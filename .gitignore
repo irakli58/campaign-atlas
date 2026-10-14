@@ -1,0 +1,6 @@
+# made on each computer when the app runs: never shared
+data/
+workspace/
+.deps/
+.deps-path
+node_modules/

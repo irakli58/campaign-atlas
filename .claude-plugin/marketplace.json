@@ -1,0 +1,14 @@
+{
+  "name": "campaign-atlas",
+  "description": "Campaign Atlas: turn a story into a playable tabletop campaign.",
+  "owner": {
+    "name": "irakli58"
+  },
+  "plugins": [
+    {
+      "name": "campaign-atlas",
+      "source": "./plugin",
+      "description": "Paste a story; get a playable tabletop campaign: the story council, maps of every place, a 3D map of the city, music for every place."
+    }
+  ]
+}

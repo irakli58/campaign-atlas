@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="atlas-token" content="__TOKEN__">
+<title>Campaign Atlas</title>
+<link rel="icon" href="/ui/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=Alegreya:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <div class="kicker">Campaign Atlas <span id="ver"></span></div>
+      <h1>Paste a story. <em>Play</em> a campaign.</h1>
+      <p class="strap">A council of writers fills your story out and closes its holes, a judge holds them to it, and every place is mapped room by room, with its clues, its people and its music.</p>
+    </div>
+    <nav class="tabs" aria-label="Views">
+      <a href="#new" data-tab="new">New campaign</a>
+      <a href="#campaigns" data-tab="campaigns">Your campaigns <span id="ncamp" class="count"></span></a>
+      <a href="#connections" data-tab="connections">Connections</a>
+    </nav>
+  </header>
+
+  <!-- a new campaign: who does the work, the story, the choices -->
+  <section id="v-new" class="view" hidden>
+    <form id="newform" autocomplete="off">
+      <div class="step">
+        <h2><span class="num">1</span> Who does the work</h2>
+        <div class="who two" role="radiogroup" aria-label="Who does the work">
+          <label class="card pick"><input type="radio" name="provider" value="own-claude" checked>
+            <span class="ct">Claude</span><span class="cs" id="st-own-claude"></span>
+            <span class="cd">With your own Claude subscription (Pro or Max), through Claude Code. Nothing extra to pay.</span></label>
+          <label class="card pick"><input type="radio" name="provider" value="own-codex">
+            <span class="ct">ChatGPT</span><span class="cs" id="st-own-codex"></span>
+            <span class="cd">With your own ChatGPT subscription (Plus or Pro), through Codex. Nothing extra to pay.</span></label>
+        </div>
+        <details class="paid" id="paid">
+          <summary>No subscription? Pay per use with an API key instead</summary>
+          <div class="who two" role="radiogroup" aria-label="Pay per use">
+            <label class="card pick"><input type="radio" name="provider" value="claude">
+              <span class="ct">Claude, pay per use</span><span class="cs" id="st-claude"></span>
+              <span class="cd">With an API key from your Claude Console account. You pay Anthropic for what it uses.</span></label>
+            <label class="card pick"><input type="radio" name="provider" value="openai">
+              <span class="ct">OpenAI, pay per use</span><span class="cs" id="st-openai"></span>
+              <span class="cd">With an API key from your OpenAI account. You pay OpenAI for what it uses.</span></label>
+          </div>
+        </details>
+        <div id="connect-here"></div>
+      </div>
+
+      <div class="step">
+        <h2><span class="num">2</span> Your story</h2>
+        <label class="field"><span>Title</span><input name="title" required maxlength="120" placeholder="The Wormroot Idol"></label>
+        <label class="field"><span>The story <small id="words"></small></span>
+          <textarea name="story" required rows="14" placeholder="Paste the whole story here: the plot, the people, the places, as much or as little as you have. The council will fill out the rest."></textarea></label>
+        <div class="row"><label class="btn ghost file">Open a file instead…<input type="file" id="storyfile" accept=".txt,.md,.markdown,.text" hidden></label><span class="hint">A .txt or .md file. From Word, use File › Save As › Plain Text.</span></div>
+      </div>
+
+      <div class="step">
+        <h2><span class="num">3</span> Your choices</h2>
+        <div class="sizes" role="radiogroup" aria-label="How big"></div>
+        <div class="grid2">
+          <label class="field"><span>Game system <small>optional</small></span><input name="system" maxlength="120" placeholder="Call of Cthulhu 7e, D&amp;D 5e, Vampire…"></label>
+          <label class="field" id="f-model"><span>Writer</span><select name="model"></select></label>
+        </div>
+        <label class="field"><span>What must not change <small>optional</small></span><textarea name="core" rows="3" maxlength="4000" placeholder="The heart of your story, in a sentence or two: the council keeps it and may change everything else."></textarea></label>
+        <label class="field"><span>Anything else for the council <small>optional</small></span><textarea name="notes" rows="3" maxlength="6000" placeholder="The tone, the players, a real city to set it in, what you want more of…"></textarea></label>
+        <label class="field narrow" id="f-cap"><span>Spending cap</span><span class="money"><span>$</span><input name="budget" type="number" min="1" max="2000" step="1" value="40"></span>
+          <small class="hint">The work stops if it reaches this. You can raise it and carry on.</small></label>
+      </div>
+
+      <div class="go">
+        <button class="btn big" type="submit" id="gobtn">Make my campaign</button>
+        <span class="hint" id="gohint"></span>
+      </div>
+      <p class="err" id="newerr" role="alert"></p>
+    </form>
+  </section>
+
+  <!-- the library -->
+  <section id="v-campaigns" class="view" hidden>
+    <div id="list" class="list"></div>
+  </section>
+
+  <!-- one campaign, being made or made -->
+  <section id="v-job" class="view" hidden>
+    <div id="job"></div>
+  </section>
+
+  <!-- connections -->
+  <section id="v-connections" class="view" hidden>
+    <div id="conns"></div>
+  </section>
+
+  <footer class="foot">Campaign Atlas runs on this computer. Your stories and campaigns stay here; the story goes only to the AI you choose.</footer>
+</div>
+<script src="/ui/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(/campaigns/**)",
+      "Bash(node atlas.js *)",
+      "PowerShell(node atlas.js *)",
+      "WebSearch",
+      "WebFetch"
+    ]
+  }
+}

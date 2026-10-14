@@ -1,0 +1,18 @@
+{
+  "name": "campaign-atlas",
+  "version": "0.1.0",
+  "description": "Paste a story; get a playable tabletop campaign. A council of writers fills it out, Tolkien judges it, every place is mapped room by room with clues, people and secrets, the city is drawn in 3D, and every place has its music.",
+  "author": {
+    "name": "irakli58"
+  },
+  "homepage": "https://github.com/irakli58/campaign-atlas",
+  "repository": "https://github.com/irakli58/campaign-atlas",
+  "license": "MIT",
+  "keywords": [
+    "tabletop",
+    "rpg",
+    "campaign",
+    "maps",
+    "game master"
+  ]
+}

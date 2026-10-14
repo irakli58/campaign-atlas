@@ -1,0 +1,18 @@
+{
+  "name": "campaign-atlas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Paste a story; get a playable tabletop campaign: a council of writers fills it out, every place is mapped room by room, the city is drawn in 3D, and every place has its music.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/irakli58/campaign-atlas.git"
+  },
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js --open"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}
