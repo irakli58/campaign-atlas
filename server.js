@@ -41,7 +41,18 @@ function setup() {
   fs.copyFileSync(path.join(ROOT, "workspace-template", "atlas.js"), path.join(WORK, "atlas.js"));
   // what Claude Code may do here without asking each time (once the game master trusts the folder): write inside
   // campaigns/, run Atlas, look things up on the web. Anything else it asks about in its own window.
-  fs.copyFileSync(path.join(ROOT, "workspace-template", "settings.json"), path.join(WORK, ".claude", "settings.json"));
+  // And its hooks: after each step it takes, it runs atlas-hook.js, which tells the app what it did (lib/activity.js).
+  const settingsFile = path.join(WORK, ".claude", "settings.json"), hookFile = path.join(WORK, ".claude", "atlas-hook.js");
+  fs.copyFileSync(path.join(ROOT, "workspace-template", "atlas-hook.js"), hookFile);
+  const conf = JSON.parse(fs.readFileSync(path.join(ROOT, "workspace-template", "settings.json"), "utf8"));
+  const hook = [{ type: "command", command: `node "${hookFile.replace(/\\/g, "/")}"`, timeout: 10 }];
+  conf.hooks = {
+    SessionStart: [{ hooks: hook }], UserPromptSubmit: [{ hooks: hook }],
+    PreToolUse: [{ matcher: "Bash|PowerShell", hooks: hook }], PostToolUse: [{ matcher: "*", hooks: hook }],
+    Notification: [{ hooks: hook }], Stop: [{ hooks: hook }], StopFailure: [{ hooks: hook }]
+  };
+  const text = JSON.stringify(conf, null, 2) + "\n";
+  if (!fs.existsSync(settingsFile) || fs.readFileSync(settingsFile, "utf8") !== text) fs.writeFileSync(settingsFile, text);
 }
 
 /* ---- the game master's connections: kept in data/settings.json on this computer, never shown back in full */
@@ -62,7 +73,7 @@ async function findTools(fresh) {
 async function state(fresh) {
   const s = settings.get(), conn = {};
   for (const p of ["claude", "openai"]) conn[p] = { connected: !!(s[p] && s[p].key), hint: s[p] ? hint(s[p].key) : "", model: s[p] && s[p].model, name: s[p] && s[p].name, installed: deps.installed(p), size: deps.CONNECTORS[p].size, ready: runners[p].READY !== false };
-  return { version: VERSION, tools: await findTools(fresh), platform: process.platform, connectors: conn, models: { claude: runners.claude.MODELS, openai: runners.openai.MODELS }, defaults: { claude: runners.claude.DEFAULT_MODEL, openai: runners.openai.DEFAULT_MODEL }, sizes: Jobs.SIZES, campaigns: jobs.list(), workspace: WORK };
+  return { version: VERSION, tools: await findTools(fresh), platform: process.platform, connectors: conn, models: { claude: runners.claude.MODELS, openai: runners.openai.MODELS }, defaults: { claude: runners.claude.DEFAULT_MODEL, openai: runners.openai.DEFAULT_MODEL }, sizes: Jobs.SIZES, freedom: Jobs.FREEDOM, lengths: Jobs.LENGTHS, defaults2: { freedom: Jobs.DEFAULT_FREEDOM, length: Jobs.DEFAULT_LENGTH }, campaigns: jobs.list(), workspace: WORK };
 }
 
 /* ---- http */
@@ -168,6 +179,12 @@ function plain(e, prov) {
   if (/ENOTFOUND|ECONNREFUSED|network|fetch failed|timed? ?out/i.test(s)) return "Could not reach the AI. Is this computer online?";
   return s.trim().slice(0, 300);
 }
+
+// an unexpected error is written down (data/errors.log) and the app keeps running: a game master's campaign may be
+// being made in another window, and the app should still be there to show it
+function note(kind, e) { try { fs.appendFileSync(path.join(DATA, "errors.log"), `${new Date().toISOString()} ${kind}: ${(e && e.stack) || e}\n`); } catch (x) {} console.error(kind + ":", (e && e.message) || e); }
+process.on("uncaughtException", e => note("uncaught", e));
+process.on("unhandledRejection", e => note("unhandled", e));
 
 setup();
 jobs = Jobs.create({ DATA, WORK, CAMPS, ATLAS_JS, TEMPLATE, settings, runners });

@@ -28,6 +28,12 @@
   const DRAFT = ["title", "story", "system", "core", "notes", "places"];
   // the game master's own places, one a line (blank lines and repeats do not count)
   const placeCount = () => new Set(String(form.places.value).split(/\r?\n/).map(l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").replace(/(?:\s+[-–—]\s+|:\s+).*$/, "").trim().toLowerCase()).filter(Boolean)).size;
+  // the two sliders: how much the council may change the story, and how long the story should be
+  function paintSliders() {
+    const f = S.freedom[form.freedom.value], l = S.lengths[form.storylen.value];
+    if (f) $("#sv-freedom").innerHTML = `<b>${esc(f.label)}.</b> ${esc(f.says)}`;
+    if (l) $("#sv-storylen").innerHTML = `<b>${esc(l.label)}:</b> about ${l.pages} pages (${l.words.toLocaleString("en")} words)${l.more ? " or more" : ""}. The story you read like a detective novel, to know everything that happens: the longer it is, the more detail.${form.storylen.value >= 4 ? " It takes longer to write." : ""}`;
+  }
   function paintPlaces() {
     const on = sizeNow() === "unlimited", n = on ? placeCount() : 0;
     $("#f-places").hidden = !on;
@@ -113,7 +119,11 @@
     if (!sz.children.length) {
       const p = store.get("size") || "campaign";
       sz.innerHTML = Object.entries(S.sizes).map(([k, s]) => `<label class="card pick"><input type="radio" name="size" value="${k}"${k === p ? " checked" : ""}><span class="ct">${esc(s.label)}</span><span class="cd">${esc(s.says.replace(/^[^:]+: /, ""))}</span><span class="cost" data-cost="${k}"></span></label>`).join("");
+      // the sliders start where they were last left, or at the app's defaults
+      form.freedom.value = store.get("freedom") || S.defaults2.freedom;
+      form.storylen.value = store.get("storylen") || S.defaults2.length;
     }
+    paintSliders();
     paintChoices();
     paintConnect();
     // a draft survives a reload
@@ -186,9 +196,11 @@
     if (e.target.name === "provider") { store.set("provider", e.target.value); paintChoices(); paintConnect(); }
     if (e.target.name === "size") { store.set("size", e.target.value); paintChoices(); }
     if (e.target.name === "model") paintChoices();
+    if (e.target.name === "freedom" || e.target.name === "storylen") { store.set(e.target.name, e.target.value); paintSliders(); }
   });
   form.addEventListener("input", e => {
     if (e.target.name === "budget") capTouched = true;
+    if (e.target.name === "freedom" || e.target.name === "storylen") paintSliders();
     if (e.target.name === "places") paintPlaces();
     if (DRAFT.includes(e.target.name)) { store.set("draft-" + e.target.name, e.target.value); if (e.target.name === "story") words(); }
   });
@@ -205,7 +217,7 @@
     const p = prov(), own = isOwn(p), err = $("#newerr"); err.textContent = "";
     if (own && !S.tools[toolOf(p)].found) { err.textContent = "Put " + S.tools[toolOf(p)].label + " on this computer first: the steps are above."; return; }
     if (!own && !S.connectors[p].connected) { err.textContent = "Connect " + PROV[p] + " first: paste your key above."; $(".ckey") && $(".ckey").focus(); return; }
-    const o = { provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value, story: form.story.value, size: sizeNow(), places: sizeNow() === "unlimited" ? form.places.value : undefined, system: form.system.value, core: form.core.value, notes: form.notes.value, model: form.model.value, budget: +form.budget.value };
+    const o = { provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value, story: form.story.value, size: sizeNow(), places: sizeNow() === "unlimited" ? form.places.value : undefined, freedom: +form.freedom.value, length: +form.storylen.value, system: form.system.value, core: form.core.value, notes: form.notes.value, model: form.model.value, budget: +form.budget.value };
     const btn = $("#gobtn"); btn.disabled = true;
     try {
       const r = await api("/api/campaigns", o); setS(r.state);
@@ -234,12 +246,13 @@
   }
 
   /* ---------------------------------------------------------------- one campaign */
-  let ES = null, J = null;
-  function closeJob() { if (ES) { ES.close(); ES = null; } J = null; }
+  let ES = null, J = null, LIVE = null;
+  function closeJob() { if (ES) { ES.close(); ES = null; } clearInterval(LIVE); J = null; }
   function openJob(slug) {
     if (J && J.slug === slug && ES) return;
     closeJob();
     J = { slug, job: null, log: [], progress: null, cost: null };
+    LIVE = setInterval(paintLive, 1000);
     $("#job").innerHTML = `<p class="busy">Opening…</p>`;
     ES = new EventSource(`/api/campaigns/${encodeURIComponent(slug)}/events?t=${TOKEN}`);
     ES.onmessage = ev => {
@@ -261,8 +274,8 @@
     if (all || !$(".jhead", box)) {
       box.innerHTML = `<div class="jhead"></div><div class="jnote"></div><div class="jown"></div><div class="meter"></div>
         <div class="cols"><div><h3 class="h3">The work</h3><ol class="steps"></ol><div class="jplan"></div><div class="jplaces"></div></div>
-        <div><h3 class="h3">As it happens</h3><div class="feed" aria-live="off"></div></div></div><div class="jreport"></div>`;
-      const feed = $(".feed", box); feed.innerHTML = J.log.map(line).join("") || `<p class="empty">Nothing yet.</p>`; feed.scrollTop = feed.scrollHeight;
+        <div><h3 class="h3">As it happens</h3><p class="live" role="status"></p><div class="feed" aria-live="off"></div></div></div><div class="jreport"></div>`;
+      const feed = $(".feed", box); feed.innerHTML = feedHTML(J.log) || `<p class="empty">Nothing yet.</p>`; feed.scrollTop = feed.scrollHeight;
     }
     const own = j.provider === "own", tool = TOOL[j.tool || "claude"];
     const working = j.status === "working", page = P && P.page;
@@ -283,7 +296,10 @@
     let notes = "";
     if (launchNote) { notes += `<p class="note bad">${esc(launchNote)}</p>`; }
     if (j.error) notes += `<p class="note bad">${esc(j.error)}</p>`;
-    if (own && j.status === "working-own") notes += `<p class="note">${esc(tool)} is working in its own window: watch it there, or here. If it stops before the end (at your plan's limit, say), press <b>Carry on in ${esc(tool)}</b> once the limit resets; nothing is lost. If it asks whether to trust the folder, say yes.</p>`;
+    const win = `the window called “Campaign Atlas: ${esc(j.title)}”`;
+    if (own && j.waiting) notes += `<p class="note bad"><b>${esc(tool)} is waiting for you</b> in ${win}${j.waiting.msg ? `: ${esc(j.waiting.msg)}` : ""}. Answer it there and the work carries on.</p>`;
+    else if (own && j.status === "working-own") notes += `<p class="note">${esc(tool)} is working in ${win}: watch it there, or here. If it stops before the end (at your plan's limit, say), press <b>Carry on in ${esc(tool)}</b> once the limit resets; nothing is lost. If it asks whether to trust the folder, say yes.</p>`;
+    else if (own && j.status === "stopped" && j.paused) notes += `<p class="note">${esc(tool)} has stopped for now${j.paused.err ? ` with an error (${esc(j.paused.err)})` : ""}.${j.paused.last ? ` Its last words: <i>“${esc(j.paused.last.slice(-400))}”</i>` : ""} Press <b>Carry on in ${esc(tool)}</b> to finish it, or answer it in its window; it picks up from what is already written.</p>`;
     else if (own && j.status === "stopped") notes += `<p class="note">Nothing in this campaign has changed for a while, so ${esc(tool)} has probably stopped: its window was closed, or your plan's limit was reached. Press <b>Carry on in ${esc(tool)}</b> to finish it; it picks up from what is already written.</p>`;
     else if (!own && j.note) notes += `<p class="note">${esc(j.note)}</p>`;
     if (!own && j.provider === "claude" && ["capped", "failed", "stopped"].includes(j.status)) notes += `<p class="row"><label class="field narrow" style="margin:0"><span>Spending cap</span><span class="money"><span>$</span><input type="number" class="newcap" min="1" step="1" value="${Math.ceil(Math.max(j.budget, j.cost + 10))}"></span></label></p>`;
@@ -304,6 +320,7 @@
       ${pl.map(x => x.mapped ? `<tr><td>${esc(x.name)}</td><td class="n">${x.tier || ""}</td><td class="n">${x.rooms}</td><td class="n">${x.done}/${x.rooms}</td><td class="n">${x.clues}</td><td class="n">${x.people}</td></tr>` : `<tr class="no"><td>${esc(x.name)}</td><td class="n">${x.tier || ""}</td><td colspan="4">not mapped yet</td></tr>`).join("")}</tbody></table></div>` : "";
     $(".jreport", box).innerHTML = P && P.report && P.report.trim() ? `<div class="report">${md(P.report)}</div>` : "";
     bindJob(j);
+    paintLive();
   }
 
   function paintMeter() {
@@ -340,19 +357,49 @@
     };
   }
 
-  function line(e) {
+  // one line of the feed; the same step done again straight after (four edits to one place) adds "×4" to its line
+  const keyOf = e => e.kind + "|" + e.text;
+  function line(e, n) {
     const t = new Date(e.t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-    if (e.kind === "say") return `<div class="e say">${esc(e.text)}</div>`;
-    if (e.kind === "check") return `<div class="e check ${e.ok ? "ok" : "bad"}"><time>${t}</time>Check: ${esc(e.text)}</div>`;
-    return `<div class="e ${esc(e.kind)}"><time>${t}</time>${esc(e.text)}</div>`;
+    const k = esc(keyOf(e)), x = `<span class="x">${n > 1 ? "×" + n : ""}</span>`;
+    if (e.kind === "say") return `<div class="e say" data-key="${k}" data-n="${n || 1}">${esc(e.text)}</div>`;
+    if (e.kind === "check") return `<div class="e check ${e.ok ? "ok" : "bad"}" data-key="${k}" data-n="${n || 1}"><time>${t}</time>Check: ${esc(e.text)} ${x}</div>`;
+    return `<div class="e ${esc(e.kind)}" data-key="${k}" data-n="${n || 1}"><time>${t}</time>${esc(e.text)} ${x}</div>`;
+  }
+  function feedHTML(log) {
+    const out = []; let prev = null, n = 0;
+    for (const e of log) { if (prev && keyOf(prev) === keyOf(e) && e.kind !== "say") { n++; prev = e; continue; } if (prev) out.push(line(prev, n)); prev = e; n = 1; }
+    if (prev) out.push(line(prev, n));
+    return out.join("");
   }
   function addLine(e) {
     const feed = $("#job .feed"); if (!feed) return;
     const near = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
     const empty = $(".empty", feed); if (empty) empty.remove();
-    feed.insertAdjacentHTML("beforeend", line(e));
+    const last = feed.lastElementChild;
+    if (last && e.kind !== "say" && last.dataset.key === keyOf(e)) {
+      const n = (+last.dataset.n || 1) + 1; last.dataset.n = n; $(".x", last).textContent = "×" + n;
+      const tm = $("time", last); if (tm) tm.textContent = new Date(e.t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    } else feed.insertAdjacentHTML("beforeend", line(e, 1));
     while (feed.children.length > 600) feed.firstElementChild.remove();
     if (near) feed.scrollTop = feed.scrollHeight;
+    paintLive();
+  }
+
+  // the line above the feed, ticking each second: what was done last and how long ago, so a long quiet stretch (a
+  // chapter being written) reads as work going on, not as nothing happening
+  function paintLive() {
+    const j = J && J.job, el = j && $("#job .live"); if (!el) return;
+    const moving = j.status === "working" || j.status === "working-own";
+    const last = J.log[J.log.length - 1], t = Math.max(j.lastActivity || 0, last ? last.t : 0);
+    if (j.waiting && j.provider === "own") { el.innerHTML = `<span class="pulse wait"></span><b>Waiting for you</b> in the ${esc(TOOL[j.tool || "claude"])} window.`; return; }
+    if (!t) { el.innerHTML = moving ? `<span class="pulse"></span><b>Starting.</b>` : ""; return; }
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    const ago = s < 60 ? s + " s" : s < 3600 ? Math.floor(s / 60) + " min " + (s % 60) + " s" : Math.floor(s / 3600) + " h " + Math.floor(s % 3600 / 60) + " min";
+    const what = !last ? "a file was written" : last.kind === "check" ? "Check: " + last.text : last.kind === "say" ? "“" + last.text.split("\n")[0].slice(0, 150) + (last.text.length > 150 ? "…" : "") + "”" : last.text;
+    el.innerHTML = moving
+      ? `<span class="pulse"></span><b>Working.</b> Last step ${ago} ago: ${esc(what)}${s > 150 ? `<span class="hint"> Probably writing something long (a chapter, or a whole floor of a place); it shows here when it is done.</span>` : ""}`
+      : `Last step ${ago} ago: ${esc(what)}`;
   }
 
   /* ---------------------------------------------------------------- connections */

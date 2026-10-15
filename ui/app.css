@@ -54,6 +54,12 @@ small, .hint { color: var(--muted); font-size: 14px; }
 .sizes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 960px) { .sizes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .field.places { margin-top: 14px; }
+.slider { margin: 18px 0 4px; max-width: 640px; }
+.slider label { display: block; font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.slider input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+.slider .ends { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+.slider .sv { margin: 6px 0 0; font-size: 15px; }
+.slider .sv b { font-family: var(--f-sc); font-weight: 400; font-size: 17px; margin-right: 4px; }
 @media (max-width: 760px) { .who, .who.two, .sizes { grid-template-columns: minmax(0, 1fr); } }
 .paid { margin-top: 12px; }
 .paid summary { cursor: pointer; color: var(--muted); font-size: 15px; }
@@ -167,6 +173,12 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 .feed .note { font-family: var(--f-mono); font-size: 12px; background: none; border: 0; padding: 3px 0; margin: 0; color: var(--bone); }
 .feed .error { font-family: var(--f-mono); font-size: 12px; color: var(--accent); }
 .feed time { font-family: var(--f-mono); font-size: 11px; color: var(--muted); margin-right: 8px; }
+.feed .x { color: var(--bone); font-family: var(--f-mono); font-size: 11px; }
+.live { font-size: 15px; margin: 0 0 8px; min-height: 1.5em; }
+.live .hint { display: block; margin-top: 2px; }
+.pulse { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); margin-right: 8px; vertical-align: 1px; animation: pulse 1.4s ease-in-out infinite; }
+.pulse.wait { background: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
 .own { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; margin-bottom: 18px; }
 .own ol { margin: 6px 0 0; padding-left: 22px; }
 .own li { margin: 6px 0; }

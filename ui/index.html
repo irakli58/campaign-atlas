@@ -66,6 +66,18 @@
         <div class="sizes" role="radiogroup" aria-label="How big"></div>
         <label class="field places" id="f-places" hidden><span>Your places <small id="nplaces">one per line; a few words after a dash if you like</small></span>
           <textarea name="places" rows="9" maxlength="40000" placeholder="Write each place on its own line. You can add a few words after a dash, for example:&#10;&#10;The lighthouse - where the keeper vanished&#10;The keeper's cottage&#10;The village church and its crypt"></textarea></label>
+        <div class="slider">
+          <label for="freedom">How much the council may change your story</label>
+          <input type="range" id="freedom" name="freedom" min="1" max="5" step="1" value="3">
+          <div class="ends"><span>Stay true to mine</span><span>Free rein</span></div>
+          <p class="sv" id="sv-freedom" aria-live="polite"></p>
+        </div>
+        <div class="slider">
+          <label for="storylen">How long the story should be</label>
+          <input type="range" id="storylen" name="storylen" min="1" max="5" step="1" value="4">
+          <div class="ends"><span>Short</span><span>An epic</span></div>
+          <p class="sv" id="sv-storylen" aria-live="polite"></p>
+        </div>
         <div class="grid2">
           <label class="field"><span>Game system <small>optional</small></span><input name="system" maxlength="120" placeholder="The rules you play by, e.g. Call of Cthulhu 7e or D&amp;D 5e"></label>
           <label class="field" id="f-model"><span>Writer</span><select name="model"></select></label>

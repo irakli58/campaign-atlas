@@ -36,7 +36,7 @@ Run commands as `node "<this folder>/scripts/atlas.js" <command> <campaign folde
 `references/playbook.md` has each step in full. In brief:
 
 0. **A permanent folder.** `init` the campaign in a folder the user can see, never a temporary one. Save their story untouched as `story/source.md`.
-1. **Convene the council** (`references/council.md`). Write the Core that may not change, then the debate, then the bible, as long as the story deserves; then Tolkien's judgement (`story/judgement.md`), the mending, and the agreement of all five. Do this without being asked, and do not ask leave to change things: change them and report.
+1. **Convene the council** (`references/council.md`). Its job: make the story as interesting to play as possible, as faithful to the user's story as they asked, and at least as long as they asked (about a hundred pages when nothing was said; longer is better). Write the Core that may not change, then the debate, then the bible; then Tolkien's judgement (`story/judgement.md`), the mending, and the agreement of all five. Do this without being asked, and do not ask leave to change things: change them and report.
 2. **Canon and cast.** Bring `canon.md` up to date; put the principals in `ATLAS.cast`.
 3. **The look and the map of the whole.** Set `campaign.js`; run `city` for a real city, a real site, an invented city or an invented site (`references/cities.md`); review its landmarks.
 4. **Register every place**, unmapped, with its tier and its position on the city map. Plan which clue points where. Two leads into every place that matters.

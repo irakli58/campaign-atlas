@@ -2,7 +2,14 @@
 
 When the user hands over a story, it goes to the council before anything is mapped. Four writers read it, argue over it, mend its holes, people it with characters worth meeting, and fill it out into a story that can be played. Then a judge, J. R. R. Tolkien, judges what they made, strictly and with reasons; they mend what he fails; and the story is finished only when all five agree on it. The user asked for this in so many words: full creative freedom, any length, as long as the core of their story survives and the result is gripping; and (14 Oct 2026) "Tolkien should be really judging, and all 5 of the writers agree on what should be written at the end: Tolkien just judges how good they did, and then they all have to agree on a finished product". And because it will be played at a table, it has to run on clues.
 
+**The council's job is to make the story as interesting to play as possible** (the user's words, 15 Oct 2026). Every proposal, every cut and every addition is weighed by that: does it give the players more to discover, more to choose, more to fear, more people worth talking to? A change that makes the story neater but duller to play is refused.
+
 Do this every time a story is given, without being asked again. Do not ask the user for permission to change things: change them, write down what changed, and tell them at the end.
+
+**Two settings may come with the story** (in the Campaign Atlas app, `story/brief.md`; otherwise from what the user says), and they bind the council:
+
+- **How much it may change the story**, from *Stay true* (keep the plot, people and places as written; only close holes and add what play needs) through *Balanced* (keep the core and the main turns) to *Free rein* (only the core idea is the user's). Without a setting, the council works at *Balanced* with the Core below.
+- **How long the story should be.** The story bible is read by the game master like a detective novel, to know everything that is happening: the longer and more detailed, the better, and a hundred pages is not too much. The length given is a floor, not a ceiling. Without a setting, aim for about a hundred pages (some 40,000 words) for a campaign and never less than thirty for a one-shot.
 
 ## Contents
 
@@ -131,7 +138,7 @@ Write the agreement at the end of `story/council.md`: each of the five signs wit
 
 ## 10. Length and how to write it
 
-Write as much as the story deserves. Fifty pages, a hundred, five hundred: the user has said length does not matter and dullness does. Never shorten to save effort, and never pad: a long bible is long because it holds more people, more places and more to find, each of them specific.
+Write as much as the story deserves, and at least the length that was asked for (section 1's settings: about a hundred pages when nothing was said). Fifty pages, a hundred, five hundred: the user has said length does not matter and dullness does, and that "the longer the story the better, because the DM can read it like a detective book and know everything that's happening". Never shorten to save effort, and never pad: a long bible is long because it holds more people, more places and more to find, each of them specific: what every person did and when, where every clue came from and how it got there, what each knows and hides, what happens hour by hour if the players do nothing.
 
 A long bible is written in parts, one file per chapter, each finished before the next is begun: the truth and timeline; the cast; the clue web; the places; the acts, scene by scene; the endings; handouts. Prefer the named and the dated to the general: "the 9.40 from Paddington, late by eleven minutes" over "a train".
 
