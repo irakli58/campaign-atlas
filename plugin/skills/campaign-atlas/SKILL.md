@@ -1,6 +1,6 @@
 ---
 name: campaign-atlas
-description: Turn a story into a complete, playable tabletop RPG campaign. A council of four writers (Conan Doyle, Agatha Christie, Poe, Lovecraft) debates the story, fixes its holes and adds characters, motives and clues; Tolkien judges what they wrote, strictly, and the story is finished only when all five agree; every location gets gridded floor-by-floor maps (player and GM versions), a room-by-room guide, clues with hints and where they lead, described NPCs, secrets and encounters; and a 3D map shows the whole setting, whether any REAL city recreated with its actual streets, river and landmarks in the look of the story era, an invented city, or a camp or military base. Published as one interactive page. Use whenever the user gives or uploads a story, scenario, campaign notes or setting (any genre or system) and wants it developed, improved, mapped or made playable; wants locations, maps, dungeons, room keys, a gazetteer, clues or character write-ups; names a city, town, camp or base and wants a 3D or playable map of it; asks to make maps bigger; or says to do "what you did for the Wormroot Idol".
+description: Turn a story into a complete, playable tabletop RPG campaign. A council of four writers (Conan Doyle, Agatha Christie, Poe, Lovecraft) debates the story, fixes its holes and adds characters, motives and clues; Tolkien judges what they wrote, strictly, and the story is finished only when all five agree; every location gets gridded floor-by-floor maps (player and GM versions), a room-by-room guide, clues with hints and where they lead, described NPCs, secrets and encounters; and a 3D map shows the whole setting, whether any REAL city recreated with its actual streets, river and landmarks in the look of the story era, an invented city, a camp or military base, or a moon base or space station of the future. Published as one interactive page. Use whenever the user gives or uploads a story, scenario, campaign notes or setting (any genre or system) and wants it developed, improved, mapped or made playable; wants locations, maps, dungeons, room keys, a gazetteer, clues or character write-ups; names a city, town, camp, base, moon base or space station and wants a 3D or playable map of it; asks to make maps bigger; or says to do "what you did for the Wormroot Idol".
 ---
 
 # Campaign Atlas
@@ -80,6 +80,8 @@ node scripts/atlas.js city <dir> --invent "Name" [--year N] [--site river|coast|
                                                     an invented city for its age, site and people
 node scripts/atlas.js city <dir> --invent "Name" --kind camp|base [--town] [--ruin 0.5]
                                                     an invented camp or military base
+node scripts/atlas.js city <dir> --invent "Name" --kind moonbase|outpost|colony|station [--year 2291]
+                                                    the future: modules, domes and tubes on a moon, or a ring in orbit
 node scripts/atlas.js locate <dir> "an address"     where a real spot falls on a fetched city's sheet
 ```
 

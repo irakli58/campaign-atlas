@@ -11,7 +11,10 @@
 
   async function api(path, body) {
     const opt = body === undefined ? { headers: { "x-atlas-token": TOKEN } } : { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(body) };
-    const r = await fetch(path, opt), d = await r.json().catch(() => ({}));
+    let r;
+    try { r = await fetch(path, opt); } catch (e) { stillThere(); throw new Error("The app is not answering."); }
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 403 && /Reload/.test(d.error || "")) { location.reload(); throw new Error("Reloading…"); }   // the app was started again
     if (!r.ok) throw new Error(d.error || "Something went wrong (" + r.status + ").");
     return d;
   }
@@ -265,7 +268,7 @@
       else if (m.type === "cost") { J.cost = m.usd; paintMeter(); }
       else if (m.type === "tokens") { J.tokens = m.tokens; paintMeter(); }
     };
-    ES.onerror = () => { if (J && !J.job) $("#job").innerHTML = `<p class="err">This campaign could not be opened. <a href="#campaigns">Back to your campaigns</a>.</p>`; };
+    ES.onerror = () => { stillThere(); if (J && !J.job) $("#job").innerHTML = `<p class="err">This campaign could not be opened. <a href="#campaigns">Back to your campaigns</a>.</p>`; };
   }
 
   function paintJob(all) {
@@ -448,6 +451,17 @@
     }
     flush();
     return out.join("\n");
+  }
+
+  /* ---------------------------------------------------------------- the app went away */
+  // Started again, the app has a new key and this page must load afresh; stopped, the page says so and waits for it.
+  let down = null;
+  function stillThere() {
+    if (down) return;
+    fetch("/api/state", { headers: { "x-atlas-token": TOKEN }, cache: "no-store" }).then(r => { if (r.status === 403) location.reload(); }).catch(() => {
+      document.querySelector(".wrap").insertAdjacentHTML("afterbegin", `<p class="note bad" id="down"><b>The app has stopped.</b> Start it again (double-click <code>start-windows.bat</code>, or <code>start-mac.command</code> on a Mac); this page reconnects by itself. Your campaigns and any work in Claude Code are not affected.</p>`);
+      down = setInterval(() => fetch("/api/state", { cache: "no-store" }).then(() => location.reload()).catch(() => {}), 4000);
+    });
   }
 
   /* ---------------------------------------------------------------- start */

@@ -19,6 +19,10 @@
                       [--culture english|american|french|italian|spanish|german|arabic|japanese|fantasy]
                       [--plan organic|grid] [--size town|city|metropolis] [--region ...] [--seed N]
                                                  an INVENTED city, laid out for its age and its part of the world
+   node atlas.js city <dir> --invent "Name" --kind camp|base [--year 1943 | --era ...] [--town] [--ruin 0.5]
+                                                 an invented camp or military base
+   node atlas.js city <dir> --invent "Name" --kind moonbase|outpost|colony|station [--year 2291]
+                                                 the FUTURE: modules, domes, tubes and pads on a moon, or a ring in orbit
    node atlas.js locate <dir> "an address or a name"   where a real spot falls on the sheet of a fetched city
 */
 "use strict";
@@ -223,10 +227,10 @@ function checkCity(A) {
   const out = [], K = A.cityKit, raw = A.cityData; let problems = 0, notes = 0;
   const P = m => { out.push("   ! " + m); problems++; }, N = m => { out.push("   - " + m); notes++; };
   if (!raw.sheet || !(raw.sheet.w > 0) || !(raw.sheet.h > 0)) N("no sheet size given (sheet: { w, h }): using 320 by 200");
-  if (!(raw.roads || []).length) P("the city has no roads: give at least its main streets");
+  if (!(raw.roads || []).length && !(raw.walls || []).some(w => w.kind === "tube")) P("the city has no roads: give at least its main streets (a station may have its tubes instead)");
   (raw.roads || []).slice(0, 4000).forEach((r, i) => { if (!Array.isArray(r) || typeof r[0] !== "string" || ![0, 1, 2, 3].includes(r[1]) || !Array.isArray(r[2]) || r[2].length < 2) P(`road ${i + 1}${r && r[0] ? ` (${r[0]})` : ""} must be [name, class 0 to 3, [[x, y], [x, y], ...]]`); });
   for (const r of raw.rivers || []) if (!(r.hw > 0) || !Array.isArray(r.pts) || r.pts.length < 2) P(`river "${r.label || r.name || "?"}" needs its points (pts) and a half-width (hw)`);
-  if (typeof raw.look === "string" && !K.LOOKS[raw.look]) P(`unknown look "${raw.look}": use "medieval", "industrial" (the same as "old") or "modern"`);
+  if (typeof raw.look === "string" && !K.LOOKS[raw.look]) P(`unknown look "${raw.look}": use "medieval", "industrial" (the same as "old"), "modern" or "scifi"`);
   if (raw.look && typeof raw.look === "object" && raw.look.base && !K.LOOKS[raw.look.base]) P(`unknown look base "${raw.look.base}"`);
   if (raw.region && !K.REGIONS[raw.region]) N(`unknown region "${raw.region}" (known: ${Object.keys(K.REGIONS).join(", ")}): the colours of the temperate north are used`);
   (raw.landmarks || []).forEach((l, i) => {
@@ -234,14 +238,29 @@ function checkCity(A) {
     else if (l.kind && !K.LM_SIZE[l.kind]) P(`landmark "${l.name || i + 1}" has unknown kind "${l.kind}" (known: ${K.LM_KINDS.join(", ")})`);
     else if (l.pts && (!Array.isArray(l.pts) || l.pts.length < 3)) P(`landmark "${l.name || i + 1}": a footprint (pts) needs at least three corners`);
   });
-  (raw.rows || []).forEach((r, i) => { if (!r || !Array.isArray(r.at) || r.at.length !== 2) P(`rows ${i + 1} needs at: [x, y] (the centre of its first hut)`); else if (r.roof && !["pitched", "flat", "barrel", "tent"].includes(r.roof)) P(`rows ${i + 1}: unknown roof "${r.roof}" (pitched, flat, barrel or tent)`); });
-  (raw.walls || []).forEach((w, i) => { if (!w || !Array.isArray(w.pts) || w.pts.length < 2) P(`walls ${i + 1} needs at least two points (pts)`); else if (w.kind && !["wall", "fence", "hesco"].includes(w.kind)) P(`walls ${i + 1}: unknown kind "${w.kind}" (wall, fence or hesco)`); });
-  if (raw.ground && !["grass", "sand", "dirt", "snow", "concrete"].includes(raw.ground)) N(`unknown ground "${raw.ground}" (grass, sand, dirt, snow or concrete)`);
+  (raw.rows || []).forEach((r, i) => { if (!r || !Array.isArray(r.at) || r.at.length !== 2) P(`rows ${i + 1} needs at: [x, y] (the centre of its first hut)`); else if (r.roof && !["pitched", "flat", "barrel", "tent", "module"].includes(r.roof)) P(`rows ${i + 1}: unknown roof "${r.roof}" (pitched, flat, barrel, tent or module)`); });
+  (raw.walls || []).forEach((w, i) => { if (!w || !Array.isArray(w.pts) || w.pts.length < 2) P(`walls ${i + 1} needs at least two points (pts)`); else if (w.kind && !["wall", "fence", "hesco", "tube"].includes(w.kind)) P(`walls ${i + 1}: unknown kind "${w.kind}" (wall, fence, hesco or tube)`); });
+  if (raw.ground && !K.GROUNDS[raw.ground]) N(`unknown ground "${raw.ground}" (${Object.keys(K.GROUNDS).join(", ")})`);
   for (const k of ["basins", "parks", "plazas", "open"]) (raw[k] || []).forEach((b, i) => { if (!b || !Array.isArray(b.pts) || b.pts.length < 3) P(`${k} ${i + 1}${b && b.name ? ` (${b.name})` : ""} needs at least three points (pts)`); });
   if (problems) return { line: "city map", out, problems, notes };
   const D = K.prepare(raw), PL = K.cityPlaces(D), w = D.sheet.w, h = D.sheet.h;
   for (const id of A.order) { const m = A.meta[id], mdl = Array.isArray(m.model) ? m.model[0] : m.model; if (!m.offmap && mdl && !K.MODEL_SIZE[mdl]) N(`${id}: unknown model "${mdl}", so it will stand as a house (see: atlas.js catalogue)`); }
   for (const id of A.order) { const m = A.meta[id]; if (m.landmark && !(raw.landmarks || []).some(l => String(l.name).toLowerCase() === String(m.landmark).toLowerCase())) P(`${id} says it is the landmark "${m.landmark}", but the city has none of that name (see the list in city.js)`); }
+  // The buildings fit the age, and the map fits the story: the future's own models on a map of the future and none of
+  // them on an older one, and a story in space drawn as the future (the user caught a moon station built of 1888's
+  // houses on a desert base, 15 Oct 2026: "you used 1888 house models for a moon base").
+  const lookName = typeof raw.look === "string" ? raw.look : raw.look && raw.look.base, future = lookName === "scifi" || lookName === "future";
+  for (const id of A.order) {
+    const m = A.meta[id], mdl = Array.isArray(m.model) ? m.model[0] : m.model; if (!mdl || m.offmap || !K.MODEL_SIZE[mdl]) continue;
+    const fut = K.FUTURE_MODELS.includes(mdl);
+    if (future && !fut) P(`${id} wears "${mdl}", a building of the past, on a map of the future: give it one of ${K.FUTURE_MODELS.join(", ")}, or no model (one is chosen from the place's name)`);
+    else if (!future && fut) P(`${id} wears "${mdl}", a building of the future, on a ${lookName || "old"} map`);
+  }
+  {
+    const cfg = A.config || {}, said = [cfg.setting, cfg.system, cfg.subtitle, cfg.strap, cfg.title].filter(x => typeof x === "string").join(" · ");
+    const space = said.toLowerCase().match(/\b(space ?station|spaceship|starship|in orbit|orbital|orbiting|moon ?base|lunar|martian|asteroid|colony ship|mothership|starfinder|stars without number|2[2-9]\d\d)\b/);
+    if (!future && space) P(`the story is set in space or in the future ("${space[0]}" in the campaign's setting), but the map is ${lookName || "old"}: make it with city --invent "Name" --kind moonbase, outpost, colony or station, so it is built of the future's modules, domes and tubes, not houses`);
+  }
   for (const e of PL) {
     if (e.x == null) P(`${e.id} has no position on the city map: give it at: [x, y], or a region that is one of the city's districts (or offmap: true)`);
     else if (e.x < 0 || e.x > w || e.y < 0 || e.y > h) P(`${e.id} stands at ${e.x.toFixed(0)}, ${e.y.toFixed(0)}, outside the sheet (0 to ${w} by 0 to ${h})`);

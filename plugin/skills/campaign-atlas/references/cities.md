@@ -8,8 +8,11 @@ Above the index of places, the page can carry one overview map: a printed plan w
 | a real place that is not a city (a camp, a base, a compound, a village, a few streets) | the same, with `--buildings` | every surveyed building as it stands, fences, watchtowers, tracks; nothing invented |
 | an invented city | `atlas.js city <dir> --invent "Name"` | a city laid out for its age, site and culture; side streets and houses grown |
 | an invented camp or base | `atlas.js city <dir> --invent "Name" --kind camp` (or `base`) | a compound: wire or blast wall, towers, gate, hut or tent lines, the buildings such a place has |
+| the future: a base on a moon or a planet, a station in orbit | `atlas.js city <dir> --invent "Name" --kind moonbase` (or `outpost`, `colony`, `station`) | modules and domes joined by pressurised tubes, landing pads, solar fields, a reactor, a dish; craters on a moon; black sky with stars |
 
 A story with no single setting (a road trip, a ship, a wilderness) needs no city map; leave it out.
+
+**The map is built of its story's own buildings.** Atlas keeps a ready-made set of buildings for each kind of setting and reuses it for every campaign of that kind: the medieval town, the industrial city of 1888, the modern city, the camp and the base, and the future (`look: "scifi"`). Choose the command, the year or era and the look that fit the story, and nothing else: never the houses of 1888, or a desert base's sandbag walls, for a station in orbit. The user caught exactly that on a moon station (15 Oct 2026: "you used 1888 house models for a moon base"). `check` fails a story set in space or after 2200 whose map is not of the future, and a place wearing a building of the wrong age.
 
 ## Contents
 
@@ -88,13 +91,25 @@ node atlas.js city <dir> --invent "Camp Falcon" --kind base --region desert --to
 
 Everything on a site is listed in `city.js` (`rows`, `walls`, `landmarks`, `open`); nothing is grown. Rearrange it freely with `ATLAS.cityEdit` to fit the story.
 
+### 4a. The future: a moon base, an outpost, a colony, a station
+
+```
+node atlas.js city <dir> --invent "Selene Base" --kind moonbase --year 2291
+node atlas.js city <dir> --invent "Tycho Ring" --kind station --year 2291
+```
+
+- **moonbase** (also **outpost**, **colony**: the same on a planet): a central hub dome with tubes out to its areas: Habitation (rows of modules), Operations (operations centre, comms dish, mast), Research (a dome and its laboratories), Power (a reactor and a solar field), the Landing Field (pads, a hangar, a fuel store) and sometimes Mining; a perimeter track and a rover track off the sheet; craters all round. Ground `regolith`.
+- **station**: a ring of tubes round a hub, four spokes, modules along the ring in four sections (Habitation Ring, Green Ring, Engineering, Command), a docking arm and a cargo arm each ending in a pad and a hangar, solar arrays, a comms dish and the core. Ground `deck`.
+- The look is `"scifi"`: white modules on grey ground, the sheet hanging in black space among stars. A place on such a map that names no `model` wears one of the future's own, chosen from its name: `dock` (docking, hangar, landing, spindle, airlock), `command` (command, bridge, control, operations, spire), `reactor` (engineering, reactor, power, core), `greenhouse` (hydroponics, garden, green), `medbay`, `lab` (lab, research, science, xeno), `quarters` (habitation, quarters, crew), `antenna` (comms, array, dish, listening), `mine`, `solar`, `cargo`, `habdome` (dome, hall, mess), else `module`.
+- The future's parts for laying one out by hand or bending a generated one (`ATLAS.cityEdit`): landmarks of kind `module`, `habdome`, `reactor`, `dish`, `solar` (with the older `pad`, `hangar`, `tank`, `spire`); walls of kind `tube` (a pressurised corridor: `{ kind: "tube", pts: [[x, y], ...] }`); `rows` with `roof: "module"` (habitat modules side by side); `open` of kind `crater`. A station needs no roads: its tubes are its streets.
+
 ## 5. The age and the part of the world
 
-`look` is the age: `"medieval"` (plaster, timber and thatch, steep roofs, no lamps or factory stacks), `"industrial"` (also `"old"`: brick terraces, slate, chimney pots, gas lamps, stacks, an aged paper plan), `"modern"` (flat roofs, glass towers, a clean plan). A look may also be an object laid over one of them: `look: { base: "industrial", lamps: false }`.
+`look` is the age: `"medieval"` (plaster, timber and thatch, steep roofs, no lamps or factory stacks), `"industrial"` (also `"old"`: brick terraces, slate, chimney pots, gas lamps, stacks, an aged paper plan), `"modern"` (flat roofs, glass towers, a clean plan), `"scifi"` (also `"future"`: white modules and domes, grey ground, black sky and stars; `--era future`, or a year from 2100). A year decides it when no era is given: before 1650 medieval, before 1946 industrial, before 2100 modern, after that the future. A look may also be an object laid over one of them: `look: { base: "industrial", lamps: false }`.
 
 `region` is the part of the world, laid over the look: `"mediterranean"` (stucco and terracotta), `"desert"` (sand-coloured walls, flat roofs, pale ground), `"eastasia"` (white plaster, dark timber, grey tile). Anything else is the temperate north. A real city's region comes from its country; `--region` overrides.
 
-`ground` (sites): `"grass"`, `"sand"`, `"dirt"`, `"snow"`, `"concrete"`.
+`ground` (sites): `"grass"`, `"sand"`, `"dirt"`, `"snow"`, `"concrete"`, and for the future `"regolith"` (a moon's dust) and `"deck"` (a station's plan).
 
 ## 6. Putting the campaign's places on the map
 

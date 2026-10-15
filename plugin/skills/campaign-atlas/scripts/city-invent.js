@@ -72,7 +72,8 @@ function inventCity(dir, name, flags, log) {
   if (!name || name === true) throw new Error('What is the city called? node atlas.js city <campaign> --invent "Name"');
   const kind = String(flags.kind && flags.kind !== true ? flags.kind : "city").toLowerCase();
   if (kind === "camp" || kind === "base") return inventSite(dir, name, flags, kind, log);
-  if (kind !== "city") throw new Error(`unknown kind "${flags.kind}": use city, camp or base`);
+  if (["moonbase", "outpost", "colony", "station"].includes(kind)) return inventOutpost(dir, name, flags, kind, log);
+  if (kind !== "city") throw new Error(`unknown kind "${flags.kind}": use city, camp, base, moonbase, outpost, colony or station`);
   const { era, year, look } = eraOf(flags), ck = String(flags.culture && flags.culture !== true ? flags.culture : "english").toLowerCase(), C = CULTURES[ck];
   if (!C) throw new Error(`unknown culture "${flags.culture}": use one of ${Object.keys(CULTURES).join(", ")}`);
   const size = String(flags.size && flags.size !== true ? flags.size : "city").toLowerCase(), dims = { town: [250, 160], city: [320, 200], metropolis: [400, 250] }[size];
@@ -326,4 +327,90 @@ function inventSite(dir, name, flags, kind, log) {
   return data;
 }
 
-module.exports = { inventCity, inventSite, CULTURES };
+// ---- the future: a base on the surface of a moon or a planet (moonbase, outpost, colony), or a station in orbit.
+// Every module, dome, tube, pad and panel is placed; nothing is grown. The look is "scifi": white modules on grey
+// ground under black sky, and places on it wear the future's own models (the user caught a moon station built of
+// 1888 houses and a desert base's sandbag walls, 15 Oct 2026).
+function inventOutpost(dir, name, flags, kind, log) {
+  const station = kind === "station";
+  const year = flags.year != null && flags.year !== true ? parseInt(flags.year, 10) : null;
+  const ground = flags.ground && flags.ground !== true ? String(flags.ground) : station ? "deck" : "regolith";
+  let seed = flags.seed && flags.seed !== true ? parseInt(flags.seed, 10) : 0; if (!seed) { for (const ch of name + kind) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0; seed = seed % 100000 + 1; }
+  const rnd = mulberry32(seed * 7 + 3), R = (a, b) => a + (b - a) * rnd();
+  const SW = 320, SH = 200, M = 30, X0 = -M, X1 = SW + M, Y0 = -M, Y1 = SH + M, cx = SW / 2 + R(-6, 6), cy = SH / 2 + R(-4, 4);
+  const squash = station ? 1 : .8;                               // a surface base spreads wider than it is deep, as the sheet does
+  const P = (r, a) => [+(cx + r * Math.cos(a)).toFixed(1), +(cy + r * Math.sin(a) * squash).toFixed(1)];
+  const roads = [], walls = [], open = [], landmarks = [], districts = {};
+  const lm = (nm, k, at, o) => landmarks.push(Object.assign({ name: nm, kind: k, at, ang: 0 }, nm ? {} : { label: false }, o || {}));
+  const tube = pts => walls.push({ kind: "tube", pts });
+  const circle = (c, r, n, j) => Array.from({ length: n }, (_, i) => { const a = i / n * 6.2832, k = r * (1 + (j ? R(-j, j) : 0)); return [+(c[0] + k * Math.cos(a)).toFixed(1), +(c[1] + k * Math.sin(a)).toFixed(1)]; });
+  const a0 = R(0, 6.2832);
+  let notes;
+
+  if (!station) {
+    lm("Central Hub", "habdome", [cx, cy], { size: 1.3, major: true });
+    const roles = ["Habitation", "Operations", "Research", "Power", "Landing Field"].concat(rnd() < .55 ? ["Mining"] : []), n = roles.length;
+    roles.forEach((role, i) => {
+      const a = a0 + i * 6.2832 / n + R(-.12, .12), r = role === "Landing Field" ? R(74, 82) : R(50, 62), c = P(r, a), side = a + Math.PI / 2;
+      tube([P(8, a), P(r - (role === "Landing Field" ? 12 : 7), a)]);
+      districts[role] = P(r * .6, a + .2);                         // its places stand beside the tube, between hub and cluster
+      if (role === "Habitation") for (let k = 0; k < 4; k++) lm(k ? "" : "Habitation Block", "module", P(r + (k % 2 ? 4 : -4), a + (k < 2 ? -.07 : .07)), { ang: side, major: !k });
+      else if (role === "Operations") { lm("Operations Centre", "module", c, { ang: side, size: 1.2, major: true }); lm("Comms Array", "dish", P(r + 11, a + .1)); lm("", "spire", P(r + 9, a - .12), { top: "needle", h: 9 }); }
+      else if (role === "Research") { lm("Research Dome", "habdome", c, { size: .85, major: true }); lm("Laboratories", "module", P(r + 12, a), { ang: side }); }
+      else if (role === "Power") { lm("Reactor", "reactor", c, { major: true }); for (let k = 0; k < 4; k++) lm(k ? "" : "Solar Field", "solar", P(r + 13 + (k % 2) * 10, a + (k < 2 ? -.14 : .14)), { ang: a }); }
+      else if (role === "Landing Field") { for (let k = 0; k < 3; k++) lm(k ? "" : "Landing Pads", "pad", P(r + 2, a + (k - 1) * .17), { size: 1.7, major: !k }); lm("Hangar", "hangar", P(r - 13, a + .17), { ang: a }); for (let k = 0; k < 3; k++) lm(k ? "" : "Fuel Store", "tank", P(r - 12, a - .16 + k * .05), { size: .8 });
+        // the rover track: from the landing field off the edge of the sheet
+        const far = P(260, a); roads.push(["Rover Track", 1, [P(r + 10, a), P((r + 260) / 2, a + R(-.06, .06)), far]]); }
+      else if (role === "Mining") { lm("Mine Head", "spire", c, { top: "stack", h: 7, major: true }); lm("Refinery", "reactor", P(r + 11, a + .1), { size: .7 }); lm("", "tank", P(r + 9, a - .14), { size: .9 }); }
+    });
+    roads.push(["Perimeter Track", 2, circle([cx, cy], 96, 28).map(([x, y]) => [x, +(cy + (y - cy) * squash).toFixed(1)]).concat([[+(cx + 96).toFixed(1), +cy.toFixed(1)]])]);
+    // craters: kept off the base itself, and off each other
+    const cr = [];
+    for (let t = 0; t < 400 && cr.length < 16; t++) {
+      const x = R(X0 + 10, X1 - 10), y = R(Y0 + 10, Y1 - 10), r = R(4, 17), dx = (x - cx) / 108, dy = (y - cy) / (108 * squash);
+      if (Math.hypot(dx, dy) < 1 + r / 108 || cr.some(q => Math.hypot(q[0] - x, q[1] - y) < q[2] + r + 3)) continue;
+      cr.push([x, y, r]); open.push({ kind: "crater", pts: circle([x, y], r, 22, .06) });
+    }
+    notes = kind === "colony" ? "a colony on the surface of a world" : kind === "outpost" ? "an outpost on the surface of a world" : "a base on the surface of a moon";
+  } else {
+    const RR = 62;
+    lm("The Hub", "habdome", [cx, cy], { size: 1.15, major: true });
+    const ring = circle([cx, cy], RR, 36); tube(ring.concat([ring[0]]));
+    for (let k = 0; k < 4; k++) { const a = a0 + k * Math.PI / 2; tube([P(8, a), P(RR, a)]); }
+    const sections = ["Habitation Ring", "Green Ring", "Engineering", "Command"];
+    sections.forEach((nm, k) => {
+      const mid = a0 + k * Math.PI / 2 + Math.PI / 4;
+      for (let q = -1; q <= 1; q++) { const a = mid + q * .24; lm("", "module", P(RR + 4.5, a), { ang: a + Math.PI / 2, major: q === 0 }); }
+      districts[nm] = P(RR - 18, mid);                             // its places stand inside the ring, between the spokes
+    });
+    // the docking arms, out from the ring on opposite sides, each ending in a pad and its hangar
+    for (const [k, nm] of [[0, "Docking Arm"], [2, "Cargo Arm"]]) {
+      const a = a0 + k * Math.PI / 2; tube([P(RR, a), P(RR + 34, a)]);
+      lm(k ? "Cargo Pad" : "Docking Pad", "pad", P(RR + 41, a), { size: 1.7, major: true }); lm("", "hangar", P(RR + 30, a + .2), { ang: a, size: .8 });
+      districts[nm] = P(RR + 24, a);
+    }
+    for (let k = 0; k < 4; k++) { const a = a0 + Math.PI / 4 + k * Math.PI / 2 + .42; lm(k ? "" : "Solar Arrays", "solar", P(RR + 24, a), { ang: a, size: 1.2 }); }
+    lm("Comms Array", "dish", P(RR * .45, a0 + Math.PI / 4)); lm("Core", "reactor", P(RR * .42, a0 + Math.PI * 1.25), { size: .8 });
+    notes = "a station in orbit";
+  }
+  // an area is where its places stand: kept on the sheet
+  for (const k of Object.keys(districts)) districts[k] = [Math.max(14, Math.min(SW - 14, districts[k][0])), Math.max(14, Math.min(SH - 14, districts[k][1]))];
+  const data = {
+    look: "scifi", ground, seed, sheet: { w: SW, h: SH, margin: M }, grow: false, wobble: 0, fill: false,
+    title: name, subtitle: year != null ? String(year) : "", scaleLabel: "Scale",
+    invented: { name, kind, era: "future", year, ground }, districts, roads, rails: [], walls, parks: [], open, plazas: [], rows: [], landmarks, boats: 0
+  };
+  const file = writeCity(dir, data, [
+    `${name}: an invented site (${notes}), laid out by: atlas.js city --invent "${name}" --kind ${kind}${year != null ? " --year " + year : ""} --seed ${seed}`,
+    "Nothing is grown on a site: every module, dome, tube, pad and panel is listed here. Another seed turns and shifts it.",
+    "This file is rewritten whenever the site is generated again. Put your own changes in campaign.js:",
+    '  ATLAS.cityEdit(c => { c.landmarks.push({ name, kind: "module", at: [x, y], ang: 0 }); c.walls.push({ kind: "tube", pts: [[x1, y1], [x2, y2]] }); });'
+  ]);
+  log(`wrote ${path.relative(process.cwd(), file) || file}: ${name}, ${notes} (the future, ${ground} ground), seed ${seed}`);
+  log(`  ${landmarks.length} modules, domes, pads and panels · ${walls.length} tubes · ${open.length} craters · ${roads.length} tracks`);
+  log(`  named (a place may be one of these: landmark: "name"): ${landmarks.filter(l => l.name).map(l => l.name).join("; ")}`);
+  log(`  areas (a place's region may be one of these): ${Object.keys(districts).join(", ")}`);
+  return data;
+}
+
+module.exports = { inventCity, inventSite, inventOutpost, CULTURES };

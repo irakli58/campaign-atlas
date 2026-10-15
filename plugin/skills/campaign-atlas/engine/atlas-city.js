@@ -65,6 +65,29 @@
       tall: (i, b) => b.zone == null || b.type === "church" || b.type === "chapel" ? scatter(i, b) : b.zone ? Math.max(1, b.zone * (.5 + h01(i) * .55) / b.h) : b.type === "back" ? 1.1 : 1.2 + h01(i + 3) * .9
     });
   }
+  // The future: a base on a moon or a planet, a station in orbit, a colony. White modules and domes joined by tubes,
+  // on grey ground, under black sky with stars. A place on such a map wears one of the future's own models (a module,
+  // a dome, a lab, a reactor...), chosen from its name when it names none; never a house of 1888 (the user caught a
+  // moon station drawn in London's houses, 15 Oct 2026).
+  LOOKS.scifi = Object.assign({}, LOOKS.modern, {
+    future: true, stars: true, lamps: false, stacks: false, crooked: 0, table: 0x0a0d12, night: 0x05070a, landmark: 0xeef1f4, lmRoof: 0x8e9aa6, flat: "#8d96a0", pub: "#5d6874", glass: 0xa9d6ea,
+    tall: () => 1, pitched: () => false,
+    brick: ["#dfe3e7", "#d3d8dd", "#e8ebee", "#c9cfd5", "#dcdfe2", "#eceef0", "#cdd3d8"], stone: ["#e4e7ea", "#d8dce0", "#eef0f2", "#d0d5da", "#e9ebed"],
+    ware: ["#9aa3ab", "#8c959e", "#a5adb4", "#939ba3"], slate: ["#7f8891", "#737c85", "#8a929a", "#6c757e", "#959ca3"], tile: ["#7f8891", "#737c85", "#8a929a"],
+    flats: ["#b9c0c7", "#a9b1b9", "#c6ccd1", "#9fa8b0", "#b3bac1", "#8f989f"],
+    plan: { INK: "#24303b", PAPER: "#d7dadc", BLOCK: "#c5c8ca", ROADF: "#eef0f1", MAJORF: "#f3e2ad", WATERC: "#9fb4c3", PARKC: "#b8c7b4", FOOT: "#bcc2c7", LOT: "#cfd2d4", WHARF: "#bcc2c7", RAILC: "#bcc2c7", HATCH: "rgba(40,50,60,.06)", FORTC: "#e6e9eb" },
+    abbr: { pubs: "", churches: "", chapels: "", schools: "", gas: "" },
+    // a place's model from its name, in this order of what matters most
+    guess: m => {
+      const s = String((m.name || "") + " " + (m.category || "") + " " + (m.tagline || "")).toLowerCase();
+      for (const [re, k] of [[/dock|hangar|landing|launch|port\b|spindle|shuttle|airlock/, "dock"], [/command|bridge|control|ops\b|operations|tower|spire/, "command"], [/engine|reactor|power|fusion|core\b|drive/, "reactor"],
+        [/hydroponic|garden|green|farm|arboretum|biodome/, "greenhouse"], [/medic|med\b|medbay|infirmary|hospital|clinic|sick/, "medbay"], [/lab|research|science|xeno|bio\b|specimen/, "lab"],
+        [/habitat|habitation|quarters|barracks|dorm|crew|living|residen/, "quarters"], [/comm|antenna|radio|relay|signal|array|dish|listening/, "antenna"], [/mine|mining|drill|refinery|ore|excavat/, "mine"],
+        [/solar|panel/, "solar"], [/cargo|store|storage|depot|warehouse|supply/, "cargo"], [/dome|hall|mess|canteen|commons|atrium/, "habdome"]]) if (re.test(s)) return k;
+      return "module";
+    }
+  });
+  LOOKS.future = LOOKS.scifi;
   // Where in the world, laid over the look of the age: region: "mediterranean" | "desert" | "eastasia".
   // Anything else is the temperate north the looks were first drawn for. A modern city takes only the `modern` part.
   const REGIONS = {
@@ -87,18 +110,27 @@
     }
   };
   // what a place can be on the map (place meta: model: "church" or ["church", 3]); the number is the ground it claims
-  const MODEL_SIZE = { house: 3, town: 3, cottage: 2.4, pub: 2.4, church: 2.4, tinchapel: 2.4, tinhall: 2.4, hall: 4, museum: 2.4, infirmary: 2.4, orphanage: 2.6, asylum: 7.5, home: 4.5, warehouse: 2.4, baths: 2.4, morgue: 2.4, annex: 2.4, arch: 2.4, shaft: 2.4, crooked: 2.4, cone: 5, quay: 3, coalyard: 2.4, slum: 2.4, alley: 1, cart: 1 };
+  const MODEL_SIZE = { house: 3, town: 3, cottage: 2.4, pub: 2.4, church: 2.4, tinchapel: 2.4, tinhall: 2.4, hall: 4, museum: 2.4, infirmary: 2.4, orphanage: 2.6, asylum: 7.5, home: 4.5, warehouse: 2.4, baths: 2.4, morgue: 2.4, annex: 2.4, arch: 2.4, shaft: 2.4, crooked: 2.4, cone: 5, quay: 3, coalyard: 2.4, slum: 2.4, alley: 1, cart: 1,
+    // the future's own (LOOKS.scifi): habitat modules and domes, and what a base or a station is made of
+    module: 3, quarters: 3.4, habdome: 3.4, greenhouse: 3.4, lab: 3.2, medbay: 3.2, command: 3, reactor: 3.4, dock: 4.2, antenna: 2.6, mine: 3, solar: 3.6, cargo: 3 };
+  // which models belong to which look: a check warns of a house in the future, or a reactor in 1888
+  const FUTURE_MODELS = ["module", "quarters", "habdome", "greenhouse", "lab", "medbay", "command", "reactor", "dock", "antenna", "mine", "solar", "cargo"];
   const MODELS = Object.keys(MODEL_SIZE);
 
   // landmarks: what each kind is when the city gives no footprint or height: [width, depth, height] in plan units
-  const LM_SIZE = { tower: [5, 5, 24], hall: [7, 5, 3.2], church: [4.5, 9, 9], mosque: [7, 7, 7], dome: [7, 7, 5], castle: [13, 11, 2.2], stadium: [16, 12, 3.2], spire: [3.4, 3.4, 22], monument: [1.6, 1.6, 3.6], pyramid: [7, 7, 5], pagoda: [4, 4, 8], wheel: [8, 2, 14], bridge: [16, 2.6, 6], watchtower: [1.6, 1.6, 3.6], tent: [5, 3.2, 1.6], hangar: [9, 7, 3.2], bunker: [5, 4, 1.1], gate: [5, 1.4, 2.6], tank: [3, 3, 2.6], pad: [5, 5, .08], park: [0, 0, 0], square: [0, 0, 0] };
+  const LM_SIZE = { tower: [5, 5, 24], hall: [7, 5, 3.2], church: [4.5, 9, 9], mosque: [7, 7, 7], dome: [7, 7, 5], castle: [13, 11, 2.2], stadium: [16, 12, 3.2], spire: [3.4, 3.4, 22], monument: [1.6, 1.6, 3.6], pyramid: [7, 7, 5], pagoda: [4, 4, 8], wheel: [8, 2, 14], bridge: [16, 2.6, 6], watchtower: [1.6, 1.6, 3.6], tent: [5, 3.2, 1.6], hangar: [9, 7, 3.2], bunker: [5, 4, 1.1], gate: [5, 1.4, 2.6], tank: [3, 3, 2.6], pad: [5, 5, .08], park: [0, 0, 0], square: [0, 0, 0],
+    // the future: a habitat module lying on its legs, a dome on a drum, a reactor, a dish, a field of solar panels
+    module: [7, 2.8, 2.6], habdome: [9, 9, 4.5], reactor: [6, 6, 5], dish: [4, 4, 5.5], solar: [9, 5, .9] };
   // what lies between the buildings of a site that is not a city (ground: "grass" | "sand" | "dirt" | "snow" | "concrete")
   const GROUNDS = {
     grass: { BLOCK: "#cbd3a4", PAPER: "#dfe3c2", HATCH: "rgba(70,90,40,.06)", LOT: "#d9dfb8" },
     sand: { BLOCK: "#e6d6ae", PAPER: "#efe3c4", HATCH: "rgba(120,90,40,.05)", LOT: "#eadcb8" },
     dirt: { BLOCK: "#d2c2a0", PAPER: "#e2d6b8", HATCH: "rgba(90,70,40,.07)", LOT: "#dccdae" },
     snow: { BLOCK: "#eef1f2", PAPER: "#f6f8f8", HATCH: "rgba(80,100,120,.05)", LOT: "#f2f4f4", PARKC: "#dfe7e2" },
-    concrete: { BLOCK: "#d9d9d4", PAPER: "#e6e6e2", HATCH: "rgba(60,60,60,.05)", LOT: "#dedede" }
+    concrete: { BLOCK: "#d9d9d4", PAPER: "#e6e6e2", HATCH: "rgba(60,60,60,.05)", LOT: "#dedede" },
+    // the future: the dust of a moon, and the deck plan of a station in orbit
+    regolith: { BLOCK: "#c3c4c3", PAPER: "#d3d4d3", HATCH: "rgba(50,50,50,.07)", LOT: "#cbcccb" },
+    deck: { BLOCK: "#c9ced3", PAPER: "#dde1e4", HATCH: "rgba(40,60,80,.05)", LOT: "#d4d9dd" }
   };
   const LM_KINDS = Object.keys(LM_SIZE);
 
@@ -141,7 +173,8 @@
     const out = [], byD = {};
     A.order.forEach((id, i) => {
       const m = A.meta[id]; if (!m || m.offmap) return;
-      const mdl = Array.isArray(m.model) ? m.model : [m.model || "house"], kind = MODEL_SIZE[mdl[0]] ? mdl[0] : "house";
+      // no model named: the look chooses (the future picks one of its own from the place's name), else a house
+      const mdl = Array.isArray(m.model) ? m.model : [m.model || (LOOK && LOOK.guess ? LOOK.guess(m) : "house")], kind = MODEL_SIZE[mdl[0]] ? mdl[0] : "house";
       const e = { id, kind, lr: mdl[1] || MODEL_SIZE[kind], x: null, y: null, p: { id, n: i + 1, name: m.name || id, dist: m.district || m.region || "", cat: m.category || "", badge: m.badge || "" } };
       // a place that IS one of the city's landmarks (landmark: "its name") stands where the landmark does, and wears it
       const lm = m.landmark ? D.landmarks.find(l => l.at && String(l.name).toLowerCase() === String(m.landmark).toLowerCase()) : null;
@@ -706,7 +739,11 @@ function drawPlan(C, ppu, view) {
   // a shape of several rings (water with islands, a building round a court)
   const bpath = b => { g.beginPath(); for (const r of [b.pts, ...(b.holes || [])]) { g.moveTo(r[0][0], r[0][1]); for (let i = 1; i < r.length; i++) g.lineTo(r[i][0], r[i][1]); g.closePath(); } };
   // open ground that is not green: sand, fields, yards
-  for (const o of C.open) { g.fillStyle = o.kind === "sand" ? "#eadfb8" : o.kind === "field" ? PARKC : LOT; g.globalAlpha = o.kind === "field" ? .45 : 1; path(o.pts, true); g.fill(); g.globalAlpha = 1; }
+  for (const o of C.open) {
+    // a crater: a shadowed bowl inside a pale rim, lit from the northwest as the buildings are
+    if (o.kind === "crater") { g.fillStyle = "rgba(40,44,48,.16)"; path(o.pts, true); g.fill(); g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = .7; g.stroke(); g.strokeStyle = "rgba(30,34,38,.22)"; g.lineWidth = .35; g.save(); g.translate(.5, .5); path(o.pts, true); g.stroke(); g.restore(); continue; }
+    g.fillStyle = o.kind === "sand" ? "#eadfb8" : o.kind === "field" ? PARKC : LOT; g.globalAlpha = o.kind === "field" ? .45 : 1; path(o.pts, true); g.fill(); g.globalAlpha = 1;
+  }
   // parks and squares
   const tree = (x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.fill(); };
   for (const p of [...C.parks, ...C.squares]) {
@@ -776,6 +813,7 @@ function drawPlan(C, ppu, view) {
   for (const p of C.plazas) { g.fillStyle = ROADF; g.strokeStyle = INK; g.lineWidth = .16; path(p.pts, true); g.fill(); g.stroke(); }
   g.lineCap = "butt";
   for (const w of C.walls) {
+    if (w.kind === "tube") { g.strokeStyle = INK; g.lineWidth = 1.5; path(w.pts); g.stroke(); g.strokeStyle = ROADF; g.lineWidth = 1.05; g.stroke(); continue; }
     if (w.kind === "fence") { g.strokeStyle = INK; g.lineWidth = .2; path(w.pts); g.stroke(); g.lineWidth = .13; g.beginPath(); for (const [x, y] of w.pts) { g.moveTo(x - .32, y - .32); g.lineTo(x + .32, y + .32); g.moveTo(x - .32, y + .32); g.lineTo(x + .32, y - .32); } g.stroke(); continue; }
     g.strokeStyle = INK; g.lineWidth = 1.5; path(w.pts); g.stroke(); g.strokeStyle = FORTC; g.lineWidth = 1.05; g.stroke();
   }
@@ -826,7 +864,9 @@ function drawPlan(C, ppu, view) {
   for (const q of C.footprints) { path(q.pts, true); g.fill(); g.stroke(); }
   g.globalAlpha = 1;
   // the landmarks' own ground
-  for (const L of C.landmarks) { if (L.flat || L.kind === "bridge" || L.place) continue; g.fillStyle = LOT; g.strokeStyle = INK; g.lineWidth = .2; bpath(L); g.fill("evenodd"); g.stroke(); }
+  // (the future's round things, modules on legs and panels on posts, leave no square on the plan)
+  const UNDRAWN = LOOK.future ? new Set(["module", "habdome", "reactor", "dish", "solar", "pad", "tank", "spire"]) : new Set();
+  for (const L of C.landmarks) { if (L.flat || L.kind === "bridge" || L.place || UNDRAWN.has(L.kind)) continue; g.fillStyle = LOT; g.strokeStyle = INK; g.lineWidth = .2; bpath(L); g.fill("evenodd"); g.stroke(); }
   // street lamps: tiny ink dots on the kerb
   g.fillStyle = INK;
   if (LOOK.lamps !== false) for (const [x, y] of C.lamps) { g.beginPath(); g.arc(x, y, .12, 0, 6.2832); g.fill(); }
@@ -1056,6 +1096,13 @@ function createMap3D(host, C, planCanvas, hooks) {
   // depth and flickered. Now it is drawn first and never written to the depth buffer, so the plan always wins.
   const tableMat = new T.MeshBasicMaterial({ color: LOOK.table, depthWrite: false });
   const table = new T.Mesh(new T.PlaneGeometry(6000, 6000), tableMat); table.rotation.x = -Math.PI / 2; table.position.y = -.6; table.renderOrder = -1; scene.add(table);
+  // the future's sky: the sheet hangs in black space among stars (they keep their size, and no fog dims them)
+  if (LOOK.stars) {
+    const n = 2200, pos = new Float32Array(n * 3), sr = mulberry32(7), RS = 2600;
+    for (let i = 0; i < n; i++) { const a = sr() * 6.2832, up = .04 + sr() * .96, k = Math.sqrt(1 - up * up); pos[i * 3] = Math.cos(a) * k * RS; pos[i * 3 + 1] = 40 + up * RS; pos[i * 3 + 2] = Math.sin(a) * k * RS; }
+    const sg = new T.BufferGeometry(); sg.setAttribute("position", new T.BufferAttribute(pos, 3));
+    scene.add(new T.Points(sg, new T.PointsMaterial({ color: 0xffffff, size: 1.7, sizeAttenuation: false, fog: false, transparent: true, opacity: .85 })));
+  }
 
   // The sharp print. The plan first appears as the one modest texture above, so the map is there at once. Then,
   // while the browser is idle, the same plan is printed again in six tiles at a higher resolution, and when all six
@@ -1104,6 +1151,8 @@ function createMap3D(host, C, planCanvas, hooks) {
   }
   const coneG = new T.ConeGeometry(.5, 1, 8); coneG.translate(0, .5, 0);
   const cylG = new T.CylinderGeometry(.5, .5, 1, 14); cylG.translate(0, .5, 0);
+  // a cylinder lying along x, resting on the ground: a habitat module, a tube between modules
+  const tubeG = new T.CylinderGeometry(.5, .5, 1, 18); tubeG.rotateZ(Math.PI / 2); tubeG.translate(0, .5, 0);
   const m4 = new T.Matrix4(), q = new T.Quaternion(), e = new T.Euler(), v = new T.Vector3(), sc = new T.Vector3(), col = new T.Color();
   function instanced(geo, list, mat, cast = true) {
     if (!list.length) return null;
@@ -1147,15 +1196,17 @@ function createMap3D(host, C, planCanvas, hooks) {
     }
   }
   // rows of huts and tents the site gives outright
-  const barrels = [];
+  const barrels = [], modules = [];
   for (const b of C.huts) {
     const x = wx(b.x), z = wz(b.y), ry = -b.a;
-    if (b.roof === "tent") roofs.push({ x, z, sx: b.w, sy: b.h, sz: b.d, ry, c: b.c || (LOOK.age ? "#b9ad8a" : "#8f9479") });
+    if (b.roof === "module") modules.push({ x, y: .25, z, sx: b.w, sy: b.d * .92, sz: b.d * .92, ry, c: b.c || "#e3e7ea" });     // a habitat module on its side
+    else if (b.roof === "tent") roofs.push({ x, z, sx: b.w, sy: b.h, sz: b.d, ry, c: b.c || (LOOK.age ? "#b9ad8a" : "#8f9479") });
     else if (b.roof === "barrel") barrels.push({ x, z, sx: b.w, sy: b.h * 2, sz: b.d, ry, c: b.c || "#8d9297" });
     else { walls.push({ x, z, sx: b.w, sy: b.h, sz: b.d, ry, c: b.c || (LOOK.age ? "#8f7b62" : "#a7a99b") }); if (b.roof === "flat") walls.push({ x, y: b.h, z, sx: b.w + .1, sy: .1, sz: b.d + .1, ry, c: LOOK.flat }); else roofs.push({ x, y: b.h, z, sx: b.w + .12, sy: Math.min(.9, b.d * .3), sz: b.d + .12, ry, c: LOOK.age ? "#5c5148" : "#70757a" }); }
   }
   const barrelG = new T.CylinderGeometry(.5, .5, 1, 14, 1, false, 0, Math.PI); barrelG.rotateZ(Math.PI / 2);
   instanced(barrelG, barrels, new T.MeshLambertMaterial({ color: 0xffffff, side: T.DoubleSide }));
+  instanced(tubeG, modules, new T.MeshLambertMaterial({ color: 0xffffff }));
   if (LOOK.stacks !== false) for (const s of C.specials.stacks) stacks.push({ x: wx(s.x), z: wz(s.y), sx: .9, sy: s.h, sz: .9, c: "#6e4d3c" });
   for (const gsh of C.specials.gas) { stacks.push({ x: wx(gsh.x), z: wz(gsh.y), sx: gsh.r * 2, sy: 2.6, sz: gsh.r * 2, c: "#7d7a70" }); }
   const wallMat = new T.MeshLambertMaterial({ color: 0xffffff });
@@ -1190,7 +1241,17 @@ function createMap3D(host, C, planCanvas, hooks) {
     }
     for (const [bx, by] of CD.towers) tw.push({ x: wx(bx), z: wz(by), sx: 2.6, sy: 6.5, sz: 2.2, c: "#a69b84" }, { x: wx(bx), y: 6.5, z: wz(by), sx: 1.6, sy: 1.5, sz: 1.4, c: "#8f8573" });
     // town walls: a curtain along the line, a tower at each turn of about a bowshot
-    for (const w of C.walls) { let run = 99; if (w.kind === "fence" || w.kind === "hesco") { for (let i = 1; i < w.pts.length; i++) { const [ax, ay] = w.pts[i - 1], [bx, by] = w.pts[i], l = Math.hypot(bx - ax, by - ay), ry = -Math.atan2(by - ay, bx - ax); if (w.kind === "hesco") tw.push({ x: wx((ax + bx) / 2), z: wz((ay + by) / 2), sx: l + .1, sy: 1.15, sz: 1.2, ry, c: "#b9a57e" }); else tw.push({ x: wx((ax + bx) / 2), z: wz((ay + by) / 2), sx: l, sy: 1.2, sz: .05, ry, c: "#8a8a80" }, { x: wx(ax), z: wz(ay), sx: .12, sy: 1.4, sz: .12, ry, c: "#4d4a44" }); } continue; } for (let i = 1; i < w.pts.length; i++) { const [ax, ay] = w.pts[i - 1], [bx, by] = w.pts[i], l = Math.hypot(bx - ax, by - ay), ry = -Math.atan2(by - ay, bx - ax); tw.push({ x: wx((ax + bx) / 2), z: wz((ay + by) / 2), sx: l + .1, sy: 1.7, sz: .7, ry, c: "#b9ad93" }); run += l; if (run > 15) { run = 0; tw.push({ x: wx(ax), z: wz(ay), sx: 1.35, sy: 2.6, sz: 1.35, ry, c: "#b2a68c" }); } } }
+    // the future's tubes: pressurised corridors between modules, a round tube on its feet, a collar at every joint
+    const tubes = [];
+    for (const w of C.walls) if (w.kind === "tube") for (let i = 1; i < w.pts.length; i++) {
+      const [ax, ay] = w.pts[i - 1], [bx, by] = w.pts[i], l = Math.hypot(bx - ax, by - ay), dir = Math.atan2(by - ay, bx - ax), ry = -dir;
+      tubes.push({ x: wx((ax + bx) / 2), y: .15, z: wz((ay + by) / 2), sx: l + .2, sy: 1.25, sz: 1.25, ry, c: "#dde2e6" });
+      // a collar where the tube ends or turns sharply (a gently curving ring has none)
+      const nx = w.pts[i + 1], turn = nx ? Math.abs(((Math.atan2(nx[1] - by, nx[0] - bx) - dir + 9.4248) % 6.2832) - 3.1416) : 9;
+      if (turn > .35) tubes.push({ x: wx(bx), y: .1, z: wz(by), sx: .6, sy: 1.45, sz: 1.45, ry, c: "#9aa4ad" });
+    }
+    instanced(tubeG, tubes, new T.MeshLambertMaterial({ color: 0xffffff }));
+    for (const w of C.walls) { let run = 99; if (w.kind === "tube") continue; if (w.kind === "fence" || w.kind === "hesco") { for (let i = 1; i < w.pts.length; i++) { const [ax, ay] = w.pts[i - 1], [bx, by] = w.pts[i], l = Math.hypot(bx - ax, by - ay), ry = -Math.atan2(by - ay, bx - ax); if (w.kind === "hesco") tw.push({ x: wx((ax + bx) / 2), z: wz((ay + by) / 2), sx: l + .1, sy: 1.15, sz: 1.2, ry, c: "#b9a57e" }); else tw.push({ x: wx((ax + bx) / 2), z: wz((ay + by) / 2), sx: l, sy: 1.2, sz: .05, ry, c: "#8a8a80" }, { x: wx(ax), z: wz(ay), sx: .12, sy: 1.4, sz: .12, ry, c: "#4d4a44" }); } continue; } for (let i = 1; i < w.pts.length; i++) { const [ax, ay] = w.pts[i - 1], [bx, by] = w.pts[i], l = Math.hypot(bx - ax, by - ay), ry = -Math.atan2(by - ay, bx - ax); tw.push({ x: wx((ax + bx) / 2), z: wz((ay + by) / 2), sx: l + .1, sy: 1.7, sz: .7, ry, c: "#b9ad93" }); run += l; if (run > 15) { run = 0; tw.push({ x: wx(ax), z: wz(ay), sx: 1.35, sy: 2.6, sz: 1.35, ry, c: "#b2a68c" }); } } }
     instanced(boxG, tw, wallMat);
   }
 
@@ -1314,6 +1375,25 @@ function createMap3D(host, C, planCanvas, hooks) {
         if (L.top === "pylons") for (const q of [-.25, .25]) { for (const v of [-1, 1]) { const [x, z] = ax(q * long, v * (short / 2 + .1)); add(boxG, M.wall, x, 0, z, .7, H, .7, ryL); } const [x, z] = ax(q * long, 0); add(boxG, M.wall, x, H * .78, z, .6, .5, short + .9, ryL, false); }
         break;
       }
+      // ---- the future: a module on its legs, a dome on a drum, a reactor, a dish, a field of panels
+      case "module": {
+        const [x, z] = ax(0, 0), dia = Math.min(short * .95, H);
+        for (const q of [-.3, .3]) { const [lx, lz] = ax(q * long, 0); add(boxG, M.dark, lx, 0, lz, .3, dia * .3, short * .6, ryL, false); }
+        add(tubeG, M.wall, x, dia * .2, z, long, dia, dia, ryL); add(tubeG, M.roof, x, dia * .18, z, long * .08, dia * 1.04, dia * 1.04, ryL, false); break;
+      }
+      case "habdome": { const r = short / 2, drum = Math.max(.6, H * .18); add(cylG, M.wall, 0, 0, 0, short, drum, short, 0, false); add(cylG, M.roof, 0, drum, 0, short * 1.02, .2, short * 1.02, 0, false); add(domeG, M.wall, 0, drum + .15, 0, short, Math.max(r, H - drum) * 2, short, 0, false); break; }
+      case "reactor":
+        add(cylG, M.wall, 0, 0, 0, short * .8, H * .65, short * .8, 0, false); add(coneG, M.wall, 0, H * .65, 0, short * .8, H * .35, short * .8, 0, false); add(cylG, M.glow, 0, H * .45, 0, short * .82, H * .07, short * .82, 0, false);
+        for (const a of [0, 1.571, 3.142, 4.712]) add(boxG, M.roof || M.dark, Math.cos(a) * short * .45, 0, Math.sin(a) * short * .45, short * .25, H * .7, .3, -a + 1.571, false); break;
+      case "dish": {
+        add(boxG, M.wall, 0, 0, 0, short * .4, H * .12, short * .4, ry, false); add(cylG, M.wall, 0, H * .12, 0, short * .12, H * .5, short * .12, 0, false);
+        const d = add(domeG, M.wall, 0, H * .7, 0, short, short * .35, short, 0, false); d.rotation.x = Math.PI * .78; break;
+      }
+      case "solar": {
+        const nu = Math.max(1, Math.round(long / 3)), nv = Math.max(1, Math.round(short / 2.4));
+        for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) { const [x, z] = ax((i + .5) * long / nu - long / 2, (j + .5) * short / nv - short / 2); const p = add(boxG, M.panel || M.dark, x, H * .6, z, long / nu * .9, .08, short / nv * .8, ryL, false); p.rotation.x = -.3; add(boxG, M.dark, x, 0, z, .12, H * .6, .12, 0, false); }
+        break;
+      }
       default: body(H); if (L.top === "dome") { cap(H); dome(0, 0, short * .3, H); } else if (L.top === "spire") { cap(H); add(coneG, M.roof, 0, H, 0, short * .3, H * .6, short * .3, 0, false); } else cap(H);
     }
   }
@@ -1329,6 +1409,8 @@ function createMap3D(host, C, planCanvas, hooks) {
     if (fp) grp.position.set(wx(fp.cx), 0, wz(fp.cy)); else { grp.position.set(wx(L.x), 0, wz(L.y)); grp.rotation.y = L.face || 0; }
     const roofCol = CD.roofs[L.p.cat] || CD.roof;
     const mats = { wall: new T.MeshLambertMaterial({ color: LOOK.landmark, transparent: true }), roof: new T.MeshLambertMaterial({ color: new T.Color(roofCol), transparent: true, side: T.DoubleSide }), dark: new T.MeshLambertMaterial({ color: 0x3a312a, transparent: true }), glow: new T.MeshBasicMaterial({ color: 0xffb35a, transparent: true }) };
+    // the future's glass, growing things and solar panels
+    if (LOOK.future) Object.assign(mats, { pane: new T.MeshLambertMaterial({ color: LOOK.glass || 0xa9d6ea, transparent: true }), leaf: new T.MeshLambertMaterial({ color: 0x5f8f5a, transparent: true }), panel: new T.MeshLambertMaterial({ color: 0x2b3d58, transparent: true }), dark: new T.MeshLambertMaterial({ color: 0x4a525a, transparent: true }) });
     let top = 0;
     const add = (geo, mat, x, y, z, sx, sy, sz, ry = 0, outline = true) => {
       const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.y = ry;
@@ -1386,6 +1468,49 @@ function createMap3D(host, C, planCanvas, hooks) {
       case "orphanage": house(4, 3.2, 3.6, 1.2); add(boxG, mats.dark, 1.2, 0, -.2, 1.2, 2.4, 2.8, 0, false); break;
       case "baths": house(3.6, 2.9, 3, .9); add(cylG, mats.dark, 1.3, 3, -.8, .5, 2.4, .5); break;
       case "morgue": house(3.4, 2.8, 2.6, .8); break;
+      // ---- the future's own (LOOKS.scifi): modules lying on legs, domes on drums, towers with glass tops
+      case "module":
+        for (const x of [-1.6, 1.6]) add(boxG, mats.dark, x, 0, 0, .25, .55, 1.4, 0, false);
+        add(tubeG, mats.wall, 0, .45, 0, 5.2, 2.1, 2.1); add(tubeG, mats.roof, 0, .42, 0, .5, 2.16, 2.16, 0, false);
+        add(boxG, mats.dark, 2.62, .8, 0, .1, 1, .9, 0, false); break;
+      case "quarters":
+        for (const z of [-1.25, 1.25]) { add(tubeG, mats.wall, 0, .3, z, 5.6, 2.1, 2.1); add(tubeG, mats.roof, -1.2, .28, z, .45, 2.16, 2.16, 0, false); add(tubeG, mats.roof, 1.2, .28, z, .45, 2.16, 2.16, 0, false); }
+        add(boxG, mats.wall, 0, 0, 0, 1.5, 1.9, 3.4); break;
+      case "habdome":
+        add(cylG, mats.wall, 0, 0, 0, 6.2, .9, 6.2); add(cylG, mats.roof, 0, .9, 0, 6.3, .2, 6.3, 0, false); add(domeG, mats.wall, 0, 1.08, 0, 6.2, 5.6, 6.2);
+        add(boxG, mats.dark, 0, 0, 3.1, 1.3, 1.4, .6, 0, false); break;
+      case "greenhouse":
+        add(cylG, mats.wall, 0, 0, 0, 6.6, .7, 6.6); add(cylG, mats.leaf, 0, .7, 0, 4.6, 1.3, 4.6, 0, false); add(domeG, mats.pane || mats.wall, 0, .7, 0, 6.3, 6, 6.3);
+        add(cylG, mats.roof, 0, .68, 0, 6.7, .14, 6.7, 0, false); break;
+      case "lab":
+        add(boxG, mats.wall, 0, 0, 0, 5, 2.2, 3.2); add(boxG, mats.roof, 0, 2.2, 0, 5.1, .2, 3.3, 0, false); add(domeG, mats.wall, -1.2, 2.4, 0, 2.3, 2.3, 2.3);
+        add(boxG, mats.dark, 1.6, 2.4, .7, .12, 2.6, .12, 0, false); add(tubeG, mats.wall, 3.4, .3, 0, 2.2, 1.5, 1.5); break;
+      case "medbay":
+        add(cylG, mats.wall, 0, 0, 0, 5.2, 2, 5.2); add(cylG, mats.roof, 0, 2, 0, 5.3, .25, 5.3, 0, false); add(domeG, mats.wall, 0, 2.25, 0, 4.4, 2.8, 4.4);
+        add(boxG, mats.roof, 0, .9, 2.62, 1.5, .45, .06, 0, false); add(boxG, mats.roof, 0, .67, 2.62, .45, 1.5, .06, 0, false); break;
+      case "command":
+        add(cylG, mats.wall, 0, 0, 0, 4.6, 1.4, 4.6); add(cylG, mats.wall, 0, 1.4, 0, 1.7, 4.2, 1.7); add(cylG, mats.pane || mats.glow, 0, 5.6, 0, 3.8, 1.1, 3.8);
+        add(cylG, mats.roof, 0, 6.7, 0, 4.1, .32, 4.1, 0, false); add(boxG, mats.dark, 0, 7, 0, .14, 2.6, .14, 0, false); break;
+      case "reactor":
+        add(cylG, mats.wall, 0, 0, 0, 4.8, 3.2, 4.8); add(coneG, mats.wall, 0, 3.2, 0, 4.8, 1.5, 4.8); add(cylG, mats.glow, 0, 2.3, 0, 4.9, .35, 4.9, 0, false);
+        for (const a of [0, 1.571, 3.142, 4.712]) add(boxG, mats.roof, Math.cos(a) * 2.75, 0, Math.sin(a) * 2.75, 1.3, 3.6, .35, -a + 1.571, false); break;
+      case "dock":
+        add(cylG, mats.dark, 0, 0, 0, 7.8, .14, 7.8, 0, false); add(cylG, mats.wall, 0, .14, 0, 4.8, .04, 4.8, 0, false); add(cylG, mats.dark, 0, .18, 0, 3.6, .04, 3.6, 0, false);
+        add(boxG, mats.roof, 3.3, 0, -2.7, .32, 3.4, .32); add(boxG, mats.roof, 2.2, 3.2, -2.7, 2.5, .26, .32, 0, false); add(tubeG, mats.wall, -3.7, .3, 2.5, 3.2, 1.7, 1.7, .8); break;
+      case "antenna": {
+        add(boxG, mats.wall, 0, 0, 0, 1.7, .8, 1.7); add(cylG, mats.wall, 0, .8, 0, .5, 3.3, .5);
+        const dish = add(domeG, mats.wall, 0, 4.6, 0, 4.2, 1.4, 4.2, 0, false); dish.rotation.x = Math.PI * .78;
+        add(boxG, mats.dark, 0, 4.1, 0, .1, 1.9, .1, 0, false); break;
+      }
+      case "mine":
+        for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add(boxG, mats.dark, x, 0, z, .18, 5, .18, 0, false);
+        add(boxG, mats.roof, 0, 4.6, 0, 2.6, .6, 2.6); add(boxG, mats.wall, 0, 0, 2.9, 3.3, 1.7, 2.2); add(coneG, mats.dark, 2.7, 0, -1.7, 2.6, 1.3, 2.6, 0, false); break;
+      case "solar":
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) { add(boxG, mats.dark, -2.4 + i * 2.4, 0, -1.3 + j * 2.6, .12, .9, .12, 0, false); const p = add(boxG, mats.panel || mats.dark, -2.4 + i * 2.4, .9, -1.3 + j * 2.6, 2.1, .08, 2.2, 0, false); p.rotation.x = -.35; }
+        break;
+      case "cargo":
+        for (const [x, y, z, c] of [[-1.3, 0, -.85, 0], [1.3, 0, -.85, 1], [-1.3, 0, .95, 1], [1.3, 0, .95, 0], [0, 1.25, .05, 0]]) add(boxG, c ? mats.roof : mats.wall, x, y, z, 2.4, 1.25, 1.6);
+        break;
       default: house(3.4, 2.8, 3.3, 1.1);
     }
     // rings on the ground: selection (accent) and fingerbone site (bone)
@@ -1402,6 +1527,7 @@ function createMap3D(host, C, planCanvas, hooks) {
   {
     const M = { wall: new T.MeshLambertMaterial({ color: LOOK.landmark }), roof: new T.MeshLambertMaterial({ color: LOOK.lmRoof || 0x9a8c78, side: T.DoubleSide }), dark: new T.MeshLambertMaterial({ color: 0x3a312a }), glow: new T.MeshBasicMaterial({ color: 0xffb35a }), green: new T.MeshLambertMaterial({ color: 0x7f9a5c }), glass: LOOK.glass ? new T.MeshLambertMaterial({ color: LOOK.glass }) : null };
     if (LOOK.glass) M.glasses = [LOOK.glass, 0xbccbd8, 0xdfe5e8, 0xc6ccd2, 0xb4c4d2, 0xd6d2c8].map(c => new T.MeshLambertMaterial({ color: c }));
+    if (LOOK.future) { M.dark = new T.MeshLambertMaterial({ color: 0x4a525a }); M.panel = new T.MeshLambertMaterial({ color: 0x2b3d58 }); }
     for (const L of C.landmarks) {
       if (L.place) continue;
       if (L.flat) { marks.push({ L, x: wx(L.x), y: 0, z: wz(L.y) }); continue; }
@@ -1596,7 +1722,10 @@ function createMap3D(host, C, planCanvas, hooks) {
     box.innerHTML = `<div class="map3d" style="background:${hex(LOOK.table)}"><div class="loading" style="background:${hex(LOOK.table)}">Surveying the streets, one by one…</div><div class="pins"></div><div class="tip" hidden></div>
       <div class="mctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Reset view" title="Reset view">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div></div>
       <div class="cityflatbox" hidden></div>
-      <div class="maphint"><span class="lg">${sw(P.MAJORF, 7)}Main road</span><span class="lg">${sw(P.ROADF, 5)}Street</span><span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="${P.INK}" stroke-width="2"/></svg>Lane, alley, court</span>${D.rails.length ? `<span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="${P.INK}" stroke-width="3.4"/><line x1="0" y1="5" x2="26" y2="5" stroke="${P.ROADF}" stroke-width="1.2" stroke-dasharray="3 3"/></svg>Railway</span>` : ""}<span class="how">Drag to pan · scroll or pinch to zoom · right-drag or two fingers to turn. Click a numbered building to open it.</span>${D.credit ? `<span class="credit">${A.esc(D.credit)}${D.creditUrl ? ` (<a href="${A.esc(D.creditUrl)}" target="_blank" rel="noopener">terms</a>)` : ""}</span>` : ""}</div>`;
+      <div class="maphint">${LOOK.future
+        // the future's key: its tubes, and its tracks only where it has any
+        ? `${(D.walls || []).some(w => w.kind === "tube") ? `<span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="${P.INK}" stroke-width="6"/><line x1="0" y1="5" x2="26" y2="5" stroke="${P.ROADF}" stroke-width="4"/></svg>Pressurised tube</span>` : ""}${D.roads.length ? `<span class="lg">${sw(P.ROADF, 5)}Track</span>` : ""}`
+        : `<span class="lg">${sw(P.MAJORF, 7)}Main road</span><span class="lg">${sw(P.ROADF, 5)}Street</span><span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="${P.INK}" stroke-width="2"/></svg>Lane, alley, court</span>`}${D.rails.length ? `<span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="${P.INK}" stroke-width="3.4"/><line x1="0" y1="5" x2="26" y2="5" stroke="${P.ROADF}" stroke-width="1.2" stroke-dasharray="3 3"/></svg>Railway</span>` : ""}<span class="how">Drag to pan · scroll or pinch to zoom · right-drag or two fingers to turn. Click a numbered building to open it.</span>${D.credit ? `<span class="credit">${A.esc(D.credit)}${D.creditUrl ? ` (<a href="${A.esc(D.creditUrl)}" target="_blank" rel="noopener">terms</a>)` : ""}</span>` : ""}</div>`;
     const host = box.querySelector(".map3d"), loading = box.querySelector(".loading"), tip = box.querySelector(".tip"), flat = box.querySelector(".cityflatbox"), how = box.querySelector(".how");
     let last = { sel: null, mode: "gm", matches: () => true };
     const ctl = { map: null, flyTo(id) { if (ctl.map) ctl.map.flyTo(id); }, sync(st) { last = st; if (ctl.map) ctl.map.sync(st); else if (!flat.hidden) flat.innerHTML = flatSVG(D, placed, last); } };
@@ -1657,5 +1786,5 @@ function createMap3D(host, C, planCanvas, hooks) {
   // a campaign's own changes to a city that was fetched or generated for it (city.js is rewritten whenever the city is
   // fetched again, so changes made there would be lost): ATLAS.cityEdit(c => { c.title = "..."; c.landmarks.push({...}); })
   A.cityEdit = fn => { (A.cityEdits = A.cityEdits || []).push(fn); return A; };
-  A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, LOOKS, REGIONS, LM_KINDS, LM_SIZE, plan: () => PLAN };
+  A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN };
 })(ATLAS);

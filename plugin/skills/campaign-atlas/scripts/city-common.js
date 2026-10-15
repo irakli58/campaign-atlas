@@ -7,15 +7,16 @@ const fs = require("fs"), path = require("path");
 const ERAS = {
   medieval: { look: "medieval", note: "plaster, timber and thatch; walls and gates; no railways, lamps or factories" },
   industrial: { look: "industrial", note: "brick terraces and slate, chimney stacks, gas lamps, railways" },
-  modern: { look: "modern", note: "flat roofs, towers of glass, a clean plan" }
+  modern: { look: "modern", note: "flat roofs, towers of glass, a clean plan" },
+  future: { look: "scifi", note: "habitat modules and domes joined by tubes, landing pads, solar arrays, black sky" }
 };
-const ERA_WORDS = { ancient: "medieval", antique: "medieval", classical: "medieval", roman: "medieval", dark: "medieval", medieval: "medieval", mediaeval: "medieval", renaissance: "medieval", tudor: "medieval", fantasy: "medieval", old: "industrial", georgian: "industrial", regency: "industrial", victorian: "industrial", edwardian: "industrial", industrial: "industrial", gaslight: "industrial", steampunk: "industrial", pulp: "industrial", "1920s": "industrial", noir: "industrial", modern: "modern", contemporary: "modern", present: "modern", today: "modern", future: "modern", cyberpunk: "modern", scifi: "modern" };
+const ERA_WORDS = { ancient: "medieval", antique: "medieval", classical: "medieval", roman: "medieval", dark: "medieval", medieval: "medieval", mediaeval: "medieval", renaissance: "medieval", tudor: "medieval", fantasy: "medieval", old: "industrial", georgian: "industrial", regency: "industrial", victorian: "industrial", edwardian: "industrial", industrial: "industrial", gaslight: "industrial", steampunk: "industrial", pulp: "industrial", "1920s": "industrial", noir: "industrial", modern: "modern", contemporary: "modern", present: "modern", today: "modern", cyberpunk: "modern", future: "future", scifi: "future", "sci-fi": "future", space: "future", spacefaring: "future", starfaring: "future", "far future": "future" };
 // era and year from the command's flags. A year alone is enough; an era alone is enough; neither means the present day.
 function eraOf(flags) {
   const year = flags.year != null && flags.year !== true ? parseInt(flags.year, 10) : null;
   let era = flags.era && flags.era !== true ? ERA_WORDS[String(flags.era).toLowerCase()] : null;
-  if (flags.era && flags.era !== true && !era) throw new Error(`unknown era "${flags.era}": use medieval, industrial or modern (or give --year)`);
-  if (!era) era = year == null ? "modern" : year < 1650 ? "medieval" : year < 1946 ? "industrial" : "modern";
+  if (flags.era && flags.era !== true && !era) throw new Error(`unknown era "${flags.era}": use medieval, industrial, modern or future (or give --year)`);
+  if (!era) era = year == null ? "modern" : year < 1650 ? "medieval" : year < 1946 ? "industrial" : year < 2100 ? "modern" : "future";
   // an industrial city before the railway and the gas main keeps the look but not the lamps and stacks
   const look = era === "industrial" && year != null && year < 1815 ? { base: "industrial", lamps: false, stacks: false } : ERAS[era].look;
   return { era, year: Number.isFinite(year) ? year : null, look };
