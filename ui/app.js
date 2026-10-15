@@ -24,7 +24,15 @@
   const provOf = j => j.provider === "own" ? "own-" + (j.tool || "claude") : j.provider;
   const STATUS = { working: "working", "working-own": "working", waiting: "not started", stopped: "stopped", capped: "cap reached", failed: "stopped by an error", finished: "finished" };
   // rough costs when paying per use with Claude: the first campaign made will tell better
-  const GUESS = { "claude-opus-5-5": { oneshot: "$8–15", campaign: "$25–40", epic: "$60–120" }, "claude-sonnet-5-5": { oneshot: "$4–8", campaign: "$12–20", epic: "$30–60" } };
+  const GUESS = { "claude-opus-5-5": { oneshot: "$8–15", campaign: "$25–40", epic: "$60–120", unlimited: "$3–5 a place" }, "claude-sonnet-5-5": { oneshot: "$4–8", campaign: "$12–20", epic: "$30–60", unlimited: "$1.50–2.50 a place" } };
+  const DRAFT = ["title", "story", "system", "core", "notes", "places"];
+  // the game master's own places, one a line (blank lines and repeats do not count)
+  const placeCount = () => new Set(String(form.places.value).split(/\r?\n/).map(l => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").replace(/(?:\s+[-–—]\s+|:\s+).*$/, "").trim().toLowerCase()).filter(Boolean)).size;
+  function paintPlaces() {
+    const on = sizeNow() === "unlimited", n = on ? placeCount() : 0;
+    $("#f-places").hidden = !on;
+    if (on) $("#nplaces").textContent = (n ? n + " place" + (n > 1 ? "s" : "") + " · " : "") + "one per line; a few words after a dash if you like";
+  }
   const copyBtn = text => `<button type="button" class="btn ghost" data-copy="${esc(text)}">Copy</button>`;
 
   /* ---------------------------------------------------------------- views */
@@ -109,7 +117,7 @@
     paintChoices();
     paintConnect();
     // a draft survives a reload
-    for (const n of ["title", "story", "system", "core", "notes"]) { const v = store.get("draft-" + n); if (v && !form[n].value) form[n].value = v; }
+    for (const n of DRAFT) { const v = store.get("draft-" + n); if (v && !form[n].value) form[n].value = v; }
     words();
   }
 
@@ -122,7 +130,9 @@
     }
     $("#f-cap").hidden = p !== "claude";
     for (const el of $$("[data-cost]")) el.textContent = own ? "uses your plan" : p === "claude" ? "roughly " + (GUESS[sel.value] || GUESS["claude-opus-5-5"])[el.dataset.cost] : "priced by OpenAI";
-    if (p === "claude" && !capTouched) form.budget.value = Math.round((S.sizes[sizeNow()] || {}).cap * (sel.value === "claude-sonnet-5-5" ? .5 : 1)) || 40;
+    const sz = S.sizes[sizeNow()] || {}, half = sel.value === "claude-sonnet-5-5" ? .5 : 1;
+    if (p === "claude" && !capTouched) form.budget.value = Math.max(4, Math.round(sz.cap * half * (sz.perPlace ? Math.max(1, placeCount()) : 1))) || 40;
+    paintPlaces();
     let hint;
     if (own) { const t = S.tools[toolOf(p)]; hint = !t.found ? "Put " + t.label + " on this computer first (above)." : t.label + " opens in a window of its own and does the work there, on your plan. A big campaign is a lot of writing: if your plan's limit stops it partway, press Carry on once the limit resets, and nothing is lost."; }
     else hint = !S.connectors[p].connected ? "Connect " + PROV[p] + " first (above)." : "It works on its own for an hour or more; you can close this page and come back.";
@@ -179,7 +189,8 @@
   });
   form.addEventListener("input", e => {
     if (e.target.name === "budget") capTouched = true;
-    if (["title", "story", "system", "core", "notes"].includes(e.target.name)) { store.set("draft-" + e.target.name, e.target.value); if (e.target.name === "story") words(); }
+    if (e.target.name === "places") paintPlaces();
+    if (DRAFT.includes(e.target.name)) { store.set("draft-" + e.target.name, e.target.value); if (e.target.name === "story") words(); }
   });
   $("#storyfile").addEventListener("change", e => {
     const f = e.target.files[0]; if (!f) return;
@@ -194,11 +205,11 @@
     const p = prov(), own = isOwn(p), err = $("#newerr"); err.textContent = "";
     if (own && !S.tools[toolOf(p)].found) { err.textContent = "Put " + S.tools[toolOf(p)].label + " on this computer first: the steps are above."; return; }
     if (!own && !S.connectors[p].connected) { err.textContent = "Connect " + PROV[p] + " first: paste your key above."; $(".ckey") && $(".ckey").focus(); return; }
-    const o = { provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value, story: form.story.value, size: sizeNow(), system: form.system.value, core: form.core.value, notes: form.notes.value, model: form.model.value, budget: +form.budget.value };
+    const o = { provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value, story: form.story.value, size: sizeNow(), places: sizeNow() === "unlimited" ? form.places.value : undefined, system: form.system.value, core: form.core.value, notes: form.notes.value, model: form.model.value, budget: +form.budget.value };
     const btn = $("#gobtn"); btn.disabled = true;
     try {
       const r = await api("/api/campaigns", o); setS(r.state);
-      for (const n of ["title", "story", "system", "core", "notes"]) { store.del("draft-" + n); form[n].value = ""; }
+      for (const n of DRAFT) { store.del("draft-" + n); form[n].value = ""; }
       capTouched = false; words();
       // the game master's own Claude Code or Codex opens at once, with the request typed
       if (own) { try { await api(`/api/campaigns/${r.job.slug}/launch`, { tool: o.tool }); } catch (x) { launchNote = x.message; } }

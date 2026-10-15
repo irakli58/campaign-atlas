@@ -54,7 +54,7 @@ The reasons are in the references; these are the ones that were learned by getti
 - **A real city is the real city.** When the user names one, fetch it: actual streets with their names, the actual river, the actual landmarks. Never draw a real city from memory. Its buildings wear the story's age: medieval, industrial or modern.
 - **The map and the guide share one set of names.** Room ids are `R1`, `R2`...; never describe a room that is not drawn, never draw one with no entry.
 - **Every place has its theme.** Say `music: "mood"` on each place that matters (`catalogue` lists the moods); the rest are guessed from their names. Sound starts only from the page's Music button.
-- **People are described.** The principals in full in the cast (looks, manner, background, want, secret, lie, what makes them talk); everyone else at least by what they look like and what they know.
+- **Every person is a person.** Everyone the players can meet, however minor, has what they look like, their story, how they act and who they know (`look`, `bg`, `manner`, `ties`); the principals have the rest too in the cast (how they speak, want, secret, lie, what makes them talk, fate). Ties name people by cast id or full name, and the page shows the web both ways.
 - **Nothing secret reaches the players.** Hidden rooms take `{ h: 1 }`, secret doors are type `"s"`, GM-only floors take `gm: 1`. A room's `d`, `pur` and `atm` are shown to players.
 - **Run `check` after every change, and act on it.** It enforces the standards: sizes by tier, every room written, players' maps clean, the trail unbroken, hints, descriptions, the city sound.
 - **Never edit `city.js`.** It is rewritten by the `city` command; changes go in `campaign.js` with `ATLAS.cityEdit`.

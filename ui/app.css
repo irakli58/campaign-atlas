@@ -51,6 +51,9 @@ small, .hint { color: var(--muted); font-size: 14px; }
 .num { font-family: var(--f-mono); font-size: 13px; color: var(--bg); background: var(--accent); border-radius: 50%; width: 24px; height: 24px; display: inline-grid; place-items: center; flex: none; transform: translateY(-3px); }
 .who, .sizes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .who.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sizes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 960px) { .sizes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.field.places { margin-top: 14px; }
 @media (max-width: 760px) { .who, .who.two, .sizes { grid-template-columns: minmax(0, 1fr); } }
 .paid { margin-top: 12px; }
 .paid summary { cursor: pointer; color: var(--muted); font-size: 15px; }

@@ -115,24 +115,27 @@ rooms: {
 
 ```js
 clues:   { C1: { t: "Title", at: "R2", p: "in the desk", d: "What it is.", how: "How it is found.", rev: "What it reveals.", hint: "What the referee does if the players miss it.", to: "other-place" } },
-npcs:    { N1: { n: "Name, role", at: "R2", look: "...", voice: "...", doing: "...", want: "...", knows: "...", secret: "...", lie: "...", press: "What makes them talk.", rev: "What they will reveal, and to whom.", to: "other-place" },
+npcs:    { N1: { n: "Name, role", at: "R2", look: "...", manner: "How they act.", voice: "...", bg: "Their story.", ties: { okafor: "How they know her.", "Joss Hale": "How they know him." },
+                 doing: "...", want: "...", knows: "...", secret: "...", lie: "...", press: "What makes them talk.", rev: "What they will reveal, and to whom.", to: "other-place" },
            N2: { who: "okafor", at: "R3", doing: "...", knows: "...", rev: "..." } },      // one of the cast: named and described there
 secrets: { S1: { t: "Title", at: "R2", acc: "How it opens.", dest: "Where it leads.", why: "Why it exists." } },
 enc:     { E1: { t: "Title", at: "R1", d: "What happens, when, what it costs." } }
 ```
 
-`to` (a place id or a list of them) is a lead. `at` is a room id, or the id of a piece of ground. `check` requires a `hint` on every clue of a tier 1 place that has a `to`, and a `look` (their own or the cast's) for every person in a tier 1 or 2 place.
+`to` (a place id or a list of them) is a lead. `at` is a room id, or the id of a piece of ground. `check` requires a `hint` on every clue of a tier 1 place that has a `to`, and, for every person in a tier 1 or 2 place, the four things every person has (their own or the cast's): `look` (what they look like), `bg` (their story), `manner` (how they act) and `ties` (who they know). At tier 3 a missing one is noted.
+
+**Ties** are the web of the story: `ties: { okafor: "her doctor; owes her his wife's last good year", "Bram Tellis": "drinks with him; suspects him" }`. A key is one of the cast's ids, or anyone else's name written as their `n` gives it (before the comma). The page shows each person's ties with links to the place where that person is met, and under **Named by** the people elsewhere who name them, so the web reads both ways. A sentence (`ties: "..."`) is allowed when the ties are not worth naming one by one; a key that looks like an id but is nobody in the cast is noted by `check`.
 
 **The cast.** The people the story turns on are described once, in `campaign.js`, and shown in full on the People tab with the places they are met in:
 
 ```js
 ATLAS.cast({
-  okafor: { n: "Dr. Adaeze Okafor", role: "Chief of the medical ring", look: "What they look like.", voice: "How they speak.", bg: "Background.",
-            want: "What they want.", secret: "What they hide.", lie: "The lie they tell.", press: "What makes them talk.", fate: "What becomes of them.", offstage: false }
+  okafor: { n: "Dr. Adaeze Okafor", role: "Chief of the medical ring", look: "What they look like.", manner: "How they act.", voice: "How they speak.", bg: "Background.",
+            ties: { "Petra Lindqvist": "How they know her." }, want: "What they want.", secret: "What they hide.", lie: "The lie they tell.", press: "What makes them talk.", fate: "What becomes of them.", offstage: false }
 });
 ```
 
-`check` requires `n`, `look`, `want`, `secret` and `press`, and notes a cast member who is met nowhere (`offstage: true` silences that for someone never seen).
+`check` requires `n`, `look`, `bg`, `manner`, `ties`, `want`, `secret` and `press`, and notes a cast member who is met nowhere (`offstage: true` silences that for someone never seen).
 
 **The guide overlay.** `guide: { ov, floors: { "FLOOR NAME": "note" }, rooms: { R1: { ... } } }` lays extra text over the map's own: its room fields win over `map.rooms`, its floor notes fill in floors without a `note`, and its `ov` joins `run`. A new campaign does not need it; write everything in `map`. It exists so a guide can be added to maps that were drawn first.
 

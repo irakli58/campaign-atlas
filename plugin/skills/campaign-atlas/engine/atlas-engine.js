@@ -632,7 +632,9 @@ var ATLAS = (function () {
     };
     dir("Clue directory", M.clues, c => `${esc(c.t || "")}</div>${f("Where", where(M, c.at) + (c.p ? " · " + c.p : ""))}${f("What it is", c.d)}${f("How it is found", c.how)}${f("What it reveals", c.rev)}${f("If the players miss it", c.hint)}${fh("Leads to", goLinks(c.to))}<div>`);
     // a person who is one of the cast (who: "id") is described there once; anything said here is added to it
-    dir("People", M.npcs, n => { const w = (n.who && A.castData && A.castData[n.who]) || {}, g = k => n[k] || w[k]; return `${esc(n.n || w.n || "")}</div>${f("Where", where(M, n.at))}${f("Looks like", g("look"))}${f("Manner", g("voice"))}${f("What they are doing", n.doing)}${f("What they want", g("want"))}${f("What they know", n.knows)}${f("What they hide", g("secret"))}${f("The lie they tell", g("lie"))}${f("What makes them talk", g("press"))}${f("What they will reveal", n.rev)}${fh("Points to", goLinks(n.to))}<div>`; });
+    // ties: { castId or "A name": "how they know them" }, or a sentence
+    const tieText = t => !t ? "" : typeof t === "string" ? t : Object.entries(t).map(([to, how]) => ((A.castData || {})[to] ? A.castData[to].n : to) + ": " + how).join("; ");
+    dir("People", M.npcs, n => { const w = (n.who && A.castData && A.castData[n.who]) || {}, g = k => n[k] || w[k]; return `${esc(n.n || w.n || "")}</div>${f("Where", where(M, n.at))}${f("Looks like", g("look"))}${f("How they act", g("manner"))}${f("How they speak", g("voice"))}${f("Their story", g("bg"))}${f("Who they know", tieText(g("ties")))}${f("What they are doing", n.doing)}${f("What they want", g("want"))}${f("What they know", n.knows)}${f("What they hide", g("secret"))}${f("The lie they tell", g("lie"))}${f("What makes them talk", g("press"))}${f("What they will reveal", n.rev)}${fh("Points to", goLinks(n.to))}<div>`; });
     dir("Secret doors, passages and hiding places", M.secrets, x => `${esc(x.t || "")}</div>${f("Where", where(M, x.at))}${f("Access", x.acc)}${f("Leads to", x.dest)}${f("Purpose", x.why)}<div>`);
     dir("Encounters and dangers", M.enc, x => `${esc(x.t || "")}</div>${f("Where", where(M, x.at))}${f("What happens", x.d)}<div>`);
     return out.join("");
@@ -654,7 +656,7 @@ var ATLAS = (function () {
   /* ---- registering a place */
   A.configure = cfg => { for (const k in cfg) A.config[k] = (cfg[k] && typeof cfg[k] === "object" && !Array.isArray(cfg[k]) && A.config[k] && typeof A.config[k] === "object" && !Array.isArray(A.config[k])) ? Object.assign({}, A.config[k], cfg[k]) : cfg[k]; return A; };
   // The cast: the people the story turns on, each described once.
-  //   ATLAS.cast({ vane: { n: "Harbour Master Vane", role: "...", look: "...", voice: "...", bg: "...", want: "...", secret: "...", lie: "...", press: "...", fate: "..." } })
+  //   ATLAS.cast({ vane: { n: "Harbour Master Vane", role: "...", look: "...", manner: "...", voice: "...", bg: "...", ties: { okafor: "..." }, want: "...", secret: "...", lie: "...", press: "...", fate: "..." } })
   // A person on a map who is one of them says who: "vane" and need not repeat the name or the description.
   A.cast = people => { A.castData = Object.assign(A.castData || {}, people); return A; };
   A.place = (id, def) => {

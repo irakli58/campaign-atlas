@@ -50,7 +50,7 @@ ATLAS.place("old-mill", {
       C1: { t: "The miller's ledger", at: "R2", p: "in the desk", d: "What it is.", how: "How it is found.", rev: "What it reveals.", hint: "What the referee does if the players miss it.", to: "another-place-id" },
       C2: { t: "A second clue", at: "R5", d: "...", how: "...", rev: "..." }
     },
-    npcs: { N1: { n: "Name, role", at: "R2", look: "What they look like.", voice: "How they speak.", doing: "...", want: "...", knows: "...", press: "What makes them talk.", rev: "What they will reveal, and to whom." } },   // or one of the cast: { who: "id", at: "R2", doing: "...", knows: "...", rev: "..." }
+    npcs: { N1: { n: "Name, role", at: "R2", look: "What they look like.", manner: "How they act.", voice: "How they speak.", bg: "Their story, in a sentence or two.", ties: { castId: "How they know them.", "Another Person's Full Name": "How they know them." }, doing: "...", want: "...", knows: "...", press: "What makes them talk.", rev: "What they will reveal, and to whom." } },   // or one of the cast: { who: "id", at: "R2", doing: "...", knows: "...", rev: "..." }
     secrets: { S1: { t: "The false wall", at: "R2", acc: "How it opens.", dest: "The strongroom (R4).", why: "Why it exists." } },
     enc: { E1: { t: "The wheel turns", at: "R1", d: "What happens, when, and what it costs." } }
   }

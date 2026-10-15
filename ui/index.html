@@ -55,7 +55,7 @@
 
       <div class="step">
         <h2><span class="num">2</span> Your story</h2>
-        <label class="field"><span>Title</span><input name="title" required maxlength="120" placeholder="The Wormroot Idol"></label>
+        <label class="field"><span>Title</span><input name="title" required maxlength="120" placeholder="Write your campaign's name here"></label>
         <label class="field"><span>The story <small id="words"></small></span>
           <textarea name="story" required rows="14" placeholder="Paste the whole story here: the plot, the people, the places, as much or as little as you have. The council will fill out the rest."></textarea></label>
         <div class="row"><label class="btn ghost file">Open a file instead…<input type="file" id="storyfile" accept=".txt,.md,.markdown,.text" hidden></label><span class="hint">A .txt or .md file. From Word, use File › Save As › Plain Text.</span></div>
@@ -64,13 +64,15 @@
       <div class="step">
         <h2><span class="num">3</span> Your choices</h2>
         <div class="sizes" role="radiogroup" aria-label="How big"></div>
+        <label class="field places" id="f-places" hidden><span>Your places <small id="nplaces">one per line; a few words after a dash if you like</small></span>
+          <textarea name="places" rows="9" maxlength="40000" placeholder="Write each place on its own line. You can add a few words after a dash, for example:&#10;&#10;The lighthouse - where the keeper vanished&#10;The keeper's cottage&#10;The village church and its crypt"></textarea></label>
         <div class="grid2">
-          <label class="field"><span>Game system <small>optional</small></span><input name="system" maxlength="120" placeholder="Call of Cthulhu 7e, D&amp;D 5e, Vampire…"></label>
+          <label class="field"><span>Game system <small>optional</small></span><input name="system" maxlength="120" placeholder="The rules you play by, e.g. Call of Cthulhu 7e or D&amp;D 5e"></label>
           <label class="field" id="f-model"><span>Writer</span><select name="model"></select></label>
         </div>
-        <label class="field"><span>What must not change <small>optional</small></span><textarea name="core" rows="3" maxlength="4000" placeholder="The heart of your story, in a sentence or two: the council keeps it and may change everything else."></textarea></label>
-        <label class="field"><span>Anything else for the council <small>optional</small></span><textarea name="notes" rows="3" maxlength="6000" placeholder="The tone, the players, a real city to set it in, what you want more of…"></textarea></label>
-        <label class="field narrow" id="f-cap"><span>Spending cap</span><span class="money"><span>$</span><input name="budget" type="number" min="1" max="2000" step="1" value="40"></span>
+        <label class="field"><span>What must not change <small>optional</small></span><textarea name="core" rows="3" maxlength="4000" placeholder="Write the heart of your story in a sentence or two. The council keeps this exactly as it is, and may change everything else."></textarea></label>
+        <label class="field"><span>Anything else for the council <small>optional</small></span><textarea name="notes" rows="3" maxlength="6000" placeholder="Anything the council should know: the tone you want, who your players are, a real city to set it in, what you want more of."></textarea></label>
+        <label class="field narrow" id="f-cap"><span>Spending cap</span><span class="money"><span>$</span><input name="budget" type="number" min="1" max="5000" step="1" value="40"></span>
           <small class="hint">The work stops if it reaches this. You can raise it and carry on.</small></label>
       </div>
 

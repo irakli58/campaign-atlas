@@ -151,6 +151,12 @@ function checkMap(A, id, level, P, N) {
     if (d === "secrets") { if (!has(v.acc)) P(`${k} needs how it is opened (acc)`); if (!has(v.dest)) P(`${k} needs where it leads (dest)`); }
     if (d === "enc" && !has(v.d)) P(`${k} needs what happens (d)`);
     if (d === "npcs" && !has(v.knows) && !has(v.doing)) N(`${k} has neither what they are doing nor what they know`);
+    // every person is a person: a story, a way of acting, and people they know (the user asked for all three, 15 Oct 2026)
+    if (d === "npcs" && !v.who) {
+      const lack = PERSON.filter(f => f !== "look" && !has(f === "ties" ? tieText(v.ties) : v[f]));   // look: checked above
+      if (lack.length) { const say = `${k} (${String(v.n || "").split(",")[0] || "a person"}) lacks ${lack.map(f => PERSON_SAYS[f]).join(", ")}`; if ((A.meta[id].tier || 3) <= 2) P(say); else N(say); }
+    }
+    if (d === "npcs") for (const t of strayTies(A, v.ties)) N(`${k}'s ties name "${t}", who is not in the cast: use a cast id, or write the name out in full`);
   }
   // can every room be reached?
   const full = reach(A, M, false), pub = reach(A, M, true);
@@ -279,14 +285,23 @@ function checkMusic(A) {
   if (lone.length) { out.push(`   - the songs for the moments at these tier 1 and 2 places are guessed from their scenes; to choose them, say music: { mood, also: { "The search": "dread" } }: ${lone.join(", ")}`); notes++; }
   return { line: `music: ${K.flavour()} · ${chosen} of ${A.order.length} places with a chosen theme`, out, problems, notes };
 }
+// What every person carries, the cast and the people on the maps alike: what they look like, their story, how they
+// act, and the people they know (ties: { castId or "A full name": "how they know them" }, or a sentence)
+const PERSON = ["look", "bg", "manner", "ties"];
+const PERSON_SAYS = { look: "what they look like (look)", bg: "their story (bg)", manner: "how they act (manner)", ties: "who they know (ties)" };
+const tieText = t => !t ? "" : typeof t === "string" ? t.trim() : Object.entries(t).filter(([, v]) => has(v)).map(([k, v]) => k + ": " + v).join("; ");
+// a tie written like an id (one lower-case word) that is not one of the cast is probably a mistyped id
+const strayTies = (A, t) => t && typeof t === "object" ? Object.keys(t).filter(x => /^[a-z][a-z0-9_-]*$/.test(x) && !(A.castData || {})[x]) : [];
+
 // the cast: each principal described well enough to play, and met somewhere
 function checkCast(A) {
   const out = [], cast = A.castData || {}; let problems = 0, notes = 0;
   const met = new Set(); for (const id of A.order) { const M = A.maps[id]; if (M) for (const n of Object.values(M.npcs || {})) if (n.who) met.add(n.who); }
   for (const [k, p] of Object.entries(cast)) {
     if (!p.n) { out.push(`   ! ${k} has no name (n)`); problems++; }
-    const lack = ["look", "want", "secret", "press"].filter(f => !p[f]);
-    if (lack.length) { out.push(`   ! ${k} lacks: ${lack.map(f => ({ look: "what they look like (look)", want: "what they want (want)", secret: "what they hide (secret)", press: "what makes them talk (press)" })[f]).join(", ")}`); problems++; }
+    const lack = [...PERSON, "want", "secret", "press"].filter(f => !(f === "ties" ? tieText(p.ties) : p[f]));
+    if (lack.length) { out.push(`   ! ${k} lacks: ${lack.map(f => PERSON_SAYS[f] || ({ want: "what they want (want)", secret: "what they hide (secret)", press: "what makes them talk (press)" })[f]).join(", ")}`); problems++; }
+    for (const t of strayTies(A, p.ties)) { out.push(`   - ${k}'s ties name "${t}", who is not in the cast: use a cast id, or write the name out in full`); notes++; }
     if (!met.has(k) && !p.offstage) { out.push(`   - ${k} is in the cast but is met nowhere: give a person on some map who: "${k}" (or mark the cast entry offstage: true)`); notes++; }
   }
   return { line: `cast: ${Object.keys(cast).length} principal${Object.keys(cast).length === 1 ? "" : "s"}`, out, problems, notes };

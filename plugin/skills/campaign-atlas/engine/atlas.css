@@ -437,6 +437,9 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .
 .pf.sec-k dd { border-left: 3px solid var(--accent); padding-left: 10px; }
 .pf.sec-k dt { color: var(--accent); }
 @media (max-width: 560px) { .pf { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+.ties { margin: 0; padding-left: 1.1em; }
+.ties li { margin: 0 0 3px; }
+.ties b { font-weight: 600; }
 .cnote { display: grid; gap: 4px; margin-top: 12px; }
 .cnote span { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .cnote textarea { width: 100%; resize: vertical; border: 1px solid var(--rule); background: var(--panel); border-radius: 3px; padding: 6px 8px; font: inherit; font-size: 15px; }

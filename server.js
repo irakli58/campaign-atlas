@@ -18,12 +18,23 @@ const TOKEN = crypto.randomBytes(24).toString("hex");
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
 
 /* ---- the workspace the AI works in: Atlas's skill, the house rules, and the campaigns */
+// one hash of every file in a folder, names and contents
+function fingerprint(dir) {
+  const h = crypto.createHash("sha1");
+  (function walk(d, rel) { for (const f of fs.readdirSync(d).sort()) { const p = path.join(d, f), r = rel + "/" + f; if (fs.statSync(p).isDirectory()) walk(p, r); else { h.update(r); h.update(fs.readFileSync(p)); } } })(dir, "");
+  return h.digest("hex");
+}
 function setup() {
   for (const d of [DATA, CAMPS]) fs.mkdirSync(d, { recursive: true });
   if (!fs.existsSync(path.join(SHIPPED, "SKILL.md"))) { console.error("The Atlas tool is missing (" + SHIPPED + "). Download the app again."); process.exit(1); }
-  // Atlas itself is refreshed from the app's copy at every start, so an updated app brings an updated tool
-  fs.rmSync(SKILL, { recursive: true, force: true });
-  fs.cpSync(SHIPPED, SKILL, { recursive: true });
+  // Atlas itself is refreshed from the app's copy when that copy has changed, so an updated app brings an updated tool,
+  // and starting the app again leaves alone a Claude Code that is working with the tool as it is
+  const stamp = fingerprint(SHIPPED), mark = path.join(SKILL, ".shipped");
+  if (!fs.existsSync(mark) || fs.readFileSync(mark, "utf8") !== stamp) {
+    fs.rmSync(SKILL, { recursive: true, force: true });
+    fs.cpSync(SHIPPED, SKILL, { recursive: true });
+    fs.writeFileSync(mark, stamp);
+  }
   const rules = fs.readFileSync(path.join(ROOT, "workspace-template", "CLAUDE.md"), "utf8");
   fs.writeFileSync(path.join(WORK, "CLAUDE.md"), rules);
   fs.writeFileSync(path.join(WORK, "AGENTS.md"), rules);       // the same rules, for Codex

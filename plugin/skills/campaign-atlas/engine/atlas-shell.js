@@ -439,13 +439,38 @@
     return true;
   }
 
+  // ---- who knows whom. A person's ties name the people they know and how (ties: { castId or "Full Name": "how" }).
+  // Everyone is also shown the people elsewhere who name them, so the web reads both ways, and a name links to the
+  // place where that person is met. A person is known by their cast id, or else by their name in lower case.
+  const tiesOf = n => { const t = n.ties || (castOf(n) || {}).ties; if (!t) return []; return typeof t === "string" ? [{ text: t }] : Object.entries(t).map(([to, text]) => ({ to, text })); };
+  const norm = s => String(s || "").trim().toLowerCase();
+  const CASTNAME = {}; for (const [id, c] of Object.entries(A.castData || {})) if (c.n) CASTNAME[norm(c.n)] = id;
+  const keyTo = to => (A.castData || {})[to] ? to : CASTNAME[norm(to)] || norm(to);
+  const keyOf = n => n.who || keyTo(who(n)[0]);
+  const POSTED = {}, NAMED = {}, NAMEOF = {};
+  const named = (to, x) => (NAMED[to] = NAMED[to] || []).push(x);
+  for (const p of P) for (const [k, n] of Object.entries((p.M || {}).npcs || {})) {
+    const me = keyOf(n); if (me && !POSTED[me]) { POSTED[me] = p.id; NAMEOF[me] = who(n)[0]; }
+    if (n.ties && typeof n.ties === "object") for (const [to, text] of Object.entries(n.ties)) { const t = keyTo(to); if (t !== me) named(t, { name: who(n)[0], pid: p.id, text }); }
+  }
+  for (const [id, c] of Object.entries(A.castData || {})) if (c.ties && typeof c.ties === "object") for (const [to, text] of Object.entries(c.ties)) { const t = keyTo(to); if (t !== id) named(t, { name: c.n, cast: id, text }); }
+  function personLink(to) {
+    const t = keyTo(to), c = (A.castData || {})[t], name = c ? c.n : NAMEOF[t] || to, at = POSTED[t];
+    return at && byId[at] ? `<a href="#${esc(at)}">${esc(name)}</a>` : esc(name);
+  }
+  function tiesRows(n) {
+    const own = tiesOf(n).map(t => `<li>${t.to ? `<b>${personLink(t.to)}</b>: ` : ""}${esc(t.text)}</li>`).join("");
+    const by = (NAMED[keyOf(n)] || []).map(x => `<li><b>${x.cast ? personLink(x.cast) : byId[x.pid] ? `<a href="#${esc(x.pid)}">${esc(x.name)}</a>` : esc(x.name)}</b>: ${esc(x.text)}</li>`).join("");
+    return (own ? `<div class="pf"><dt>Ties</dt><dd><ul class="ties">${own}</ul></dd></div>` : "") + (by ? `<div class="pf"><dt>Named by</dt><dd><ul class="ties">${by}</ul></dd></div>` : "");
+  }
+
   // ---- people: each "People here" entry opens into a profile, with the referee's own notes saved per person
   function profile(pid, k, n) {
     const c = castOf(n) || {}, cid = n.who || pid + "." + k, g = f => n[f] || c[f] || "";
     const row = (label, v, cls) => v ? `<div class="pf${cls ? " " + cls : ""}"><dt>${label}</dt><dd>${esc(v)}</dd></div>` : "";
     const notes = TR.chars[cid] ? TR.chars[cid].notes || "" : "", M = byId[pid].M;
     return `<div class="prof"><dl>
-      ${row("Where", n.at ? ((A.nameOf && A.nameOf(M, n.at)) ? n.at + " · " + A.nameOf(M, n.at) : n.at) : "")}${row("Looks", g("look"))}${row("Acts", n.doing)}${row("Sounds", g("voice"))}${row("Story", c.bg)}${row("Wants", g("want"))}${row("Knows", n.knows)}${row("Secret", g("secret"), "sec-k")}${row("Lie", g("lie"))}${row("Talks", g("press"))}${row("Reveals", n.rev)}${row("Fate", c.fate)}
+      ${row("Where", n.at ? ((A.nameOf && A.nameOf(M, n.at)) ? n.at + " · " + A.nameOf(M, n.at) : n.at) : "")}${row("Looks", g("look"))}${row("Manner", g("manner"))}${row("Sounds", g("voice"))}${row("Doing", n.doing)}${row("Story", g("bg"))}${tiesRows(n)}${row("Wants", g("want"))}${row("Knows", n.knows)}${row("Secret", g("secret"), "sec-k")}${row("Lie", g("lie"))}${row("Talks", g("press"))}${row("Reveals", n.rev)}${row("Fate", c.fate)}
     </dl>
     ${TR.ready ? `<label class="cnote"><span>Your notes on ${esc(who(n)[0])}</span><textarea data-cnote="${esc(cid)}" rows="3" placeholder="What the party has learned, how you've played them, changes…"${TR.canWrite ? "" : " disabled"}>${esc(notes)}</textarea></label>` : ""}</div>`;
   }

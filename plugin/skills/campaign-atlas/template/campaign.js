@@ -22,10 +22,13 @@ ATLAS.configure({
   storageKey: "atlas"
 });
 
-// The cast: the people the story turns on, from the council's bible, each described once. The People tab shows them
-// in full. A person on a map who is one of them says who: "id" and need not repeat the name or the description.
+// The cast: the people the story turns on, from the council's bible, each described once. A person on a map who is
+// one of them says who: "id" and need not repeat the name or the description. Everyone (the cast and every person
+// on a map) has a look, a story (bg), a manner (how they act) and ties (who they know, and how): a tie names one of
+// the cast by id, or anyone else by their full name, and the page shows the web both ways.
 // ATLAS.cast({
-//   id: { n: "Name", role: "Who they are in the story", look: "What they look like.", voice: "How they speak.", bg: "Background.",
+//   id: { n: "Name", role: "Who they are in the story", look: "What they look like.", manner: "How they act.", voice: "How they speak.",
+//         bg: "Background.", ties: { otherId: "How they know them.", "Someone's Full Name": "How they know them." },
 //         want: "What they want.", secret: "What they hide.", lie: "The lie they tell.", press: "What makes them talk.", fate: "What becomes of them." }
 // });
 
