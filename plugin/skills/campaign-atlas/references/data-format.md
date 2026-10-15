@@ -122,7 +122,7 @@ secrets: { S1: { t: "Title", at: "R2", acc: "How it opens.", dest: "Where it lea
 enc:     { E1: { t: "Title", at: "R1", d: "What happens, when, what it costs." } }
 ```
 
-`to` (a place id or a list of them) is a lead. `at` is a room id, or the id of a piece of ground. `check` requires a `hint` on every clue of a tier 1 place that has a `to`, and, for every person in a tier 1 or 2 place, the four things every person has (their own or the cast's): `look` (what they look like), `bg` (their story), `manner` (how they act) and `ties` (who they know). At tier 3 a missing one is noted.
+`to` (a place id or a list of them) is a lead. `at` is a room id, or the id of a piece of ground. `check` requires a `hint` on every clue of a tier 1 place that has a `to`, and, for every person in every place, the four things every person has (their own or the cast's): `look` (what they look like), `bg` (their story), `manner` (how they act) and `ties` (who they know).
 
 **Ties** are the web of the story: `ties: { okafor: "her doctor; owes her his wife's last good year", "Bram Tellis": "drinks with him; suspects him" }`. A key is one of the cast's ids, or anyone else's name written as their `n` gives it (before the comma). The page shows each person's ties with links to the place where that person is met, and under **Named by** the people elsewhere who name them, so the web reads both ways. A sentence (`ties: "..."`) is allowed when the ties are not worth naming one by one; a key that looks like an id but is nobody in the cast is noted by `check`.
 

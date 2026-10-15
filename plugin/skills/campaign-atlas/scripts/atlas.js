@@ -147,14 +147,15 @@ function checkMap(A, id, level, P, N) {
     if (d === "clues") { if (!has(v.d)) P(`${k} needs a description (d)`); if (!has(v.how)) P(`${k} needs how it is found (how)`); if (!has(v.rev)) P(`${k} needs what it reveals (rev)`);
       // a clue that leads somewhere must not be able to stall the game: the GM needs a way to give it when it is missed
       if (v.to && !has(v.hint)) { if ((A.meta[id].tier || 3) <= 1) P(`${k} leads on, so it needs a hint for when the players miss it (hint)`); else N(`${k} leads on but has no hint for when it is missed (hint)`); } }
-    if (d === "npcs") { const w = v.who ? (A.castData || {})[v.who] : null; if (v.who && !w) P(`${k} says who: "${v.who}", but the cast has nobody of that name (ATLAS.cast in campaign.js)`); if (w && !v.n) v.n = w.n; if (!has(v.look) && !(w && has(w.look))) { if ((A.meta[id].tier || 3) <= 2) P(`${k} needs a description of the person (look), or who: "..." naming one of the cast`); else N(`${k} has no description (look)`); } }
+    if (d === "npcs") { const w = v.who ? (A.castData || {})[v.who] : null; if (v.who && !w) P(`${k} says who: "${v.who}", but the cast has nobody of that name (ATLAS.cast in campaign.js)`); if (w && !v.n) v.n = w.n; if (!has(v.look) && !(w && has(w.look))) P(`${k} needs a description of the person (look), or who: "..." naming one of the cast`); }
     if (d === "secrets") { if (!has(v.acc)) P(`${k} needs how it is opened (acc)`); if (!has(v.dest)) P(`${k} needs where it leads (dest)`); }
     if (d === "enc" && !has(v.d)) P(`${k} needs what happens (d)`);
     if (d === "npcs" && !has(v.knows) && !has(v.doing)) N(`${k} has neither what they are doing nor what they know`);
-    // every person is a person: a story, a way of acting, and people they know (the user asked for all three, 15 Oct 2026)
+    // every person is a person, in every place however small: a story, a way of acting, and the people they know (the
+    // user asked for all of it for "every character", 15 Oct 2026)
     if (d === "npcs" && !v.who) {
       const lack = PERSON.filter(f => f !== "look" && !has(f === "ties" ? tieText(v.ties) : v[f]));   // look: checked above
-      if (lack.length) { const say = `${k} (${String(v.n || "").split(",")[0] || "a person"}) lacks ${lack.map(f => PERSON_SAYS[f]).join(", ")}`; if ((A.meta[id].tier || 3) <= 2) P(say); else N(say); }
+      if (lack.length) P(`${k} (${String(v.n || "").split(",")[0] || "a person"}) lacks ${lack.map(f => PERSON_SAYS[f]).join(", ")}`);
     }
     if (d === "npcs") for (const t of strayTies(A, v.ties)) N(`${k}'s ties name "${t}", who is not in the cast: use a cast id, or write the name out in full`);
   }
