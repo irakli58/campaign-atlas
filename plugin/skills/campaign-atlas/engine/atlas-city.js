@@ -65,6 +65,22 @@
       tall: (i, b) => b.zone == null || b.type === "church" || b.type === "chapel" ? scatter(i, b) : b.zone ? Math.max(1, b.zone * (.5 + h01(i) * .55) / b.h) : b.type === "back" ? 1.1 : 1.2 + h01(i + 3) * .9
     });
   }
+  // Fantasy: the medieval town's crooked lanes and steep roofs, roofed in blue, red, copper-green and violet, a turret on
+  // the odd house, and places that are taverns, wizards' towers, temples and keeps (the user asked for it, 20 Oct 2026).
+  LOOKS.fantasy = Object.assign({}, LOOKS.medieval, {
+    fantasy: true, table: 0xe4d8b6, landmark: 0xefe6d2, lmRoof: 0x5b4a78, flat: "#7d6a4a", pub: "#6a4a32",
+    brick: ["#e8dcc0", "#ddd0b2", "#efe5cf", "#c9b48e", "#d8c7a4", "#8a6a4c", "#e4d6b6"], stone: ["#c9c1ae", "#d4ccb9", "#bdb5a2", "#dcd4c2", "#b3ab98"],
+    slate: ["#4f6a8a", "#7a3b3b", "#3f6b5a", "#5b4a78", "#8a5a2a", "#4a5a6a", "#6b3a4a"], tile: ["#a5573a", "#99503a", "#b06244"],
+    dress: [{ kind: "turret", share: .05 }],
+    guess: m => {
+      const s = String((m.name || "") + " " + (m.category || "") + " " + (m.tagline || "")).toLowerCase();
+      for (const [re, k] of [[/tavern|\binn\b|alehouse|taproom|\bpub\b|hostel/, "tavern"], [/wizard|\bmage|sorcer|magus|arcane|warlock|necromanc/, "wizardtower"], [/castle|\bkeep\b|citadel|fortress|palace|stronghold|prison|dungeon|gaol/, "keep"],
+        [/temple|cathedral|church|chapel|sanctum|monaster|abbey/, "temple"], [/shrine|altar|oracle/, "shrine"], [/guild|\bhall\b|market|exchange|council|bank|counting/, "guildhall"], [/forge|smith|anvil|foundry|armou?r/, "forge"],
+        [/tree|grove|\belf|elven|druid|sylvan|forest/, "treehouse"], [/academy|college|library|school|archive|observatory|collegium/, "academy"], [/\bmill\b|windmill|granary|farm|bakery/, "windmill"],
+        [/crypt|tomb|mausoleum|catacomb|ossuary|graveyard|barrow|necropolis/, "crypt"], [/\bhut\b|hovel|shack|witch|hermit/, "hut"], [/tower|spire/, "wizardtower"]]) if (re.test(s)) return k;
+      return "house";
+    }
+  });
   // The future: a base on a moon or a planet, a station in orbit, a colony. White modules and domes joined by tubes,
   // on grey ground, under black sky with stars. A place on such a map wears one of the future's own models (a module,
   // a dome, a lab, a reactor...), chosen from its name when it names none; never a house of 1888 (the user caught a
@@ -112,7 +128,10 @@
   // what a place can be on the map (place meta: model: "church" or ["church", 3]); the number is the ground it claims
   const MODEL_SIZE = { house: 3, town: 3, cottage: 2.4, pub: 2.4, church: 2.4, tinchapel: 2.4, tinhall: 2.4, hall: 4, museum: 2.4, infirmary: 2.4, orphanage: 2.6, asylum: 7.5, home: 4.5, warehouse: 2.4, baths: 2.4, morgue: 2.4, annex: 2.4, arch: 2.4, shaft: 2.4, crooked: 2.4, cone: 5, quay: 3, coalyard: 2.4, slum: 2.4, alley: 1, cart: 1,
     // the future's own (LOOKS.scifi): habitat modules and domes, and what a base or a station is made of
-    module: 3, quarters: 3.4, habdome: 3.4, greenhouse: 3.4, lab: 3.2, medbay: 3.2, command: 3, reactor: 3.4, dock: 4.2, antenna: 2.6, mine: 3, solar: 3.6, cargo: 3 };
+    module: 3, quarters: 3.4, habdome: 3.4, greenhouse: 3.4, lab: 3.2, medbay: 3.2, command: 3, reactor: 3.4, dock: 4.2, antenna: 2.6, mine: 3, solar: 3.6, cargo: 3,
+    // fantasy's own (LOOKS.fantasy)
+    tavern: 3, wizardtower: 2.6, temple: 3.8, shrine: 2.6, keep: 3.6, guildhall: 3.6, forge: 3, treehouse: 3.6, academy: 3.6, windmill: 2.8, crypt: 2.8, hut: 2.2 };
+  const FANTASY_MODELS = ["tavern", "wizardtower", "temple", "shrine", "keep", "guildhall", "forge", "treehouse", "academy", "windmill", "crypt", "hut"];
   // which models belong to which look: a check warns of a house in the future, or a reactor in 1888
   const FUTURE_MODELS = ["module", "quarters", "habdome", "greenhouse", "lab", "medbay", "command", "reactor", "dock", "antenna", "mine", "solar", "cargo"];
   const MODELS = Object.keys(MODEL_SIZE);
@@ -122,7 +141,9 @@
     // the future: a habitat module lying on its legs, a dome on a drum, a reactor, a dish, a field of solar panels
     module: [7, 2.8, 2.6], habdome: [9, 9, 4.5], reactor: [6, 6, 5], dish: [4, 4, 5.5], solar: [9, 5, .9],
     // a building made for one place: it wears its kit model (model: "..."), on a plot of size [w, d] (or its pts)
-    custom: [6, 6, 3] };
+    custom: [6, 6, 3],
+    // fantasy: a wizard's tower, a great tree, a ring of standing stones, a crystal rising from the ground
+    wizardtower: [4, 4, 16], greattree: [12, 12, 14], stones: [10, 10, 2.6], crystal: [3, 3, 8] };
   // what lies between the buildings of a site that is not a city (ground: "grass" | "sand" | "dirt" | "snow" | "concrete")
   const GROUNDS = {
     grass: { BLOCK: "#cbd3a4", PAPER: "#dfe3c2", HATCH: "rgba(70,90,40,.06)", LOT: "#d9dfb8" },
@@ -889,7 +910,7 @@ function drawPlan(C, ppu, view) {
   g.globalAlpha = 1;
   // the landmarks' own ground
   // (the future's round things, modules on legs and panels on posts, leave no square on the plan)
-  const UNDRAWN = LOOK.future ? new Set(["module", "habdome", "reactor", "dish", "solar", "pad", "tank", "spire"]) : new Set();
+  const UNDRAWN = new Set(["wizardtower", "greattree", "stones", "crystal"].concat(LOOK.future ? ["module", "habdome", "reactor", "dish", "solar", "pad", "tank", "spire"] : []));
   for (const L of C.landmarks) { if (L.flat || L.kind === "bridge" || L.place || UNDRAWN.has(L.kind)) continue; g.fillStyle = LOT; g.strokeStyle = INK; g.lineWidth = .2; bpath(L); g.fill("evenodd"); g.stroke(); }
   // street lamps: tiny ink dots on the kerb
   g.fillStyle = INK;
@@ -1198,7 +1219,7 @@ function createMap3D(host, C, planCanvas, hooks) {
   // the view moves: each is drawn only when the camera is within the distance given
   const lod = [];
   // ---- ordinary buildings
-  const walls = [], roofs = [], chim = [], spires = [], stacks = [], lampPosts = [], lampHeads = [], dressDomes = [];
+  const walls = [], roofs = [], chim = [], spires = [], stacks = [], lampPosts = [], lampHeads = [], dressDomes = [], DRESS = (LOOK.dress || []).concat(KIT.dress);
   for (const b of C.buildings) {
     const wall = b.type === "ware" ? pick(WARE) : b.type === "church" || b.type === "chapel" || b.type === "school" ? mixHex(pick(STONE), "#9a8f7c", .3) : mixHex(pick(BRICK), pick(STONE), b.west * .85);
     const ry = -b.a, x = wx(b.x), z = wz(b.y);
@@ -1208,8 +1229,9 @@ function createMap3D(host, C, planCanvas, hooks) {
     walls.push({ x, z, sx: b.w, sy: H, sz: b.d, ry, c: ruined ? mixHex(wall, "#4a4540", .5) : b.type === "pub" ? LOOK.pub : wall });
     if (pitched) roofs.push({ x, y: H, z, sx: b.w + .12, sy: roofH, sz: b.d + .12, ry, c: b.type === "pub" ? "#3f3a35" : rnd() < .2 ? pick(TILE) : pick(SLATE) });
     else if (!ruined) walls.push({ x, y: H, z, sx: b.w + .1, sy: .12, sz: b.d + .1, ry, c: LOOK.flats ? LOOK.flats[bi % LOOK.flats.length] : LOOK.flat });
-    // a kit's dress on a share of the ordinary houses: wooden balconies on both long faces, a small dome on the roof
-    if (!ruined && KIT.dress.length && b.w > 1.8) KIT.dress.forEach((dr, di) => {
+    // the look's and a kit's dress on a share of the ordinary houses: wooden balconies on both long faces, a small dome on
+    // the roof, a round turret at a corner
+    if (!ruined && DRESS.length && b.w > 1.8) DRESS.forEach((dr, di) => {
       if (h01(bi * 13 + di * 101) >= (dr.share == null ? .3 : dr.share)) return;
       if (dr.near && Math.hypot(b.x - dr.near[0], b.y - dr.near[1]) > (dr.r || 50)) return;
       const ca = Math.cos(b.a), sa = Math.sin(b.a), off = b.d / 2 + .22;
@@ -1221,6 +1243,12 @@ function createMap3D(host, C, planCanvas, hooks) {
           walls.push({ x: x - sa * (off + .2) * s, y: y0 + .5, z: z + ca * (off + .2) * s, sx: b.w * (dr.width || .78), sy: .1, sz: .06, ry, c: dr.trim || "#3e2c1c" });
         }
       } else if (dr.kind === "dome") dressDomes.push({ x, y: H + roofH * .6, z, sx: Math.min(b.w, b.d) * .55, sy: Math.min(b.w, b.d) * .55, sz: Math.min(b.w, b.d) * .55, c: dr.color || "#b08a4a" });
+      else if (dr.kind === "turret") {
+        const u = b.w / 2 - .25, v = b.d / 2 - .25, s = h01(bi + di * 7) < .5 ? 1 : -1, tx = x + ca * u * s - sa * v, tz = z + sa * u * s + ca * v;
+        const r = Math.min(1.1, Math.max(.7, b.d * .32)), th = H + roofH + .4;
+        stacks.push({ x: tx, z: tz, sx: r, sy: th, sz: r, c: dr.color || wall });
+        spires.push({ x: tx, y: th, z: tz, sx: r * 1.25, sy: r * 1.7, sz: r * 1.25, c: dr.roof || pick(SLATE) });
+      }
     });
     if (b.type === "terrace" && pitched && LOOK.chimneys && rnd() < .55 && b.w > 2.4) {
       const ca = Math.cos(b.a), sa = Math.sin(b.a), u = b.w / 2 - .35;
@@ -1453,6 +1481,31 @@ function createMap3D(host, C, planCanvas, hooks) {
         for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) { const [x, z] = ax((i + .5) * long / nu - long / 2, (j + .5) * short / nv - short / 2); const p = add(boxG, M.panel || M.dark, x, H * .6, z, long / nu * .9, .08, short / nv * .8, ryL, false); p.rotation.x = -.3; add(boxG, M.dark, x, 0, z, .12, H * .6, .12, 0, false); }
         break;
       }
+      // ---- fantasy: a wizard's tower, a great tree, a ring of standing stones, a crystal
+      case "wizardtower": {
+        const r = short * .55;
+        add(cylG, M.wall, 0, 0, 0, r * 1.25, H * .08, r * 1.25, 0, false); add(cylG, M.wall, 0, H * .08, 0, r, H * .55, r, 0, false);
+        add(cylG, M.dark, 0, H * .63, 0, r * 1.45, H * .015, r * 1.45, 0, false); add(cylG, M.wall, 0, H * .645, 0, r * 1.2, H * .1, r * 1.2, 0, false);
+        add(coneG, M.roof, 0, H * .745, 0, r * 1.45, H * .25, r * 1.45, 0, false); add(ballG, M.glow, 0, H * 1.01, 0, r * .3, r * .3, r * .3, 0, false);
+        add(boxG, M.glow, 0, H * .67, r * .6, r * .2, H * .04, .05, 0, false); break;
+      }
+      case "greattree": {
+        const bark = new T.MeshLambertMaterial({ color: 0x5a4430 }), leaf = new T.MeshLambertMaterial({ color: 0x55804a });
+        add(cylG, bark, 0, 0, 0, short * .2, H * .6, short * .2, 0, false); add(coneG, bark, 0, 0, 0, short * .34, H * .14, short * .34, 0, false);
+        for (const [x, y, z, k] of [[0, .72, 0, 1], [-.28, .6, .2, .62], [.3, .63, -.22, .66], [.1, .86, .18, .58], [-.1, .55, -.3, .5]]) add(ballG, leaf, x * short, y * H, z * short, short * k, short * k * .72, short * k, 0, false);
+        break;
+      }
+      case "stones": {
+        const n = 11, R = short * .42;
+        for (let i = 0; i < n; i++) { const a = i / n * 6.2832; add(boxG, M.wall, Math.cos(a) * R, 0, Math.sin(a) * R, short * .08, H * (.8 + (i % 3) * .1), short * .05, -a, false); }
+        for (let i = 0; i < n; i += 3) { const a = (i + .5) / n * 6.2832; add(boxG, M.wall, Math.cos(a) * R, H * .9, Math.sin(a) * R, short * .26, H * .12, short * .06, -a + Math.PI / 2, false); }
+        add(boxG, M.wall, 0, 0, 0, short * .14, H * .3, short * .09, 0, false); break;
+      }
+      case "crystal": {
+        const glow = new T.MeshLambertMaterial({ color: 0x9fe3f0, emissive: 0x2a6f7a });
+        add(cylG, M.wall, 0, 0, 0, short * 1.4, H * .05, short * 1.4, 0, false); add(obeliskG, glow, 0, H * .05, 0, short * .6, H * .95, short * .6, .4, false);
+        add(obeliskG, glow, short * .45, H * .05, short * .2, short * .3, H * .45, short * .3, 1.1, false); add(obeliskG, glow, -short * .4, H * .05, -short * .25, short * .26, H * .38, short * .26, 2, false); break;
+      }
       default: body(H); if (L.top === "dome") { cap(H); dome(0, 0, short * .3, H); } else if (L.top === "spire") { cap(H); add(coneG, M.roof, 0, H, 0, short * .3, H * .6, short * .3, 0, false); } else cap(H);
     }
   }
@@ -1469,6 +1522,8 @@ function createMap3D(host, C, planCanvas, hooks) {
     const roofCol = CD.roofs[L.p.cat] || CD.roof;
     const mats = { wall: new T.MeshLambertMaterial({ color: LOOK.landmark, transparent: true }), roof: new T.MeshLambertMaterial({ color: new T.Color(roofCol), transparent: true, side: T.DoubleSide }), dark: new T.MeshLambertMaterial({ color: 0x3a312a, transparent: true }), glow: new T.MeshBasicMaterial({ color: 0xffb35a, transparent: true }) };
     // the future's glass, growing things and solar panels
+    // fantasy's leaves, bark and thatch
+    if (LOOK.fantasy) Object.assign(mats, { leaf: new T.MeshLambertMaterial({ color: 0x5f8a4a, transparent: true }), bark: new T.MeshLambertMaterial({ color: 0x5a4430, transparent: true }), thatch: new T.MeshLambertMaterial({ color: 0xb79a5a, transparent: true, side: T.DoubleSide }) });
     if (LOOK.future) Object.assign(mats, { pane: new T.MeshLambertMaterial({ color: LOOK.glass || 0xa9d6ea, transparent: true }), leaf: new T.MeshLambertMaterial({ color: 0x5f8f5a, transparent: true }), panel: new T.MeshLambertMaterial({ color: 0x2b3d58, transparent: true }), dark: new T.MeshLambertMaterial({ color: 0x4a525a, transparent: true }) });
     let top = 0;
     const add = (geo, mat, x, y, z, sx, sy, sz, ry = 0, outline = true) => {
@@ -1573,6 +1628,56 @@ function createMap3D(host, C, planCanvas, hooks) {
       case "cargo":
         for (const [x, y, z, c] of [[-1.3, 0, -.85, 0], [1.3, 0, -.85, 1], [-1.3, 0, .95, 1], [1.3, 0, .95, 0], [0, 1.25, .05, 0]]) add(boxG, c ? mats.roof : mats.wall, x, y, z, 2.4, 1.25, 1.6);
         break;
+      // ---- fantasy's own (LOOKS.fantasy): built of the same simple parts, each known by its outline
+      case "tavern":
+        add(boxG, mats.wall, 0, 0, 0, 3.4, 1.6, 2.8); add(boxG, mats.wall, 0, 1.6, 0, 3.8, 1.5, 3.2); add(roofG, mats.roof, 0, 3.1, 0, 4.1, 1.5, 3.5);
+        for (const u of [-1.2, 0, 1.2]) add(boxG, mats.dark, u, 1.6, 1.62, .1, 1.5, .04, 0, false);
+        add(boxG, mats.dark, 0, 2.3, 1.62, 3.8, .1, .04, 0, false); add(boxG, mats.dark, 1.3, 3.1, -.6, .45, 1.7, .45);
+        add(boxG, mats.dark, -2.05, 1.95, 1.75, .9, .08, .08, 0, false); add(boxG, mats.glow, -2.3, 1.35, 1.75, .55, .5, .06, 0, false); break;
+      case "wizardtower":
+        add(cylG, mats.wall, 0, 0, 0, 2.7, 1.2, 2.7); add(cylG, mats.wall, 0, 1.2, 0, 2.1, 4.2, 2.1); add(cylG, mats.dark, 0, 5.2, 0, 3.1, .2, 3.1, 0, false);
+        add(cylG, mats.wall, 0, 5.4, 0, 2.6, 1.3, 2.6); add(coneG, mats.roof, 0, 6.7, 0, 3.1, 3.8, 3.1);
+        add(boxG, mats.glow, 0, 5.7, 1.29, .5, .6, .06, 0, false); add(boxG, mats.glow, 0, 3, 1.06, .3, .5, .06, 0, false); add(ballG, mats.glow, 0, 10.7, 0, .45, .45, .45, 0, false); break;
+      case "temple":
+        add(boxG, mats.wall, 0, 0, 0, 6, .45, 4.8); add(boxG, mats.wall, 0, .45, -.3, 4.4, 2.6, 3.2);
+        for (let i = 0; i < 5; i++) add(cylG, mats.wall, -1.8 + i * .9, .45, 1.75, .32, 2.6, .32, 0, false);
+        add(roofG, mats.roof, 0, 3.05, .2, 4.9, 1.1, 4.2, Math.PI / 2); add(cylG, mats.wall, 0, 3.4, -.3, 2.4, .5, 2.4, 0, false); add(domeG, mats.roof, 0, 3.9, -.3, 2.4, 2, 2.4); break;
+      case "shrine":
+        add(cylG, mats.wall, 0, 0, 0, 3.6, .3, 3.6, 0, false);
+        for (let i = 0; i < 6; i++) { const a = i / 6 * 6.2832; add(cylG, mats.wall, Math.cos(a) * 1.25, .3, Math.sin(a) * 1.25, .26, 2, .26, 0, false); }
+        add(cylG, mats.wall, 0, 2.3, 0, 3, .3, 3, 0, false); add(domeG, mats.roof, 0, 2.6, 0, 3, 1.6, 3); add(boxG, mats.glow, 0, .3, 0, .35, 1, .35, 0, false); break;
+      case "keep":
+        add(boxG, mats.wall, 0, 0, 0, 3.6, 5, 3.6);
+        for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { add(cylG, mats.wall, u * 1.8, 0, v * 1.8, 1.35, 6, 1.35); add(coneG, mats.roof, u * 1.8, 6, v * 1.8, 1.65, 1.9, 1.65); }
+        for (const u of [-1.05, -.35, .35, 1.05]) for (const v of [-1, 1]) { add(boxG, mats.wall, u, 5, v * 1.7, .38, .45, .25, 0, false); add(boxG, mats.wall, v * 1.7, 5, u, .25, .45, .38, 0, false); }
+        add(boxG, mats.dark, 0, 0, 1.82, .9, 1.4, .05, 0, false); break;
+      case "guildhall":
+        add(boxG, mats.wall, 0, 0, 0, 5.2, 3, 3.2); add(roofG, mats.roof, 0, 3, 0, 5.5, 2.4, 3.5);
+        for (const u of [-2, -1, 0, 1, 2]) add(boxG, mats.dark, u, 0, 1.62, .1, 3, .04, 0, false);
+        add(boxG, mats.dark, 0, 1.5, 1.62, 5.2, .1, .04, 0, false); add(boxG, mats.wall, 0, 4.4, 0, .9, 1.5, .9); add(coneG, mats.roof, 0, 5.9, 0, 1.2, 1.6, 1.2); break;
+      case "forge":
+        add(boxG, mats.wall, 0, 0, 0, 3.4, 1.8, 2.8); add(roofG, mats.roof, 0, 1.8, 0, 3.6, .9, 3);
+        add(boxG, mats.wall, 1.25, 0, -.85, 1.1, 3.9, 1.1); add(boxG, mats.dark, 1.25, 3.9, -.85, .8, .3, .8, 0, false);
+        add(boxG, mats.glow, -.4, .2, 1.42, 1.3, .9, .06, 0, false); add(boxG, mats.dark, -.6, 0, 2.2, .55, .45, .32, 0, false); break;
+      case "treehouse":
+        add(cylG, mats.bark || mats.dark, 0, 0, 0, 1.5, 6.2, 1.5); add(cylG, mats.bark || mats.dark, 0, 0, 0, 2.4, .6, 2.4, 0, false);
+        add(cylG, mats.bark || mats.dark, 0, 3.4, 0, 4.4, .22, 4.4, 0, false); add(boxG, mats.wall, 1, 3.62, .4, 1.7, 1.2, 1.5); add(coneG, mats.roof, 1, 4.82, .4, 2.1, 1.1, 2.1);
+        for (const [x, y, z, r] of [[0, 6.8, 0, 4.6], [-1.6, 5.9, 1, 3.2], [1.5, 6.2, -1.2, 3.4], [.4, 7.9, .6, 3]]) add(ballG, mats.leaf || mats.roof, x, y, z, r, r * .8, r, 0, false);
+        break;
+      case "academy":
+        add(boxG, mats.wall, -.4, 0, 0, 4.6, 2.8, 3); add(roofG, mats.roof, -.4, 2.8, 0, 4.9, 1.3, 3.3);
+        add(cylG, mats.wall, 2.4, 0, 0, 1.6, 5.2, 1.6); add(coneG, mats.roof, 2.4, 5.2, 0, 1.9, 1.8, 1.9);
+        add(cylG, mats.wall, -1.4, 3.5, 0, 1.6, .5, 1.6, 0, false); add(domeG, mats.wall, -1.4, 4, 0, 1.6, 1.6, 1.6); add(boxG, mats.dark, -1.4, 4.1, .55, .25, .6, .2, 0, false); break;
+      case "windmill": {
+        add(frustG, mats.wall, 0, 0, 0, 2.8, 4.4, 2.8); add(coneG, mats.roof, 0, 4.4, 0, 2, 1.3, 2); add(cylG, mats.dark, 0, 4.1, 1.1, .3, .3, .3, 0, false);
+        for (let k = 0; k < 4; k++) { const sail = add(boxG, mats.wall, 0, 4.25, 1.3, .55, 3.4, .06, 0, false); sail.rotation.z = k * Math.PI / 2 + .4; }
+        add(boxG, mats.dark, 0, 0, 1.42, .6, 1, .05, 0, false); break;
+      }
+      case "crypt":
+        add(boxG, mats.wall, 0, 0, 0, 3, 1.6, 3.6); add(pyrG, mats.roof, 0, 1.6, 0, 3.3, 1.4, 3.9); add(boxG, mats.dark, 0, 0, 1.82, .9, 1.2, .05, 0, false);
+        for (const u of [-1.4, 1.4]) add(obeliskG, mats.wall, u, 0, 2.4, .5, 1.6, .5, 0, false); break;
+      case "hut":
+        add(cylG, mats.wall, 0, 0, 0, 2.6, 1.2, 2.6); add(coneG, mats.thatch || mats.roof, 0, 1.2, 0, 3.4, 1.9, 3.4); add(boxG, mats.dark, 0, 0, 1.31, .6, .9, .05, 0, false); break;
       default: house(3.4, 2.8, 3.3, 1.1);
     }
     // rings on the ground: selection (accent) and fingerbone site (bone)
@@ -1852,5 +1957,5 @@ function createMap3D(host, C, planCanvas, hooks) {
   // a campaign's own changes to a city that was fetched or generated for it (city.js is rewritten whenever the city is
   // fetched again, so changes made there would be lost): ATLAS.cityEdit(c => { c.title = "..."; c.landmarks.push({...}); })
   A.cityEdit = fn => { (A.cityEdits = A.cityEdits || []).push(fn); return A; };
-  A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN, kit: () => KIT, KIT_SHAPES: ["box", "roof", "cylinder", "cone", "tube", "dome", "ball", "pyramid", "spire", "obelisk", "frustum", "ring", "arch"], KIT_MATS: ["wall", "roof", "dark", "glow", "green", "glass", "gold", "copper", "stone", "brick", "wood", "white", "black", "water"], KIT_DRESS: ["balcony", "dome"] };
+  A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, FANTASY_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN, kit: () => KIT, KIT_SHAPES: ["box", "roof", "cylinder", "cone", "tube", "dome", "ball", "pyramid", "spire", "obelisk", "frustum", "ring", "arch"], KIT_MATS: ["wall", "roof", "dark", "glow", "green", "glass", "gold", "copper", "stone", "brick", "wood", "white", "black", "water"], KIT_DRESS: ["balcony", "dome", "turret"] };
 })(ATLAS);

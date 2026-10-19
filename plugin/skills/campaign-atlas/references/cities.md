@@ -13,7 +13,7 @@ Above the index of places, the page can carry one overview map: a printed plan w
 
 A story with no single setting (a road trip, a ship, a wilderness) needs no city map; leave it out.
 
-**The map is built of its story's own buildings.** Atlas keeps a ready-made set of buildings for each kind of setting and reuses it for every campaign of that kind: the medieval town, the industrial city of 1888, the modern city, the camp and the base, and the future (`look: "scifi"`). Choose the command, the year or era and the look that fit the story, and nothing else: never the houses of 1888, or a desert base's sandbag walls, for a station in orbit. The user caught exactly that on a moon station (15 Oct 2026: "you used 1888 house models for a moon base"). `check` fails a story set in space or after 2200 whose map is not of the future, and a place wearing a building of the wrong age.
+**The map is built of its story's own buildings.** Atlas keeps a ready-made set of buildings for each kind of setting and reuses it for every campaign of that kind: the medieval town, the industrial city of 1888, the modern city, fantasy's town (`look: "fantasy"`), the camp and the base, and the future (`look: "scifi"`). Choose the command, the year or era and the look that fit the story, and nothing else: never the houses of 1888, or a desert base's sandbag walls, for a station in orbit. The user caught exactly that on a moon station (15 Oct 2026: "you used 1888 house models for a moon base"). `check` fails a story set in space or after 2200 whose map is not of the future, and a place wearing a building of the wrong age.
 
 ## Contents
 
@@ -67,10 +67,11 @@ A place of real suffering is mapped accurately and without ornament. The people 
 ```
 node atlas.js city <dir> --invent "Saltreach" --year 1350 --site harbour
 node atlas.js city <dir> --invent "Karlstadt" --year 1890 --site river --culture german
+node atlas.js city <dir> --invent "Eldermere" --era fantasy --site river
 node atlas.js city <dir> --invent "Newhaven" --era modern --site coast --culture american
 ```
 
-- **`--year` / `--era`**: medieval gives a walled town of crooked lanes with a castle, a cathedral and gates; industrial gives a boulevard where the wall stood, a railway and station, gasworks and a park; modern gives a grid with a business quarter of towers, a stadium and a great park.
+- **`--year` / `--era`**: medieval gives a walled town of crooked lanes with a castle, a cathedral and gates; fantasy gives the same town in fantasy's look with its wonders (a wizard's tower, a great tree in its clearing, standing stones outside the walls, a crystal), its temples and shrines named for its gods, and its places in fantasy's own buildings, chosen from their names: `tavern`, `wizardtower`, `temple`, `shrine`, `keep`, `guildhall`, `forge`, `treehouse`, `academy`, `windmill`, `crypt`, `hut` (anything else a house); industrial gives a boulevard where the wall stood, a railway and station, gasworks and a park; modern gives a grid with a business quarter of towers, a stadium and a great park.
 - **`--site`**: `river`, `coast`, `harbour` (a river mouth), `lake`, `plain`.
 - **`--culture`**: the language of the street names and the kind of great buildings: `english`, `american`, `french`, `italian`, `spanish`, `german`, `arabic`, `japanese`, `fantasy`. It also sets the region's colours where that is obvious.
 - **`--plan organic|grid`**, **`--size town|city|metropolis`**, **`--region`**, **`--seed N`**: the same seed lays out the same city; another seed, another.
@@ -132,7 +133,7 @@ ATLAS.kit({
 
 ## 5. The age and the part of the world
 
-`look` is the age: `"medieval"` (plaster, timber and thatch, steep roofs, no lamps or factory stacks), `"industrial"` (also `"old"`: brick terraces, slate, chimney pots, gas lamps, stacks, an aged paper plan), `"modern"` (flat roofs, glass towers, a clean plan), `"scifi"` (also `"future"`: white modules and domes, grey ground, black sky and stars; `--era future`, or a year from 2100). A year decides it when no era is given: before 1650 medieval, before 1946 industrial, before 2100 modern, after that the future. A look may also be an object laid over one of them: `look: { base: "industrial", lamps: false }`.
+`look` is the age: `"medieval"` (plaster, timber and thatch, steep roofs, no lamps or factory stacks), `"industrial"` (also `"old"`: brick terraces, slate, chimney pots, gas lamps, stacks, an aged paper plan), `"modern"` (flat roofs, glass towers, a clean plan), `"fantasy"` (a medieval town's lanes and walls, roofs of blue, red, copper-green and violet, a turret on the odd house; `--era fantasy`, or `--culture fantasy` with no year), `"scifi"` (also `"future"`: white modules and domes, grey ground, black sky and stars; `--era future`, or a year from 2100). A year decides it when no era is given: before 1650 medieval, before 1946 industrial, before 2100 modern, after that the future. A look may also be an object laid over one of them: `look: { base: "industrial", lamps: false }`.
 
 `region` is the part of the world, laid over the look: `"mediterranean"` (stucco and terracotta), `"desert"` (sand-coloured walls, flat roofs, pale ground), `"eastasia"` (white plaster, dark timber, grey tile). Anything else is the temperate north. A real city's region comes from its country; `--region` overrides.
 

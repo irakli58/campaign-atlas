@@ -216,7 +216,7 @@
     const c = A.config.music || {}; if (c.flavour && FLAVOURS[c.flavour]) return c.flavour;
     if (c.flavour !== "auto") return "arkham";         // flavour: "auto" takes it from the city instead
     const D = A.cityData;
-    if (D) { if (D.region === "desert") return "arabic"; if (D.region === "eastasia") return "eastasia"; const look = typeof D.look === "object" ? D.look.base : D.look; if (look === "modern") return "modern"; if (look === "medieval") return D.region === "mediterranean" ? "mediterranean" : "medieval"; return D.region === "mediterranean" ? "mediterranean" : "industrial"; }
+    if (D) { if (D.region === "desert") return "arabic"; if (D.region === "eastasia") return "eastasia"; const look = typeof D.look === "object" ? D.look.base : D.look; if (look === "fantasy") return "fantasy"; if (look === "scifi" || look === "future") return "scifi"; if (look === "modern") return "modern"; if (look === "medieval") return D.region === "mediterranean" ? "mediterranean" : "medieval"; return D.region === "mediterranean" ? "mediterranean" : "industrial"; }
     return A.config.paper === "blueprint" ? "scifi" : "industrial";
   }
   // what plays for a place: { mood, flavour, seed, label, guessed }

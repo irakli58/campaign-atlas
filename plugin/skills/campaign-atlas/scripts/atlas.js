@@ -11,7 +11,7 @@
    node atlas.js catalogue [<dir>]               list floor kinds, items and furnishing presets (and dist/catalogue.html)
 
    The city map (writes <dir>/city.js):
-   node atlas.js city <dir> "Florence, Italy" [--year 1478 | --era medieval|industrial|modern] [--km 2]
+   node atlas.js city <dir> "Florence, Italy" [--year 1478 | --era medieval|industrial|modern|fantasy|future] [--km 2]
                       [--around "Ponte Vecchio"] [--landmarks 36] [--must "Bargello; Uffizi"] [--lang local|en|xx] [--region ...] [--refresh]
                       [--buildings] [--ground grass|sand|dirt|snow|concrete]
                                                  a REAL city: its true streets, water, parks and landmarks
@@ -275,11 +275,16 @@ function checkCity(A) {
     const fut = K.FUTURE_MODELS.includes(mdl);
     if (future && !fut) P(`${id} wears "${mdl}", a building of the past, on a map of the future: give it one of ${K.FUTURE_MODELS.join(", ")}, or no model (one is chosen from the place's name)`);
     else if (!future && fut) P(`${id} wears "${mdl}", a building of the future, on a ${lookName || "old"} map`);
+    // fantasy's buildings belong to fantasy's map (or a medieval one, at a pinch)
+    else if (K.FANTASY_MODELS.includes(mdl) && !["fantasy", "medieval"].includes(lookName)) N(`${id} wears "${mdl}", a fantasy building, on a ${lookName || "old"} map`);
   }
   {
     const cfg = A.config || {}, said = [cfg.setting, cfg.system, cfg.subtitle, cfg.strap, cfg.title].filter(x => typeof x === "string").join(" · ");
     const space = said.toLowerCase().match(/\b(space ?station|spaceship|starship|in orbit|orbital|orbiting|moon ?base|lunar|martian|asteroid|colony ship|mothership|starfinder|stars without number|2[2-9]\d\d)\b/);
     if (!future && space) P(`the story is set in space or in the future ("${space[0]}" in the campaign's setting), but the map is ${lookName || "old"}: make it with city --invent "Name" --kind moonbase, outpost, colony or station, so it is built of the future's modules, domes and tubes, not houses`);
+    // a story of swords and sorcery on a map that is not fantasy's (a medieval map is let be: it may be meant)
+    const magic = said.toLowerCase().match(/\b(dungeons (&|and) dragons|d&d|pathfinder|dragonbane|warhammer fantasy|the one ring|shadowdark|old-school essentials|wizards?|sorcer\w*|elves|elven|dwarves|dragons?|kingdom of)\b/);
+    if (!future && magic && !["fantasy", "medieval"].includes(lookName) && !D.real) N(`the story looks like fantasy ("${magic[0]}" in the campaign's setting), but the map is ${lookName || "old"}: an invented fantasy city is city --invent "Name" --era fantasy (taverns, wizards' towers, temples and keeps)`);
   }
   for (const e of PL) {
     if (e.x == null) P(`${e.id} has no position on the city map: give it at: [x, y], or a region that is one of the city's districts (or offmap: true)`);

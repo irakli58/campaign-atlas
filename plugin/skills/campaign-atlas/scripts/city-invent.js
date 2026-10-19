@@ -74,7 +74,7 @@ function inventCity(dir, name, flags, log) {
   if (kind === "camp" || kind === "base") return inventSite(dir, name, flags, kind, log);
   if (["moonbase", "outpost", "colony", "station"].includes(kind)) return inventOutpost(dir, name, flags, kind, log);
   if (kind !== "city") throw new Error(`unknown kind "${flags.kind}": use city, camp, base, moonbase, outpost, colony or station`);
-  const { era, year, look } = eraOf(flags), ck = String(flags.culture && flags.culture !== true ? flags.culture : "english").toLowerCase(), C = CULTURES[ck];
+  const { era, year, look, fantasy } = eraOf(flags), ck = String(flags.culture && flags.culture !== true ? flags.culture : fantasy ? "fantasy" : "english").toLowerCase(), C = CULTURES[ck];
   if (!C) throw new Error(`unknown culture "${flags.culture}": use one of ${Object.keys(CULTURES).join(", ")}`);
   const size = String(flags.size && flags.size !== true ? flags.size : "city").toLowerCase(), dims = { town: [250, 160], city: [320, 200], metropolis: [400, 250] }[size];
   if (!dims) throw new Error(`unknown size "${flags.size}": use town, city or metropolis`);
@@ -187,6 +187,17 @@ function inventCity(dir, name, flags, log) {
     if (era === "medieval" || rnd() < .45) { const [x, y] = polar(bis(big[2 % big.length]), RC - 9); mark(C.castle, "castle", x, y, { major: true, size: era === "medieval" ? 1 : .8 }); }
     for (let i = 1; i <= (size === "town" ? 2 : 4); i++) { const [x, y] = polar(bis(i % arms.length) + R(-.25, .25), RC * R(.55, 1.5)); mark(C.church(holy[i % holy.length]), C.faith, x, y, { size: .75, label: i < 3 }); }
     if (wet) { const x = bayX + bayW * 1.15; landmarks.push({ name: C.light, kind: "spire", top: "light", at: [x, seaY(x) - 3], h: 5 }); }
+    // a fantasy city's wonders: a wizard's tower in the town, a great tree beyond it, standing stones outside the walls,
+    // and a crystal near the market
+    if (fantasy) {
+      const fp = a => a[Math.floor(rnd() * a.length)];
+      // a wonder that stands in the open has a clearing round it, where no house grows
+      const clearing = (x, y, r, trees) => parks.push({ name: "", pts: Array.from({ length: 16 }, (_, i) => [x + r * Math.cos(i / 16 * 6.2832), y + r * .85 * Math.sin(i / 16 * 6.2832)]), trees });
+      { const [x, y] = polar(bis(big[3 % big.length]) + R(-.2, .2), RC * .62); mark(fp(["The Mage's Spire", "The Tower of Stars", "The Sorcerer's Tower", "The Violet Tower"]), "wizardtower", x, y, { major: true }); }
+      { const [x, y] = polar(bis(big[4 % big.length]) + R(-.25, .25), RC * 1.4); const at = mark(fp(["The Elder Tree", "The Great Oak", "The Moonwood Tree", "The Lantern Tree"]), "greattree", x, y, { major: true }); clearing(at[0], at[1], 14, .9); }
+      { const [x, y] = land(...polar(bis(big[1 % big.length]) + Math.PI, RC * 1.95), 12); landmarks.push({ name: fp(["The Standing Stones", "The Old Ring", "The Nine Sisters"]), kind: "stones", at: [x, y], major: true }); clearing(x, y, 12, .15); }
+      { const [x, y] = polar(bis(big[2 % big.length]) + .5, RC * .32); mark(fp(["The Crystal Well", "The Shard", "The Wishing Stone"]), "crystal", x, y, { size: .8 }); }
+    }
     if (era !== "medieval") {
       const ra = bis(big[0]) + Math.PI, n = [Math.cos(ra), Math.sin(ra)], d = RC + 20, t = [-n[1], n[0]], pt = s => [cx + n[0] * d + t[0] * s + n[0] * (s * s) / 1400, cy + n[1] * d * .86 + t[1] * s + n[1] * (s * s) / 1400];
       rails.push({ name: C.rail, pts: [-260, -130, -50, 0, 50, 130, 260].map(pt) });
@@ -217,17 +228,17 @@ function inventCity(dir, name, flags, log) {
   const data = Object.assign({
     look, region: region || undefined, seed, sheet: { w: SW, h: SH, margin: M },
     title: C.title(name), subtitle: year != null ? `in the year ${year}` : "", scaleLabel: era === "modern" ? "Scale" : "Scale of Chains",
-    invented: { name, era, year, site, culture: ck, plan, size },
+    invented: { name, era: fantasy ? "fantasy" : era, year, site, culture: ck, plan, size },
     names: C.names || undefined, districts, roads, rivers, basins, parks, plazas, rails, walls, gasworks: gasworks.length ? gasworks : undefined, signs, landmarks, heights,
     boats: river || wet ? (era === "modern" ? 12 : 34) : 0
   }, extra);
   const file = writeCity(dir, data, [
-    `${name}: an invented city, laid out by: atlas.js city --invent "${name}" ${year != null ? "--year " + year : "--era " + era} --site ${site} --culture ${ck} --plan ${plan} --size ${size} --seed ${seed}`,
+    `${name}: an invented city, laid out by: atlas.js city --invent "${name}" ${year != null ? "--year " + year : "--era " + (fantasy ? "fantasy" : era)} --site ${site} --culture ${ck} --plan ${plan} --size ${size} --seed ${seed}`,
     "The same command with the same seed lays out the same city; another seed, another city.",
     "This file is rewritten whenever the city is generated again. Put your own changes in campaign.js:",
     '  ATLAS.cityEdit(c => { c.title = "..."; c.landmarks.push({ name, kind, at: [x, y] }); c.districts["The Rookery"] = [x, y]; });'
   ]);
-  log(`wrote ${path.relative(process.cwd(), file) || file}: ${name}, an invented ${era} ${size} (${plan} plan, ${site}, ${ck}${region ? ", " + region : ""}), seed ${seed}`);
+  log(`wrote ${path.relative(process.cwd(), file) || file}: ${name}, an invented ${fantasy ? "fantasy" : era} ${size} (${plan} plan, ${site}, ${ck}${region ? ", " + region : ""}), seed ${seed}`);
   log(`  ${roads.length} roads laid${data.grow === false ? " (the whole grid)" : " (the side streets grow from them)"} · ${rivers.length} rivers · ${walls.length ? "walled" : "no wall"} · ${rails.length} railways · ${parks.length} parks`);
   log(`  districts (a place's region may be one of these): ${Object.keys(districts).join(", ")}`);
   log(`  landmarks (a place may be one of these: landmark: "name"): ${landmarks.filter(l => l.name).map(l => l.name).join("; ")}`);
