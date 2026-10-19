@@ -83,6 +83,9 @@ node scripts/atlas.js city <dir> --invent "Name" --kind camp|base [--town] [--ru
 node scripts/atlas.js city <dir> --invent "Name" --kind moonbase|outpost|colony|station [--year 2291]
                                                     the future: modules, domes and tubes on a moon, or a ring in orbit
 node scripts/atlas.js locate <dir> "an address"     where a real spot falls on a fetched city's sheet
+node scripts/atlas.js kit list | use <dir> <kit> | save <dir>
+                                                    buildings made for one place (a city's own landmarks and streets):
+                                                    the kits there are, one into a campaign, a campaign's kept for next time
 ```
 
 Write place files with the Write and Edit tools. Shell heredocs on this user's machine eat backslashes and stumble on apostrophes, which place files are full of.

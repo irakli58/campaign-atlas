@@ -24,6 +24,8 @@
    node atlas.js city <dir> --invent "Name" --kind moonbase|outpost|colony|station [--year 2291]
                                                  the FUTURE: modules, domes, tubes and pads on a moon, or a ring in orbit
    node atlas.js locate <dir> "an address or a name"   where a real spot falls on the sheet of a fetched city
+   node atlas.js kit list [<dir>] · kit use <dir> <kit> [--force] · kit save <dir> [name] [--force]
+                                                 KITS: buildings made for one place (references/cities.md, "Kits")
 */
 "use strict";
 const fs = require("fs"), path = require("path");
@@ -38,6 +40,7 @@ function sources(dir) {
   const c = path.join(dir, "campaign.js"); if (!fs.existsSync(c)) die(`No campaign.js in ${dir}. Start one with: node atlas.js init ${dir}`);
   const pd = path.join(dir, "places"), files = [c];
   if (fs.existsSync(path.join(dir, "city.js"))) files.push(path.join(dir, "city.js"));     // a city fetched or generated for the campaign
+  if (fs.existsSync(path.join(dir, "kit.js"))) files.push(path.join(dir, "kit.js"));       // buildings made for this place (ATLAS.kit)
   if (fs.existsSync(pd)) for (const f of fs.readdirSync(pd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(pd, f));
   return files;
 }
@@ -243,8 +246,25 @@ function checkCity(A) {
   if (raw.ground && !K.GROUNDS[raw.ground]) N(`unknown ground "${raw.ground}" (${Object.keys(K.GROUNDS).join(", ")})`);
   for (const k of ["basins", "parks", "plazas", "open"]) (raw[k] || []).forEach((b, i) => { if (!b || !Array.isArray(b.pts) || b.pts.length < 3) P(`${k} ${i + 1}${b && b.name ? ` (${b.name})` : ""} needs at least three points (pts)`); });
   if (problems) return { line: "city map", out, problems, notes };
-  const D = K.prepare(raw), PL = K.cityPlaces(D), w = D.sheet.w, h = D.sheet.h;
-  for (const id of A.order) { const m = A.meta[id], mdl = Array.isArray(m.model) ? m.model[0] : m.model; if (!m.offmap && mdl && !K.MODEL_SIZE[mdl]) N(`${id}: unknown model "${mdl}", so it will stand as a house (see: atlas.js catalogue)`); }
+  const D = K.prepare(raw), PL = K.cityPlaces(D), w = D.sheet.w, h = D.sheet.h, KIT = K.kit();
+  for (const id of A.order) { const m = A.meta[id], mdl = Array.isArray(m.model) ? m.model[0] : m.model; if (!m.offmap && mdl && !K.MODEL_SIZE[mdl] && !KIT.models[mdl]) N(`${id}: unknown model "${mdl}", so it will stand as a house (see: atlas.js catalogue, or the kit's models)`); }
+  // a kit (buildings made for this place): every part a known shape with numbers for its place and size, every
+  // landmark it dresses on the map, every dress a known kind
+  for (const [nm, mo] of Object.entries(KIT.models)) {
+    if (!mo || !Array.isArray(mo.parts) || !mo.parts.length) { P(`kit model "${nm}" has no parts`); continue; }
+    if (mo.parts.length > 800) N(`kit model "${nm}" has ${mo.parts.length} parts: a few dozen are usually enough, and many slow the page`);
+    mo.parts.forEach((p, i) => {
+      if (!Array.isArray(p) || !K.KIT_SHAPES.includes(p[0])) P(`kit model "${nm}", part ${i + 1}: unknown shape "${Array.isArray(p) ? p[0] : p}" (${K.KIT_SHAPES.join(", ")})`);
+      else if (p.slice(2, 9).some(v => v != null && !Number.isFinite(v))) P(`kit model "${nm}", part ${i + 1}: its place, size and turn must be numbers`);
+      else if ([p[5], p[6], p[7]].some(v => v != null && v <= 0)) P(`kit model "${nm}", part ${i + 1}: a size of nothing or less`);
+    });
+  }
+  const lmNames = new Set((raw.landmarks || []).map(l => String(l.name)));
+  for (const [lmName, mdl] of Object.entries(KIT.landmarks)) {
+    if (!KIT.models[mdl]) P(`the kit dresses "${lmName}" as "${mdl}", which is none of its models`);
+    else if (!lmNames.has(lmName)) N(`the kit has a model for "${lmName}", but the map has no landmark of that name (see the list in city.js), so it is not used`);
+  }
+  for (const d of KIT.dress) if (!K.KIT_DRESS.includes(d.kind)) P(`kit dress: unknown kind "${d.kind}" (${K.KIT_DRESS.join(", ")})`);
   for (const id of A.order) { const m = A.meta[id]; if (m.landmark && !(raw.landmarks || []).some(l => String(l.name).toLowerCase() === String(m.landmark).toLowerCase())) P(`${id} says it is the landmark "${m.landmark}", but the city has none of that name (see the list in city.js)`); }
   // The buildings fit the age, and the map fits the story: the future's own models on a map of the future and none of
   // them on an older one, and a story in space drawn as the future (the user caught a moon station built of 1888's
@@ -506,6 +526,7 @@ function cmdCatalogue(dir) {
   if (!A.music) new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-music.js"), "utf8"))(A);
   console.log("MUSIC: moods (place: music: \"crypt\"; without it the mood is guessed from the place's name)\n  " + Object.keys(A.music.MOODS).join(" ") + "\nMUSIC: flavours (ATLAS.configure({ music: { flavour: \"arabic\" } }); without it, taken from the city's look and region)\n  " + Object.keys(A.music.FLAVOURS).join(" "));
   console.log("CITY MAP: what a place can be (place: model: \"church\" or [\"church\", 3])\n  " + A.cityKit.MODELS.join(" ") + "\nCITY MAP: looks (by age)\n  " + Object.keys(A.cityKit.LOOKS).join(" ") + "\nCITY MAP: regions (colours by part of the world)\n  " + Object.keys(A.cityKit.REGIONS).join(" ") + " (anything else: the temperate north)\nCITY MAP: kinds of landmark (landmarks: [{ name, kind, at: [x, y], h, top, pts }])\n  " + A.cityKit.LM_KINDS.join(" ") + "\n  top: tower taper|stone · church twin|dome|flat · spire needle|obelisk|column|light|stack · monument statue|fountain · bridge pylons · hall dome|spire · castle spires");
+  console.log("CITY MAP: a kit, buildings made for one place (kit.js: ATLAS.kit({ name, for, look, dress, models, landmarks }); references/cities.md, \"Kits\")\n  shapes: " + A.cityKit.KIT_SHAPES.join(" ") + "\n  materials: " + A.cityKit.KIT_MATS.join(" ") + " or a colour \"#a8654a\"\n  dress: " + A.cityKit.KIT_DRESS.join(" ") + "\n  kits ready to use (atlas.js kit use <dir> <name>): " + (kitList(dir).map(k => k.id).join(" ") || "none yet"));
   console.log("STANDARDS (tier: rooms, floors, secrets, clues, people, encounters, leads in)\n" + [1, 2, 3].map(t => { const S = dir ? standardFor(A, t) : STANDARDS[t]; return `  tier ${t}: ${S.rooms}, ${S.floors}, ${S.secrets}, ${S.clues}, ${S.people}, ${S.encounters}, ${S.inbound}`; }).join("\n"));
   if (dir) {
     const C = A.C, P = A.paper(), cells = [];
@@ -545,6 +566,51 @@ async function cmdLocate(dir, what) {
   try { await require("./city-real.js").locate(dir, A.cityData.geo, what); } catch (e) { die("locate: " + e.message); }
 }
 
+// ---- kits: buildings made for one place, kept so the next campaign set there uses them again (the user, 15 and 20 Oct
+//      2026: "you have prompt specific models already made you can just reuse them"). Two shelves: the kits that come
+//      with Atlas (its kits/ folder), and your own, in a kits/ folder beside your campaigns folder.
+const kitShelves = dir => [path.resolve(dir ? path.join(path.resolve(dir), "..", "..") : ".", "kits"), path.join(ROOT, "kits")];
+function kitList(dir) {
+  const seen = new Set(), out = [];
+  for (const shelf of kitShelves(dir)) {
+    if (!fs.existsSync(shelf)) continue;
+    for (const f of fs.readdirSync(shelf).filter(f => f.endsWith(".js")).sort()) {
+      const id = f.slice(0, -3); if (seen.has(id)) continue; seen.add(id);
+      const s = fs.readFileSync(path.join(shelf, f), "utf8"), nm = s.match(/\bname:\s*"([^"]+)"/), fr = s.match(/\bfor:\s*"([^"]+)"/);
+      out.push({ id, file: path.join(shelf, f), name: nm ? nm[1] : id, for: fr ? fr[1] : "", own: shelf !== path.join(ROOT, "kits") });
+    }
+  }
+  return out;
+}
+function cmdKit(sub, dir, name) {
+  if (sub === "list") {
+    const ks = kitList(dir);
+    if (!ks.length) { console.log("No kits yet. Make one in a campaign's kit.js, then: node atlas.js kit save <dir>"); return; }
+    for (const k of ks) console.log(`${k.id.padEnd(22)} ${k.name}${k.for ? ": " + k.for : ""}${k.own ? "   (yours)" : ""}`);
+    return;
+  }
+  if (sub === "use") {
+    if (!dir || !name) die("node atlas.js kit use <dir> <kit>   (node atlas.js kit list shows them)");
+    const want = slug(name), k = kitList(dir).find(x => x.id === want || slug(x.name) === want);
+    if (!k) die(`no kit called "${name}". node atlas.js kit list shows those there are; to make one, see references/cities.md, "Kits"`);
+    const to = path.join(dir, "kit.js");
+    if (fs.existsSync(to) && !flags.force) die(`${to} is already there. Add --force to replace it with the kit "${k.name}"`);
+    fs.copyFileSync(k.file, to); console.log(`${to}: the kit "${k.name}"${k.for ? " (" + k.for + ")" : ""}. Rebuild to see it.`);
+    return;
+  }
+  if (sub === "save") {
+    if (!dir) die("node atlas.js kit save <dir> [name]");
+    const from = path.join(dir, "kit.js"); if (!fs.existsSync(from)) die(`${dir} has no kit.js to save`);
+    load(dir);                                                             // a kit that does not load is not kept
+    const s = fs.readFileSync(from, "utf8"), nm = s.match(/\bname:\s*"([^"]+)"/), id = slug(name || (nm ? nm[1] : path.basename(path.resolve(dir))));
+    const shelf = kitShelves(dir)[0]; fs.mkdirSync(shelf, { recursive: true });
+    const to = path.join(shelf, id + ".js"); if (fs.existsSync(to) && !flags.force) die(`${to} is already there. Add --force to replace it`);
+    fs.copyFileSync(from, to); console.log(`kept as ${to}: the next campaign set there can use it with: node atlas.js kit use <dir> ${id}`);
+    return;
+  }
+  die("node atlas.js kit list [<dir>] · kit use <dir> <kit> · kit save <dir> [name]");
+}
+
 switch (cmd) {
   case "city": cmdCity(pos[0], pos[1]); break;
   case "locate": cmdLocate(pos[0], pos.slice(1).join(" ")); break;
@@ -556,5 +622,6 @@ switch (cmd) {
   case "build": cmdBuild(pos[0]); break;
   case "export": cmdExport(pos[0], pos.slice(1)); break;
   case "catalogue": case "catalog": cmdCatalogue(pos[0]); break;
+  case "kit": cmdKit(pos[0], pos[1], pos[2]); break;
   default: console.log(fs.readFileSync(__filename, "utf8").split("*/")[0].replace(/^#!.*\n\/\* ?/, ""));
 }

@@ -31,7 +31,7 @@ Do the steps in this order. Each one feeds the next: the council decides the pla
 
 **4. The look.** In `campaign.js`: what the referee is called, the grid unit, paper and ink, fonts, an accent, the categories places fall into. `A catalogue` shows what floor kinds and furnishings exist; add any the setting needs.
 
-**5. The map of the whole.** A real city, a real site, an invented city or an invented camp: one command (`references/cities.md`). Choose the year from the story. Centre a real city on the quarter the story happens in. Read the landmark list and correct it from what you know of the place.
+**5. The map of the whole.** A real city, a real site, an invented city, an invented camp or base, or a base or station of the future: one command (`references/cities.md`). Choose the year from the story, and the set of buildings that fits it (the future for a story in space). Centre a real city on the quarter the story happens in. Read the landmark list and correct it from what you know of the place. When buildings **made for this place** were asked for (`story/brief.md`, or the user), dress the map in a kit: `node atlas.js kit list`, then `kit use`; if there is none for the place, design one (`cities.md`, 4b) and keep it with `kit save`. A kit already on the shelf for the story's city is worth using even when it was not asked for.
 
 **6. Register every place, unmapped.** One line each:
 

@@ -200,6 +200,8 @@
     if (e.target.name === "size") { store.set("size", e.target.value); paintChoices(); }
     if (e.target.name === "model") paintChoices();
     if (e.target.name === "freedom" || e.target.name === "storylen") { store.set(e.target.name, e.target.value); paintSliders(); }
+    // choosing from the lists of sets means choosing a set
+    if (e.target.name === "bset" || e.target.name === "bregion") form.querySelector("input[name=buildings][value=set]").checked = true;
   });
   form.addEventListener("input", e => {
     if (e.target.name === "budget") capTouched = true;
@@ -220,7 +222,7 @@
     const p = prov(), own = isOwn(p), err = $("#newerr"); err.textContent = "";
     if (own && !S.tools[toolOf(p)].found) { err.textContent = "Put " + S.tools[toolOf(p)].label + " on this computer first: the steps are above."; return; }
     if (!own && !S.connectors[p].connected) { err.textContent = "Connect " + PROV[p] + " first: paste your key above."; $(".ckey") && $(".ckey").focus(); return; }
-    const o = { provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value, story: form.story.value, size: sizeNow(), places: sizeNow() === "unlimited" ? form.places.value : undefined, freedom: +form.freedom.value, length: +form.storylen.value, system: form.system.value, core: form.core.value, notes: form.notes.value, model: form.model.value, budget: +form.budget.value };
+    const o = { provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value, story: form.story.value, size: sizeNow(), places: sizeNow() === "unlimited" ? form.places.value : undefined, freedom: +form.freedom.value, length: +form.storylen.value, buildings: (form.querySelector("input[name=buildings]:checked") || {}).value || "auto", bset: form.bset.value, bregion: form.bregion.value, system: form.system.value, core: form.core.value, notes: form.notes.value, model: form.model.value, budget: +form.budget.value };
     const btn = $("#gobtn"); btn.disabled = true;
     try {
       const r = await api("/api/campaigns", o); setS(r.state);

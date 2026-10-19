@@ -78,6 +78,29 @@
           <div class="ends"><span>Short</span><span>An epic</span></div>
           <p class="sv" id="sv-storylen" aria-live="polite"></p>
         </div>
+        <div class="field buildings">
+          <span>Buildings on the map</span>
+          <div class="bopts" role="radiogroup" aria-label="Buildings on the map">
+            <label class="bopt"><input type="radio" name="buildings" value="auto" checked><span><b>Automatic.</b> Chosen to fit your story's place and time.</span></label>
+            <label class="bopt"><input type="radio" name="buildings" value="set"><span><b>A set I choose:</b>
+              <select name="bset" aria-label="Which set">
+                <option value="medieval">A medieval town</option>
+                <option value="industrial">A 19th-century city (like 1888 London)</option>
+                <option value="modern">A modern city</option>
+                <option value="camp">A wartime camp</option>
+                <option value="base">A military base</option>
+                <option value="future">The future: a moon base or a space station</option>
+              </select>
+              <select name="bregion" aria-label="Part of the world">
+                <option value="">in the colours of its part of the world</option>
+                <option value="temperate">northern Europe and America</option>
+                <option value="mediterranean">the Mediterranean</option>
+                <option value="desert">the desert and the Middle East</option>
+                <option value="eastasia">East Asia</option>
+              </select></span></label>
+            <label class="bopt"><input type="radio" name="buildings" value="custom"><span><b>Made for this place.</b> Its own landmarks and the look of its streets, designed for this story (a real city's famous buildings, a fantasy city's towers). It takes longer and uses more of your plan. Once made, it is kept for any later campaign set there.</span></label>
+          </div>
+        </div>
         <div class="grid2">
           <label class="field"><span>Game system <small>optional</small></span><input name="system" maxlength="120" placeholder="The rules you play by, e.g. Call of Cthulhu 7e or D&amp;D 5e"></label>
           <label class="field" id="f-model"><span>Writer</span><select name="model"></select></label>

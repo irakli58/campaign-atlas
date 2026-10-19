@@ -5,6 +5,7 @@ Above the index of places, the page can carry one overview map: a printed plan w
 | The story is set in | Command | What you get |
 |---|---|---|
 | a real city | `atlas.js city <dir> "City, Country"` | its true streets and their names, rivers, coast, parks, squares, railways, walls, districts, landmarks |
+| one place's very own buildings (when asked: "made for this place") | `atlas.js kit use <dir> <kit>`, or a `kit.js` made for it (section 4b) | its famous buildings as models on the map's landmarks, and the colours, roofs and details of its streets |
 | a real place that is not a city (a camp, a base, a compound, a village, a few streets) | the same, with `--buildings` | every surveyed building as it stands, fences, watchtowers, tracks; nothing invented |
 | an invented city | `atlas.js city <dir> --invent "Name"` | a city laid out for its age, site and culture; side streets and houses grown |
 | an invented camp or base | `atlas.js city <dir> --invent "Name" --kind camp` (or `base`) | a compound: wire or blast wall, towers, gate, hut or tent lines, the buildings such a place has |
@@ -102,6 +103,32 @@ node atlas.js city <dir> --invent "Tycho Ring" --kind station --year 2291
 - **station**: a ring of tubes round a hub, four spokes, modules along the ring in four sections (Habitation Ring, Green Ring, Engineering, Command), a docking arm and a cargo arm each ending in a pad and a hangar, solar arrays, a comms dish and the core. Ground `deck`.
 - The look is `"scifi"`: white modules on grey ground, the sheet hanging in black space among stars. A place on such a map that names no `model` wears one of the future's own, chosen from its name: `dock` (docking, hangar, landing, spindle, airlock), `command` (command, bridge, control, operations, spire), `reactor` (engineering, reactor, power, core), `greenhouse` (hydroponics, garden, green), `medbay`, `lab` (lab, research, science, xeno), `quarters` (habitation, quarters, crew), `antenna` (comms, array, dish, listening), `mine`, `solar`, `cargo`, `habdome` (dome, hall, mess), else `module`.
 - The future's parts for laying one out by hand or bending a generated one (`ATLAS.cityEdit`): landmarks of kind `module`, `habdome`, `reactor`, `dish`, `solar` (with the older `pad`, `hangar`, `tank`, `spire`); walls of kind `tube` (a pressurised corridor: `{ kind: "tube", pts: [[x, y], ...] }`); `rows` with `roof: "module"` (habitat modules side by side); `open` of kind `crater`. A station needs no roads: its tubes are its streets.
+
+### 4b. Kits: buildings made for one place
+
+The ready-made sets fit a *kind* of place. A kit fits *one* place: Tbilisi's carved balconies and its cathedral on the hill, Venice's palazzi, a fantasy city's spires, a particular station's look. The user asked for this on 20 Oct 2026 ("you won't be able to use generic models, you will need custom"): when the game master chooses buildings **made for this place** (the app writes it in `story/brief.md`), or asks for a real city's own look, the map wears a kit. It takes more work, so it is done when asked, and every kit is kept and used again.
+
+**First look for one already made.** `node atlas.js kit list` shows the kits Atlas has (its `kits/` folder) and the user's own (a `kits/` folder beside the campaigns folder). `node atlas.js kit use <dir> <kit>` copies one into the campaign as `kit.js`. Only when there is none, design one; when it is done and the map looks right, `node atlas.js kit save <dir>` keeps it for the next campaign set there.
+
+**The kit file** (`<campaign>/kit.js`; `kits/tbilisi.js` is a full example):
+
+```js
+ATLAS.kit({
+  name: "Tbilisi", for: "Tbilisi, Georgia: Old Tbilisi and the centre",
+  look: { brick: [...], stone: [...], slate: [...], tile: [...], flats: [...], landmark: 0xeadcc4, lmRoof: 0x8b5b45, pitched: 0.55, tall: [1.05, 2.1] },
+  dress: [{ kind: "balcony", share: 0.5, near: [165, 140], r: 70, color: "#6f97ab", trim: "#2f3f48" }],
+  models: { sameba: { size: 12, parts: [["box", "stone", 0, 0, 0, 12, 1.1, 12], ["cone", "gold", 0, 10.4, 0, 3.7, 2.8, 3.7]] } },
+  landmarks: { "Holy Trinity Cathedral of Tbilisi": "sameba" }
+});
+```
+
+- **`look`**: the colours of the ordinary streets (wall colours `brick` and `stone`, warehouses `ware`, roofs `slate` and `tile`, flat roofs `flats`; the landmarks' `landmark` and `lmRoof`), laid over the map's age. `pitched`: the share of pitched roofs (0 to 1). `tall: [min, max]`: how many times the usual height the houses stand.
+- **`dress`**: details added to a share of the ordinary houses: `balcony` (a wooden balcony on each long face, one to three storeys; `color`, `trim`, `width`) and `dome` (a small dome on the roof; `color`). `near: [x, y]` and `r` keep it to one quarter.
+- **`models`**: buildings made of simple parts, the way Atlas's own are. A part is `[shape, material, x, y, z, sx, sy, sz, ry, { rx, rz }]`, in squares of the plan about the model's centre, y up. Shapes: `box`, `roof` (a gable, its ridge along x), `cylinder`, `cone`, `frustum` (a cone cut short), `pyramid`, `spire` (a four-sided needle), `obelisk`, `dome` (a half sphere), `tube` (a cylinder lying along x), `arch` (a half ring standing on its feet, sx wide), `ball` and `ring` (centred on y); every shape but the ball and the ring stands with its foot at y. Materials: `wall`, `roof` (the place's colour), `dark`, `glow`, `green`, `glass`, `gold`, `copper`, `stone`, `brick`, `wood`, `white`, `black`, `water`, or any colour `"#a8654a"`. `ry` turns a part about the upright, `rx`/`rz` tilt it.
+- A model's `size` is the width it is drawn at: on a map with a real footprint for the landmark it dresses, it is scaled to that footprint (turned along it), so the cathedral covers its true ground; `fit: false` and `scale` keep it as drawn. A place's model may say `claim` (the ground it takes, in squares).
+- **`landmarks`**: which model each of the map's landmarks wears, by its name as `city.js` has it (`check` notes a name the map does not have). A landmark you add yourself may name its model directly: `c.landmarks.push({ name: "Sulphur Baths", kind: "custom", at: [197, 167], model: "sulfur-bath" })`. A place may wear a model too (`model: "balcony-house"`); on a real map a place still stands in the map's own building there, and a kit model is for its landmarks.
+
+**Designing one.** Find out what the place looks like: its five to ten most famous buildings (from what you know; search the web when you can), and its ordinary streets (wall colours, roof material and pitch, storeys, the details that make them its own). Scale: one square is `geo.mpu` metres on a real map (in `city.js`; about 8 at 2.6 km) and about 5 on an invented one. Draw each famous building in ten to forty parts, its silhouette before its details: what someone would know it by from across the river. Then `check`, `build`, and look at it beside a photograph in your mind: the dome the right colour, the tower the right height against the houses, the colours of the street. Write what you made in the report.
 
 ## 5. The age and the part of the world
 

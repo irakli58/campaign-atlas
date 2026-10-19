@@ -120,7 +120,9 @@
   // landmarks: what each kind is when the city gives no footprint or height: [width, depth, height] in plan units
   const LM_SIZE = { tower: [5, 5, 24], hall: [7, 5, 3.2], church: [4.5, 9, 9], mosque: [7, 7, 7], dome: [7, 7, 5], castle: [13, 11, 2.2], stadium: [16, 12, 3.2], spire: [3.4, 3.4, 22], monument: [1.6, 1.6, 3.6], pyramid: [7, 7, 5], pagoda: [4, 4, 8], wheel: [8, 2, 14], bridge: [16, 2.6, 6], watchtower: [1.6, 1.6, 3.6], tent: [5, 3.2, 1.6], hangar: [9, 7, 3.2], bunker: [5, 4, 1.1], gate: [5, 1.4, 2.6], tank: [3, 3, 2.6], pad: [5, 5, .08], park: [0, 0, 0], square: [0, 0, 0],
     // the future: a habitat module lying on its legs, a dome on a drum, a reactor, a dish, a field of solar panels
-    module: [7, 2.8, 2.6], habdome: [9, 9, 4.5], reactor: [6, 6, 5], dish: [4, 4, 5.5], solar: [9, 5, .9] };
+    module: [7, 2.8, 2.6], habdome: [9, 9, 4.5], reactor: [6, 6, 5], dish: [4, 4, 5.5], solar: [9, 5, .9],
+    // a building made for one place: it wears its kit model (model: "..."), on a plot of size [w, d] (or its pts)
+    custom: [6, 6, 3] };
   // what lies between the buildings of a site that is not a city (ground: "grass" | "sand" | "dirt" | "snow" | "concrete")
   const GROUNDS = {
     grass: { BLOCK: "#cbd3a4", PAPER: "#dfe3c2", HATCH: "rgba(70,90,40,.06)", LOT: "#d9dfb8" },
@@ -135,6 +137,21 @@
   const LM_KINDS = Object.keys(LM_SIZE);
 
   let PLAN = null, CD = null, LOOK = null;
+  // A kit: buildings made for one place (ATLAS.kit({...}), usually the campaign's kit.js). The ready-made sets fit a
+  // kind of place; a kit fits one: Tbilisi's carved balconies and its cathedral, not a modern city's boxes (the user's
+  // idea, 20 Oct 2026). Several kits merge, the later winning. A kit's look is laid over the city's age.
+  let KIT = { look: null, models: {}, landmarks: {}, dress: [] };
+  function mergeKits() {
+    const K = { look: null, models: {}, landmarks: {}, dress: [], names: [] };
+    for (const k of A.kits || []) {
+      if (!k) continue;
+      if (k.look) K.look = Object.assign({}, K.look || {}, k.look, { plan: Object.assign({}, (K.look && K.look.plan) || {}, k.look.plan || {}) });
+      Object.assign(K.models, k.models || {}); Object.assign(K.landmarks, k.landmarks || {}); K.dress.push(...(k.dress || [])); if (k.name) K.names.push(k.name);
+    }
+    return K;
+  }
+  // the model a landmark wears from the kit: its own model: "...", or the kit's list of landmarks by name
+  const kitModelOf = L => KIT.models[(L.src && L.src.model) || ""] || KIT.models[KIT.landmarks[L.name] || ""] || null;
   // fill in everything the campaign left out, and make this city the current one
   function prepare(raw) {
     // a campaign's own changes to a city that was fetched or generated for it: ATLAS.cityEdit(c => { ... }), applied once
@@ -152,6 +169,13 @@
       if (o) L = Object.assign({}, L, o, { plan: Object.assign({}, L.plan, o.plan || {}) });
       if (D.look && typeof D.look === "object") L = Object.assign({}, L, D.look, { plan: Object.assign({}, L.plan, D.look.plan || {}) });
       if (GROUNDS[D.ground]) L = Object.assign({}, L, { plan: Object.assign({}, L.plan, GROUNDS[D.ground]) });
+      // a kit's look: the place's own colours, its share of pitched roofs (pitched: 0.4) and its storeys (tall: [1.1, 2.4])
+      KIT = mergeKits();
+      if (KIT.look) {
+        const k = KIT.look; L = Object.assign({}, L, k, { plan: Object.assign({}, L.plan, k.plan || {}) });
+        if (typeof k.pitched === "number") L.pitched = (i, b) => b.type === "church" || b.type === "chapel" || h01(i + 11) < k.pitched;
+        if (Array.isArray(k.tall)) L.tall = (i, b) => b.type === "church" || b.type === "chapel" ? 1 : k.tall[0] + h01(i + 3) * (k.tall[1] - k.tall[0]);
+      }
       LOOK = L;
     }
     // how tall each quarter stands, where the city knows: heights: { cell, cols, rows, x0, y0, v: [...] } in plan units
@@ -174,8 +198,8 @@
     A.order.forEach((id, i) => {
       const m = A.meta[id]; if (!m || m.offmap) return;
       // no model named: the look chooses (the future picks one of its own from the place's name), else a house
-      const mdl = Array.isArray(m.model) ? m.model : [m.model || (LOOK && LOOK.guess ? LOOK.guess(m) : "house")], kind = MODEL_SIZE[mdl[0]] ? mdl[0] : "house";
-      const e = { id, kind, lr: mdl[1] || MODEL_SIZE[kind], x: null, y: null, p: { id, n: i + 1, name: m.name || id, dist: m.district || m.region || "", cat: m.category || "", badge: m.badge || "" } };
+      const mdl = Array.isArray(m.model) ? m.model : [m.model || (LOOK && LOOK.guess ? LOOK.guess(m) : "house")], kind = MODEL_SIZE[mdl[0]] || KIT.models[mdl[0]] ? mdl[0] : "house";
+      const e = { id, kind, lr: mdl[1] || MODEL_SIZE[kind] || (KIT.models[kind] && KIT.models[kind].claim) || 3.4, x: null, y: null, p: { id, n: i + 1, name: m.name || id, dist: m.district || m.region || "", cat: m.category || "", badge: m.badge || "" } };
       // a place that IS one of the city's landmarks (landmark: "its name") stands where the landmark does, and wears it
       const lm = m.landmark ? D.landmarks.find(l => l.at && String(l.name).toLowerCase() === String(m.landmark).toLowerCase()) : null;
       // On a surveyed map (a real city or site) a place set down by position stands IN one of the map's own buildings,
@@ -1174,7 +1198,7 @@ function createMap3D(host, C, planCanvas, hooks) {
   // the view moves: each is drawn only when the camera is within the distance given
   const lod = [];
   // ---- ordinary buildings
-  const walls = [], roofs = [], chim = [], spires = [], stacks = [], lampPosts = [], lampHeads = [];
+  const walls = [], roofs = [], chim = [], spires = [], stacks = [], lampPosts = [], lampHeads = [], dressDomes = [];
   for (const b of C.buildings) {
     const wall = b.type === "ware" ? pick(WARE) : b.type === "church" || b.type === "chapel" || b.type === "school" ? mixHex(pick(STONE), "#9a8f7c", .3) : mixHex(pick(BRICK), pick(STONE), b.west * .85);
     const ry = -b.a, x = wx(b.x), z = wz(b.y);
@@ -1184,6 +1208,20 @@ function createMap3D(host, C, planCanvas, hooks) {
     walls.push({ x, z, sx: b.w, sy: H, sz: b.d, ry, c: ruined ? mixHex(wall, "#4a4540", .5) : b.type === "pub" ? LOOK.pub : wall });
     if (pitched) roofs.push({ x, y: H, z, sx: b.w + .12, sy: roofH, sz: b.d + .12, ry, c: b.type === "pub" ? "#3f3a35" : rnd() < .2 ? pick(TILE) : pick(SLATE) });
     else if (!ruined) walls.push({ x, y: H, z, sx: b.w + .1, sy: .12, sz: b.d + .1, ry, c: LOOK.flats ? LOOK.flats[bi % LOOK.flats.length] : LOOK.flat });
+    // a kit's dress on a share of the ordinary houses: wooden balconies on both long faces, a small dome on the roof
+    if (!ruined && KIT.dress.length && b.w > 1.8) KIT.dress.forEach((dr, di) => {
+      if (h01(bi * 13 + di * 101) >= (dr.share == null ? .3 : dr.share)) return;
+      if (dr.near && Math.hypot(b.x - dr.near[0], b.y - dr.near[1]) > (dr.r || 50)) return;
+      const ca = Math.cos(b.a), sa = Math.sin(b.a), off = b.d / 2 + .22;
+      if (dr.kind === "balcony") {
+        const levels = Math.max(1, Math.min(3, Math.floor(H / 1.25))), col = dr.color || "#7b5a3a";
+        for (let k = 0; k < levels; k++) for (const s of [-1, 1]) {
+          const y0 = .9 + k * 1.2; if (y0 + .55 > H) continue;
+          walls.push({ x: x - sa * off * s, y: y0, z: z + ca * off * s, sx: b.w * (dr.width || .78), sy: .5, sz: .42, ry, c: col });
+          walls.push({ x: x - sa * (off + .2) * s, y: y0 + .5, z: z + ca * (off + .2) * s, sx: b.w * (dr.width || .78), sy: .1, sz: .06, ry, c: dr.trim || "#3e2c1c" });
+        }
+      } else if (dr.kind === "dome") dressDomes.push({ x, y: H + roofH * .6, z, sx: Math.min(b.w, b.d) * .55, sy: Math.min(b.w, b.d) * .55, sz: Math.min(b.w, b.d) * .55, c: dr.color || "#b08a4a" });
+    });
     if (b.type === "terrace" && pitched && LOOK.chimneys && rnd() < .55 && b.w > 2.4) {
       const ca = Math.cos(b.a), sa = Math.sin(b.a), u = b.w / 2 - .35;
       for (const s of [-1, 1]) chim.push({ x: x + ca * u * s, y: H + roofH * .4, z: z + sa * u * s, sx: .38, sy: roofH * .6 + .55, sz: .7, ry, c: "#6b4f40" });
@@ -1215,6 +1253,7 @@ function createMap3D(host, C, planCanvas, hooks) {
   lod.push([instanced(boxG, chim, wallMat), 380]);
   instanced(coneG, spires, new T.MeshLambertMaterial({ color: 0xffffff }));
   instanced(cylG, stacks, new T.MeshLambertMaterial({ color: 0xffffff }));
+  if (dressDomes.length) instanced(new T.SphereGeometry(.5, 14, 8, 0, 6.2832, 0, Math.PI / 2), dressDomes, new T.MeshLambertMaterial({ color: 0xffffff }));
   // viaducts
   instanced(boxG, C.viaduct.map(s => ({ x: wx(s.x), z: wz(s.y), sx: s.l, sy: CD.railHeight || 1.1, sz: 1.9, ry: -s.a, c: LOOK.age ? "#957b66" : "#8e9297" })), wallMat);
   // gas lamps
@@ -1264,6 +1303,26 @@ function createMap3D(host, C, planCanvas, hooks) {
   const pyrG = new T.ConeGeometry(.7071, 1, 4); pyrG.translate(0, .5, 0); pyrG.rotateY(Math.PI / 4);
   const wheelG = new T.TorusGeometry(.5, .016, 6, 48);
   const spokeG = new T.BoxGeometry(1, 1, 1);
+  // ---- a kit's models: built of these shapes, as Atlas's own are. A part is [shape, material, x, y, z, sx, sy, sz, ry,
+  //      { rx, rz }], in squares of the plan, about the model's centre on the ground. Every shape stands on y (its foot at
+  //      y) but the ball and the ring, whose centre is at y. The tube and the roof lie along x.
+  const archG = new T.TorusGeometry(.5, .07, 6, 16, Math.PI);
+  const SHAPES = { box: boxG, roof: roofG, cylinder: cylG, cone: coneG, tube: tubeG, dome: domeG, ball: ballG, pyramid: pyrG, spire: taper4G, obelisk: obeliskG, frustum: frustG, ring: wheelG, arch: archG };
+  const KIT_MAT = { gold: 0xc9a54a, copper: 0x5f9e8a, glass: 0x9fc3d6, stone: 0xd9cdb6, brick: 0xa8654a, wood: 0x7b5a3a, white: 0xf1efe9, black: 0x2a2724, green: 0x6f8f55, water: 0x7fa7b5 };
+  // build a kit model into a group with the given add(); k scales it; mats are the group's own materials, and a
+  // material named by colour ("#a8654a") or by a common word (gold, copper, stone, brick, wood...) is made once and kept
+  function buildParts(model, add, mats, k) {
+    for (const p of model.parts || []) {
+      if (!Array.isArray(p)) continue;
+      const [shape, mat, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1, ry = 0, o = {}] = p, geo = SHAPES[shape]; if (!geo) continue;
+      let m = typeof mat === "string" && mats[mat === "glass" && mats.pane ? "pane" : mat];
+      if (!m) { const key = "k:" + mat; m = mats[key] || (mats[key] = new T.MeshLambertMaterial({ color: new T.Color(KIT_MAT[mat] != null ? KIT_MAT[mat] : /^#[0-9a-f]{3,8}$/i.test(String(mat)) ? mat : 0xcccccc), transparent: true, side: shape === "roof" || shape === "dome" || shape === "arch" ? T.DoubleSide : T.FrontSide })); }
+      const mesh = add(geo, m, x * k, y * k, z * k, sx * k, sy * k, sz * k, ry, !(o && (o.rx || o.rz)) && model.outline !== false);
+      if (o && o.rx) mesh.rotation.x = o.rx; if (o && o.rz) mesh.rotation.z = o.rz;
+    }
+  }
+  // how much a kit model is scaled: to the landmark's true footprint, when the map has one; otherwise as drawn
+  const kitScale = (model, L) => (L && (L.surveyed || (L.src && L.src.pts)) && model.size && model.fit !== false) ? Math.max(.25, Math.min(6, Math.max(L.w, L.d) / model.size)) : (model.scale || 1);
   const fpGeo = (L, h, k = 1, kin = 0) => {
     const ring = (r, q) => r.map(([x, y]) => new T.Vector2((x - L.cx) * q, -(y - L.cy) * q));
     const sh = new T.Shape(ring(L.pts, k));
@@ -1419,7 +1478,10 @@ function createMap3D(host, C, planCanvas, hooks) {
       top = Math.max(top, y + sy); return m;
     };
     const house = (w, d, h, rh, x = 0, z = 0) => { add(boxG, mats.wall, x, 0, z, w, h, d); add(roofG, mats.roof, x, h, z, w + .2, rh, d + .2); };
-    if (fp) { mats.glass = mats.wall; mats.green = mats.dark; raise(fp, add, mats); }
+    const kitFp = fp && kitModelOf(fp), kitOwn = !fp && KIT.models[L.kind];
+    if (kitFp) { buildParts(kitFp, add, mats, kitScale(kitFp, fp)); grp.rotation.y = -(fp.ang || 0); }          // a place that is a landmark the kit has a model for
+    else if (kitOwn) buildParts(kitOwn, add, mats, kitOwn.scale || 1);                                          // a place that wears a kit model itself
+    else if (fp) { mats.glass = mats.wall; mats.green = mats.dark; raise(fp, add, mats); }
     else switch (L.fp ? "post" : L.kind) {
       case "post": add(boxG, mats.dark, 0, 0, 0, .16, 3, .16); add(boxG, mats.roof, 0, 2.2, 0, 1.5, .7, .12); add(cylG, hitMat, 0, 0, 0, 2.6, 3, 2.6, 0, false); break;   // a place that is a park or a square: a signpost
       case "alley": {
@@ -1517,10 +1579,10 @@ function createMap3D(host, C, planCanvas, hooks) {
     const rr = Math.min(L.lr, 4.2);
     const sel = new T.Mesh(new T.RingGeometry(rr + .5, rr + 1.05, 48), selRingMat); sel.rotation.x = -Math.PI / 2; sel.position.y = .08; sel.visible = false; grp.add(sel);
     const bone = new T.Mesh(new T.RingGeometry(rr + 1.3, rr + 1.7, 48), boneRingMat); bone.rotation.x = -Math.PI / 2; bone.position.y = .07; bone.visible = false; grp.add(bone);
-    // campaign buildings stand a storey above their neighbours
-    if (!fp) grp.scale.set(1, 1.35, 1);
+    // campaign buildings stand a storey above their neighbours (a kit model stands as it was drawn)
+    if (!fp && !kitOwn) grp.scale.set(1, 1.35, 1);
     scene.add(grp);
-    LM[L.id] = { L, grp, mats, sel, bone, top: Math.max(top, 2) * (fp ? 1 : 1.35), roofCol };
+    LM[L.id] = { L, grp, mats, sel, bone, top: Math.max(top, 2) * (fp || kitOwn ? 1 : 1.35), roofCol };
   }
   // the landmarks of the city itself, those that are not also one of the campaign places
   const marks = [];
@@ -1539,7 +1601,9 @@ function createMap3D(host, C, planCanvas, hooks) {
         if (!geo.boundingBox) geo.computeBoundingBox();
         top = Math.max(top, y + sy * geo.boundingBox.max.y); return m;
       };
-      try { raise(L, add, M); } catch (err) { continue; }      // a footprint too broken to raise is left as its outline on the plan
+      const km = kitModelOf(L);
+      if (km) { const sub = new T.Group(); sub.rotation.y = -(L.ang || 0); grp.add(sub); const addTo = (geo, mat, x, y, z, sx, sy, sz, ry = 0, outline = true) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.y = ry; m.castShadow = true; m.receiveShadow = true; sub.add(m); if (outline && L.label) { const ln = new T.LineSegments(new T.EdgesGeometry(geo, 20), inkMat); ln.position.copy(m.position); ln.scale.copy(m.scale); ln.rotation.y = ry; sub.add(ln); } if (!geo.boundingBox) geo.computeBoundingBox(); top = Math.max(top, y + sy * geo.boundingBox.max.y); return m; }; buildParts(km, addTo, M, kitScale(km, L)); }
+      else try { raise(L, add, M); } catch (err) { continue; }      // a footprint too broken to raise is left as its outline on the plan
       scene.add(grp); marks.push({ L, x: grp.position.x, y: top, z: grp.position.z });
     }
   }
@@ -1783,8 +1847,10 @@ function createMap3D(host, C, planCanvas, hooks) {
   };
 
   A.city = data => { A.cityData = data; return A; };
+  // buildings made for one place: ATLAS.kit({ name, look, dress, models, landmarks }) (references/cities.md, "Kits")
+  A.kit = def => { (A.kits = A.kits || []).push(def); return A; };
   // a campaign's own changes to a city that was fetched or generated for it (city.js is rewritten whenever the city is
   // fetched again, so changes made there would be lost): ATLAS.cityEdit(c => { c.title = "..."; c.landmarks.push({...}); })
   A.cityEdit = fn => { (A.cityEdits = A.cityEdits || []).push(fn); return A; };
-  A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN };
+  A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN, kit: () => KIT, KIT_SHAPES: ["box", "roof", "cylinder", "cone", "tube", "dome", "ball", "pyramid", "spire", "obelisk", "frustum", "ring", "arch"], KIT_MATS: ["wall", "roof", "dark", "glow", "green", "glass", "gold", "copper", "stone", "brick", "wood", "white", "black", "water"], KIT_DRESS: ["balcony", "dome"] };
 })(ATLAS);
