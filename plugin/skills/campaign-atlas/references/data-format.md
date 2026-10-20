@@ -1,6 +1,6 @@
 # Data format
 
-A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the map of the whole, written by `atlas.js city`; its format is in `cities.md`), `places/*.js` (one file per place, read in file-name order; names starting with `_` are skipped), `story/` (the user's story, the council's transcript, the bible), `canon.md` and `checklist.md`. `build` writes `dist/`.
+A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the map of the whole, written by `atlas.js city`; its format is in `cities.md`), `table.js` (the clocks, the session plan, the players' characters and the rest for the table: `table.md`), `places/*.js` (one file per place, read in file-name order; names starting with `_` are skipped), `story/` (the user's story, the council's transcript, the bible), `canon.md` and `checklist.md`. `build` writes `dist/`.
 
 ## Contents
 
@@ -10,6 +10,7 @@ A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the ma
 4. Bigger versions: `expand`
 5. Campaign settings (`campaign.js`)
 6. Floor kinds, items and furnishing presets
+7. For the table
 
 ## 1. A place
 
@@ -34,6 +35,8 @@ ATLAS.place("old-mill", {
                                  // link: "https://...", title: "..." gives the place a song of the user's own (YouTube, Spotify, a music file
                                  // on the web), when they hand one over; the referee can also choose their own on the page
   leads: [{ to: "harbour-office", why: "The carter's route ends there." }],   // rare: a lead that is not a clue or a person
+  intensity: 3, content: ["violence"],   // how hard it hits, 1 to 5, and what it holds (table.md, section 10)
+  tables: { "Overheard here": ["...", "..."] },   // random tables of its own (table.md, section 9)
   map: { ... },                  // omit to list a place that is not mapped yet
   expand: [ { ... }, { ... } ],  // optional bigger versions, each built on the one before
   guide: { ... }                 // optional overlay; see section 3
@@ -116,12 +119,13 @@ rooms: {
 `check` requires `d`, `pur`, `obj`, `chk` and `atm` for every room, and notes rooms without `kp`. The page adds, on its own: the clues, people, secrets and encounters whose `at` is this room, and the room's connections worked out from the doors and stairs.
 
 ```js
-clues:   { C1: { t: "Title", at: "R2", p: "in the desk", d: "What it is.", how: "How it is found.", rev: "What it reveals.", hint: "What the referee does if the players miss it.", to: "other-place" } },
+clues:   { C1: { t: "Title", at: "R2", p: "in the desk", d: "What it is.", how: "How it is found.", rev: "What it reveals.", hint: "What the referee does if the players miss it.", to: "other-place",
+                 roll: "Spot Hidden", rescue: "How it reaches them if they miss it.", handout: { kind: "letter", date: "...", to: "...", text: "...", from: "..." } } },   // table.md
 npcs:    { N1: { n: "Name, role", at: "R2", look: "...", manner: "How they act.", voice: "...", bg: "Their story.", ties: { okafor: "How they know her.", "Joss Hale": "How they know him." },
                  doing: "...", want: "...", knows: "...", secret: "...", lie: "...", press: "What makes them talk.", rev: "What they will reveal, and to whom.", to: "other-place" },
            N2: { who: "okafor", at: "R3", doing: "...", knows: "...", rev: "..." } },      // one of the cast: named and described there
 secrets: { S1: { t: "Title", at: "R2", acc: "How it opens.", dest: "Where it leads.", why: "Why it exists." } },
-enc:     { E1: { t: "Title", at: "R1", d: "What happens, when, what it costs." } }
+enc:     { E1: { t: "Title", at: "R1", d: "What happens, when, what it costs.", roll: "Dodge", stats: { ... }, count: 3 } }   // stats: the game's own numbers (table.md, section 7); a person may have stats too
 ```
 
 `to` (a place id or a list of them) is a lead. `at` is a room id, or the id of a piece of ground. `check` requires a `hint` on every clue of a tier 1 place that has a `to`, and, for every person in every place, the four things every person has (their own or the cast's): `look` (what they look like), `bg` (their story), `manner` (how they act) and `ties` (who they know).
@@ -236,3 +240,7 @@ Run `node scripts/atlas.js catalogue <dir>` for the current list and a drawn she
 - Generic: `box` and `disc` (plain shapes that take a colour), `x` (nothing)
 
 **Furnishing presets** (`fx`): `bedroom garret dorm ward cell kitchen scullery wash parlour dining office library store shop workshop privy yard cellar coalhole attic chapel classroom bar taproom surgery lab vestry stable boiler strong hall shed pantry nursery waiting ice`. They suit pre-modern and early modern rooms; for other settings place items by hand or mix (`office`, `store`, `lab`, `ward`, `waiting` and `strong` are period-neutral).
+
+## 7. For the table
+
+`table.js` holds `ATLAS.clocks([...])`, `ATLAS.sessions([...])`, `ATLAS.pcs({...})`, `ATLAS.rescues([...])`, `ATLAS.tables({...})` and `ATLAS.handouts([...])`; the places and their clues, people and encounters carry `intensity`, `content`, `tables`, `roll`, `rescue`, `handout` and `stats`; `campaign.js` may say `era` and `people`. Every one of them is described, with an example, in `references/table.md`.

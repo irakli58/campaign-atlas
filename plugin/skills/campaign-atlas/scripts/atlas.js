@@ -55,6 +55,7 @@ function sources(dir) {
   if (fs.existsSync(cd)) for (const f of fs.readdirSync(cd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(cd, f));
   if (fs.existsSync(path.join(dir, "kit.js"))) files.push(path.join(dir, "kit.js"));       // buildings made for this place (ATLAS.kit)
   for (const f of ["world.js", "world-terrain.js"]) if (fs.existsSync(path.join(dir, f))) files.push(path.join(dir, f));   // the world map
+  if (fs.existsSync(path.join(dir, "table.js"))) files.push(path.join(dir, "table.js"));   // for the table: clocks, sessions, the players' characters, tables, handouts
   if (fs.existsSync(pd)) for (const f of fs.readdirSync(pd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(pd, f));
   return files;
 }
@@ -66,6 +67,7 @@ function load(dir) {
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-city.js"), "utf8"))(A);   // gives campaigns ATLAS.city(); loading it needs no browser
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-music.js"), "utf8"))(A);  // the lists of moods and flavours, for the checker
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-world.js"), "utf8"))(A);  // gives campaigns ATLAS.world()
+  new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-table.js"), "utf8"))(A);  // gives campaigns ATLAS.clocks(), sessions(), pcs(), tables(), handouts(), rescues()
   for (const f of sources(dir)) { try { new Function("ATLAS", fs.readFileSync(f, "utf8"))(A); } catch (e) { die(`${path.relative(dir, f)}: ${e.message}`); } }
   Object.defineProperty(A, "__dir", { value: dir });
   return A;
@@ -439,6 +441,76 @@ function checkCast(A) {
   }
   return { line: `cast: ${Object.keys(cast).length} principal${Object.keys(cast).length === 1 ? "" : "s"}`, out, problems, notes };
 }
+// the table (references/table.md): the villains' clocks, the session plan, the players' characters, handouts, rolls,
+// stat blocks, rescues, random tables, and how hard each place hits
+const HANDOUT_KINDS = ["letter", "diary", "note", "telegram", "newspaper", "ledger", "notice", "poster", "photo", "email", "message", "datapad", "scroll"];
+function checkTable(A) {
+  const out = [], P = m => { out.push("   ! " + m); problems++; }, N = m => { out.push("   - " + m); notes++; }; let problems = 0, notes = 0;
+  const isPlace = id => !!A.meta[id], big = A.order.filter(id => (A.meta[id].tier || 3) <= 2);
+  const words = l => Array.isArray(l) && l.length && l.every(x => typeof x === "string" && x.trim());
+  // the clocks
+  const clocks = A.clocksData || [], ids = new Set();
+  for (const c of clocks) {
+    const nm = c.name || c.id || "a clock";
+    if (!c.id) P(`the clock "${nm}" has no id`); else if (ids.has(c.id)) P(`two clocks have the id "${c.id}"`); else ids.add(c.id);
+    if (!has(c.name)) P(`the clock ${c.id || ""} has no name`);
+    const t = (c.ticks || []).filter(has), seg = +c.segments || t.length;
+    if (t.length < 3) P(`the clock "${nm}" needs at least three ticks, each a thing that changes in the world`);
+    else if (t.length < seg) P(`the clock "${nm}" has ${seg} segments but only ${t.length} ticks: say what each tick changes`);
+    if (!has(c.done)) N(`the clock "${nm}" does not say what happens when it is full (done)`);
+  }
+  if (!clocks.length) N(`no villains' clocks: give each enemy working in the background a clock (ATLAS.clocks in table.js)`);
+  // the sessions
+  const ses = A.sessionsData || [], inSession = new Set();
+  for (const s of ses) {
+    if (!(+s.n > 0)) P(`a session has no number (n)`);
+    for (const id of [].concat(s.places || [])) { if (!isPlace(id)) P(`session ${s.n} names the place "${id}", which does not exist`); else inSession.add(id); }
+    if (!has(s.start)) N(`session ${s.n} has no strong start (start)`);
+    if (!has(s.cliff) && s !== ses[ses.length - 1]) N(`session ${s.n} has no cliffhanger to end on (cliff)`);
+  }
+  if (!ses.length) N(`no session plan: split the campaign into evenings of play, each with a strong start and a cliffhanger (ATLAS.sessions in table.js)`);
+  else { const left = big.filter(id => A.maps[id] && !inSession.has(id)); if (left.length) N(`tier 1 and 2 places in no session: ${left.join(", ")}`); }
+  // the players' characters
+  const pcs = A.pcsData || {};
+  for (const [k, pc] of Object.entries(pcs)) {
+    if (!has(pc.n)) P(`the player character ${k} has no name (n)`);
+    for (const f of ["hook", "secret"]) if (!has(pc[f])) N(`the player character ${pc.n || k} has no ${f === "hook" ? "hook (why this story is theirs)" : "secret"}`);
+    if (!pc.clue || !has(pc.clue.t)) N(`the player character ${pc.n || k} has no clue of their own (clue: { t, at, d })`);
+    else if (!isPlace(pc.clue.at)) P(`${pc.n || k}'s own clue stands at "${pc.clue.at}", which is not a place`);
+    for (const id of [].concat(pc.places || [])) if (!isPlace(id)) P(`${pc.n || k} names the place "${id}", which does not exist`);
+    for (const t of strayTies(A, pc.ties)) N(`${pc.n || k}'s ties name "${t}", who is not in the cast`);
+  }
+  if (!Object.keys(pcs).length && A.__dir && fs.existsSync(path.join(A.__dir, "story", "pcs.md"))) N(`story/pcs.md has the players' characters, but none is woven in (ATLAS.pcs in table.js)`);
+  // handouts
+  const hs = A.table ? A.table.allHandouts() : [];
+  for (const h of hs) {
+    const nm = h.title || h.headline || h.id;
+    if (h.kind && !HANDOUT_KINDS.includes(h.kind)) P(`the handout "${nm}" is of an unknown kind "${h.kind}" (${HANDOUT_KINDS.join(", ")})`);
+    if (!has(h.text) && !has(h.scene)) P(`the handout "${nm}" has no text: write it as the players will read it`);
+  }
+  if (hs.length < 3) N(`${hs.length} handout${hs.length === 1 ? "" : "s"}: make every document the players can hold a handout (handout: on its clue), at least three`);
+  // rescues, tables, intensity, rolls, stat blocks
+  for (const r of A.rescuesData || []) { if (r.at && !isPlace(r.at)) P(`a rescue stands at "${r.at}", which is not a place`); if (!has(r.do || r.d)) P(`a rescue ("${r.when || "?"}") does not say what to do (do)`); }
+  for (const [nm, l] of Object.entries(A.tablesData || {})) if (!words(l)) P(`the random table "${nm}" is not a list of entries`);
+  let stats = 0;
+  const statsIn = M => Object.values(M.npcs || {}).filter(n => n.stats).length + Object.values(M.enc || {}).filter(e => e.stats).length;
+  for (const id of A.order) {
+    const m = A.meta[id];
+    for (const [nm, l] of Object.entries(m.tables || {})) if (!words(l)) P(`${id}: the random table "${nm}" is not a list of entries`);
+    if (m.intensity != null && !(+m.intensity >= 1 && +m.intensity <= 5)) P(`${id}: intensity is ${m.intensity}; it runs from 1 (gentle) to 5 (brutal)`);
+    if (m.content != null && !Array.isArray(m.content)) P(`${id}: content is a list of what it holds ([] for nothing to warn of)`);
+    if (A.maps[id]) stats += statsIn(A.get(id, 99));
+    if ((m.tier || 3) > 2 || !A.maps[id]) continue;
+    if (m.intensity == null || m.content == null) N(`${id}: say how hard it hits (intensity: 1 to 5) and what it holds (content: [...])`);
+    if (!Object.keys(m.tables || {}).length) N(`${id}: give it a random table of its own (tables: { "Overheard here": [...] })`);
+    const cl = Object.values(A.get(id, 99).clues || {});
+    if (cl.length && !cl.some(c => has(c.roll))) N(`${id}: none of its clues says which roll finds it (roll: "Spot Hidden")`);
+  }
+  stats += Object.values(A.castData || {}).filter(c => c.stats).length;
+  if (!stats && has(A.config.system)) N(`no stat blocks: give the dangers and anyone who may fight their numbers in ${A.config.system}'s rules (stats:)`);
+  const line = `the table: ${clocks.length} clock${clocks.length === 1 ? "" : "s"} · ${ses.length} session${ses.length === 1 ? "" : "s"} · ${Object.keys(pcs).length} character${Object.keys(pcs).length === 1 ? "" : "s"} · ${hs.length} handout${hs.length === 1 ? "" : "s"} · ${stats} stat block${stats === 1 ? "" : "s"}`;
+  return { line, out, problems, notes };
+}
 function cmdCheck(dir, want) {
   const A = load(dir); let problems = 0, notes = 0;
   const list = (want.length ? want : A.order);
@@ -470,6 +542,7 @@ function cmdCheck(dir, want) {
     console.log(`clue trail: ${leads.length} lead${leads.length === 1 ? "" : "s"} between ${A.order.length} places${out.length ? "" : "  OK"}`); out.forEach(l => console.log(l));
     if (A.config.music !== false) { const c = checkMusic(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
     if (A.castData) { const c = checkCast(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
+    { const c = checkTable(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
     for (const cid of Object.keys(A.cities || {})) { const c = checkCity(A, cid); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
     if (A.worldData) { const c = checkWorld(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
     else for (const id of A.order) { const m = A.meta[id]; if (m.location) { console.log(`   ! ${id} stands in the world location "${m.location}", but the campaign has no world map (world.js)`); problems++; } }
@@ -557,7 +630,11 @@ function cmdStatus(dir) {
 function pageParts(dir) {
   const A = load(dir), cfg = A.config, P = A.paper(), ui = cfg.ui || {};
   // The default dress is the Wormroot Idol Gazetteer's: the Fell types, Alegreya, IBM Plex Mono (atlas.css has its colours).
-  const fams = (cfg.fonts && cfg.fonts.google) || ["IM+Fell+English:ital@0;1", "IM+Fell+English+SC", "Alegreya:ital,wght@0,400;0,600;1,400", "IBM+Plex+Mono:wght@400;500"];
+  const fams = ((cfg.fonts && cfg.fonts.google) || ["IM+Fell+English:ital@0;1", "IM+Fell+English+SC", "Alegreya:ital,wght@0,400;0,600;1,400", "IBM+Plex+Mono:wght@400;500"]).slice();
+  // the handouts' own types (a typewriter, a hand, a newspaper's, a screen's), when the campaign has handouts
+  const FELL = "IM+Fell+English:ital@0;1", HO_FONTS = { victorian: [FELL, "Special+Elite", "Caveat:wght@400;600", "Old+Standard+TT:ital,wght@0,400;0,700;1,400", "UnifrakturMaguntia"], "1920s": [FELL, "Special+Elite", "Caveat:wght@400;600", "Old+Standard+TT:ital,wght@0,400;0,700;1,400", "UnifrakturMaguntia"], medieval: [FELL, "UnifrakturMaguntia", "Caveat:wght@400;600"], fantasy: [FELL, "UnifrakturMaguntia", "Caveat:wght@400;600"], modern: ["Caveat:wght@400;600"], future: ["Share+Tech+Mono", "Caveat:wght@400;600"] };
+  const hoFams = A.table ? [...new Set(A.table.allHandouts().flatMap(h => HO_FONTS[h.era || A.table.era()] || []))] : [];
+  if (hoFams.length) fams.push(...hoFams.filter(f => !fams.some(g => g.split(":")[0] === f.split(":")[0])));
   const link = fams.length ? `<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link rel="stylesheet" href="https://fonts.googleapis.com/css2?${fams.map(f => "family=" + f).join("&")}&display=swap">\n` : "";
   const light = [`--map-paper: ${P.paper}`], dark = [];
   if (ui.accent) light.push(`--accent: ${ui.accent}`, `--accent-soft: color-mix(in srgb, ${ui.accent} 11%, transparent)`);
@@ -571,7 +648,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw };

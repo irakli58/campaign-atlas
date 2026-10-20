@@ -16,6 +16,7 @@ This is the order that works, with the command for each step. It was arrived at 
 | 6 | Every place registered | one `ATLAS.place(id, {...})` line each | Tier, category, region, tagline, position on the map |
 | 7 | The trail planned | `A check` | Every place that matters has two leads in, on paper |
 | 8 | The places, one at a time | the loop below | `A check <place>` is clean for each |
+| 8b | The table | `table.js`, and on the places (`references/table.md`) | Clocks, the session plan, the players' characters woven in, handouts, rolls, stat blocks, rescues, random tables, intensity; `check`'s "the table" line is OK |
 | 9 | Build and look | `A build`, the preview | Both modes, light and dark, phone width |
 | 10 | Publish | the Artifact tool | One address, saved to memory and to the folder's notes |
 | 11 | Report | to the user | What was made, what the council changed, what was invented |
@@ -62,7 +63,7 @@ Take the places in tier order, tier 1 first. Finish each before starting the nex
 1. **Size it to its tier at once** (`standards.md`): tier 1 is thirty rooms or more on three floors or more. Do not draw a small version and wait to be asked.
 2. **Lay out the floors.** Start from what the building is: public rooms at the front, service behind, private above, storage and secrets below. Keep every floor of a building the same size so stairs line up. Use `fx` to furnish a room in one word.
 3. `A check <dir> <place>` and `A ascii <dir> <place> <floor>`: read the text drawing. Fix every problem before writing a word of the guide.
-4. **Place the clues, people, secrets and encounters** from the trail plan, each with its marker in its room. Give every clue that leads on a `hint`.
+4. **Place the clues, people, secrets and encounters** from the trail plan, each with its marker in its room. Give every clue that leads on a `hint`. For the table (`references/table.md`): the `roll` that finds a clue, in the game's own words; a `handout` with its whole text when the clue is a document; a `rescue` for each clue the story needs; `stats` for anyone or anything that may fight; the place's `intensity` and `content`, and for a tier 1 or 2 place a random table or two of its own.
 5. `A dump <dir> <place>`: one compact page of everything written so far. Write the room guide from it, about ten rooms to an edit, floor by floor.
 6. `A check <dir> <place>` until it says OK. Then `A status <dir>`, which rewrites `checklist.md`.
 
@@ -74,15 +75,19 @@ What makes this fast:
 - When a floor is nearly the one below it, copy that floor's outline and change the inside.
 - Read `check`'s notes as well as its problems: "more than 40% of rooms have nothing to do" is the note that precedes "make it more interesting".
 
+## Step 8b: the table
+
+When the places are mapped, write `table.js` (`references/table.md`): a clock for each enemy working in the background, the campaign split into sessions (a strong start and a cliffhanger each, every tier 1 and 2 place in one), the players' characters woven in when they were given (`story/pcs.md`: a hook, a secret and a clue of their own placed in a place, which the place file then holds too), the ways back that belong to no one clue, the campaign's own random tables, and any handout that is not a clue. `A check` reads it on its "the table" line. The page does the rest by itself: the players' screen with fog of war, the board, combat and sanity, people and places made on the spot, Ask the campaign, the printed book, maps for online tables, the safety tools.
+
 ## Steps 9 to 11: out of the door
 
 **9. Build and look.** `A build <dir>` writes `dist/<title>.html` (to publish) and `dist/preview.html` (to open). The page is laid out exactly as the Wormroot Idol Gazetteer is (`standards.md`, section 9): look at it against that list. Look at one tier 1 place in the referee's view and in player-safe mode: its people here, its clues to find, its maps; look at the city map, the strip of key items and the Story view.
 
 **4a. The masthead.** While setting the look (step 4), give `campaign.js` a short `system` and `setting`, a `strap`, the `acts` and the `keys` (`data-format.md`, section 5). Leave fonts and colours unset: the default dress is the Gazetteer's.
 
-**10. Publish** `dist/<title>.html` with the Artifact tool (load `artifact-design` first for its publish rules, and `artifact-capabilities` for the tracker's database). The first publish declares `capabilities: { db: {}, user: {} }` so the investigation tracker can save; later publishes leave `capabilities` out, which keeps it. Later versions go to the same address with a short label. Save the address to memory and write it in the folder's notes. Never delete an artifact unless the user says so.
+**10. Publish** `dist/<title>.html` with the Artifact tool (load `artifact-design` first for its publish rules, and `artifact-capabilities` for the tracker's database). The first publish declares `capabilities: { db: {}, user: {}, sample: {}, downloads: true }`: the database keeps the investigation tracker and everything at the table and links the players' screen to the referee's page; `sample` lets "Ask the campaign" and "Previously on…" be written by Claude; `downloads` lets the printed book and the maps for online tables be saved. Later publishes leave `capabilities` out, which keeps them (a page first published with only `db` and `user` is given the full set once, on its next publish). Later versions go to the same address with a short label. Save the address to memory and write it in the folder's notes. Never delete an artifact unless the user says so.
 
-Where there is no Artifact tool (plain Claude Code, Codex, the Campaign Atlas app), or the folder's house rules say nothing is published, the finished campaign is `dist/preview.html`: one complete page that opens in any browser and can be copied anywhere. Tell the user where it is. Opened that way, the music, the narrator and the referee's own songs work; the investigation tracker saves only when the page is opened from the Campaign Atlas app.
+Where there is no Artifact tool (plain Claude Code, Codex, the Campaign Atlas app), or the folder's house rules say nothing is published, the finished campaign is `dist/preview.html`: one complete page that opens in any browser and can be copied anywhere. Tell the user where it is. Opened that way, the music, the narrator, the referee's own songs, the tracker and everything at the table work, kept in that browser (in the Campaign Atlas app, kept by the app); "Ask the campaign" then shows the passages that answer a question, and in the app it is answered by the game master's own Claude Code.
 
 **11. Report.** In plain words: what was made (how many places, rooms, clues, people); what the council changed; everything invented while mapping that touches the plot (from `canon.md`); what is still open.
 
@@ -97,6 +102,9 @@ Where there is no Artifact tool (plain Claude Code, Codex, the Campaign Atlas ap
 | "Make the 3D map of X" (a location on the world map) | `A city <dir> --invent "X" --id <its city id>` (or a real city by name, with `--id`), then build |
 | "Here is world.js from the page" (Copy as world.js) | Put it in place of the old `world.js`, `A world <dir>` (keeps the land), check, build |
 | "Add a place" | Register it, give it two leads in from existing clues, map it, rebuild |
+| "Here are my players' characters" | Save them as `story/pcs.md`; weave each in (`references/table.md`, section 5): `ATLAS.pcs` in `table.js` and their own clue in its place; check, build |
+| "How do I show my players the map", "a second screen", "handouts" | Nothing to make: the page's At the table view, Players' screen tab (`references/table.md`, section 1). Tell them how |
+| "Add a clock", "split it into sessions", "make this a handout" | `table.js` or the clue's `handout` (`references/table.md`); check, build |
 | "Players should not see X" | `h: 1`, door type `"s"`, or `gm: 1`; then `check` |
 | A new story | A new campaign folder; start at step 0 |
 
@@ -104,6 +112,7 @@ Where there is no Artifact tool (plain Claude Code, Codex, the Campaign Atlas ap
 
 - `A check <dir>` ends "all clear".
 - Every place meets its tier.
+- The table is written: clocks, sessions, handouts, rolls, stat blocks, intensity, and the players' characters when they were given.
 - The council's transcript, the bible and the canon sheet are in the folder.
 - The page is published at one address, and that address is saved.
 - The user has been told what changed and what was invented.

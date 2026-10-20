@@ -16,8 +16,9 @@ Use the **campaign-atlas** skill (`.claude/skills/campaign-atlas/`). Read its `S
    - Each settlement the story spends time in gets its own 3D city (`node atlas.js city ... --id <id>`).
 4. Map every location, biggest for the most important (tier 1: 30 rooms or more on 3 floors or more), with a room-by-room guide, clues with hints and where they lead, characters with descriptions, secrets and encounters.
 5. Give every place its music (`music: "mood"` on each place, with moment songs). The default style is dark orchestral mystery; choose another only when the story plainly is not that.
+5b. **The table** (`references/table.md`): write `table.js` with the villains' clocks, the session plan, and, when `story/pcs.md` holds the players' characters, each one woven in (a hook, a secret, a clue of their own placed in one of the places). On the places: the roll that finds each clue, a handout with its whole text for every document, a rescue for every clue the story needs, stat blocks in the game's own rules, a random table or two, and how hard each place hits.
 6. Check and build. `node atlas.js check campaigns/<name>` must end "all clear". Then `node atlas.js build campaigns/<name>`. The finished page is `campaigns/<name>/dist/preview.html`; the app shows it to the game master. There is nothing to publish.
-7. Write `campaigns/<name>/REPORT.md` for the game master, in plain words: what was made (places, rooms, clues, people), what the council changed and why, what Tolkien judged and what he made them mend, what was invented while mapping that touches the plot, and anything still open.
+7. Write `campaigns/<name>/REPORT.md` for the game master, in plain words: what was made (places, rooms, clues, people, handouts, clocks, sessions), what the council changed and why, how their players' characters were woven in, what Tolkien judged and what he made them mend, what was invented while mapping that touches the plot, and anything still open. Tell them, briefly, how to play it: the page's "At the table" view, and its players' screen for a second window or a television.
 
 ## How to work here
 

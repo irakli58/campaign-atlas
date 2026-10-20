@@ -14,6 +14,12 @@
     set(k, v) { try { localStorage.setItem(cfg.storageKey + "-" + k, v); } catch (e) {} }
   };
   A.loadPrefs();
+  // the page's database (claude.ai, the Atlas app), or else one kept in this browser (atlas-table.js), so the tracker and
+  // the table work wherever the page is opened
+  const DBP = (async () => { let db = null; try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (e) { db = null; } return db || (A.localDb ? A.localDb(cfg.storageKey) : null); })();
+  // the players' screen: the same page opened with #players (or made so in this window), showing only what the referee shows
+  const asPlayers = (location.hash || "") === "#players" || (() => { try { return sessionStorage.getItem(cfg.storageKey + "-players") === "1"; } catch (e) { return false; } })();
+  if (asPlayers && A.playersScreen) { const st = A.table.makeStore(DBP, cfg.storageKey); A.playersScreen({ store: st, found: A.table.foundIn(st), prefStore: store }); return; }
   A.pageShows = { ov: 1, ext: 1 };          // the dossier shows these itself, so the map reference does not repeat them
   const gm = cfg.gm || "GM";
   const toList = v => (Array.isArray(v) ? v : v || v === 0 ? [v] : []);
@@ -41,7 +47,7 @@
   const ROWS = {}, INTO = {};
   for (const p of P) {
     const M = p.M, rows = ROWS[p.id] = []; if (!M) continue;
-    for (const [k, c] of Object.entries(M.clues || {})) rows.push({ k, short: c.t || k, text: (c.t || k) + (c.rev ? ": " + c.rev : c.d ? ": " + c.d : ""), to: toList(c.to).filter(t => byId[t] && t !== p.id), hint: c.hint || "" });
+    for (const [k, c] of Object.entries(M.clues || {})) rows.push({ k, short: c.t || k, text: (c.t || k) + (c.rev ? ": " + c.rev : c.d ? ": " + c.d : ""), to: toList(c.to).filter(t => byId[t] && t !== p.id), hint: c.hint || "", roll: c.roll || "", handout: c.handout ? p.id + "." + k : "", rescue: c.rescue || "" });
     for (const [k, n] of Object.entries(M.npcs || {})) { const to = toList(n.to).filter(t => byId[t] && t !== p.id); if (!to.length) continue; const [nm] = who(n), pr = n.press || (castOf(n) || {}).press; rows.push({ k, short: "Talking to " + nm, text: nm + ": " + (n.rev || n.knows || "points the way on"), to, hint: pr ? "What makes them talk: " + pr : "", person: nm }); }
     for (const l of A.meta[p.id].leads || []) if (byId[l.to]) rows.push({ k: "L" + rows.length, short: l.why || "A lead", text: l.why || "A lead", to: [l.to], hint: "" });
     for (const r of rows) for (const t of r.to) (INTO[t] = INTO[t] || []).push({ from: p.id, k: r.k, short: r.short, text: r.text, person: r.person });
@@ -82,11 +88,13 @@
   <nav class="views" aria-label="View">
     <button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
     ${A.worldData && A.worldMount ? `<button type="button" id="v-world" aria-pressed="false">World map</button>` : ""}
+    ${A.tableUI ? `<button type="button" id="v-table" class="keeper" aria-pressed="false">At the table</button>` : ""}
     ${(A.storyData || []).length ? `<button type="button" id="v-story" class="keeper" aria-pressed="false">The story</button>` : ""}
     ${A.music && A.music.enabled && A.music.enabled() ? `<button type="button" id="v-music" aria-pressed="false">Music</button>` : ""}
   </nav>
   <section class="story keeper" id="story" aria-label="The whole story"></section>
   <section class="studio" id="studio" aria-label="Make your own music"></section>
+  ${A.tableUI ? `<section class="tablev keeper" id="tablev" aria-label="At the table"></section>` : ""}
   <nav class="bones keeper" id="bones" aria-label="${esc(keyWord)}" style="--bones:${Math.max(1, BONES.length)}"></nav>
   <section class="tracker keeper" id="tracker" aria-label="Investigation tracker">
     <details id="trk"><summary><span class="trh">Investigation tracker</span><span class="trs" id="trk-sum"></span></summary><div id="trk-body"></div></details>
@@ -150,7 +158,6 @@
   /* ---- the world map (atlas-world.js): the level above the cities. It is drawn the first time it is shown and kept,
           so it is where it was left (its view, its choice) when the referee comes back from a city. */
   let WORLD = null;
-  const DBP = (async () => { try { return window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (e) { return null; } })();
   // the campaign's places in a world location: those that say location: "<its id>", or stand in the city it names
   const inLoc = (pid, L) => { const m = A.meta[pid] || {}, c = L.city || (CITIES[L.id] ? L.id : null); if (m.location) return m.location === L.id; return !!c && cityOf(pid) === c; };
   const WORLD_CTX = {
@@ -205,7 +212,7 @@
     const wl = A.worldData && A.worldMount ? (A.worldData.locations || []).find(L => L && L.id && inLoc(p.id, L)) : null;
     const wtag = wl && (state.mode === "gm" || wl.state !== "unknown") ? `<button type="button" class="tag wtag" data-world="${esc(wl.id)}" title="Show it on the world map">⌖ ${esc(wl.name)}</button>` : "";
     const links = linksOf(p.id).map(id => `<button type="button" data-go="${esc(id)}"><span class="n">${pad(byId[id].n)}</span>${esc(byId[id].name)}</button>`).join("");
-    const hooks = Object.values(M.enc || {}).map(e => `<li><details class="hk"><summary>${esc(e.t || "")}</summary><p>${esc(e.d || "")}</p></details></li>`);
+    const hooks = Object.values(M.enc || {}).map(e => `<li><details class="hk"><summary>${esc(e.t || "")}${e.roll && A.tableUI ? " " + A.tableUI.roll(e.roll) : ""}</summary><p>${esc(e.d || "")}</p>${e.stats && A.tableUI ? A.tableUI.stats(e.stats, e.count ? e.count + " of them" : "") : ""}</details></li>`);
     // the head of the dossier, with the place's suggested song at its top right (the user asked for it there)
     $("#dossier").innerHTML = `
       <div class="dhead"><div class="dtop"><div class="dtitle">
@@ -213,6 +220,7 @@
       <h2>${esc(p.name)}</h2>
       ${p.sub ? `<p class="subt keeper">${esc(p.sub)}</p>` : ""}
       <div class="meta">${acts}${bone}${wtag}</div>
+      ${A.tableUI ? A.tableUI.dossierBar(p) : ""}
       </div>${A.music && A.music.card ? A.music.card(p.id) : ""}</div></div>
       <div id="accSlot">${accTop(p.id)}</div>
       ${M.ext ? `<section class="sec readaloud"><h3>First impressions · read aloud${A.narrateBtn ? `<span class="nar-h">${A.narrateBtn(M.ext, "first impressions")}${A.narrateSet()}</span>` : ""}</h3><p class="lead">${esc(M.ext)}</p></section>` : ""}
@@ -220,6 +228,7 @@
       ${M.ov ? `<section class="sec secret keeper"><h3>What's really going on</h3><p>${esc(M.ov)}</p></section>` : ""}
       <section class="sec keeper" id="peopleSlot"><h3>People here${FOLDALL}</h3>${peopleList(p)}</section>
       <div class="keeper" id="clueSlot">${clueSection(p)}</div>
+      ${A.tableUI ? A.tableUI.dossierExtra(p) : ""}
       ${hooks.length ? `<section class="sec keeper"><h3>Scenes and hooks${FOLDALL}</h3><ul class="hks">${hooks.join("")}</ul></section>` : ""}
       <section class="sec"><h3>Connected places</h3><div class="links">${links || `<span class="kn">None.</span>`}</div></section>
       ${connWhy(p)}
@@ -296,11 +305,14 @@
     if (v === "story" && (!story.length || state.mode !== "gm")) v = "gaz";
     if (v === "music" && !$("#v-music")) v = "gaz";
     if (v === "world" && !$("#v-world")) v = "gaz";
+    if (v === "table" && (!$("#v-table") || state.mode !== "gm")) v = "gaz";
     state.view = v; app.dataset.view = v;
     $("#v-gaz").setAttribute("aria-pressed", v === "gaz");
     if ($("#v-world")) $("#v-world").setAttribute("aria-pressed", v === "world");
     if (v === "world") { if (!WORLD) WORLD = A.worldMount($("#worldv"), WORLD_CTX); else WORLD.wake(); WORLD.search(state.q); renderCityBar(); }
     if ($("#v-story")) $("#v-story").setAttribute("aria-pressed", v === "story");
+    if ($("#v-table")) $("#v-table").setAttribute("aria-pressed", v === "table");
+    if (v === "table") A.tableUI.view();
     if ($("#v-music")) $("#v-music").setAttribute("aria-pressed", v === "music");
     if (v === "story") renderStory();
     if (v === "music") A.music.studio($("#studio"));   // the Music tab: music of the referee's own (the user asked for it, 14 Oct 2026)
@@ -376,7 +388,7 @@
     };
     const shown = TR.keys.filter(match);
     body.innerHTML = `
-      ${TR.canWrite ? "" : `<p class="trnote">Read-only: you can see the tracker but not change it.</p>`}
+      ${TR.canWrite ? "" : `<p class="trnote">Read-only: you can see the tracker but not change it.</p>`}${TR.db && TR.db.local ? `<p class="trnote">Kept in this browser only. Open the page on claude.ai, signed in, to keep it with the page.</p>` : ""}
       <div class="party"><span class="kl">Characters</span>${TR.party.map(m => `<span class="pc"><span class="pcg">${esc(m.name)}</span>${TR.canWrite ? `<button type="button" class="pcx" data-mdel="${esc(m.id)}" aria-label="Remove ${esc(m.name)}">×</button>` : ""}</span>`).join("") || `<span class="kn">none added</span>`}
         ${TR.canWrite ? `<form class="inl" id="memForm"><input id="memName" placeholder="Add a character" aria-label="Character name" maxlength="40"><button type="submit">Add</button></form>` : ""}</div>
       <div class="trsum">
@@ -418,7 +430,7 @@
     const rows = ROWS[p.id] || [];
     const lead = (r, done) => r.to.length ? `<div class="cl-to"><span class="kn">${TR.ready ? (done ? "Opened" : "Would open") : "Leads to"}</span>${r.to.map(t => `<span class="pc">${accBadge(t)}<button type="button" class="pcg" data-go="${esc(t)}">${esc(placeName(t))}</button></span>`).join("")}</div>` : "";
     const hint = r => r.hint ? `<details class="chint"><summary>${r.to.length === 1 ? "How to hint at " + esc(placeName(r.to[0])) : r.to.length ? "How to hint where it leads" : "If it is missed"}</summary><p>${esc(r.hint)}</p></details>` : "";
-    const fold = (r, done) => `<details class="clf"><summary>${esc(r.short)}</summary><p class="clx">${esc(r.text)}</p>${lead(r, done)}${hint(r)}</details>`;
+    const fold = (r, done) => `<details class="clf"><summary>${esc(r.short)}${r.roll && A.tableUI ? " " + A.tableUI.roll(r.roll) : ""}${r.handout ? ` <span class="ho-b" title="A handout">✉</span>` : ""}</summary><p class="clx">${esc(r.text)}</p>${lead(r, done)}${hint(r)}${r.rescue ? `<details class="chint"><summary>If they're stuck</summary><p>${esc(r.rescue)}</p></details>` : ""}${r.handout && A.tableUI ? `<p class="cl-ho">${A.tableUI.handoutBtns(r.handout)}</p>` : ""}</details>`;
     if (!TR.ready) return `<section class="sec"><h3>Clues to find${rows.length ? FOLDALL : ""}</h3>${rows.length ? `<ul class="cls">${rows.map(r => `<li class="cl"><span class="ckx"></span>${fold(r)}</li>`).join("")}</ul>` : `<p class="kn">None here.</p>`}</section>`;
     const ro = TR.canWrite ? "" : " disabled";
     const main = rows.map(r => { const done = clueDone(p.id, r.k); return `<li class="cl${done ? " done" : ""}"><input type="checkbox" data-clue="${esc(p.id)}" data-ck="${esc(r.k)}" aria-label="Found: ${esc(r.short)}"${done ? " checked" : ""}${ro}>${fold(r, done)}</li>`; }).join("");
@@ -542,7 +554,7 @@
     const notes = TR.chars[cid] ? TR.chars[cid].notes || "" : "", M = byId[pid].M;
     return `<div class="prof"><dl>
       ${row("Where", n.at ? ((A.nameOf && A.nameOf(M, n.at)) ? n.at + " · " + A.nameOf(M, n.at) : n.at) : "")}${row("Looks", g("look"))}${row("Manner", g("manner"))}${row("Sounds", g("voice"))}${row("Doing", n.doing)}${row("Story", g("bg"))}${tiesRows(n)}${row("Wants", g("want"))}${row("Knows", n.knows)}${row("Secret", g("secret"), "sec-k")}${row("Lie", g("lie"))}${row("Talks", g("press"))}${row("Reveals", n.rev)}${row("Fate", c.fate)}
-    </dl>
+    </dl>${A.tableUI ? A.tableUI.stats(n.stats || c.stats) : ""}
     ${TR.ready ? `<label class="cnote"><span>Your notes on ${esc(who(n)[0])}</span><textarea data-cnote="${esc(cid)}" rows="3" placeholder="What the party has learned, how you've played them, changes…"${TR.canWrite ? "" : " disabled"}>${esc(notes)}</textarea></label>` : ""}</div>`;
   }
   function peopleList(p) {
@@ -568,6 +580,7 @@
     if (t.closest("#v-story")) { setView("story"); return; }
     if (t.closest("#v-music")) { setView("music"); return; }
     if (t.closest("#v-world")) { setView("world"); return; }
+    if (t.closest("#v-table")) { setView("table"); return; }
     const wb = t.closest("[data-world]"); if (wb) { showWorld(wb.dataset.world || null); return; }
     const j = t.closest("[data-sjump]"); if (j) { const s = document.getElementById("st-" + j.dataset.sjump); if (s) s.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const fa = t.closest("[data-foldall]"); if (fa) { const box = fa.closest(".lm-blk, .sec"), list = box ? [...box.querySelectorAll("details.fold, details.clf, details.hk, details.npc, details.ci")] : [], open = list.some(d => !d.open); list.forEach(d => { d.open = open; }); fa.textContent = open ? "Close all" : "Open all"; return; }
@@ -582,7 +595,7 @@
     if (t.closest("#plNew")) { openPlaceEditor(); return; }
     const pd = t.closest("[data-pldel]"); if (pd) { if (TR.places[pd.dataset.pldel]) twice(pd, () => trWrite(db => db.collection("places").doc(pd.dataset.pldel).delete())); return; }
     const g = t.closest("[data-go]");
-    if (g && !g.closest(".lmap-sec")) { if (g.closest("#story")) setView("gaz"); go(g.dataset.go, !!g.closest(".atlas")); return; }
+    if (g && !g.closest(".lmap-sec")) { if (g.closest("#story, #tablev, #tDlg")) setView("gaz"); go(g.dataset.go, !!g.closest(".atlas")); return; }
     if (g) { go(g.dataset.go); return; }
     const c = t.closest("[data-cat]"); if (c) { state.cat = c.dataset.cat; renderAll(false); return; }
     if (t.closest("#m-keeper")) { setMode("gm"); return; }
@@ -632,7 +645,7 @@
   function setMode(m) {
     state.mode = m; store.set("mode", m);
     if (m === "player" && state.cat === "bones") state.cat = "all";
-    if (m === "player" && state.view === "story") setView("gaz");
+    if (m === "player" && (state.view === "story" || state.view === "table")) setView("gaz");
     renderAll(false);
     if (WORLD) WORLD.sync();
   }
@@ -642,13 +655,17 @@
     else if (byId[h] && h !== state.sel) go(h);
   });
 
+  /* ---- the table (atlas-table-gm.js): its context, before the first paint */
+  if (A.tableUI) A.tableUI.init({ P, byId, ROWS, INTO, who, castOf, state, TR, POSTED, md, inl, db: DBP, prefs: store, go, setView: v => setView(v),
+    stOf, accessInfo, clueDone, redraw: () => { if (byId[state.sel]) renderDossier(false); } });
+
   /* ---- first paint */
   renderAll(false); renderTracker();
   if (A.music) { A.music.bind(app); A.music.place(state.sel); }
   // the city on the plan: the chosen place's own (or the one shown last); #world and #city/<id> open those directly
   if (A.cityData && A.cityMount) { const h = hash(), want = /^city\//.test(h) ? h.slice(5) : byId[state.sel] ? cityOf(state.sel) : store.get("city"); mountCity(CITIES[want] ? want : mainCity); }
   if (/^city\//.test(hash()) && CITIES[hash().slice(5)]) enterCity(hash().slice(5));
-  else setView(hash() === "world" ? "world" : ["story", "music", "world"].includes(store.get("view")) ? store.get("view") : "gaz");
+  else setView(hash() === "world" ? "world" : ["story", "music", "world", "table"].includes(store.get("view")) ? store.get("view") : "gaz");
 
   /* ---- connect the tracker to the artifact's database */
   (async function initTracker() {

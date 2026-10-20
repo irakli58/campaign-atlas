@@ -8,7 +8,7 @@
 "use strict";
 if (+process.versions.node.split(".")[0] < 18) { console.error("\n  Campaign Atlas needs Node.js 18 or newer; this is " + process.version + ". Get the LTS version from https://nodejs.org/\n"); process.exit(1); }
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto"), { spawn } = require("child_process");
-const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch");
+const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch"), Ask = require("./lib/ask");
 
 const ROOT = __dirname, PORT = +process.env.ATLAS_PORT || 4747;
 const UI = path.join(ROOT, "ui"), DATA = path.join(ROOT, "data"), WORK = path.join(ROOT, "workspace"), CAMPS = path.join(WORK, "campaigns");
@@ -134,6 +134,11 @@ async function route(req, res) {
     if (m === "POST" && rest === "make-city") {
       if (!authed) return fail(res, 403, "forbidden");
       try { return send(res, 200, await jobs.makeCity(mm[1], await body(req, 1 << 12))); } catch (e) { return fail(res, 400, e.message); }
+    }
+    // "Ask the campaign" and "Previously on...": answered by the game master's own Claude Code, on their own plan
+    if (m === "POST" && rest === "ask") {
+      if (!authed) return fail(res, 403, "forbidden");
+      try { return send(res, 200, { text: await Ask.ask(String((await body(req, 1 << 17)).prompt || "")) }); } catch (e) { return fail(res, 400, e.message); }
     }
     if (rest === "db") {
       if (!authed) return fail(res, 403, "forbidden");

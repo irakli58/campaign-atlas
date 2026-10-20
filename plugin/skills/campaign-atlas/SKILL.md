@@ -12,7 +12,8 @@ This skill turns a story into something a referee can run at the table, and it d
 3. **The trail.** Which clue in which room points to which other place, with a hint for every clue that might be missed, so no single miss stalls the game.
 4. **The map of the whole.** A 3D map above the index: any real city, fetched street by street, in the buildings of the story's age, with its landmarks; or a city invented for its time and place; or a site that is not a city. A story that travels has a **world map** above its cities: an invented land, the real world (true coasts, rivers and mountains), or the game master's own drawing, read and redrawn; each city on it opens in 3D, and the referee moves the party and plans its journeys on it.
 5. **The page.** One published page with an index, search, a player-safe switch, the cast in full, the clue trail, and map-size buttons.
-6. **The music.** Every place plays its own theme, made by the page itself as it plays: a mood for what the place is (a crypt, a market, the docks), in a dark orchestral mystery style by default (piano, low strings, cello, choir), with other styles for other settings, each played on the instruments of its era. Each place shows its suggested song at the top right, with a song for each of its moments (a search, a fever, a chase); the music bar's Songs chooser lists every place's songs and every mood, with what each is played on. The referee can give any place a song of their own: one of Atlas's in any style, a link (YouTube, Spotify), a music file from their computer, or a piece they made in the page's Music tab (a band, drums, and sounds such as rain, lightning and a heartbeat, looped). The referee can switch to a chase, a battle or dread at any moment.
+6. **The table.** Everything a referee needs while playing: a players' screen in a second window (a place's map revealed room by room, handouts drawn as the letters, telegrams, newspapers and datapads they are, a face, the world map, the players' own corkboard of what they know, their notes, and a Stop button), the villains' clocks, tonight's sheet, Previously on…, a "They're stuck" button, combat with wounds and sanity, dice, a person or a small mapped place made on the spot, random tables, Ask the campaign, session zero and the X-card, the whole campaign as a printed book, and maps for online tables. The council writes what it runs on: clocks, a session plan, the players' characters woven in, handouts, rolls and stat blocks in the game's own rules, ways back, intensity.
+7. **The music.** Every place plays its own theme, made by the page itself as it plays: a mood for what the place is (a crypt, a market, the docks), in a dark orchestral mystery style by default (piano, low strings, cello, choir), with other styles for other settings, each played on the instruments of its era. Each place shows its suggested song at the top right, with a song for each of its moments (a search, a fever, a chase); the music bar's Songs chooser lists every place's songs and every mood, with what each is played on. The referee can give any place a song of their own: one of Atlas's in any style, a link (YouTube, Spotify), a music file from their computer, or a piece they made in the page's Music tab (a band, drums, and sounds such as rain, lightning and a heartbeat, looped). The referee can switch to a chase, a battle or dread at any moment.
 
 It was distilled from a long project (the Wormroot Idol gazetteer: 51 places, about 1,300 rooms, a 3D map of 1888 London). What the user asked for there, and asked for again when it was missing, is written down as standards so the next story meets them the first time.
 
@@ -26,6 +27,7 @@ It was distilled from a long project (the Wormroot Idol gazetteer: 51 places, ab
 | `references/cities.md` | When the story has a setting. Real cities, invented cities, camps and bases; the city data format. |
 | `references/world.md` | When the story travels between places, or the user gives a map they drew. The world map: invented, real or from a drawing; several cities in one campaign. |
 | `references/data-format.md` | When writing place files. Every field of a place, the cast and `campaign.js`. |
+| `references/table.md` | When the places are written. What the page does at the table, and what the council writes for it in `table.js` and on the places: clocks, sessions, the players' characters, handouts, rolls, stat blocks, rescues, random tables, intensity. |
 | `references/workflow.md` | Before the first map. How to design a place, the quality bar for a room, enlarging, and the lessons learned. |
 
 Also here: `scripts/atlas.js` (the command line; Node 18+, nothing to install), `engine/` (the renderers and the page; never copied into a campaign), `template/` (what `init` copies), `example/` (a small complete campaign with a cast, hints and tiers; read `example/places/01-docking-bay.js` once), `example-city/` (a hand-laid city).
@@ -41,7 +43,8 @@ Run commands as `node "<this folder>/scripts/atlas.js" <command> <campaign folde
 2. **Canon and cast.** Bring `canon.md` up to date; put the principals in `ATLAS.cast`.
 3. **The look and the map of the whole.** Set `campaign.js`; run `city` for a real city, a real site, an invented city or an invented site (`references/cities.md`); review its landmarks. When the story travels, make the world map and a 3D city for each settlement that matters (`references/world.md`).
 4. **Register every place**, unmapped, with its tier and its position on the city map. Plan which clue points where. Two leads into every place that matters.
-5. **One place at a time, completely, in tier order**: draw at full size for its tier, `check`, `ascii`, place clues and people, write every room, `check` until clean.
+5. **One place at a time, completely, in tier order**: draw at full size for its tier, `check`, `ascii`, place clues and people (with their rolls, handouts, rescues and stat blocks), write every room, `check` until clean.
+5b. **The table** (`references/table.md`): `table.js` with the clocks, the session plan and the players' characters woven in; every place rated for how hard it hits.
 6. **Build, look, publish** to one address with the Artifact tool; save the address. Without an Artifact tool, the finished campaign is `dist/preview.html`: tell the user where it is.
 7. **Report**: what was made, what the council changed, what was invented while mapping.
 
@@ -65,7 +68,7 @@ The reasons are in the references; these are the ones that were learned by getti
 
 ```
 node scripts/atlas.js init <dir> --title "Name"     start a campaign folder (with story/ for the council)
-node scripts/atlas.js check <dir> [place ...]       standards, maps, guides, player safety, clue trail, cast, city
+node scripts/atlas.js check <dir> [place ...]       standards, maps, guides, player safety, clue trail, cast, city, the table
 node scripts/atlas.js ascii <dir> <place> [floor]   a floor as text, with room rectangles, doors and markers
 node scripts/atlas.js dump <dir> <place ...>        everything written about a place, compactly
 node scripts/atlas.js status <dir>                  progress table; rewrites checklist.md
@@ -104,4 +107,5 @@ Write place files with the Write and Edit tools. Shell heredocs on this user's m
 - "Change the story": reconvene the council on that point, update the bible and canon, then the places it touches.
 - "The players should not see X": hide it, then `check`.
 - "Add a place": register it, give it two inbound leads, map it, rebuild.
+- "Here are my players' characters", "add a clock", "make this a handout": `references/table.md`. "How do I show the map to my players": the page's At the table view does it; tell them.
 - Something looks wrong and you cannot see what: ask which map and what is wrong, once, before inspecting anything.

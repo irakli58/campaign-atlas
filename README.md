@@ -9,6 +9,7 @@ Campaign Atlas turns a story (a plot, a scenario, a page of notes) into a comple
 - **The whole world in 3D.** A real city is drawn from its real streets, river and landmarks, in the buildings of your story's age; an invented city or a camp is laid out for its time and place.
 - **Music for every place.** Each place plays its own theme, made by the page itself, with suggested songs for its key moments, your own songs, and a music maker with rain, thunder and heartbeats.
 - **A read-aloud narrator**, an investigation tracker for your table, and a player-safe view.
+- **Everything for game night.** A players' screen for a second window or a TV (maps revealed room by room, handouts drawn as the letters, telegrams and newspapers they are, faces, the world map, a corkboard of what the players know, their own notes, and a Stop button); the villains' clocks; tonight's session sheet and a read-aloud "Previously on…"; a "They're stuck" button; combat with wounds and sanity; dice; a person or a small mapped place made up on the spot; random tables; safety tools; "Ask the campaign" (answered by your own Claude); the whole campaign as a printable book; and maps with walls and doors for Foundry, Roll20 and other online tables. Give your players' characters with the story and the council weaves each one in.
 
 Everything ends up as one page that opens in your browser.
 
@@ -34,7 +35,7 @@ Everything ends up as one page that opens in your browser.
 
 1. **Who does the work:** choose Claude or ChatGPT (your subscription), or open *Pay per use* for an API key.
 2. **Your story:** a title, and the story pasted in or opened from a `.txt` or `.md` file.
-3. **Your choices:** how big (a one-shot, a campaign or an epic), the game system, and what must not change.
+3. **Your choices:** how big (a one-shot, a campaign or an epic), the game system, what must not change, and, if you know them, your players' characters.
 4. Press **Make my campaign**.
 
 With a subscription, your own Claude Code (or Codex) opens in a window of its own with the request already typed, and does the work there. The first time, it asks whether to trust the folder: say yes. The app follows along: the council's progress, Tolkien's grades, each place as it is mapped. A full campaign is a lot of writing and takes a while, from about an hour for a one-shot to many hours for an epic. If your plan's usage limit stops it partway, press **Carry on** once the limit resets: it picks up from what is already written, and nothing is lost.
