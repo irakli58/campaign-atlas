@@ -327,7 +327,8 @@
     if (launchNote) { notes += `<p class="note bad">${esc(launchNote)}</p>`; }
     if (j.error) notes += `<p class="note bad">${esc(j.error)}</p>`;
     const win = `the window called “Campaign Atlas: ${esc(j.title)}”`;
-    if (own && j.waiting) notes += `<p class="note bad"><b>${esc(tool)} is waiting for you</b> in ${win}${j.waiting.msg ? `: ${esc(j.waiting.msg)}` : ""}. Answer it there and the work carries on.</p>`;
+    // once it has finished, Claude Code sitting idle in its window is not waiting for anything
+    if (own && j.waiting && j.status !== "finished") notes += `<p class="note bad"><b>${esc(tool)} is waiting for you</b> in ${win}${j.waiting.msg ? `: ${esc(j.waiting.msg)}` : ""}. Answer it there and the work carries on.</p>`;
     else if (own && j.status === "working-own") notes += `<p class="note">${esc(tool)} is working in ${win}: watch it there, or here. If it stops before the end (at your plan's limit, say), press <b>Carry on in ${esc(tool)}</b> once the limit resets; nothing is lost. If it asks whether to trust the folder, say yes.</p>`;
     else if (own && j.status === "stopped" && j.paused) notes += `<p class="note">${esc(tool)} has stopped for now${j.paused.err ? ` with an error (${esc(j.paused.err)})` : ""}.${j.paused.last ? ` Its last words: <i>“${esc(j.paused.last.slice(-400))}”</i>` : ""} Press <b>Carry on in ${esc(tool)}</b> to finish it, or answer it in its window; it picks up from what is already written.</p>`;
     else if (own && j.status === "stopped") notes += `<p class="note">Nothing in this campaign has changed for a while, so ${esc(tool)} has probably stopped: its window was closed, or your plan's limit was reached. Press <b>Carry on in ${esc(tool)}</b> to finish it; it picks up from what is already written.</p>`;
@@ -340,7 +341,7 @@
     const steps = (P && P.steps) || [];
     const moving = working || j.status === "working-own";
     // the little scene under the live line (scene.js): the step being worked on, or how things stand
-    if (window.AtlasScene) { const cur = steps.find(s => s.current); AtlasScene.show($(".scene", box), j.status === "finished" ? "finished" : own && j.waiting ? "waiting" : ["stopped", "failed", "capped"].includes(j.status) ? "stopped" : cur ? cur.id : "story", moving); }
+    if (window.AtlasScene) AtlasScene.show($(".scene", box), sceneOf(j, steps, moving), moving);
     $(".steps", box).innerHTML = steps.map(s => `<li class="stp${s.done ? " done" : ""}${s.current ? " cur" : ""}${s.current && !moving ? " idle" : ""}"><span class="dot" aria-hidden="true"></span>
       <span class="t">${esc(s.label)}${s.who ? `<span class="who">${esc(s.who)}</span>` : ""}</span>${s.detail ? `<span class="d">${esc(s.detail)}</span>` : ""}</li>`).join("") || `<li class="busy">Reading the folder…</li>`;
     // the AI's own plan (only when the app runs it)
@@ -353,6 +354,26 @@
     $(".jreport", box).innerHTML = P && P.report && P.report.trim() ? `<div class="report">${md(P.report)}</div>` : "";
     bindJob(j);
     paintLive();
+  }
+
+  // which little scene to show: how things stand, or else what the AI did last (the work does not always go in the
+  // order of the steps: a campaign carried on may be writing places while an early step is still open), or else the
+  // step the list is at
+  const DOING = [[/judgement/i, "judge"], [/council's debate|story bible/i, "council"], [/your story|your choices|Starting the campaign folder/i, "story"],
+    [/map of the whole|world map|the city |Finding an address|buildings made for this place/i, "map"], [/the place |Drawing a floor|everything written about a place|Taking stock of the places/i, "places"],
+    [/Checking the campaign/i, "check"], [/Building the page|Exporting the maps/i, "build"], [/report for you/i, "report"]];
+  function sceneOf(j, steps, moving) {
+    if (j.status === "finished") return "finished";
+    if (j.provider === "own" && j.waiting) return "waiting";
+    if (["stopped", "failed", "capped"].includes(j.status)) return "stopped";
+    // the same "last step" as the live line above it, counted from the latest sign of work
+    const last = moving && J.log.filter(e => e.kind !== "say").pop();
+    if (last && Date.now() - Math.max(j.lastActivity || 0, last.t) < 5 * 60 * 1000) {
+      if (last.kind === "check") return "check";
+      for (const [re, scene] of DOING) if (re.test(last.text)) return scene;
+    }
+    const cur = steps.find(s => s.current);
+    return cur ? cur.id : "story";
   }
 
   function paintMeter() {
@@ -415,7 +436,11 @@
     } else feed.insertAdjacentHTML("beforeend", line(e, 1));
     while (feed.children.length > 600) feed.firstElementChild.remove();
     if (near) feed.scrollTop = feed.scrollHeight;
-    if (window.AtlasScene) AtlasScene.poke($("#job .scene"));
+    if (window.AtlasScene && J && J.job) {
+      const moving = J.job.status === "working" || J.job.status === "working-own";
+      AtlasScene.show($("#job .scene"), sceneOf(J.job, (J.progress && J.progress.steps) || [], moving), moving);
+      AtlasScene.poke($("#job .scene"));
+    }
     paintLive();
   }
 
@@ -425,7 +450,7 @@
     const j = J && J.job, el = j && $("#job .live"); if (!el) return;
     const moving = j.status === "working" || j.status === "working-own";
     const last = J.log[J.log.length - 1], t = Math.max(j.lastActivity || 0, last ? last.t : 0);
-    if (j.waiting && j.provider === "own") { el.innerHTML = `<span class="pulse wait"></span><b>Waiting for you</b> in the ${esc(TOOL[j.tool || "claude"])} window.`; return; }
+    if (j.waiting && j.provider === "own" && j.status !== "finished") { el.innerHTML = `<span class="pulse wait"></span><b>Waiting for you</b> in the ${esc(TOOL[j.tool || "claude"])} window.`; return; }
     if (!t) { el.innerHTML = moving ? `<span class="pulse"></span><b>Starting.</b>` : ""; return; }
     const s = Math.max(0, Math.round((Date.now() - t) / 1000));
     const ago = s < 60 ? s + " s" : s < 3600 ? Math.floor(s / 60) + " min " + (s % 60) + " s" : Math.floor(s / 3600) + " h " + Math.floor(s % 3600 / 60) + " min";
