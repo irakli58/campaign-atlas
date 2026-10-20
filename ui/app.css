@@ -359,3 +359,5 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 @keyframes sc-ring { from { transform: scale(1); opacity: .9; } to { transform: scale(5); opacity: 0; } }
 @keyframes sc-dot { from { transform: scale(0); opacity: 1; } 40% { transform: scale(1.2); opacity: 1; } to { transform: scale(.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .scene svg *, .scene .sc-cap { animation: none !important; } }
+.planpick { display: grid; gap: 6px; border: 1px dashed var(--rule, #c5ccc5); border-radius: 6px; padding: 10px 12px; font-size: 14px; line-height: 1.45; }
+.planpick input { max-width: 100%; }

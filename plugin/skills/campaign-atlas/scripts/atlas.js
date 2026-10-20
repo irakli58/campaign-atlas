@@ -57,6 +57,8 @@ function sources(dir) {
   for (const f of ["world.js", "world-terrain.js"]) if (fs.existsSync(path.join(dir, f))) files.push(path.join(dir, f));   // the world map
   if (fs.existsSync(path.join(dir, "table.js"))) files.push(path.join(dir, "table.js"));   // for the table: clocks, sessions, the players' characters, tables, handouts
   if (fs.existsSync(pd)) for (const f of fs.readdirSync(pd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(pd, f));
+  const ed = path.join(dir, "edits");                                                       // maps the game master redrew (the map editor)
+  if (fs.existsSync(ed)) for (const f of fs.readdirSync(ed).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(ed, f));
   return files;
 }
 const hasWorld = dir => fs.existsSync(path.join(dir, "world.js"));
@@ -459,6 +461,7 @@ function checkTable(A) {
     else if (t.length < seg) P(`the clock "${nm}" has ${seg} segments but only ${t.length} ticks: say what each tick changes`);
     if (!has(c.done)) N(`the clock "${nm}" does not say what happens when it is full (done)`);
   }
+  for (const id of A.__badEdits || []) P(`edits: a redrawn map for "${id}", which is not a mapped place`);
   if (!clocks.length) N(`no villains' clocks: give each enemy working in the background a clock (ATLAS.clocks in table.js)`);
   // the sessions
   const ses = A.sessionsData || [], inSession = new Set();
@@ -648,7 +651,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw };

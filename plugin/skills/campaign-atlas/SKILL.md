@@ -102,6 +102,7 @@ Write place files with the Write and Edit tools. Shell heredocs on this user's m
 ## When the user asks for changes later
 
 - "Make it bigger", "more rooms", "more to find": add an `expand` step to that place; see "Enlarging a place" in `references/workflow.md`.
+- "Exactly like this", a floor plan or a sketch of a place, "I changed the map on the page": `references/workflow.md`, "When the game master wants it exactly so". Every page has a map editor ("Edit this map" on a place's maps): the game master can redraw any map, trace a picture, or let Claude read one into rooms; their saved maps come back as `edits/<place>.js`, never redrawn by hand.
 - "A different city", "another year", "more landmarks": run `city` again with other options. "This landmark is wrong": `ATLAS.cityEdit`.
 - "A map of the world", "here is a map I drew", "use the real coast": `references/world.md`.
 - "Change the story": reconvene the council on that point, update the bible and canon, then the places it touches.

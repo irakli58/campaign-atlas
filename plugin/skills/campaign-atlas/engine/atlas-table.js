@@ -20,6 +20,42 @@
   A.handouts = list => { A.handoutsData = (A.handoutsData || []).concat(list || []); return A; };
   A.rescues = list => { A.rescuesData = (A.rescuesData || []).concat(list || []); return A; };
 
+  /* ---- a map as the referee redrew it (the map editor, atlas-mapedit.js; the user asked, 21 Oct 2026, to get a place's
+          map exactly as they want it). An edit replaces the place's floors (rooms, doors, stairs, markers, hand-placed
+          items; furniture is laid out again from each room's fx) at the size it was edited at, which becomes the place's
+          only size; its rooms' new words are laid over the guide. It comes from the campaign's edits/<id>.js, or, on the
+          page, from the database (collection "mapedits"), and A.mapUnedit puts the drawn map back. */
+  A.mapEdits = {}; A.mapOrig = {};
+  A.mapEdit = (id, ed) => {
+    if (!A.maps[id] && !(ed && ed.off)) { (A.__badEdits = A.__badEdits || []).push(id); return A; }
+    if (!A.maps[id] || !ed || !Array.isArray(ed.floors) || !ed.floors.length) return A;
+    const copy = o => JSON.parse(JSON.stringify(o));
+    if (!A.mapOrig[id]) A.mapOrig[id] = { map: A.maps[id], exp: A.exp[id] };
+    A.maps[id] = A.mapOrig[id].map; if (A.mapOrig[id].exp) A.exp[id] = A.mapOrig[id].exp; A.state.cache = {};
+    const src = A.get(id, ed.level == null ? 99 : ed.level);
+    const floors = ed.floors.map(F0 => { const F = Object.assign({ D: [], I: [], ST: [], M: [] }, copy(F0)); F.R = F.R || []; F.I = (F.I || []).slice(); return A.finishFloor ? A.finishFloor(F, F.R) : F; });
+    const M = Object.assign({}, src, { floors, edited: ed.t || 1 }); delete M.order; if (ed.order) M.order = ed.order;
+    M.rooms = Object.assign({}, src.rooms || {}); for (const [rid, r] of Object.entries(ed.rooms || {})) M.rooms[rid] = Object.assign({}, M.rooms[rid] || {}, r);
+    A.maps[id] = M; delete A.exp[id]; A.mapEdits[id] = ed; A.state.cache = {};
+    return A;
+  };
+  A.mapUnedit = id => { const o = A.mapOrig[id]; if (!o) return A; A.maps[id] = o.map; if (o.exp) A.exp[id] = o.exp; else delete A.exp[id]; delete A.mapEdits[id]; delete A.mapOrig[id]; A.state.cache = {}; return A; };
+  // the edits kept in the page's database, laid over the places: a newer edit replaces the older; { off: true } puts a
+  // place back as it was drawn (even one edited in the campaign's files); an edit gone from the database is undone,
+  // unless it came with the campaign's files. Says whether anything changed.
+  function applyMapEdits(d) {
+    d = d || {};
+    if (!A.__srcEdits) A.__srcEdits = new Set(Object.keys(A.mapEdits));
+    let changed = false;
+    for (const [id, ed] of Object.entries(d)) {
+      if (!A.maps[id] || !ed) continue;
+      if (ed.off) { if (A.mapEdits[id]) { A.mapUnedit(id); changed = true; } continue; }
+      if (!A.mapEdits[id] || A.mapEdits[id].t !== ed.t) { A.mapEdit(id, ed); changed = true; }
+    }
+    for (const id of Object.keys(A.mapEdits)) if (!(id in d) && !A.__srcEdits.has(id)) { A.mapUnedit(id); changed = true; }
+    return changed;
+  }
+
   /* ---- the age the story is set in: it dresses the handouts and names the people */
   function era() {
     const c = A.config || {}; if (c.era) return c.era;
@@ -492,6 +528,7 @@
     st.watch("safety", () => { if (now.kind === "safety") render(); });
     for (const c of ["clues", "status"]) st.watch(c, () => { if (now.kind === "board") render(); if (tab === "board" || tab === "places") renderPage(); });
     st.watch("given", () => { badges(); if (tab === "handouts") renderPage(); });
+    st.watch("mapedits", d => { if (applyMapEdits(d)) { if (now.kind === "map") render(); if (tab === "places") renderPage(); } });
     st.watch("journal", () => paintNotes());
     window.addEventListener("resize", () => { fit(); fitBoard(); });
 
@@ -550,5 +587,5 @@
   const icon = (k, cls) => `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${IC[k] || ""}</svg>`;
 
   // for the referee's tools (atlas-table-gm.js), the checker and the build
-  A.table = { plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
+  A.table = { applyMapEdits, plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
 })(ATLAS);

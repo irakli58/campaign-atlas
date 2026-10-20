@@ -686,7 +686,7 @@ var ATLAS = (function () {
     return `<section class="sec lmap-sec" data-loc="${id}"><h3>Maps of the location</h3>
       <div class="lm-bar"><div class="lm-floors" role="group" aria-label="Floor">${floorBtns(id)}</div>
         <div class="lm-views gm-only" role="group" aria-label="Map view"><button type="button" data-lmv="player" aria-pressed="${v === "player"}">Player view</button><button type="button" data-lmv="gm" aria-pressed="${v !== "player"}">${esc(gmName)} view</button></div>
-        <button type="button" class="lm-full" data-lmfull="${id}">Full size</button>${n ? `<div class="lm-sizes" role="group" aria-label="Map size">${Array.from({ length: n + 1 }, (_, i) => `<button type="button" data-lmsize="${i}" aria-pressed="${levelFor(id) === i}">${esc(i ? (A.exp[keyOf(id)][i - 1].label || sizeName(i)) : sizeName(0))}</button>`).join("")}</div>` : ""}</div>
+        <button type="button" class="lm-full" data-lmfull="${id}">Full size</button>${A.mapEditor && !String(id).startsWith("fly-") ? `<button type="button" class="lm-edit gm-only" data-medit="${id}" title="Change this map yourself: rooms, doors, stairs, floors, size">Edit this map</button>` : ""}${n ? `<div class="lm-sizes" role="group" aria-label="Map size">${Array.from({ length: n + 1 }, (_, i) => `<button type="button" data-lmsize="${i}" aria-pressed="${levelFor(id) === i}">${esc(i ? (A.exp[keyOf(id)][i - 1].label || sizeName(i)) : sizeName(0))}</button>`).join("")}</div>` : ""}</div>
       <div class="lm-stage">${svg(id, fi, v, "m" + (A.state.n++))}</div>
       ${legend()}
       <div class="lm-ref">${ref(id)}</div>
@@ -740,7 +740,7 @@ var ATLAS = (function () {
   }
   A.loadPrefs = () => { try { const v = localStorage.getItem(A.config.storageKey + "-size"); if (v !== null && v !== "") A.state.level = +v; } catch (e) {} };
 
-  Object.assign(A, { C, esc, isRoom, kindOf, isOut, isSolid, isIndoorKind, KINDS, PATS, GEN, ITEMS: LMI, FX: LMX_FX, itemFn, markers, dirOf, levels, levelFor, expanded, get, keyOf, isGmFloor, svg, ref, section, rerender, connections, roomEntry, nameOf, leads, sizeName, label, paper });
+  Object.assign(A, { C, esc, isRoom, kindOf, isOut, isSolid, isIndoorKind, KINDS, PATS, GEN, ITEMS: LMI, FX: LMX_FX, itemFn, markers, dirOf, levels, levelFor, expanded, get, keyOf, isGmFloor, svg, ref, section, rerender, connections, roomEntry, nameOf, leads, sizeName, label, paper, furnishRoom: furnish, finishFloor: finish });
   return A;
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = ATLAS;

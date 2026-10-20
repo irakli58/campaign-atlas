@@ -1,6 +1,6 @@
 # Data format
 
-A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the map of the whole, written by `atlas.js city`; its format is in `cities.md`), `table.js` (the clocks, the session plan, the players' characters and the rest for the table: `table.md`), `places/*.js` (one file per place, read in file-name order; names starting with `_` are skipped), `story/` (the user's story, the council's transcript, the bible), `canon.md` and `checklist.md`. `build` writes `dist/`.
+A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the map of the whole, written by `atlas.js city`; its format is in `cities.md`), `edits/<place>.js` (a map as the game master redrew it with the page's map editor: `ATLAS.mapEdit("place", { level, floors, rooms })`, read after the places; never edited by hand), `table.js` (the clocks, the session plan, the players' characters and the rest for the table: `table.md`), `places/*.js` (one file per place, read in file-name order; names starting with `_` are skipped), `story/` (the user's story, the council's transcript, the bible), `canon.md` and `checklist.md`. `build` writes `dist/`.
 
 ## Contents
 

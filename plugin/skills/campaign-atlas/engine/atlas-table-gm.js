@@ -717,14 +717,47 @@
   const diceBody = () => `<div class="t-row t-dice">${["d4", "d6", "d8", "d10", "d12", "d20", "d100"].map(d => `<button type="button" class="t-btn" data-t="die" data-e="1${d === "d100" ? "d%" : d}">${d}</button>`).join("")}</div>
       <div class="t-row"><input class="t-in t-grow" data-t="diceexpr" placeholder="Any dice, like 2d6+1" aria-label="Dice to roll"><button type="button" class="t-btn" data-t="dicego">Roll</button></div>
       <div class="t-row"><label class="t-lab">Skill <input class="t-in t-n" type="number" min="1" max="99" data-t="skill" placeholder="60"></label><button type="button" class="t-btn" data-t="skillgo">Roll d100 against it</button></div>
+      <div class="t-tray" aria-hidden="true"></div>
       <ol class="t-dicelog" aria-live="polite">${UI.dice.map(x => `<li>${x}</li>`).join("")}</ol>`;
   const diceHTML = () => `<section class="t-card"><h3>${T.icon("dice")} Dice</h3>${diceBody()}</section>`;
   const diceLog = h => { UI.dice.unshift(h); UI.dice = UI.dice.slice(0, 10); document.querySelectorAll(".t-dicelog").forEach(l => { l.innerHTML = UI.dice.map(x => `<li>${x}</li>`).join(""); }); };
   const rollShow = x => `<b>${x.total}</b> <span class="kn">${esc(x.expr)}${x.dice.length > 1 ? " · " + x.dice.join(" + ") : ""}</span>`;
   // the box a dice button sits in, so its own inputs are read (the tab's or the toolbar's)
   const boxOf = b => (b && b.closest && b.closest(".t-card, .t-pop")) || document;
-  function rollExpr(box) { const v = (box.querySelector('[data-t="diceexpr"]') || {}).value, x = T.roll(v); diceLog(x ? rollShow(x) : `<span class="kn">Write dice like 2d6+1 or d20.</span>`); }
-  function rollSkill(box) { const v = +(box.querySelector('[data-t="skill"]') || {}).value || 50, x = T.skillRoll(v); diceLog(`<b>${x.roll}</b> <span class="kn">against ${x.skill}:</span> ${esc(x.how)}`); }
+  function rollExpr(box) { const v = (box.querySelector('[data-t="diceexpr"]') || {}).value, x = T.roll(v); if (x) tumble(box, x); diceLog(x ? rollShow(x) : `<span class="kn">Write dice like 2d6+1 or d20.</span>`); }
+  function rollSkill(box) { const v = +(box.querySelector('[data-t="skill"]') || {}).value || 50, x = T.skillRoll(v); tumble(box, { expr: "1d100", dice: [x.roll], total: x.roll }); diceLog(`<b>${x.roll}</b> <span class="kn">against ${x.skill}:</span> ${esc(x.how)}`); }
+
+  /* ---- the dice, rolled where they can be seen (the user asked for "an animation corresponding to each dice"):
+          each die tumbles onto the tray in its own shape (a d4's triangle, a d6's square, a d8's diamond, a d10's
+          kite, a d12's pentagon, a d20's many-faced hexagon; a d100 as two d10s, tens and units), its face flickering
+          through numbers until it lands on the roll */
+  const DIE = {
+    4: { fill: "#b5462f", ink: "#fff3e8", ty: 44, shape: `<polygon points="32,5 61,57 3,57"/><path d="M32 5 32 40M3 57 32 40 61 57" fill="none" opacity=".45"/>` },
+    6: { fill: "#efe6d2", ink: "#2a2016", ty: 33, shape: `<rect x="7" y="7" width="50" height="50" rx="9"/><rect x="12" y="12" width="40" height="40" rx="6" fill="none" opacity=".35"/>` },
+    8: { fill: "#2f7a55", ink: "#effaf3", ty: 27, shape: `<polygon points="32,3 61,32 32,61 3,32"/><path d="M3 32 61 32M32 3 18 32 32 61 46 32 32 3" fill="none" opacity=".35"/>` },
+    10: { fill: "#2c5a85", ink: "#eef5ff", ty: 29, shape: `<polygon points="32,3 61,27 32,61 3,27"/><path d="M3 27 32 44 61 27M32 44 32 61" fill="none" opacity=".4"/>` },
+    12: { fill: "#6a3f9e", ink: "#f6efff", ty: 34, shape: `<polygon points="32,3 61,24 50,59 14,59 3,24"/><polygon points="32,15 47,26 41,45 23,45 17,26" fill="none" opacity=".45"/><path d="M32 3 32 15M61 24 47 26M50 59 41 45M14 59 23 45M3 24 17 26" fill="none" opacity=".45"/>` },
+    20: { fill: "#8a2432", ink: "#fff1d6", ty: 37, shape: `<polygon points="32,2 60,17 60,47 32,62 4,47 4,17"/><polygon points="32,16 49,44 15,44" fill="none" opacity=".5"/><path d="M32 2 32 16M60 17 49 44M4 17 15 44M32 62 15 44M32 62 49 44M4 47 15 44M60 47 49 44M4 17 32 16 60 17" fill="none" opacity=".4"/>` },
+    0: { fill: "#5b5650", ink: "#fff", ty: 33, shape: `<circle cx="32" cy="32" r="28"/>` }
+  };
+  const dieSVG = (sides, v) => { const d = DIE[sides] || DIE[0]; return `<svg viewBox="0 0 64 64"><g fill="${d.fill}" stroke="#14110d" stroke-width="2" stroke-linejoin="round">${d.shape}</g><text x="32" y="${d.ty}" text-anchor="middle" dominant-baseline="middle" fill="${d.ink}" font-family="var(--f-mono), monospace" font-weight="700" font-size="${String(v).length > 2 ? 15 : String(v).length > 1 ? 19 : 22}">${esc(v)}</text></svg>`; };
+  function tumble(box, x) {
+    const tray = box.querySelector && box.querySelector(".t-tray"); if (!tray) return;
+    const m = /d(\d+)/.exec(x.expr || ""), sides = m ? +m[1] : 6;
+    // a d100 is two d10s: tens (00 to 90) and units (0 to 9); 100 shows as 00 and 0
+    const faces = sides === 100 ? x.dice.flatMap(v => [{ s: 10, v: String(Math.floor((v % 100) / 10) * 10).padStart(2, "0"), rnd: () => String(Math.floor(Math.random() * 10) * 10).padStart(2, "0") }, { s: 10, v: String(v % 10), rnd: () => String(Math.floor(Math.random() * 10)) }])
+      : x.dice.map(v => ({ s: sides, v: String(v), rnd: () => String(1 + Math.floor(Math.random() * sides)) }));
+    const shown = faces.slice(0, 12), still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tray.innerHTML = shown.map((f, i) => `<div class="t-die${still ? "" : " rolling"}" style="--i:${i}">${dieSVG(f.s, still ? f.v : f.rnd())}</div>`).join("") + (faces.length > 12 ? `<span class="t-more">+${faces.length - 12}</span>` : "") + `<b class="t-total${still ? " on" : ""}">${x.total}</b>`;
+    if (still) return;
+    const dies = [...tray.querySelectorAll(".t-die")], t0 = performance.now(), stop = 820;
+    clearInterval(tray._flick);
+    tray._flick = setInterval(() => {
+      const t = performance.now() - t0;
+      dies.forEach((el, i) => { const done = t > stop + i * 70, txt = el.querySelector("text"); if (!txt || el.dataset.done) return; if (done) { txt.textContent = shown[i].v; el.dataset.done = 1; el.classList.add("landed"); } else txt.textContent = shown[i].rnd(); });
+      if (dies.every(el => el.dataset.done)) { clearInterval(tray._flick); const tot = tray.querySelector(".t-total"); if (tot) tot.classList.add("on"); }
+    }, 65);
+  }
   // someone made up on the spot, with what to do with them
   const personCard = p => `<div class="t-person"><h4>${esc(p.name)}</h4><p class="kn">${esc(p.trade)}</p><p><span class="kl">Looks</span>${esc(p.look)}</p><p><span class="kl">Manner</span>${esc(p.manner)}</p><p><span class="kl">Wants</span>${esc(p.want)}</p><p><span class="kl">Secret</span>${esc(p.secret)}</p><div class="t-row"><button type="button" class="t-mini" data-t="person">Someone else</button><button type="button" class="t-mini" data-t="personshow">Show them to the players</button><button type="button" class="t-mini" data-t="personkeep">Keep them</button></div></div>`;
 
@@ -873,7 +906,7 @@
       case "cbnext": { const c = cnow(); if (!c.list.length) return; if (!c.round) { c.list.sort((a, b) => (+b.init || 0) - (+a.init || 0)); c.round = 1; c.turn = 0; } else { c.turn++; if (c.turn >= c.list.length) { c.turn = 0; c.round++; } } cset(c); cbMsg(`${c.list[c.turn].name} acts.`); break; }
       case "cbend": twice(b, () => { cset({ round: 0, turn: 0, list: [] }); cbMsg("The fight is over."); }); break;
       case "sanroll": { const r = cnow().list.find(x => x.id === d.id); if (!r) return; const x = T.skillRoll(r.san); cbMsg(`${r.name}: Sanity roll ${x.roll} against ${x.skill}: ${x.how === "Failure" || x.how === "Fumble" ? "failed, so the larger loss" : "succeeded, so the smaller loss"}.`); break; }
-      case "die": { const x = T.roll(d.e); if (x) diceLog(rollShow(x)); break; }
+      case "die": { const x = T.roll(d.e); if (x) { tumble(boxOf(b), x); diceLog(rollShow(x)); } break; }
       case "dicego": rollExpr(boxOf(b)); break;
       case "skillgo": rollSkill(boxOf(b)); break;
       case "rolltab": { const list = tableList(d.key); if (!list.length) return; UI.tabSel = d.key; UI.tabRes = T.rollTable(list); document.querySelectorAll(`.t-tab[data-tkey="${CSS.escape(d.key)}"] .t-tabres`).forEach(x => { x.textContent = UI.tabRes; }); break; }
@@ -982,6 +1015,7 @@
       UI.tab = pref.get("tab") || "home"; if (!TABS.some(([k]) => k === UI.tab)) UI.tab = "home";
       if (pref.get("tablet") === "1") app().dataset.tablet = "1";
       dockInit(); intro();
+      if (A.mapEditor) A.mapEditor.init(S, ctx);
       const MAP = { screen: ["screen", "home"], fog: ["screen"], clocks: ["clocks", "tonight", "home"], log: ["tonight", "home"], combat: ["combat", "home"], board: ["board", "home"], journal: ["party", "home"], safety: ["safety", "tonight", "home"], fly: ["make", "screen", "home"], clues: ["tonight", "board", "home"], status: ["tonight", "board"] };
       for (const f of Object.keys(MAP)) S.watch(f, () => {
         if (f === "fly") for (const x of Object.values(S.get("fly") || {})) if (x.kind && x.kind !== "person") flyPlace(x);

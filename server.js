@@ -135,6 +135,25 @@ async function route(req, res) {
       if (!authed) return fail(res, 403, "forbidden");
       try { return send(res, 200, await jobs.makeCity(mm[1], await body(req, 1 << 12))); } catch (e) { return fail(res, 400, e.message); }
     }
+    // the map editor: a map the game master redrew is kept in the campaign (edits/<id>.js), so a rebuild keeps it
+    if (m === "POST" && rest === "save-map") {
+      if (!authed) return fail(res, 403, "forbidden");
+      try {
+        const o = await body(req, 8 << 20), id = String(o.id || "");
+        if (!/^[a-z0-9][a-z0-9_-]{0,80}$/.test(id)) return fail(res, 400, "Which place?");
+        const dir2 = path.join(dir, "edits"), f = path.join(dir2, id + ".js");
+        if (!o.edit) { try { fs.unlinkSync(f); } catch (e) {} return send(res, 200, { ok: true }); }
+        if (!Array.isArray(o.edit.floors) || !o.edit.floors.length) return fail(res, 400, "That map has no floors.");
+        fs.mkdirSync(dir2, { recursive: true });
+        fs.writeFileSync(f, "// The map of " + id + " as the game master redrew it with the map editor (" + new Date().toISOString().slice(0, 10) + ").\n// Rooms added here need their words for the guide: Claude writes them when the campaign is next worked on.\nATLAS.mapEdit(" + JSON.stringify(id) + ", " + JSON.stringify(o.edit) + ");\n");
+        return send(res, 200, { ok: true });
+      } catch (e) { return fail(res, 400, e.message); }
+    }
+    // the map editor: a floor plan or sketch read into rooms by the game master's own Claude Code
+    if (m === "POST" && rest === "trace") {
+      if (!authed) return fail(res, 403, "forbidden");
+      try { const o = await body(req, 12 << 20); return send(res, 200, { plan: await Ask.readPlan(o.image, o.prompt) }); } catch (e) { return fail(res, 400, e.message); }
+    }
     // "Ask the campaign" and "Previously on...": answered by the game master's own Claude Code, on their own plan
     if (m === "POST" && rest === "ask") {
       if (!authed) return fail(res, 403, "forbidden");

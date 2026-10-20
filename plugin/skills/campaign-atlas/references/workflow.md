@@ -115,6 +115,16 @@ Rules for additions:
 - `grow: [left, top, right, bottom]` adds squares on each side. Streets, grass, rivers and rock that touched the old edge stretch to the new one. If stretching would run a churchyard over your new cottages, set `nostretch: true` and add the extra street and ground yourself.
 - After an expansion, `check` runs every size. A room reachable at one size and cut off at the next is the usual mistake.
 
+### When the game master wants it exactly so
+
+The user asked (21 Oct 2026) how a game master gets "a huge mansion" or "something very specific". Three ways, all of which outrank the usual sizes by tier:
+
+- **Their wishes in words.** In the app, "Wishes for particular places" (`story/brief.md`, under "The game master's wishes for places"); otherwise what they say. Follow them to the letter: the floors, the number of rooms, the rooms it must have and where. Then fill the rest as usual.
+- **From the game master's floor plan.** A plan or sketch for a place (in the app, `story/plans/<place>.jpg`; otherwise a picture they give). Look at the picture and draw that place's floors from it: lay it on the grid at one square to the campaign's grid unit (a 60-foot house front is 12 squares at 5 ft), keep its shape, its rooms where they are drawn, its walls, doors, windows and stairs, and the names written on it; a room that is not a rectangle is two or three rectangles with the same id. Then put the story's clues, people and secrets in its rooms, and add rooms only where the plan leaves space or the story needs them. Say in the report which places were drawn from their plans.
+- **The map editor.** Every place's maps have "Edit this map" on the page: the game master draws, moves and resizes rooms, puts doors, windows, secret doors and stairs, adds floors and makes a floor bigger, and can lay a picture over the grid to trace it or let Claude read it into rooms. What they save becomes the place's map (at the size they edited; its other sizes are set aside). In the Atlas app it is written to `edits/<place>.js` at once; on claude.ai it is in the artifact's database (collection `mapedits`).
+
+**Taking in a redrawn map.** Whenever a campaign is worked on again: read the artifact's `mapedits` collection (on claude.ai, with `ArtifactData`, action `list`) and write each document that has `floors` as `edits/<place>.js` containing `ATLAS.mapEdit("<place>", <the document>);` (one marked `off: true` means: delete `edits/<place>.js`). Never edit those maps back by hand: they are the game master's. Then `check`, and give what it asks for: every new room its guide entry (`d`, `pur`, `atm`, `obj`, `chk`, through `guide: { rooms: {...} }` on the place or in the edit's `rooms`), markers moved into the rooms their entries name (or the entries' `at` changed to where the game master put them), and the clues and people of a room the game master took away given a new room.
+
 ## 7. Canon discipline
 
 - **Check before inventing a fact.** Names, dates, who is alive, who knows what: look in `canon.md` or the user's document.

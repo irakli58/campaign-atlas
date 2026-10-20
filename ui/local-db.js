@@ -53,6 +53,15 @@
       return fetch(URL_.replace(/db$/, "ask"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ prompt: prompt }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "no answer"); return d.text; }); });
     },
+    // the map editor: keep a redrawn map in the campaign (null puts the drawn one back), and read a floor plan into rooms
+    saveMap: function (id, edit) {
+      return fetch(URL_.replace(/db$/, "save-map"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ id: id, edit: edit }) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not saved"); return d; }); });
+    },
+    trace: function (image, prompt) {
+      return fetch(URL_.replace(/db$/, "trace"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ image: image, prompt: prompt }) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not read"); return d.plan; }); });
+    },
     makeCity: function (o) {
       return fetch(URL_.replace(/db$/, "make-city"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not made"); return d; }); })
