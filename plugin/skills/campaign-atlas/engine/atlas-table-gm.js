@@ -441,7 +441,7 @@
     const f = { home: homeHTML, tonight: tonightHTML, screen: screenHTML, clocks: clocksHTML, combat: combatHTML, make: makeHTML, board: boardHTML, party: partyHTML, safety: safetyHTML, ask: askHTML, export: exportHTML }[UI.tab] || homeHTML;
     body.innerHTML = f();
     if (UI.tab === "board") bindBoard();
-    requestAnimationFrame(fitPreviews);
+    fitPreviews(); requestAnimationFrame(fitPreviews);
   }
   const visible = () => X && X.state.view === "table";
   const refresh = tabs => { if (visible() && (!tabs || tabs.includes(UI.tab))) renderTab(); };
@@ -543,7 +543,12 @@
 
   /* ---- The players' screen */
   function screenNow() { return S.get("screen", "now") || { kind: "title" }; }
-  function show(doc) { S.set("screen", "now", Object.assign({ t: Date.now() }, doc)); note("On the players' screen now."); }
+  // a handout once shown is the players' to keep: their window lists every one they have been given
+  function show(doc) {
+    const t = Date.now(); S.set("screen", "now", Object.assign({ t }, doc));
+    if (doc.kind === "handout" && doc.id) S.set("given", doc.id, doc.h ? { t, h: doc.h } : { t });
+    note("On the players' screen now.");
+  }
   function nowText(d) {
     switch (d.kind) {
       case "map": return `the map of ${placeName(d.place)}${d.floor ? ", floor " + (+d.floor + 1) : ""}`;
@@ -629,6 +634,7 @@
         <div class="t-scr-l"><h3>${T.icon("screen")} The players' screen</h3>
           <p class="t-scrstat${open ? " on" : ""}">${esc(screenStatus())}</p>
           <ol class="t-steps"><li><b>Open it.</b> It opens in a window of its own: drag that onto the television or the second screen, and press ⤢ on it for full screen.</li><li><b>Choose what they see</b> below. Their screen changes at once; the picture here shows what is on it.</li></ol>
+          <p class="t-small">It is the players' own window, with nothing of yours on it. Besides what you send to the table, it keeps every handout you have given them, their board, the places they know (only the rooms they have seen) and their notes, each a click away for them.</p>
           <div class="t-row"><button type="button" class="t-btn prim" data-t="openscreen">${T.icon("open")}Open the players' screen</button></div>
           <p class="t-small">On another computer or a tablet instead: open this same page there, and on that one press <button type="button" class="t-link" data-t="beplayers">make this window the players' screen</button>. (Pressed here, it turns this page into theirs.)</p></div>
         <div class="t-scr-r"><div class="kl">What they see now</div><div class="t-prev" role="img" aria-label="${esc(cap(nowText(d)))}">${previewHTML(d)}</div><div class="t-small">${esc(cap(nowText(d)))}</div></div>
@@ -846,7 +852,7 @@
       case "fogall": setRooms(true); break;
       case "fognone": setRooms(false); break;
       case "showscene": { const bx = boxOf(b), tt = (bx.querySelector('[data-t="scenetitle"]') || {}).value || "", tx = (bx.querySelector('[data-t="scenetext"]') || {}).value || ""; if (!tx.trim() && !tt.trim()) return; show({ kind: "scene", title: tt.trim().slice(0, 120), text: tx.trim().slice(0, 4000) }); break; }
-      case "showface": { const cid = (boxOf(b).querySelector('[data-t="facepick"]') || {}).value, c = (A.castData || {})[cid]; if (c) show({ kind: "person", name: c.n, role: c.role || "", look: c.look || "" }); break; }
+      case "showface": { const cid = (boxOf(b).querySelector('[data-t="facepick"]') || {}).value, c = (A.castData || {})[cid]; if (c) show({ kind: "person", name: c.n, role: T.plainRole(c.role), look: c.look || "" }); break; }   // the plain part of a role only: what follows a semicolon or a dash is often the secret
       case "hview": if (b.closest("summary") && e) e.preventDefault(); openHandout(d.id, d.list || null); break;
       case "hshow": { const h = T.allHandouts().find(x => x.id === d.id); if (!h) return; show({ kind: "handout", id: h.id }); const dl = b.closest("#tDlg"); if (dl) openHandout(h.id, dl.dataset.place || null); break; }
       case "hprint": { const h = T.allHandouts().find(x => x.id === d.id); if (h) printNow(`<div class="bk-ho">${T.handoutHTML(h)}</div>`, "pr-ho"); break; }
@@ -956,7 +962,7 @@
       }
     }
     pop.innerHTML = html; pop.dataset.kind = UI.dock;
-    requestAnimationFrame(fitPreviews);
+    fitPreviews(); requestAnimationFrame(fitPreviews);
   }
   // a hint, once, for a referee who has not found the table yet
   function intro() {

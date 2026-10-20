@@ -45,7 +45,16 @@ The **At the table** view (referee only) has these tools:
 
 Each place's dossier also shows its intensity and content, its random tables, the players' characters' clues there, a button to show its map on the players' screen, and one to export it for online tables; each clue shows its roll, and its handout to read or give. A **table-side view** makes everything bigger to touch, with the tabs along the bottom of the screen.
 
-**The players' screen** is the page opened a second time with `#players` (the referee's "Open the players' screen" opens it in a window of its own, to drag onto a television; or on another computer, "Make this window the players' screen"). It shows only what the referee puts on it, has the players' notes and the Stop button, and follows the referee's page at once.
+**The players' window** (the user asked, 21 Oct 2026, for a separate window holding only what the players have) is the page opened a second time with `#players`: the referee's "Open the players' screen" opens it in a window of its own, to drag onto a television; on another computer, "Make this window the players' screen" turns that window into it. Nothing of the referee's is on it, and a window opened for the players has no way back to the referee's page. Its menu along the bottom (fading on The table until the mouse moves):
+
+- **The table**: what the referee sends, and only that. When something new arrives while a player is on another page, a prompt offers to look.
+- **Handouts**: every handout the referee has given them, newest first, to read again (a count shows the new ones).
+- **Our board**: their corkboard of what they have found.
+- **Places**: the places they know of, the first impressions, what they found there, and the maps with only the rooms they have seen.
+- **Our notes**: the notes the party keeps, which the referee can read and add to.
+- **Stop**: the X-card.
+
+A face shows a person's name, the plain part of their role (what follows a semicolon or a dash is left off, being often the secret) and their look. The window follows the referee's page at once.
 
 Where it keeps things: the page's database on claude.ai and in the Atlas app; anywhere else (a file opened from the computer), in that browser, so the tracker and the table still work.
 

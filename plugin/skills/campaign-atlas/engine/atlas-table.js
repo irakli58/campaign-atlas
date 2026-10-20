@@ -310,6 +310,8 @@
     if (N.length) for (const nd of N) { pos[nd.id][0] = clampX(pos[nd.id][0] + dx); pos[nd.id][1] = clampY(pos[nd.id][1] + dy); }
     return pos;
   }
+  // what the players may see of a person's role: its plain part (what follows a semicolon, a dash or a bracket is often the secret)
+  const plainRole = r => String(r || "").split(/\s*[;—(]\s*|\s+-\s+/)[0].trim();
   const PERSON_SIL = `<svg viewBox="0 0 40 46" aria-hidden="true"><rect width="40" height="46" fill="#cfc6b2"/><circle cx="20" cy="17" r="8" fill="#5a5148"/><path d="M5 46 C6 32 13 28 20 28 C27 28 34 32 35 46 Z" fill="#5a5148"/></svg>`;
   // the board, drawn: cards on cork with red string for leads, black for ties, grey to where things are found
   function boardHTML(model, pos, show, W, H, gm) {
@@ -321,7 +323,7 @@
     }).join("");
     const cards = model.nodes.filter(n => vis(n.id)).map(n => {
       const p = pos[n.id] || [W / 2, H / 2], rot = ((n.id.length * 37) % 9) - 4;
-      return `<div class="bd-card ${n.kind}${gm && !show(n.id) ? " secret" : ""}" data-bd="${esc(n.id)}" style="left:${p[0].toFixed(0)}px;top:${p[1].toFixed(0)}px;--r:${rot}deg">${n.kind === "person" ? PERSON_SIL : ""}<b>${esc(n.title)}</b>${n.sub ? `<span>${esc(n.sub)}</span>` : ""}<i class="bd-pin"></i></div>`;
+      return `<div class="bd-card ${n.kind}${gm && !show(n.id) ? " secret" : ""}" data-bd="${esc(n.id)}" style="left:${p[0].toFixed(0)}px;top:${p[1].toFixed(0)}px;--r:${rot}deg">${n.kind === "person" ? PERSON_SIL : ""}<b>${esc(n.title)}</b>${n.sub ? `<span>${esc(gm || n.kind !== "person" ? n.sub : plainRole(n.sub))}</span>` : ""}<i class="bd-pin"></i></div>`;
     }).join("");
     return `<div class="bd" style="width:${W}px;height:${H}px"><svg class="bd-strings" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${edges}</svg>${cards}</div>`;
   }
@@ -334,20 +336,41 @@
     if (id.startsWith("l:")) { const v = (st.get("status", id.slice(2)) || {}).status; return !!v && v !== "unknown"; }
     return false;
   };
-  const SAFETY_NOTE = "Anyone can say \"let's skip that\" at any time, or touch Stop on the players' screen: the game moves on, and nobody has to explain why.";
+  const SAFETY_NOTE = "Anyone can say \"let's skip that\" at any time, or press Stop in the players' window: the game moves on, and nobody has to explain why.";
 
-  /* ---- the players' screen: this page opened with #players. Only what the referee shows is on it */
+  /* ---- the players' window: this page opened with #players (or made so in this window). Everything on it is the
+          players': what the referee sends to the table, the handouts they have been given, their board, the places they
+          know (with only the rooms they have seen), their notes, and the Stop card. Nothing of the referee's is on it:
+          the user asked (21 Oct 2026) for the referee's tools and the players' to be in separate windows. On a
+          television it stays on The table, and its menu fades until the mouse moves. */
+  const STATUS_WORDS = { rumoured: "Heard of", known: "Known", open: "Open to us", resolved: "Finished", closed: "Closed" };
   A.playersScreen = function (ctx) {
     const app = document.getElementById("app"), cfg = A.config, st = ctx.store;
     document.documentElement.dataset.theme = "dark"; app.dataset.mode = "player"; app.classList.add("ps-wrap");
-    document.title = (cfg.title || "Campaign") + ": the players' screen";
-    app.innerHTML = `<div class="ps"><div class="ps-stage" id="psStage"></div>
-      <div class="ps-bar"><button type="button" class="ps-btn ps-back" data-ps="back" title="Back to the game master's page (click twice)">⌂</button><button type="button" class="ps-btn" data-ps="notes">Our notes</button><button type="button" class="ps-btn" data-ps="full" title="Full screen">⤢</button><button type="button" class="ps-x" data-ps="x" title="Touch this if you want what is happening to stop. No need to explain.">✕<span>Stop</span></button></div>
-      <aside class="ps-journal" hidden><h3>Our notes</h3><p class="ps-hint">What the party knows and suspects. The game master can read these.</p><form class="ps-add"><textarea maxlength="2000" rows="3" placeholder="A note, a theory, a name to remember"></textarea><button type="submit">Add</button></form><div class="ps-entries"></div></aside>
-      <div class="ps-toast" hidden></div></div>`;
-    const stage = app.querySelector("#psStage"), journal = app.querySelector(".ps-journal");
-    let now = { kind: "title" }, world = null;
-    const fit = () => { const el = stage.firstElementChild; if (!el || !el.classList.contains("ps-fit")) return; const w = el.offsetWidth, h = el.offsetHeight, s = Math.min(stage.clientWidth * .94 / w, stage.clientHeight * .9 / h, 3); el.style.transform = `translate(-50%, -50%) scale(${s})`; };
+    document.title = (cfg.title || "Campaign") + ": the players' window";
+    // a window opened for the players has no way back to the referee's page; only the referee's own window, made into
+    // theirs with "Make this window the players' screen", has one (and asks twice)
+    const mine = (() => { try { return sessionStorage.getItem(cfg.storageKey + "-players") === "1"; } catch (e) { return false; } })();
+    const TABS = [["table", "The table", "screen"], ["handouts", "Handouts", "handout"], ["board", "Our board", "board"], ["places", "Places", "map"], ["notes", "Our notes", "tonight"]];
+    app.innerHTML = `<div class="ps" data-tab="table">
+      <div class="ps-stage" id="psStage"></div>
+      <main class="ps-page" id="psPage" hidden></main>
+      <nav class="ps-menu" aria-label="The players' window">${TABS.map(([k, l, ic]) => `<button type="button" class="ps-tab" data-ptab="${k}" aria-pressed="${k === "table"}">${icon(ic)}<span>${l}</span><b class="ps-badge" hidden></b></button>`).join("")}
+        <span class="ps-sep" aria-hidden="true"></span>
+        <button type="button" class="ps-btn" data-ps="full" title="Full screen" aria-label="Full screen">⤢</button>
+        <button type="button" class="ps-x" data-ps="x" title="Touch this if you want what is happening to stop. No need to explain.">✕<span>Stop</span></button>
+        ${mine ? `<button type="button" class="ps-btn ps-back" data-ps="back" title="Back to the game master's page (click twice)" aria-label="Back to the game master's page">⌂</button>` : ""}</nav>
+      <div class="ps-toast" hidden><span></span><button type="button" data-ptab="table">Look</button></div></div>`;
+    const root = app.querySelector(".ps"), stage = app.querySelector("#psStage"), page = app.querySelector("#psPage");
+    let now = { kind: "title" }, world = null, tab = "table", first = true;
+    const pref = { get(k) { try { return localStorage.getItem(cfg.storageKey + "-p-" + k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(cfg.storageKey + "-p-" + k, v); } catch (e) {} } };
+    const fit = () => { const el = stage.firstElementChild; if (!el || !el.classList.contains("ps-fit")) return; const w = el.offsetWidth, h = el.offsetHeight, s = Math.min(stage.clientWidth * .94 / w, stage.clientHeight * .86 / h, 3); el.style.transform = `translate(-50%, -50%) scale(${s})`; };
+    const when = t => new Date(t || 0).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const placeName = id => (A.meta[id] || {}).name || id;
+    // what is on the table, in the players' words
+    const nowWords = d => ({ map: "the map of " + placeName(d.place), handout: "a handout", person: d.name || "someone", scene: d.title || "words to read", world: "the world map", board: "your board", safety: "the lines and veils", blank: "nothing" })[d.kind] || "the title";
+
+    /* the table: what the referee sends */
     function render() {
       if (world && now.kind !== "world") { world.dispose(); world = null; }
       const k = now.kind;
@@ -366,45 +389,136 @@
         if (!world) { stage.innerHTML = `<div class="ps-world"></div>`; world = A.worldMount(stage.firstChild, { mode: () => "player", placesAt: () => [], peopleAt: () => [], leadsInto: () => [], hasCity: () => false, cityName: id => id, enter() {}, open() {}, db: st.ready, store: ctx.prefStore }); }
         else world.sync();
       } else if (k === "board") {
-        // the players' own board: only what they have, laid out on its own
-        const all = boardModel(), keep = new Set(all.nodes.filter(nd => ctx.found(nd.id)).map(nd => nd.id)), model = { nodes: all.nodes.filter(nd => keep.has(nd.id)), edges: all.edges.filter(e => keep.has(e.a) && keep.has(e.b)) }, [W, H] = boardSize(Math.max(6, model.nodes.length)), pos = boardLayout(model, W, H);
+        const [model, pos, W, H] = theirBoard();
         stage.innerHTML = `<div class="ps-fit ps-board">${boardHTML(model, pos, id => ctx.found(id), W, H, false)}</div>`;
       } else if (k === "safety") {
-        const z = st.get("safety", "zero") || {}, li = a => (a || []).map(x => `<li>${esc(x)}</li>`).join("");
-        stage.innerHTML = `<div class="ps-fit"><div class="ps-scene ps-safety"><h2>At this table</h2><div class="ps-lv"><section><h3>Not in the game</h3><ul>${li(z.lines) || "<li>Nothing named yet</li>"}</ul></section><section><h3>Only off screen</h3><ul>${li(z.veils) || "<li>Nothing named yet</li>"}</ul></section></div><p>${esc(SAFETY_NOTE)}</p></div></div>`;
+        stage.innerHTML = `<div class="ps-fit">${safetyHTML()}</div>`;
       } else if (k === "blank") stage.innerHTML = "";
       else stage.innerHTML = `<div class="ps-fit"><div class="ps-title"><div>${esc(cfg.system || "")}</div><h1>${esc(cfg.title || "")}</h1>${cfg.strap ? `<p>${esc(cfg.strap)}</p>` : ""}</div></div>`;
-      requestAnimationFrame(fit);
+      fit(); requestAnimationFrame(fit);
     }
-    st.watch("screen", d => { now = d.now || { kind: "title" }; render(); });
-    st.watch("fog", () => { if (now.kind === "map") render(); });
-    st.watch("board", () => { if (now.kind === "board") render(); });
-    st.watch("safety", () => { if (now.kind === "safety") render(); });
-    for (const c of ["clues", "status"]) st.watch(c, () => { if (now.kind === "board") render(); });
-    st.watch("journal", d => {
-      const list = Object.entries(d).sort((a, b) => (b[1].t || 0) - (a[1].t || 0));
-      journal.querySelector(".ps-entries").innerHTML = list.map(([id, e]) => `<div class="ps-entry"><p>${esc(e.text)}</p><time>${new Date(e.t || 0).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time><button type="button" data-jdel="${esc(id)}" aria-label="Remove this note">×</button></div>`).join("") || `<p class="ps-hint">Nothing written yet.</p>`;
+    // the players' own board: only what they have, laid out on its own
+    function theirBoard() {
+      const all = boardModel(), keep = new Set(all.nodes.filter(nd => ctx.found(nd.id)).map(nd => nd.id));
+      const model = { nodes: all.nodes.filter(nd => keep.has(nd.id)), edges: all.edges.filter(e => keep.has(e.a) && keep.has(e.b)) }, [W, H] = boardSize(Math.max(6, model.nodes.length));
+      return [model, boardLayout(model, W, H), W, H];
+    }
+    function safetyHTML() {
+      const z = st.get("safety", "zero") || {}, li = a => (a || []).map(x => `<li>${esc(x)}</li>`).join("");
+      return `<div class="ps-scene ps-safety"><h2>At this table</h2><div class="ps-lv"><section><h3>Not in the game</h3><ul>${li(z.lines) || "<li>Nothing named yet</li>"}</ul></section><section><h3>Only off screen</h3><ul>${li(z.veils) || "<li>Nothing named yet</li>"}</ul></section></div><p>${esc(SAFETY_NOTE)}</p></div>`;
+    }
+
+    /* the players' own pages */
+    const given = () => { const g = st.get("given") || {}, all = allHandouts(); return Object.entries(g).map(([id, x]) => ({ t: x.t || 0, h: all.find(h => h.id === id) || x.h || null })).filter(x => x.h).sort((a, b) => b.t - a.t); };
+    function known() {
+      const out = [];
+      for (const id of A.order) {
+        const m = A.meta[id]; if (!m || String(id).startsWith("fly-")) continue;
+        const s = (st.get("status", id) || {}).status || "unknown", fog = (st.get("fog", id) || {}).f || {}, seen = Object.values(fog).some(l => (l || []).length);
+        if (s === "unknown" && !seen) continue;
+        out.push({ id, m, s, fog, seen });
+      }
+      return out;
+    }
+    function pageHTML() {
+      switch (tab) {
+        case "handouts": {
+          const l = given();
+          return `<h2>Handouts</h2><p class="ps-hint">Everything the game master has handed you, newest first. Read them again whenever you like.</p>${l.length ? l.map(x => `<article class="ps-ho"><div class="ps-when">${esc(when(x.t))}</div>${handoutHTML(x.h)}</article>`).join("") : `<p class="ps-empty">Nothing handed to you yet.</p>`}`;
+        }
+        case "board": {
+          const [model, pos, W, H] = theirBoard();
+          return `<h2>Our board</h2><p class="ps-hint">The people, places and clues you have found, and how they connect. The game master pins things up as you learn them.</p>${model.nodes.length ? `<div class="ps-bwrap" data-w="${W}" data-h="${H}"><div class="ps-bscale">${boardHTML(model, pos, id => ctx.found(id), W, H, false)}</div></div>` : `<p class="ps-empty">Nothing on the board yet.</p>`}`;
+        }
+        case "places": {
+          const l = known();
+          return `<h2>Places</h2><p class="ps-hint">The places you know of, what you found there, and the rooms you have seen.</p>${l.length ? l.map(({ id, m, s, fog, seen }) => {
+            const M = A.maps[id] ? A.get(id, 99) : null, done = (st.get("clues", id) || {}).done || [];
+            const found = M ? done.map(k => (M.clues || {})[k]).filter(Boolean).map(c => `<li>${esc(String(c.t || "").replace(/\s*\(.*\)\s*$/, ""))}</li>`).join("") : "";
+            const floors = M ? M.floors.map((F, fi) => [F, fi]).filter(([F, fi]) => !A.isGmFloor(F) && (fog[fi] || []).length) : [];
+            const more = s !== "rumoured" || seen;
+            return `<section class="ps-place"><div class="ps-ph"><h3>${esc(m.name || id)}</h3>${m.region ? `<span class="ps-reg">${esc(m.region)}</span>` : ""}${STATUS_WORDS[s] ? `<span class="ps-st st-${s}">${STATUS_WORDS[s]}</span>` : ""}</div>
+              ${more && M && M.ext ? `<p class="ps-ext">${esc(M.ext)}</p>` : ""}${found ? `<h4>What we found here</h4><ul class="ps-found">${found}</ul>` : ""}
+              ${floors.map(([F, fi]) => `<figure class="ps-pmap">${fogSVG(id, fi, fog[fi], true)}</figure>`).join("")}</section>`;
+          }).join("") : `<p class="ps-empty">No places yet. They appear here as you learn of them.</p>`}`;
+        }
+        case "notes":
+          return `<h2>Our notes</h2><p class="ps-hint">What the party knows and suspects: names, theories, things to check. The game master can read these, and may add to them.</p><form class="ps-add"><textarea maxlength="2000" rows="3" placeholder="A note, a theory, a name to remember"></textarea><button type="submit">Add</button></form><div class="ps-entries"></div>`;
+      }
+      return "";
+    }
+    function paintNotes() {
+      const box = page.querySelector(".ps-entries"); if (!box) return;
+      const list = Object.entries(st.get("journal") || {}).sort((a, b) => (b[1].t || 0) - (a[1].t || 0));
+      box.innerHTML = list.map(([id, e]) => `<div class="ps-entry${e.gm ? " gm" : ""}"><p>${esc(e.text)}</p><time>${e.gm ? "From the game master · " : ""}${esc(when(e.t))}</time><button type="button" data-jdel="${esc(id)}" aria-label="Remove this note">×</button></div>`).join("") || `<p class="ps-hint">Nothing written yet.</p>`;
+    }
+    function fitBoard() {
+      const w = page.querySelector(".ps-bwrap"); if (!w) return;
+      const W = +w.dataset.w, H = +w.dataset.h, s = Math.min(1, (w.clientWidth || W) / W), sc = w.querySelector(".ps-bscale");
+      sc.style.transform = `scale(${s})`; w.style.height = Math.ceil(H * s) + "px";
+    }
+    function renderPage() {
+      if (tab === "table") return;
+      const keep = page.scrollTop;
+      page.innerHTML = `<div class="ps-col">${pageHTML()}</div>`;
+      if (tab === "notes") paintNotes();
+      if (tab === "board") { fitBoard(); requestAnimationFrame(fitBoard); }
+      page.scrollTop = keep;
+    }
+    function setTab(k) {
+      tab = k; root.dataset.tab = k;
+      root.querySelectorAll(".ps-tab").forEach(b => b.setAttribute("aria-pressed", b.dataset.ptab === k));
+      stage.hidden = k !== "table"; page.hidden = k === "table";
+      if (k === "table") { fit(); requestAnimationFrame(fit); if (world) world.wake && world.wake(); }
+      else { page.scrollTop = 0; renderPage(); }
+      if (k === "handouts") { pref.set("seen", String(Date.now())); badges(); }
+      app.querySelector(".ps-toast").hidden = true;
+    }
+    // a count on Handouts of what has come since they last looked
+    function badges() {
+      const seen = +pref.get("seen") || 0, n = given().filter(x => x.t > seen).length, b = root.querySelector('[data-ptab="handouts"] .ps-badge');
+      b.hidden = !n || tab === "handouts"; b.textContent = n;
+    }
+    const toast = (t, look) => { const el = app.querySelector(".ps-toast"); el.querySelector("span").textContent = t; el.querySelector("button").hidden = !look; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 6000); };
+
+    st.watch("screen", d => {
+      const n = d.now || { kind: "title" }, changed = (n.t || 0) !== (now.t || 0);
+      now = n; render();
+      if (!first && changed && tab !== "table") toast(`New on the table: ${nowWords(now)}.`, true);
+      first = false;
     });
-    window.addEventListener("resize", fit);
-    const toast = t => { const el = app.querySelector(".ps-toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 4000); };
+    st.watch("fog", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
+    st.watch("board", () => { if (now.kind === "board") render(); if (tab === "board") renderPage(); });
+    st.watch("safety", () => { if (now.kind === "safety") render(); });
+    for (const c of ["clues", "status"]) st.watch(c, () => { if (now.kind === "board") render(); if (tab === "board" || tab === "places") renderPage(); });
+    st.watch("given", () => { badges(); if (tab === "handouts") renderPage(); });
+    st.watch("journal", () => paintNotes());
+    window.addEventListener("resize", () => { fit(); fitBoard(); });
+
+    // on The table the menu fades away until someone moves the mouse or touches the screen
+    let idle = null;
+    const wake = () => { root.classList.remove("idle"); clearTimeout(idle); idle = setTimeout(() => { if (tab === "table") root.classList.add("idle"); }, 5000); };
+    ["mousemove", "pointerdown", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, wake, { passive: true })); wake();
+
     app.addEventListener("click", e => {
+      const pt = e.target.closest("[data-ptab]"); if (pt) { setTab(pt.dataset.ptab); return; }
       const b = e.target.closest("[data-ps]"), jd = e.target.closest("[data-jdel]");
       if (jd) { if (jd.dataset.sure) st.set("journal", jd.dataset.jdel, null); else { jd.dataset.sure = 1; jd.textContent = "Really?"; } return; }
       if (!b) return;
-      if (b.dataset.ps === "back") {          // twice, so a player does not turn the screen into the referee's page by accident
+      if (b.dataset.ps === "back") {          // twice, so a player does not turn the window into the referee's page by accident
         if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Back to the game master's page? Click again"; setTimeout(() => { delete b.dataset.sure; b.textContent = "⌂"; }, 4000); return; }
         try { sessionStorage.removeItem(cfg.storageKey + "-players"); } catch (e) {}
         location.hash = ""; location.reload(); return;
       }
-      if (b.dataset.ps === "notes") journal.hidden = !journal.hidden;
-      else if (b.dataset.ps === "full") { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); }
-      else if (b.dataset.ps === "x") { const t = Date.now(); st.set("xcard", "now", { t }); st.set("xcard", "x" + t, { t }); toast("The game master has been told. Take a breath; the game will move on."); }
+      if (b.dataset.ps === "full") { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); }
+      else if (b.dataset.ps === "x") { const t = Date.now(); st.set("xcard", "now", { t }); st.set("xcard", "x" + t, { t }); toast("The game master has been told. Take a breath; the game will move on.", false); }
     });
-    app.querySelector(".ps-add").addEventListener("submit", e => {
+    app.addEventListener("submit", e => {
+      if (!e.target.matches(".ps-add")) return;
       e.preventDefault(); const ta = e.target.querySelector("textarea"), v = ta.value.trim().slice(0, 2000); if (!v) return;
       st.set("journal", "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), { text: v, t: Date.now() }); ta.value = "";
     });
-    // so the referee's page can say the players' screen is open and following
+    // so the referee's page can say the players' window is open and following
     const beat = () => st.set("presence", "players", { t: Date.now() });
     st.ready.then(beat); setInterval(beat, 30000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) beat(); });
@@ -436,5 +550,5 @@
   const icon = (k, cls) => `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${IC[k] || ""}</svg>`;
 
   // for the referee's tools (atlas-table-gm.js), the checker and the build
-  A.table = { icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
+  A.table = { plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
 })(ATLAS);
