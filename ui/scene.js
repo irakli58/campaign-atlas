@@ -99,8 +99,10 @@
     waiting: [[180, 60], `<g class="sc-hg"><path class="sc-sand top" d="M167 30 C168 46 178 52 179.4 57 H180.6 C182 52 192 46 193 30 Z"/><path class="sc-sand bottom" d="M167 90 C168 74 178 68 179.4 63 H180.6 C182 68 192 74 193 90 Z"/><path class="sc-stream" d="M180 57 V90"/>
       <path class="sc-glass2" d="M164 20 C164 48 178 52 178 60 C178 68 164 72 164 100 M196 20 C196 48 182 52 182 60 C182 68 196 72 196 100"/>
       <path class="sc-post" d="M158 20 V100 M202 20 V100"/><rect class="sc-plate" x="154" y="14" width="52" height="6" rx="1.5"/><rect class="sc-plate" x="154" y="100" width="52" height="6" rx="1.5"/></g>`],
-    stopped: [[180, 40], `<rect class="sc-candle" x="170" y="56" width="20" height="46" rx="2"/><path class="sc-ink" d="M180 56 V48"/><path class="sc-holder" d="M150 102 H210 L204 110 H156 Z"/>
-      <path class="sc-smoke" d="M180 46 C174 38 186 32 180 24 C174 16 186 10 180 2"/>`]
+    // a snuffed candle: an ember on the wick, and curls of smoke rising from it one after another
+    stopped: [[180, 40], `<path class="sc-holder" d="M148 102 H212 L205 110 H155 Z"/><rect class="sc-candle" x="170" y="58" width="20" height="44" rx="2"/><path class="sc-candle" d="M174 58 v9 a2 2 0 0 0 4 0 v-9"/>
+      <path class="sc-ink" d="M180 58 V51"/><circle class="sc-ember" cx="180" cy="50.5" r="1.7"/>` +
+      [0, 1, 2].map(i => `<path class="sc-wisp" style="--i:${i}" d="M180 47 c-5 -5 5 -9 0 -14 c-5 -5 5 -9 0 -14"/>`).join("")]
   };
   // show the scene for this moment of the work: a step's id, "finished", "waiting" or "stopped"; moving says whether
   // the work goes on (a step whose work has paused is shown stilled). The scene is drawn again only when it changes.

@@ -311,8 +311,10 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 /* stopped: a snuffed candle, smoking */
 .sc .sc-candle { fill: var(--panel); stroke: var(--ink); stroke-width: 1.2; }
 .sc .sc-holder { fill: var(--bone); }
-.sc .sc-smoke { stroke: var(--muted); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 5 9; animation: sc-smoke 3s linear infinite; }
-@keyframes sc-smoke { from { stroke-dashoffset: 0; opacity: .9; } to { stroke-dashoffset: 28; opacity: .3; } }
+.sc .sc-ember { fill: var(--accent); animation: sc-ember 2.4s ease-in-out infinite; }
+@keyframes sc-ember { 50% { opacity: .25; } }
+.sc .sc-wisp { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linecap: round; transform-origin: 50% 100%; animation: sc-wisp 3s ease-out infinite both; animation-delay: calc(var(--i) * 1s); }
+@keyframes sc-wisp { 0% { transform: translateY(4px) scale(.55); opacity: 0; } 20% { opacity: .85; } 100% { transform: translateY(-22px) scale(1.15) rotate(7deg); opacity: 0; } }
 /* a splash of ink each time something is done */
 .sc .sc-poke circle { fill: var(--accent); transform-origin: 50% 50%; }
 .sc .sc-poke > circle:first-child { animation: sc-blob .9s ease-out forwards; }
