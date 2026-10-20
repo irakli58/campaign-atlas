@@ -217,7 +217,6 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 .sc .sc-feather { fill: var(--panel); stroke: var(--ink); stroke-width: 1.1; stroke-linejoin: round; }
 .sc .sc-name { font-family: var(--f-mono); font-size: 8.5px; letter-spacing: .08em; text-anchor: middle; fill: var(--muted); text-transform: uppercase; }
 /* the story: a page turns */
-.sc-story .sc-ribbon { fill: var(--accent); }
 .sc .sc-turn { transform-origin: 0% 50%; animation: sc-turn 3.6s ease-in-out infinite; }
 @keyframes sc-turn { 0%, 10% { transform: scaleX(1); opacity: 1; } 55%, 86% { transform: scaleX(-1); opacity: 1; } 92% { transform: scaleX(-1); opacity: 0; } 93% { transform: scaleX(1); opacity: 0; } 100% { transform: scaleX(1); opacity: 1; } }
 /* the council: four pens write in turn */
