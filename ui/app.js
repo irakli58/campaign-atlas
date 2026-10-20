@@ -304,7 +304,7 @@
     if (all || !$(".jhead", box)) {
       box.innerHTML = `<div class="jhead"></div><div class="jnote"></div><div class="jown"></div><div class="meter"></div>
         <div class="cols"><div><h3 class="h3">The work</h3><ol class="steps"></ol><div class="jplan"></div><div class="jplaces"></div></div>
-        <div><h3 class="h3">As it happens</h3><p class="live" role="status"></p><div class="feed" aria-live="off"></div></div></div><div class="jreport"></div>`;
+        <div><h3 class="h3">As it happens</h3><p class="live" role="status"></p><div class="scene" aria-hidden="true"></div><div class="feed" aria-live="off"></div></div></div><div class="jreport"></div>`;
       const feed = $(".feed", box); feed.innerHTML = feedHTML(J.log) || `<p class="empty">Nothing yet.</p>`; feed.scrollTop = feed.scrollHeight;
     }
     const own = j.provider === "own", tool = TOOL[j.tool || "claude"];
@@ -339,6 +339,8 @@
     // the steps
     const steps = (P && P.steps) || [];
     const moving = working || j.status === "working-own";
+    // the little scene under the live line (scene.js): the step being worked on, or how things stand
+    if (window.AtlasScene) { const cur = steps.find(s => s.current); AtlasScene.show($(".scene", box), j.status === "finished" ? "finished" : own && j.waiting ? "waiting" : ["stopped", "failed", "capped"].includes(j.status) ? "stopped" : cur ? cur.id : "story", moving); }
     $(".steps", box).innerHTML = steps.map(s => `<li class="stp${s.done ? " done" : ""}${s.current ? " cur" : ""}${s.current && !moving ? " idle" : ""}"><span class="dot" aria-hidden="true"></span>
       <span class="t">${esc(s.label)}${s.who ? `<span class="who">${esc(s.who)}</span>` : ""}</span>${s.detail ? `<span class="d">${esc(s.detail)}</span>` : ""}</li>`).join("") || `<li class="busy">Reading the folder…</li>`;
     // the AI's own plan (only when the app runs it)
@@ -413,6 +415,7 @@
     } else feed.insertAdjacentHTML("beforeend", line(e, 1));
     while (feed.children.length > 600) feed.firstElementChild.remove();
     if (near) feed.scrollTop = feed.scrollHeight;
+    if (window.AtlasScene) AtlasScene.poke($("#job .scene"));
     paintLive();
   }
 
