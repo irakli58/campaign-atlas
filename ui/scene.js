@@ -21,29 +21,160 @@
   };
   const PAPER = (x, y, w, h) => `<rect class="sc-paper" x="${x}" y="${y}" width="${w}" height="${h}" rx="3"/>`;
   const QUILL = `<path class="sc-feather" d="M0 34 L5 25 C12 11 22 2 33 -3 C27 9 18 22 7 30 Z"/><path class="sc-ink" d="M0 34 L-3 39"/>`;
-  // A scene told in order, every part at its moment of one ten-second loop: each part gets keyframes of its own (drawn,
-  // faded in, popped up, risen, stamped, shown for a while, or moved from point to point), so the whole scene keeps in
-  // step and fades out together at the end.
-  function timeline(id, items) {
-    let css = "", body = "";
+  // A scene told in order, every part at its moment of one ten-second loop: each part gets keyframes of its own, so the
+  // whole scene keeps in step and fades out together at the end. T.cls({ how, t, d, ... }) gives the class that plays a
+  // part; T.style() the keyframes. A part is drawn (a line inked), faded in, popped up, risen, stamped, shown for a
+  // while (until e), popped up for a while, moved from point to point (keys: [t, x, y, opacity, turn]), flipped over
+  // (a page, from its left edge), flipped away (a cover), folded (a letter), flipped down (an envelope's flap),
+  // unrolled (a scroll), drawn and later struck out of sight (drawhide, until e), or kept until it goes (until).
+  function tl(id) {
+    let css = "", n = 0;
     const p = t => (t * 10).toFixed(1);
-    items.forEach((it, n) => {
-      const k = id + n, d = it.d || .8, a = p(it.t || 0), b = p((it.t || 0) + d), c = p((it.t || 0) + d + .25), r = it.rot || 0;
-      const at = ([, x, y]) => `transform:translate(${x}px,${y}px)`;
-      const frames = it.how === "move"
-        ? `0%{${at(it.keys[0])}}` + it.keys.map(q => `${p(q[0])}%{${at(q)}}`).join("") + `92%{${at(it.keys[it.keys.length - 1])};opacity:1}97%,100%{${at(it.keys[it.keys.length - 1])};opacity:0}`
-        : {
-          draw: `0%,${a}%{stroke-dashoffset:1;opacity:1}${b}%,92%{stroke-dashoffset:0;opacity:1}97%,100%{stroke-dashoffset:0;opacity:0}`,
-          fade: `0%,${a}%{opacity:0}${b}%,92%{opacity:1}97%,100%{opacity:0}`,
-          pop: `0%,${a}%{transform:scale(0);opacity:0}${b}%{transform:scale(1.18);opacity:1}${c}%,92%{transform:scale(1);opacity:1}97%,100%{transform:scale(1);opacity:0}`,
-          rise: `0%,${a}%{transform:scaleY(0);opacity:1}${b}%,92%{transform:scaleY(1);opacity:1}97%,100%{transform:scaleY(1);opacity:0}`,
-          stamp: `0%,${a}%{transform:scale(2.6) rotate(${r}deg);opacity:0}${b}%{transform:scale(.94) rotate(${r}deg);opacity:1}${c}%,92%{transform:scale(1) rotate(${r}deg);opacity:1}97%,100%{transform:scale(1) rotate(${r}deg);opacity:0}`,
-          show: `0%,${a}%{opacity:0}${b}%,${p(it.e)}%{opacity:1}${p(it.e + .2)}%,100%{opacity:0}`
-        }[it.how];
-      css += `@keyframes ${k}{${frames}}.sc .${k}{animation:${k} 10s ${it.how === "draw" || it.how === "move" ? "ease-in-out" : "ease-out"} infinite}`;
-      body += it.svg.replace("{k}", k);
+    return {
+      cls(it) {
+        const k = id + (n++), t = it.t || 0, d = it.d || .8, a = p(t), b = p(t + d), c = p(t + d + .25), r = it.rot || 0, e = it.e != null ? p(it.e) : null, e2 = it.e != null ? p(it.e + .2) : null;
+        const at = q => `transform:translate(${q[1]}px,${q[2]}px)${q[4] != null ? ` rotate(${q[4]}deg)` : ""};opacity:${q[3] != null ? q[3] : 1}`;
+        const last = it.keys && it.keys[it.keys.length - 1];
+        const frames = it.how === "move"
+          ? `0%{${at(it.keys[0])}}` + it.keys.map(q => `${p(q[0])}%{${at(q)}}`).join("") + `92%{${at(last)}}97%,100%{${at(last).replace(/opacity:[\d.]+/, "opacity:0")}}`
+          : {
+            draw: `0%,${a}%{stroke-dashoffset:1;opacity:1}${b}%,92%{stroke-dashoffset:0;opacity:1}97%,100%{stroke-dashoffset:0;opacity:0}`,
+            drawhide: `0%,${a}%{stroke-dashoffset:1;opacity:1}${b}%,${e}%{stroke-dashoffset:0;opacity:1}${e2}%,100%{stroke-dashoffset:0;opacity:0}`,
+            fade: `0%,${a}%{opacity:0}${b}%,92%{opacity:1}97%,100%{opacity:0}`,
+            until: `0%,${e}%{opacity:1}${e2}%,100%{opacity:0}`,
+            pop: `0%,${a}%{transform:scale(0);opacity:0}${b}%{transform:scale(1.18);opacity:1}${c}%,92%{transform:scale(1);opacity:1}97%,100%{transform:scale(1);opacity:0}`,
+            popshow: `0%,${a}%{transform:scale(0);opacity:0}${b}%{transform:scale(1.15);opacity:1}${c}%,${e}%{transform:scale(1);opacity:1}${e2}%,100%{transform:scale(.7);opacity:0}`,
+            rise: `0%,${a}%{transform:scaleY(0);opacity:1}${b}%,92%{transform:scaleY(1);opacity:1}97%,100%{transform:scaleY(1);opacity:0}`,
+            stamp: `0%,${a}%{transform:scale(2.6) rotate(${r}deg);opacity:0}${b}%{transform:scale(.94) rotate(${r}deg);opacity:1}${c}%,92%{transform:scale(1) rotate(${r}deg);opacity:1}97%,100%{transform:scale(1) rotate(${r}deg);opacity:0}`,
+            show: `0%,${a}%{opacity:0}${b}%,${e}%{opacity:1}${e2}%,100%{opacity:0}`,
+            flip: `0%,${a}%{transform:scaleX(1)}${b}%,92%{transform:scaleX(-1);opacity:1}97%,100%{transform:scaleX(-1);opacity:0}`,
+            flipaway: `0%,${a}%{transform:scaleX(1);opacity:1}${b}%{transform:scaleX(-1);opacity:1}${c}%,100%{transform:scaleX(-1);opacity:0}`,
+            fold: `0%,${a}%{transform:scaleY(1);opacity:1}${b}%{transform:scaleY(.3);opacity:1}${c}%,100%{transform:scaleY(.3);opacity:0}`,
+            flipdown: `0%,${a}%{transform:scaleY(1)}${b}%,92%{transform:scaleY(-1);opacity:1}97%,100%{transform:scaleY(-1);opacity:0}`,
+            unroll: `0%,${a}%{transform:scaleX(0)}${b}%,92%{transform:scaleX(1);opacity:1}97%,100%{transform:scaleX(1);opacity:0}`
+          }[it.how];
+        css += `@keyframes ${k}{${frames}}.sc .${k}{animation:${k} 10s ${/draw|move|flip|fold|unroll/.test(it.how) ? "ease-in-out" : "ease-out"} infinite}`;
+        return k;
+      },
+      style: () => `<style>${css}</style>`
+    };
+  }
+  function timeline(id, items) {
+    const T = tl(id); let body = "";
+    for (const it of items) body += it.svg.replace("{k}", T.cls(it));
+    return T.style() + body;
+  }
+  // a quill and a red pen, their tips at the point they stand on
+  const QUILLTIP = `<g transform="translate(0 -34)">${QUILL}</g>`;
+  const REDPEN = `<path class="sc-redpen" d="M0 0 L6 -4 L40 -40 L36 -44 L2 -10 Z"/><path class="sc-ink" d="M0 0 L-2 3"/>`;
+  const STAR = (x, y, s) => `M${x} ${y - s} L${x + s * .28} ${y - s * .28} L${x + s} ${y} L${x + s * .28} ${y + s * .28} L${x} ${y + s} L${x - s * .28} ${y + s * .28} L${x - s} ${y} L${x - s * .28} ${y - s * .28} Z`;
+  // keys for a pen that writes along lines: lifted between them
+  const along = (lines, t0, step, dur) => { const k = []; lines.forEach(([x1, y, x2], i) => { const t = t0 + i * step; k.push([t, x1, y], [t + dur, x2, y]); }); return k; };
+
+  // the story: a closed book opens; the quill writes a page, the next, the page turns, it writes on; then it marks in
+  // red what must not change
+  function storyScene() {
+    const T = tl("sct"), L = [[96, 42, 164], [96, 52, 160], [96, 62, 166], [96, 72, 150], [96, 82, 158]], R = L.map(([a, y, b]) => [a + 100, y, b + 100]);
+    const lines = (rows, t0, step) => rows.map(([x1, y, x2], i) => `<path class="sc-line2 sc-dash ${T.cls({ how: "draw", t: t0 + i * step, d: step * .85 })}" pathLength="1" d="M${x1} ${y} H${x2}"/>`).join("");
+    const left = "M180 96 C150 86 110 86 80 94 V30 C110 22 150 22 180 32 Z", right = "M180 96 C210 86 250 86 280 94 V30 C250 22 210 22 180 32 Z";
+    const keys = [[0, 300, 14, 0], [.8, 300, 14, 1], ...along(L, 1, .32, .27), ...along(R, 2.6, .28, .24), [3.7, 292, 20], [5.0, 292, 20], ...along(R, 5.2, .3, .26), [6.8, 198, 66], [7.3, 258, 66], [7.5, 270, 56], [7.8, 270, 74], [8.4, 300, 14]];
+    return `<path class="sc-paper ${T.cls({ how: "fade", t: .55, d: .3 })}" d="${left}"/>${lines(L, 1, .32)}<path class="sc-paper" d="${right}"/>${lines(R, 5.2, .3)}
+      <path class="sc-mark2 sc-dash ${T.cls({ how: "draw", t: 6.8, d: .5 })}" pathLength="1" d="M198 66 H258"/><path class="sc-mark2 sc-dash ${T.cls({ how: "draw", t: 7.5, d: .3 })}" pathLength="1" d="M266 56 h4 v18 h-4"/>
+      <g class="sc-leaf ${T.cls({ how: "flip", t: 3.9, d: .9 })}"><path class="sc-paper" d="${right}"/>${lines(R, 2.6, .28)}</g>
+      <g class="sc-leaf ${T.cls({ how: "flipaway", t: .15, d: .6 })}"><path class="sc-bookcover" d="M180 98 C210 88 252 88 284 96 V26 C252 18 210 18 180 28 Z"/><path class="sc-gilt" d="M198 44 H264 M206 54 H256"/></g>
+      <g class="${T.cls({ how: "move", keys })}">${QUILLTIP}</g>` + T.style();
+  }
+  // the council: four writers round a table, each speaking in turn (their emblem in a bubble), a note from each flying
+  // into the manuscript, which grows a line at a time
+  function councilScene() {
+    const T = tl("scn"), W = [
+      { n: "Doyle", seat: [118, 62], name: [104, 64, "end"], bub: [80, 40], icon: `<circle class="i" cx="-1.5" cy="-1.5" r="4"/><path class="i" d="M1.5 1.5 L5.5 5.5"/>` },
+      { n: "Christie", seat: [180, 30], name: [180, 18, "middle"], bub: [228, 18], icon: `<path class="i fill" d="M-2 -7 h4 v3 l3 4 v7 h-10 v-7 l3 -4 Z"/><rect class="cork" x="-2" y="-9" width="4" height="2.4"/>` },
+      { n: "Poe", seat: [242, 62], name: [256, 64, "start"], bub: [284, 38], icon: `<path class="i fill" d="M-7 2 C-5 -3 -1 -5 2 -4 L6 -6 L5 -3 C7 -1 6 3 2 4 L-1 7 L-2 4 C-5 4 -7 3 -7 2 Z"/>` },
+      { n: "Lovecraft", seat: [180, 94], name: [180, 112, "middle"], bub: [232, 100], icon: `<path class="i" d="M-5 6 C-6 0 -2 -5 2 -4 C6 -3 6 3 2 3 C0 3 0 1 1 0" stroke-width="2"/><circle class="dot" cx="-4.3" cy="2" r=".8"/><circle class="dot" cx="-3.4" cy="-1.6" r=".8"/>` }
+    ];
+    let s = `<ellipse class="sc-table ${T.cls({ how: "fade", t: 0, d: .4 })}" cx="180" cy="62" rx="62" ry="34"/><rect class="sc-paper ${T.cls({ how: "pop", t: .3, d: .3 })}" x="162" y="44" width="36" height="38" rx="1.5"/>`;
+    W.forEach((w, i) => {
+      const t = 1.2 + i * 1.8, [sx, sy] = w.seat, [bx, by] = w.bub, [nx, ny, anchor] = w.name;
+      s += `<circle class="sc-seat ${T.cls({ how: "fade", t: .4 + i * .1, d: .3 })}" cx="${sx}" cy="${sy}" r="5"/>`;
+      s += `<text class="sc-name2 ${T.cls({ how: "fade", t: .5 + i * .1, d: .3 })}" x="${nx}" y="${ny}" text-anchor="${anchor}">${w.n}</text><text class="sc-name2 on ${T.cls({ how: "show", t, d: .2, e: t + 1.5 })}" x="${nx}" y="${ny}" text-anchor="${anchor}">${w.n}</text>`;
+      s += `<g transform="translate(${bx} ${by})"><g class="sc-bubble ${T.cls({ how: "popshow", t: t + .05, d: .25, e: t + 1.5 })}"><path class="b" d="M0 -11 a11 11 0 1 1 -0.01 0 Z"/><path class="b" d="M${(sx - bx) * .38} ${(sy - by) * .38} L${(sx - bx) * .2 - 3} ${(sy - by) * .2} L${(sx - bx) * .2 + 3} ${(sy - by) * .2} Z"/>${w.icon}</g></g>`;
+      s += `<g class="${T.cls({ how: "move", keys: [[0, sx, sy, 0], [t + .3, sx, sy, 0], [t + .35, sx, sy, 1], [t + .8, 180, 63, 1], [t + .9, 180, 63, 0]] })}"><rect class="sc-slip" x="-4" y="-3" width="8" height="6"/></g>`;
+      [0, 1].forEach(q => { const y = 50 + (i * 2 + q) * 4; s += `<path class="sc-line2 thin sc-dash ${T.cls({ how: "draw", t: t + .8 + q * .3, d: .3 })}" pathLength="1" d="M166 ${y} H${194 - ((i + q) % 3) * 4}"/>`; });
     });
-    return `<style>${css}</style>` + body;
+    return s + T.style();
+  }
+  // the judge: Tolkien's red pen grades each chapter; one line is struck and marked Fair, rewritten by the four, and
+  // marked Good; his pipe smokes in the corner
+  function judgeScene() {
+    const T = tl("scj"), rows = [[24, 0], [31, 1], [38, 1], [45, 1], [58, 0], [65, 1], [72, 1], [79, 1], [92, 0], [99, 1], [106, 1]];
+    let s = PAPER(110, 10, 130, 104) + rows.filter(([y]) => y !== 72).map(([y, b]) => `<path class="${b ? "sc-line" : "sc-head"}" d="M124 ${y} H${b ? 214 - (y % 3) * 6 : 170}"/>`).join("");
+    const grade = (txt, x, y, t, cls) => `<text class="sc-grade2 ${cls || ""} ${T.cls({ how: "pop", t, d: .25 })}" x="${x}" y="${y}">${txt}</text>`;
+    // chapter one: Good. Chapter two: a line struck, Fair; mended; Good. Chapter three: Good.
+    s += grade("Good", 262, 32, 1.4) + `<text class="sc-tickr ${T.cls({ how: "pop", t: 1.6, d: .2 })}" x="246" y="33">✓</text>`;
+    s += `<path class="sc-line ${T.cls({ how: "until", e: 4.4 })}" d="M124 72 H214"/><path class="sc-strike2 sc-dash ${T.cls({ how: "drawhide", t: 2.3, d: .5, e: 4.4 })}" pathLength="1" d="M122 72 H216"/>`;
+    s += `<path class="sc-line fix sc-dash ${T.cls({ how: "draw", t: 4.7, d: .6 })}" pathLength="1" d="M124 72 H204"/>`;
+    s += grade("Fair", 262, 70, 3.1, "bad") + `<path class="sc-strike2 sc-dash ${T.cls({ how: "draw", t: 5.6, d: .25 })}" pathLength="1" d="M259 67 H284"/>` + grade("Good", 262, 80, 5.9);
+    s += grade("Good", 262, 104, 7.0) + `<text class="sc-tickr ${T.cls({ how: "pop", t: 7.2, d: .2 })}" x="246" y="104">✓</text>`;
+    s += `<path class="sc-sign sc-dash ${T.cls({ how: "draw", t: 7.6, d: .6 })}" pathLength="1" d="M200 108 c3 -6 5 4 8 -1 s4 -5 6 1 s3 3 6 -2 s4 0 8 -1"/>`;
+    s += `<g class="${T.cls({ how: "move", keys: [[0, 300, 8, 0], [.8, 248, 30, 1], [1.4, 252, 36], [2.2, 122, 74], [2.8, 216, 74], [3.1, 250, 72], [4.0, 286, 40], [5.5, 248, 70], [6.0, 254, 82], [6.8, 250, 104], [7.6, 200, 110], [8.2, 228, 108], [8.6, 300, 8]] })}">${REDPEN}</g>`;
+    // the pipe, and its rings of smoke (they keep their own time)
+    s += `<g transform="translate(74 94)"><path class="sc-stem" d="M-20 -4 C-12 -4 -6 -2 0 2"/><path class="sc-pipe" d="M-1 -8 H11 V1 C11 8 -1 8 -1 1 Z"/><path class="sc-stem" d="M-1 -8 H11"/>${[0, 1, 2].map(i => `<circle class="sc-ringsmoke" style="--i:${i}" cx="5" cy="-12" r="3"/>`).join("")}</g>`;
+    return s + T.style();
+  }
+  // the agreement: a scroll unrolls, its terms are written, and each of the five signs and seals in turn
+  function agreeScene() {
+    const T = tl("sca"), X = [84, 132, 180, 228, 276], L = ["Doyle", "Christie", "Poe", "Lovecraft", "Tolkien"];
+    let s = `<rect class="sc-paper sc-unroll ${T.cls({ how: "unroll", t: .2, d: .9 })}" x="58" y="14" width="244" height="94"/>`;
+    s += `<g class="${T.cls({ how: "move", keys: [[0, 124, 0], [.2, 124, 0], [1.1, 0, 0]] })}"><rect class="sc-roll" x="50" y="10" width="9" height="102" rx="4"/></g><g class="${T.cls({ how: "move", keys: [[0, -124, 0], [.2, -124, 0], [1.1, 0, 0]] })}"><rect class="sc-roll" x="301" y="10" width="9" height="102" rx="4"/></g>`;
+    s += `<path class="sc-head sc-dash ${T.cls({ how: "draw", t: 1.2, d: .4 })}" pathLength="1" d="M150 26 H210"/>` + [36, 44, 52].map((y, i) => `<path class="sc-line2 thin sc-dash ${T.cls({ how: "draw", t: 1.5 + i * .25, d: .3 })}" pathLength="1" d="M78 ${y} H${282 - i * 14}"/>`).join("");
+    X.forEach((x, i) => {
+      const t = 2.6 + i * .95;
+      s += `<path class="sc-sign sc-dash ${T.cls({ how: "draw", t, d: .4 })}" pathLength="1" d="M${x - 15} 92 c4 -8 7 6 10 -2 s5 -6 8 2 s6 4 9 -3 s4 -2 5 1"/>`;
+      s += `<text class="sc-name2 ${T.cls({ how: "fade", t, d: .3 })}" x="${x}" y="103" text-anchor="middle">${L[i]}</text>`;
+      s += `<g transform="translate(${x} 72)"><g class="sc-seal2 ${T.cls({ how: "stamp", t: t + .45, d: .25, rot: (i % 2 ? 8 : -8) })}"><circle r="10"/><circle class="sc-ring" r="7"/><text y="4">${L[i][0]}</text></g></g>`;
+    });
+    return s + T.style();
+  }
+  // the build: a printing press stamps four pages; each slides to the stack; a cover closes over them, its title gilt
+  function buildScene() {
+    const T = tl("scb");
+    let s = `<path class="sc-post2" d="M70 100 V22 M130 100 V22"/><rect class="sc-beam" x="62" y="14" width="76" height="9" rx="2"/><rect class="sc-bed" x="66" y="88" width="68" height="6" rx="1"/>`;
+    const pk = [[0, 0, 0]];
+    [0, 1, 2, 3].forEach(i => {
+      const t = .6 + i * 1.5;
+      pk.push([t, 0, 0], [t + .25, 0, 34], [t + .45, 0, 34], [t + .7, 0, 0]);
+      s += `<g class="${T.cls({ how: "move", keys: [[0, 0, 0, 0], [t + .7, 0, 0, 0], [t + .75, 0, 0, 1], [t + 1.25, 152, 4 - i * 5, 1], [t + 1.3, 152, 4 - i * 5, 0]] })}"><rect class="sc-paper" x="82" y="82" width="36" height="5"/></g>`;
+      s += `<rect class="sc-paper ${T.cls({ how: "fade", t: t + 1.25, d: .05 })}" x="234" y="${86 - i * 5}" width="36" height="5"/>`;
+    });
+    s += `<rect class="sc-paper" x="82" y="82" width="36" height="5"/><g class="${T.cls({ how: "move", keys: pk })}"><rect class="sc-screw" x="97" y="12" width="6" height="36"/><rect class="sc-platen" x="78" y="44" width="44" height="8" rx="1.5"/></g>`;
+    s += `<g class="${T.cls({ how: "move", keys: [[0, 0, -24, 0], [6.9, 0, -24, 0], [7.4, 0, 0, 1]] })}"><rect class="sc-bookcover" x="228" y="62" width="48" height="34" rx="3"/><path class="sc-gilt" d="M236 72 H268 M240 80 H264"/></g>`;
+    s += [[222, 58], [284, 64], [252, 50], [288, 90]].map(([x, y], i) => `<path class="sc-star2 ${T.cls({ how: "pop", t: 7.6 + i * .15, d: .25 })}" d="${STAR(x, y, 5)}"/>`).join("");
+    return s + T.style();
+  }
+  // the report: the quill writes a letter and signs it; it folds into an envelope, the flap closes, the seal is pressed,
+  // and it is sent to you
+  function reportScene() {
+    const T = tl("scr"), L = [[146, 28, 214], [146, 38, 210], [146, 48, 216], [146, 58, 204], [146, 68, 212]];
+    let s = `<g class="sc-fold ${T.cls({ how: "fold", t: 4.8, d: .4 })}"><rect class="sc-paper" x="132" y="14" width="96" height="74" rx="2"/>` +
+      L.map(([x1, y, x2], i) => `<path class="sc-line2 thin sc-dash ${T.cls({ how: "draw", t: .5 + i * .65, d: .55 })}" pathLength="1" d="M${x1} ${y} H${x2}"/>`).join("") +
+      `<path class="sc-sign sc-dash ${T.cls({ how: "draw", t: 3.9, d: .5 })}" pathLength="1" d="M186 80 c3 -6 5 4 8 -1 s4 -5 6 1 s3 3 6 -2"/></g>`;
+    s += `<g class="${T.cls({ how: "move", keys: [[0, 0, 0], [7.2, 0, 0], [8.1, 130, -46, 0]] })}">
+      <rect class="sc-envelope ${T.cls({ how: "fade", t: 5.05, d: .2 })}" x="140" y="40" width="80" height="50" rx="2"/><path class="sc-envline ${T.cls({ how: "fade", t: 5.1, d: .2 })}" d="M140 90 L180 64 L220 90"/>
+      <g class="sc-flap ${T.cls({ how: "flipdown", t: 5.6, d: .4 })}"><path class="sc-envelope ${T.cls({ how: "fade", t: 5.05, d: .2 })}" d="M140 40 L180 14 L220 40 Z"/></g>
+      <g transform="translate(180 64)"><g class="sc-seal2 ${T.cls({ how: "stamp", t: 6.2, d: .25, rot: -6 })}"><circle r="8"/><circle class="sc-ring" r="5.5"/></g></g></g>`;
+    s += `<g class="${T.cls({ how: "move", keys: [[0, 300, 10, 0], [.4, 146, 28, 1], ...along(L, .5, .65, .55), [3.9, 186, 80], [4.4, 206, 78], [4.7, 300, 10, 0]] })}">${QUILLTIP}</g>`;
+    return s + T.style();
+  }
+  // finished: the campaign's book, glowing; a d20 tumbles in and comes up 20; gold sparks rise
+  function finishedScene() {
+    const T = tl("scf");
+    let s = `<circle class="sc-halo" cx="180" cy="60" r="54"/><rect class="sc-bookcover" x="146" y="22" width="68" height="80" rx="4"/><rect class="sc-giltbox" x="152" y="28" width="56" height="68" rx="2"/><path class="sc-gilt" d="M162 44 H198 M166 54 H194"/>`;
+    s += `<g transform="translate(180 80)"><g class="sc-seal glow"><circle r="8"/><circle class="sc-ring" r="5.5"/></g></g>`;
+    s += [[110, 30], [256, 40], [100, 86], [262, 92], [180, 10]].map(([x, y], i) => `<path class="sc-star" style="--i:${i}" d="${STAR(x, y, 7)}"/>`).join("");
+    s += [0, 1, 2, 3, 4, 5, 6].map(i => `<rect class="sc-spark" style="--i:${i}" x="${128 + i * 17}" y="104" width="2.6" height="2.6"/>`).join("");
+    s += `<g class="sc-roller ${T.cls({ how: "move", keys: [[0, 40, 92, 0, 0], [.6, 40, 92, 1, 0], [1.3, 84, 88, 1, 250], [1.7, 100, 92, 1, 335], [2.0, 106, 92, 1, 360]] })}"><g class="sc-die" transform="scale(1.55)"><path class="f" d="M0 -12 L10.4 -6 L10.4 6 L0 12 L-10.4 6 L-10.4 -6 Z"/><path class="face" d="M0 -9 L-7.6 5 H7.6 Z"/><path class="e" d="M0 -12 V-9 M-7.6 5 L-10.4 6 M7.6 5 L10.4 6 M-7.6 5 L0 12 L7.6 5 M-7.6 5 L-10.4 -6 M7.6 5 L10.4 -6"/><text y="1.6">20</text></g></g>`;
+    return s + T.style();
   }
   // a floor plan as Atlas draws one, for the places and the check: graph paper, the outer walls, the inner walls with
   // their doorways, the doors' swings, the room numbers, the furniture, and Atlas's markers (clues, a person, a secret
@@ -125,29 +256,16 @@
   }
   // where the ink splashes in each scene (the tip of whatever is writing)
   const SCENES = {
-    story: [[180, 60], `<path class="sc-paper" d="M180 94 C150 84 110 84 80 92 V28 C110 20 150 20 180 30 Z"/><path class="sc-paper" d="M180 94 C210 84 250 84 280 92 V28 C250 20 210 20 180 30 Z"/>
-      <path class="sc-line" d="M96 40 H164 M96 50 H160 M96 60 H166 M96 70 H150 M196 40 H264 M196 50 H258 M196 60 H262 M196 70 H240"/>
-      <g class="sc-turn"><path class="sc-paper" d="M180 94 C210 84 250 84 280 92 V28 C250 20 210 20 180 30 Z"/><path class="sc-line" d="M196 40 H262 M196 50 H264 M196 60 H256 M196 70 H262 M196 80 H236"/></g>`],
-    council: [[180, 74], PAPER(26, 58, 308, 44) + ["Doyle", "Christie", "Poe", "Lovecraft"].map((n, i) => {
-      const x = 44 + i * 76;
-      return `<path class="sc-write" style="--i:${i}" pathLength="1" d="M${x} 76 q7 -5 14 0 t14 0 t14 0 t14 0"/><path class="sc-write" style="--i:${i}" pathLength="1" d="M${x} 88 q7 -5 14 0 t14 0 t14 0"/>
-        <g transform="translate(${x} 40)"><g class="sc-quill" style="--i:${i}">${QUILL}</g></g><text class="sc-name" x="${x + 26}" y="116">${n}</text>`;
-    }).join("")],
-    judge: [[230, 60], PAPER(110, 8, 140, 104) + `<path class="sc-line" d="M126 26 H228 M126 38 H224 M126 50 H230 M126 62 H218 M126 74 H228 M126 86 H210 M126 98 H222"/>
-      <path class="sc-strike" pathLength="1" d="M126 62 H218"/>` + [[26, "✓"], [50, "✓"], [62, "✗"], [86, "✓"]].map((m, i) => `<text class="sc-mark" style="--i:${i}" x="236" y="${m[0] + 4}">${m[1]}</text>`).join("") +
-      `<g class="sc-grade"><circle cx="205" cy="102" r="0" /><text x="205" y="106">Good</text></g>
-      <g transform="translate(150 20)"><g class="sc-pen"><path class="sc-redpen" d="M0 0 L6 -4 L40 -40 L36 -44 L2 -10 Z"/><path class="sc-ink" d="M0 0 L-2 3"/></g></g>`],
-    agree: [[180, 78], PAPER(36, 12, 288, 96) + `<path class="sc-line" d="M60 30 H300 M60 42 H290 M60 54 H296"/>` +
-      ["D", "C", "P", "L", "T"].map((l, i) => `<g transform="translate(${84 + i * 48} 82)"><g class="sc-seal" style="--i:${i}"><circle r="14"/><circle class="sc-ring" r="10"/><text y="4.5">${l}</text></g></g>`).join("")],
+    story: [[180, 60], storyScene()],
+    council: [[180, 62], councilScene()],
+    judge: [[230, 60], judgeScene()],
+    agree: [[180, 72], agreeScene()],
     map: [[202, 42], PAPER(20, 6, 320, 108) + mapScene()],
     places: [[180, 60], PAPER(60, 6, 240, 108) + placesScene()],
     check: [[180, 60], PAPER(60, 6, 240, 108) + checkScene()],
-    build: [[180, 40], Array.from({ length: 5 }, (_, i) => `<rect class="sc-paper sc-sheet" style="--i:${i}" x="130" y="${86 - i * 5}" width="100" height="14" rx="2"/>`).join("") +
-      `<rect class="sc-cover" x="126" y="58" width="108" height="46" rx="3"/><path class="sc-ribbon" d="M206 58 V112 L212 106 L218 112 V58 Z"/>`],
-    report: [[230, 54], PAPER(100, 12, 160, 96) + ["M118 32 H236", "M118 44 H240", "M118 56 H228", "M118 68 H238", "M118 80 H200"].map((d, i) => `<path class="sc-write2" style="--i:${i}" pathLength="1" d="${d}"/>`).join("") +
-      `<g transform="translate(118 -2)"><g class="sc-quill2">${QUILL}</g></g><g transform="translate(236 92)"><g class="sc-seal late"><circle r="11"/><circle class="sc-ring" r="7.5"/></g></g>`],
-    finished: [[180, 60], `<rect class="sc-cover" x="130" y="22" width="100" height="80" rx="4"/><path class="sc-gilt" d="M146 40 H214 M152 52 H208"/><g transform="translate(180 76)"><g class="sc-seal glow"><circle r="12"/><circle class="sc-ring" r="8"/></g></g>` +
-      [[110, 30], [256, 40], [100, 86], [262, 92], [180, 12]].map((p, i) => `<path class="sc-star" style="--i:${i}" d="M${p[0]} ${p[1] - 7} L${p[0] + 2} ${p[1] - 2} L${p[0] + 7} ${p[1]} L${p[0] + 2} ${p[1] + 2} L${p[0]} ${p[1] + 7} L${p[0] - 2} ${p[1] + 2} L${p[0] - 7} ${p[1]} L${p[0] - 2} ${p[1] - 2} Z"/>`).join("")],
+    build: [[100, 80], buildScene()],
+    report: [[180, 50], reportScene()],
+    finished: [[180, 60], `<defs><radialGradient id="sc-halo-g"><stop offset="0" stop-color="#e8c66a" stop-opacity=".32"/><stop offset="1" stop-color="#e8c66a" stop-opacity="0"/></radialGradient></defs>` + finishedScene()],
     // an hourglass: the sand runs down, and when the top is empty the glass turns over and it runs again
     waiting: [[180, 60], `<g class="sc-hg"><path class="sc-sand top" d="M167 30 C168 46 178 52 179.4 57 H180.6 C182 52 192 46 193 30 Z"/><path class="sc-sand bottom" d="M167 90 C168 74 178 68 179.4 63 H180.6 C182 68 192 74 193 90 Z"/><path class="sc-stream" d="M180 57 V90"/>
       <path class="sc-glass2" d="M164 20 C164 48 178 52 178 60 C178 68 164 72 164 100 M196 20 C196 48 182 52 182 60 C182 68 196 72 196 100"/>
