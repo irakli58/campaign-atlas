@@ -336,11 +336,11 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 .sc .sc-post { stroke: var(--bone); stroke-width: 2.4; stroke-linecap: round; }
 .sc .sc-plate { fill: var(--bone); }
 .sc .sc-sand { fill: var(--bone); }
-.sc .sc-sand.top { transform-origin: 50% 100%; animation: sc-top 7s linear infinite; }
-.sc .sc-sand.bottom { transform-origin: 50% 100%; animation: sc-bottom 7s linear infinite; }
+.sc .sc-sand.top { animation: sc-top 7s linear infinite; }
+.sc .sc-sand.bottom { animation: sc-bottom 7s linear infinite; }
 .sc .sc-stream { stroke: var(--bone); stroke-width: 1.4; stroke-dasharray: 3 3; animation: sc-stream .5s linear infinite, sc-flow 7s linear infinite; }
-@keyframes sc-top { 0% { transform: scaleY(1); } 80%, 100% { transform: scaleY(0); } }
-@keyframes sc-bottom { 0% { transform: scaleY(0); } 80%, 100% { transform: scaleY(1); } }
+@keyframes sc-top { 0% { transform: translateY(0); } 80%, 100% { transform: translateY(39px); } }
+@keyframes sc-bottom { 0% { transform: translateY(39px); } 80%, 100% { transform: translateY(0); } }
 @keyframes sc-stream { to { stroke-dashoffset: -6; } }
 @keyframes sc-flow { 0%, 78% { opacity: 1; } 82%, 100% { opacity: 0; } }
 /* stopped: a snuffed candle, smoking */

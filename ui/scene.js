@@ -267,7 +267,10 @@
     report: [[180, 50], reportScene()],
     finished: [[180, 60], `<defs><radialGradient id="sc-halo-g"><stop offset="0" stop-color="#e8c66a" stop-opacity=".32"/><stop offset="1" stop-color="#e8c66a" stop-opacity="0"/></radialGradient></defs>` + finishedScene()],
     // an hourglass: the sand runs down, and when the top is empty the glass turns over and it runs again
-    waiting: [[180, 60], `<g class="sc-hg"><path class="sc-sand top" d="M167 30 C168 46 178 52 179.4 57 H180.6 C182 52 192 46 193 30 Z"/><path class="sc-sand bottom" d="M167 90 C168 74 178 68 179.4 63 H180.6 C182 68 192 74 193 90 Z"/><path class="sc-stream" d="M180 57 V90"/>
+    // the sand is trimmed to the inside of each bulb, so it never shows outside the glass: the top's level falls as the
+    // bottom's rises
+    waiting: [[180, 60], `<defs><clipPath id="sc-hg-top"><path d="M165 21 C165 48 178.5 52 179 60 H181 C181.5 52 195 48 195 21 Z"/></clipPath><clipPath id="sc-hg-bot"><path d="M165 99 C165 72 178.5 68 179 60 H181 C181.5 68 195 72 195 99 Z"/></clipPath></defs>
+      <g class="sc-hg"><g clip-path="url(#sc-hg-top)"><rect class="sc-sand top" x="158" y="21" width="44" height="40"/></g><g clip-path="url(#sc-hg-bot)"><rect class="sc-sand bottom" x="158" y="60" width="44" height="40"/></g><path class="sc-stream" d="M180 60 V98"/>
       <path class="sc-glass2" d="M164 20 C164 48 178 52 178 60 C178 68 164 72 164 100 M196 20 C196 48 182 52 182 60 C182 68 196 72 196 100"/>
       <path class="sc-post" d="M158 20 V100 M202 20 V100"/><rect class="sc-plate" x="154" y="14" width="52" height="6" rx="1.5"/><rect class="sc-plate" x="154" y="100" width="52" height="6" rx="1.5"/></g>`],
     // a snuffed candle: an ember on the wick, and curls of smoke rising from it one after another
