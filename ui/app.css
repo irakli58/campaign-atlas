@@ -239,13 +239,25 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 .sc .sc-seal text { font-family: var(--f-display); font-size: 13px; fill: var(--on-accent); text-anchor: middle; }
 .sc-agree .sc-seal { transform-origin: 50% 50%; animation: sc-seal 7s cubic-bezier(.3, 1.5, .5, 1) infinite both; animation-delay: calc(var(--i) * .9s); }
 @keyframes sc-seal { 0% { transform: scale(2.2); opacity: 0; } 8% { transform: scale(1); opacity: 1; } 80% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
-/* the map: streets draw themselves, houses rise, the compass turns */
-.sc .sc-draw { fill: none; stroke-dasharray: 1; stroke-dashoffset: 0; animation: sc-draw 9s ease-in-out infinite both; animation-delay: calc(var(--i) * .35s); }
-.sc .sc-road { stroke: var(--ink); stroke-opacity: .5; stroke-width: 2.2; stroke-linecap: round; }
-.sc .sc-river { stroke: #6f9fc8; stroke-width: 4; stroke-linecap: round; }
-@keyframes sc-draw { 0% { stroke-dashoffset: 1; opacity: 1; } 35% { stroke-dashoffset: 0; } 90% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
-.sc .sc-house { fill: var(--accent); fill-opacity: .72; transform-origin: 50% 100%; animation: sc-house 9s ease infinite both; animation-delay: calc(2.6s + var(--i) * .06s); }
-@keyframes sc-house { 0% { transform: scaleY(0); opacity: 1; } 6% { transform: scaleY(1); } 46% { transform: scaleY(1); opacity: 1; } 50%, 100% { transform: scaleY(1); opacity: 0; } }
+/* the map: an old map drawing itself (its timing is in scene.js, mapScene) */
+.sc .sc-dash { fill: none; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.sc .sc-coast { stroke: var(--ink); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.sc .sc-sea { fill: #6f9fc8; fill-opacity: .2; }
+.sc .sc-ripple { stroke: #6f9fc8; stroke-width: 1; stroke-opacity: .6; }
+.sc .sc-ripple.far { stroke-opacity: .32; }
+.sc .sc-river2 { stroke: #6f9fc8; stroke-width: 2.2; stroke-linecap: round; }
+.sc .sc-road2 { stroke: var(--bone); stroke-width: 1.8; stroke-linecap: round; }
+.sc .sc-bridge { stroke: var(--ink); stroke-width: 1.3; fill: none; stroke-linecap: round; transform-origin: 50% 50%; }
+.sc .sc-mt, .sc .sc-house2, .sc .sc-keep, .sc .sc-tree { transform-origin: 50% 100%; }
+.sc .sc-mt .face { fill: var(--paper); stroke: var(--ink); stroke-width: .9; stroke-linejoin: round; }
+.sc .sc-mt .shade { fill: var(--muted); fill-opacity: .4; }
+.sc .sc-house2 .wall, .sc .sc-keep .wall { fill: var(--paper); stroke: var(--ink); stroke-width: .7; }
+.sc .sc-house2 .roof, .sc .sc-keep .roof { fill: var(--accent); stroke: var(--ink); stroke-width: .5; stroke-linejoin: round; }
+.sc .sc-tree { fill: #7f9a5a; fill-opacity: .85; stroke: var(--ink); stroke-width: .6; }
+.sc .sc-ship2 { animation: sc-bob 2.6s ease-in-out infinite; }
+.sc .sc-ship2 .hull { fill: var(--ink); }
+.sc .sc-ship2 .sail { fill: var(--paper); stroke: var(--ink); stroke-width: .6; }
+@keyframes sc-bob { 50% { transform: translateY(-2px) rotate(-4deg); } }
 .sc .sc-spin { transform-origin: 50% 50%; animation: sc-spin 14s linear infinite; }
 .sc .sc-rose { fill: var(--accent); }
 @keyframes sc-spin { to { transform: rotate(360deg); } }

@@ -23,6 +23,48 @@
   const QUILL = `<path class="sc-feather" d="M0 34 L5 25 C12 11 22 2 33 -3 C27 9 18 22 7 30 Z"/><path class="sc-ink" d="M0 34 L-3 39"/>`;
   const PLAN = `<rect class="sc-wall" x="80" y="18" width="200" height="84"/>` +
     [[80, 18, 60, 40], [140, 18, 70, 40], [210, 18, 70, 40], [80, 58, 90, 44], [170, 58, 50, 44], [220, 58, 60, 44]].map((r, i) => `<path class="sc-room" style="--i:${i}" pathLength="1" d="M${r[0]} ${r[1]} h${r[2]} v${r[3]} h${-r[2]} Z"/>`).join("");
+  // A scene told in order, every part at its moment of one ten-second loop: each part gets keyframes of its own (drawn,
+  // faded in, popped up or risen), so the whole scene keeps in step and fades out together at the end.
+  function timeline(id, items) {
+    let css = "", body = "";
+    const p = t => (t * 10).toFixed(1);
+    items.forEach((it, n) => {
+      const k = id + n, d = it.d || .8, a = p(it.t), b = p(it.t + d), c = p(it.t + d + .25);
+      const frames = {
+        draw: `0%,${a}%{stroke-dashoffset:1;opacity:1}${b}%,92%{stroke-dashoffset:0;opacity:1}97%,100%{stroke-dashoffset:0;opacity:0}`,
+        fade: `0%,${a}%{opacity:0}${b}%,92%{opacity:1}97%,100%{opacity:0}`,
+        pop: `0%,${a}%{transform:scale(0);opacity:0}${b}%{transform:scale(1.18);opacity:1}${c}%,92%{transform:scale(1);opacity:1}97%,100%{transform:scale(1);opacity:0}`,
+        rise: `0%,${a}%{transform:scaleY(0);opacity:1}${b}%,92%{transform:scaleY(1);opacity:1}97%,100%{transform:scaleY(1);opacity:0}`
+      }[it.how];
+      css += `@keyframes ${k}{${frames}}.sc .${k}{animation:${k} 10s ${it.how === "draw" ? "ease-in-out" : "ease-out"} infinite}`;
+      body += it.svg.replace("{k}", k);
+    });
+    return `<style>${css}</style>` + body;
+  }
+  // the map of the whole, as an old map is drawn: the coast inked, the sea washed in with its ripples, the mountains,
+  // a river down to the sea, roads curving into a town, its houses going up round the keep, a wood, a ship in the bay
+  function mapScene() {
+    const coast = "M20 100 C52 98 74 106 108 99 C138 93 150 104 176 96 C200 89 212 74 236 71 C260 68 270 54 294 51 C314 49 326 38 340 35";
+    const items = [
+      { how: "draw", t: 0, d: 1.6, svg: `<path class="sc-coast sc-dash {k}" pathLength="1" d="${coast}"/>` },
+      { how: "fade", t: 1, d: 1.2, svg: `<path class="sc-sea {k}" d="${coast} L340 114 L20 114 Z"/>` },
+      { how: "draw", t: 1.5, d: 1.2, svg: `<path class="sc-ripple sc-dash {k}" pathLength="1" transform="translate(0 6)" d="${coast}"/>` },
+      { how: "draw", t: 1.8, d: 1.2, svg: `<path class="sc-ripple far sc-dash {k}" pathLength="1" transform="translate(0 12)" d="${coast}"/>` }
+    ];
+    [[34, 32], [50, 26], [66, 33], [84, 24], [100, 31]].forEach(([x, y], i) => items.push({ how: "pop", t: 1.9 + i * .18, d: .4, svg: `<g class="sc-mt {k}"><path class="face" d="M${x - 10} ${y} L${x} ${y - 15} L${x + 10} ${y} Z"/><path class="shade" d="M${x} ${y - 15} L${x + 10} ${y} L${x + 3} ${y} Z"/></g>` }));
+    items.push({ how: "draw", t: 2.8, d: 1.4, svg: `<path class="sc-river2 sc-dash {k}" pathLength="1" d="M72 30 C76 40 98 38 106 48 C114 62 146 66 154 80 C160 90 168 94 174 96"/>` });
+    ["M20 42 C52 38 86 52 126 47 C150 44 168 46 196 44", "M226 6 C224 20 212 30 202 40", "M202 48 C210 56 222 62 234 70", "M208 44 C236 40 266 32 300 30 C318 29 330 26 340 22"].forEach((d, i) =>
+      items.push({ how: "draw", t: 3.8 + i * .35, d: 1, svg: `<path class="sc-road2 sc-dash {k}" pathLength="1" d="${d}"/>` }));
+    items.push({ how: "pop", t: 5, d: .3, svg: `<path class="sc-bridge {k}" d="M101 43 L111 41 M103 51 L113 49"/>` });
+    [[184, 38], [192, 33], [212, 35], [220, 42], [216, 53], [206, 57], [192, 53], [180, 47], [168, 41], [228, 58], [234, 49], [176, 56]].forEach(([x, y], i) =>
+      items.push({ how: "rise", t: 5.2 + i * .12, d: .35, svg: `<g class="sc-house2 {k}"><path class="wall" d="M${x - 3.5} ${y} h7 v-5 h-7 Z"/><path class="roof" d="M${x - 4.5} ${y - 5} L${x} ${y - 9} L${x + 4.5} ${y - 5} Z"/></g>` }));
+    items.push({ how: "rise", t: 6.7, d: .5, svg: `<g class="sc-keep {k}"><path class="wall" d="M196 48 h9 v-15 h-9 Z"/><path class="roof" d="M195 33 L200.5 23 L206 33 Z"/></g>` });
+    [[40, 66], [48, 72], [56, 64], [62, 74], [70, 68], [44, 80], [54, 84], [66, 82], [76, 78], [84, 70], [36, 74], [80, 86]].forEach(([x, y], i) =>
+      items.push({ how: "pop", t: 6 + i * .07, d: .3, svg: `<circle class="sc-tree {k}" cx="${x}" cy="${y}" r="4"/>` }));
+    items.push({ how: "fade", t: 7.1, d: .6, svg: `<g class="{k}"><g transform="translate(272 88)"><g class="sc-ship2"><path class="hull" d="M-9 0 H9 L6 4 H-6 Z"/><path class="sail" d="M0 0 V-12 L7 -2 Z"/></g></g></g>` });
+    items.push({ how: "fade", t: 2.2, d: .8, svg: `<g class="{k}"><g transform="translate(318 94)"><g class="sc-spin"><path class="sc-rose" d="M0 -12 L3 0 L0 12 L-3 0 Z M-12 0 L0 -3 L12 0 L0 3 Z"/><circle class="sc-ink" r="8" fill="none"/></g></g></g>` });
+    return timeline("scm", items);
+  }
   // where the ink splashes in each scene (the tip of whatever is writing)
   const SCENES = {
     story: [[180, 60], `<path class="sc-paper" d="M180 94 C150 84 110 84 80 92 V28 C110 20 150 20 180 30 Z"/><path class="sc-paper" d="M180 94 C210 84 250 84 280 92 V28 C250 20 210 20 180 30 Z"/>
@@ -39,10 +81,7 @@
       <g transform="translate(150 20)"><g class="sc-pen"><path class="sc-redpen" d="M0 0 L6 -4 L40 -40 L36 -44 L2 -10 Z"/><path class="sc-ink" d="M0 0 L-2 3"/></g></g>`],
     agree: [[180, 78], PAPER(36, 12, 288, 96) + `<path class="sc-line" d="M60 30 H300 M60 42 H290 M60 54 H296"/>` +
       ["D", "C", "P", "L", "T"].map((l, i) => `<g transform="translate(${84 + i * 48} 82)"><g class="sc-seal" style="--i:${i}"><circle r="14"/><circle class="sc-ring" r="10"/><text y="4.5">${l}</text></g></g>`).join("")],
-    map: [[300, 30], PAPER(20, 6, 320, 108) + `<path class="sc-river sc-draw" style="--i:0" pathLength="1" d="M20 92 C80 72 120 102 170 82 S260 42 340 54"/>` +
-      ["M36 32 H322", "M62 14 V112", "M150 14 L172 112", "M244 14 C232 60 262 80 252 112", "M36 70 H330", "M100 14 C110 50 90 80 112 112"].map((d, i) => `<path class="sc-road sc-draw" style="--i:${i + 1}" pathLength="1" d="${d}"/>`).join("") +
-      Array.from({ length: 26 }, (_, i) => { const x = 40 + (i * 53) % 280, y = 18 + (i * 37) % 86; return `<rect class="sc-house" style="--i:${i}" x="${x}" y="${y}" width="${7 + i % 3 * 2}" height="${6 + i % 2 * 3}"/>`; }).join("") +
-      `<g transform="translate(312 32)"><g class="sc-spin"><path class="sc-rose" d="M0 -16 L4 0 L0 16 L-4 0 Z M-16 0 L0 -4 L16 0 L0 4 Z"/><circle class="sc-ink" r="11" fill="none"/></g></g>`],
+    map: [[202, 42], PAPER(20, 6, 320, 108) + mapScene()],
     places: [[180, 60], PAPER(60, 6, 240, 108) + PLAN + [[110, 38], [175, 40], [245, 34], [125, 80], [250, 84]].map((p, i) => `<circle class="sc-clue" style="--i:${i}" cx="${p[0]}" cy="${p[1]}" r="3.5"/>`).join("") +
       `<g transform="translate(0 0)"><g class="sc-pencil"><path class="sc-feather" d="M0 0 L5 -2 L34 -31 L31 -34 L2 -5 Z"/><path class="sc-ink" d="M0 0 L-2 2"/></g></g>`],
     check: [[180, 60], PAPER(60, 6, 240, 108) + PLAN.replace(/sc-room"/g, 'sc-room still"') + [[108, 38], [173, 38], [243, 38], [123, 80], [193, 80], [248, 80]].map((p, i) => `<text class="sc-tick" style="--i:${i}" x="${p[0]}" y="${p[1]}">✓</text>`).join("") +
