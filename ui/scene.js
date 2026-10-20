@@ -41,28 +41,31 @@
     });
     return `<style>${css}</style>` + body;
   }
-  // the map of the whole, as an old map is drawn: the coast inked, the sea washed in with its ripples, the mountains,
-  // a river down to the sea, roads curving into a town, its houses going up round the keep, a wood, a ship in the bay
+  // the map of the whole, as an old map of a walled town is drawn: the wall and its towers, a river through it, roads to
+  // its gates, its streets and square, the houses going up round the cathedral, then the hills, woods and fields outside.
+  // In ink, parchment and red only, like the rest of the page (the user found a blue sea out of keeping)
   function mapScene() {
-    const coast = "M20 100 C52 98 74 106 108 99 C138 93 150 104 176 96 C200 89 212 74 236 71 C260 68 270 54 294 51 C314 49 326 38 340 35";
-    const items = [
-      { how: "draw", t: 0, d: 1.6, svg: `<path class="sc-coast sc-dash {k}" pathLength="1" d="${coast}"/>` },
-      { how: "fade", t: 1, d: 1.2, svg: `<path class="sc-sea {k}" d="${coast} L340 114 L20 114 Z"/>` },
-      { how: "draw", t: 1.5, d: 1.2, svg: `<path class="sc-ripple sc-dash {k}" pathLength="1" transform="translate(0 6)" d="${coast}"/>` },
-      { how: "draw", t: 1.8, d: 1.2, svg: `<path class="sc-ripple far sc-dash {k}" pathLength="1" transform="translate(0 12)" d="${coast}"/>` }
-    ];
-    [[34, 32], [50, 26], [66, 33], [84, 24], [100, 31]].forEach(([x, y], i) => items.push({ how: "pop", t: 1.9 + i * .18, d: .4, svg: `<g class="sc-mt {k}"><path class="face" d="M${x - 10} ${y} L${x} ${y - 15} L${x + 10} ${y} Z"/><path class="shade" d="M${x} ${y - 15} L${x + 10} ${y} L${x + 3} ${y} Z"/></g>` }));
-    items.push({ how: "draw", t: 2.8, d: 1.4, svg: `<path class="sc-river2 sc-dash {k}" pathLength="1" d="M72 30 C76 40 98 38 106 48 C114 62 146 66 154 80 C160 90 168 94 174 96"/>` });
-    ["M20 42 C52 38 86 52 126 47 C150 44 168 46 196 44", "M226 6 C224 20 212 30 202 40", "M202 48 C210 56 222 62 234 70", "M208 44 C236 40 266 32 300 30 C318 29 330 26 340 22"].forEach((d, i) =>
-      items.push({ how: "draw", t: 3.8 + i * .35, d: 1, svg: `<path class="sc-road2 sc-dash {k}" pathLength="1" d="${d}"/>` }));
-    items.push({ how: "pop", t: 5, d: .3, svg: `<path class="sc-bridge {k}" d="M101 43 L111 41 M103 51 L113 49"/>` });
-    [[184, 38], [192, 33], [212, 35], [220, 42], [216, 53], [206, 57], [192, 53], [180, 47], [168, 41], [228, 58], [234, 49], [176, 56]].forEach(([x, y], i) =>
-      items.push({ how: "rise", t: 5.2 + i * .12, d: .35, svg: `<g class="sc-house2 {k}"><path class="wall" d="M${x - 3.5} ${y} h7 v-5 h-7 Z"/><path class="roof" d="M${x - 4.5} ${y - 5} L${x} ${y - 9} L${x + 4.5} ${y - 5} Z"/></g>` }));
-    items.push({ how: "rise", t: 6.7, d: .5, svg: `<g class="sc-keep {k}"><path class="wall" d="M196 48 h9 v-15 h-9 Z"/><path class="roof" d="M195 33 L200.5 23 L206 33 Z"/></g>` });
-    [[40, 66], [48, 72], [56, 64], [62, 74], [70, 68], [44, 80], [54, 84], [66, 82], [76, 78], [84, 70], [36, 74], [80, 86]].forEach(([x, y], i) =>
-      items.push({ how: "pop", t: 6 + i * .07, d: .3, svg: `<circle class="sc-tree {k}" cx="${x}" cy="${y}" r="4"/>` }));
-    items.push({ how: "fade", t: 7.1, d: .6, svg: `<g class="{k}"><g transform="translate(272 88)"><g class="sc-ship2"><path class="hull" d="M-9 0 H9 L6 4 H-6 Z"/><path class="sail" d="M0 0 V-12 L7 -2 Z"/></g></g></g>` });
-    items.push({ how: "fade", t: 2.2, d: .8, svg: `<g class="{k}"><g transform="translate(318 94)"><g class="sc-spin"><path class="sc-rose" d="M0 -12 L3 0 L0 12 L-3 0 Z M-12 0 L0 -3 L12 0 L0 3 Z"/><circle class="sc-ink" r="8" fill="none"/></g></g></g>` });
+    const C = [180, 60], J = [1, .97, 1.03, .98, 1.02, .96, 1.01, 1.03, .97, 1, .98, 1.02, .99, 1.01];
+    const wall = J.map((j, k) => { const a = k / J.length * Math.PI * 2; return [C[0] + Math.cos(a) * 76 * j, C[1] + Math.sin(a) * 42 * j]; });
+    const P = p => p[0].toFixed(1) + " " + p[1].toFixed(1), S = [190, 56], gate = { e: wall[0], s: wall[4], w: wall[7], n: wall[10] };
+    const items = [{ how: "draw", t: 0, d: 1.6, svg: `<path class="sc-wall2 sc-dash {k}" pathLength="1" d="M${wall.map(P).join(" L")} Z"/>` }];
+    wall.forEach((p, i) => { if (i % 2 === 0) items.push({ how: "pop", t: 1.1 + i * .06, d: .3, svg: `<circle class="sc-tower {k}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.8"/>` }); });
+    [[34, 32], [50, 25], [66, 32], [84, 26]].forEach(([x, y], i) => items.push({ how: "pop", t: 1.6 + i * .18, d: .4, svg: `<g class="sc-mt {k}"><path class="face" d="M${x - 10} ${y} L${x} ${y - 15} L${x + 10} ${y} Z"/><path class="shade" d="M${x} ${y - 15} L${x + 10} ${y} L${x + 3} ${y} Z"/></g>` }));
+    const river = "M126 6 C132 28 150 38 162 52 C176 68 200 80 214 94 C222 102 230 108 236 114";
+    items.push({ how: "draw", t: 2.2, d: 1.4, svg: `<path class="sc-river2 sc-dash {k}" pathLength="1" d="${river}"/>` }, { how: "draw", t: 2.2, d: 1.4, svg: `<path class="sc-river2 inner sc-dash {k}" pathLength="1" d="${river}"/>` });
+    // the roads come in to the gates, the streets go on to the square
+    [`M${P(gate.w)} C${gate.w[0] - 30} ${gate.w[1] - 2} 50 56 20 56`, `M${P(gate.n)} C${gate.n[0] + 2} ${gate.n[1] - 6} 168 10 170 6`, `M${P(gate.e)} C${gate.e[0] + 30} ${gate.e[1] + 2} 310 66 340 66`, `M${P(gate.s)} C${gate.s[0] - 2} ${gate.s[1] + 6} 152 110 150 114`].forEach((d, i) =>
+      items.push({ how: "draw", t: 3.4 + i * .25, d: .9, svg: `<path class="sc-road2 sc-dash {k}" pathLength="1" d="${d}"/>` }));
+    Object.values(gate).forEach((g, i) => items.push({ how: "draw", t: 4.1 + i * .2, d: .8, svg: `<path class="sc-street sc-dash {k}" pathLength="1" d="M${P(g)} Q${((g[0] + S[0]) / 2 + (i % 2 ? 6 : -4)).toFixed(1)} ${((g[1] + S[1]) / 2).toFixed(1)} ${S[0]} ${S[1]}"/>` }));
+    items.push({ how: "pop", t: 4.6, d: .3, svg: `<circle class="sc-square {k}" cx="${S[0]}" cy="${S[1]}" r="7"/>` });
+    items.push({ how: "pop", t: 4.9, d: .3, svg: `<path class="sc-bridge {k}" d="M161 54 L172 53 M163 62 L174 61"/>` });
+    [[116, 46], [126, 40], [132, 52], [118, 54], [198, 34], [186, 30], [222, 38], [232, 46], [242, 54], [204, 68], [216, 70], [228, 72], [240, 70], [222, 82], [234, 82], [130, 70], [142, 72], [154, 74], [126, 82], [140, 86], [152, 92], [168, 84]].forEach(([x, y], i) =>
+      items.push({ how: "rise", t: 5.1 + i * .08, d: .3, svg: `<g class="sc-house2 {k}"><path class="wall" d="M${x - 3.5} ${y} h7 v-5 h-7 Z"/><path class="roof" d="M${x - 4.5} ${y - 5} L${x} ${y - 9} L${x + 4.5} ${y - 5} Z"/></g>` }));
+    items.push({ how: "rise", t: 7, d: .5, svg: `<g class="sc-keep {k}"><path class="wall" d="M202 50 h14 v-10 h-14 Z M211 40 h5 v-6 h-5 Z"/><path class="roof" d="M201 40 L207 34 L211 34 L211 40 Z M210.5 34 L213.5 24 L216.5 34 Z"/></g>` });
+    [[38, 84], [46, 90], [54, 82], [62, 92], [44, 100], [56, 104], [70, 98], [34, 96], [286, 18], [296, 26], [306, 18], [316, 28], [300, 36]].forEach(([x, y], i) =>
+      items.push({ how: "pop", t: 6.2 + i * .07, d: .3, svg: `<circle class="sc-tree {k}" cx="${x}" cy="${y}" r="4"/>` }));
+    [[264, 94, 18, 12], [284, 96, 16, 10], [268, 80, 14, 10]].forEach(([x, y, w, h], i) => items.push({ how: "fade", t: 6.6 + i * .2, d: .5, svg: `<g class="sc-field {k}"><path d="M${x} ${y} h${w} v${h} h${-w} Z"/><path class="hatch" d="${Array.from({ length: Math.floor(w / 4) }, (_, q) => `M${x + 2 + q * 4} ${y + h - 1} l3 ${-(h - 2)}`).join(" ")}"/></g>` }));
+    items.push({ how: "fade", t: 2, d: .8, svg: `<g class="{k}"><g transform="translate(322 94)"><g class="sc-spin"><path class="sc-rose" d="M0 -12 L3 0 L0 12 L-3 0 Z M-12 0 L0 -3 L12 0 L0 3 Z"/><circle class="sc-ink" r="8" fill="none"/></g></g></g>` });
     return timeline("scm", items);
   }
   // where the ink splashes in each scene (the tip of whatever is writing)
@@ -92,8 +95,10 @@
       `<g transform="translate(118 -2)"><g class="sc-quill2">${QUILL}</g></g><g transform="translate(236 92)"><g class="sc-seal late"><circle r="11"/><circle class="sc-ring" r="7.5"/></g></g>`],
     finished: [[180, 60], `<rect class="sc-cover" x="130" y="22" width="100" height="80" rx="4"/><path class="sc-gilt" d="M146 40 H214 M152 52 H208"/><g transform="translate(180 76)"><g class="sc-seal glow"><circle r="12"/><circle class="sc-ring" r="8"/></g></g>` +
       [[110, 30], [256, 40], [100, 86], [262, 92], [180, 12]].map((p, i) => `<path class="sc-star" style="--i:${i}" d="M${p[0]} ${p[1] - 7} L${p[0] + 2} ${p[1] - 2} L${p[0] + 7} ${p[1]} L${p[0] + 2} ${p[1] + 2} L${p[0]} ${p[1] + 7} L${p[0] - 2} ${p[1] + 2} L${p[0] - 7} ${p[1]} L${p[0] - 2} ${p[1] - 2} Z"/>`).join("")],
-    waiting: [[180, 60], `<path class="sc-ink" fill="none" d="M160 18 H200 M160 102 H200 M164 18 C164 48 196 48 196 60 C196 72 164 72 164 102 M196 18 C196 48 164 48 164 60 C164 72 196 72 196 102"/>
-      <path class="sc-sand top" d="M170 26 H190 C190 40 180 50 180 54 C180 50 170 40 170 26 Z"/><path class="sc-sand bottom" d="M168 100 H192 C192 90 180 82 180 80 C180 82 168 90 168 100 Z"/><path class="sc-stream" d="M180 54 V96"/>`],
+    // an hourglass: the sand runs down, and when the top is empty the glass turns over and it runs again
+    waiting: [[180, 60], `<g class="sc-hg"><path class="sc-sand top" d="M167 30 C168 46 178 52 179.4 57 H180.6 C182 52 192 46 193 30 Z"/><path class="sc-sand bottom" d="M167 90 C168 74 178 68 179.4 63 H180.6 C182 68 192 74 193 90 Z"/><path class="sc-stream" d="M180 57 V90"/>
+      <path class="sc-glass2" d="M164 20 C164 48 178 52 178 60 C178 68 164 72 164 100 M196 20 C196 48 182 52 182 60 C182 68 196 72 196 100"/>
+      <path class="sc-post" d="M158 20 V100 M202 20 V100"/><rect class="sc-plate" x="154" y="14" width="52" height="6" rx="1.5"/><rect class="sc-plate" x="154" y="100" width="52" height="6" rx="1.5"/></g>`],
     stopped: [[180, 40], `<rect class="sc-candle" x="170" y="56" width="20" height="46" rx="2"/><path class="sc-ink" d="M180 56 V48"/><path class="sc-holder" d="M150 102 H210 L204 110 H156 Z"/>
       <path class="sc-smoke" d="M180 46 C174 38 186 32 180 24 C174 16 186 10 180 2"/>`]
   };
