@@ -21,25 +21,81 @@
   };
   const PAPER = (x, y, w, h) => `<rect class="sc-paper" x="${x}" y="${y}" width="${w}" height="${h}" rx="3"/>`;
   const QUILL = `<path class="sc-feather" d="M0 34 L5 25 C12 11 22 2 33 -3 C27 9 18 22 7 30 Z"/><path class="sc-ink" d="M0 34 L-3 39"/>`;
-  const PLAN = `<rect class="sc-wall" x="80" y="18" width="200" height="84"/>` +
-    [[80, 18, 60, 40], [140, 18, 70, 40], [210, 18, 70, 40], [80, 58, 90, 44], [170, 58, 50, 44], [220, 58, 60, 44]].map((r, i) => `<path class="sc-room" style="--i:${i}" pathLength="1" d="M${r[0]} ${r[1]} h${r[2]} v${r[3]} h${-r[2]} Z"/>`).join("");
   // A scene told in order, every part at its moment of one ten-second loop: each part gets keyframes of its own (drawn,
-  // faded in, popped up or risen), so the whole scene keeps in step and fades out together at the end.
+  // faded in, popped up, risen, stamped, shown for a while, or moved from point to point), so the whole scene keeps in
+  // step and fades out together at the end.
   function timeline(id, items) {
     let css = "", body = "";
     const p = t => (t * 10).toFixed(1);
     items.forEach((it, n) => {
-      const k = id + n, d = it.d || .8, a = p(it.t), b = p(it.t + d), c = p(it.t + d + .25);
-      const frames = {
-        draw: `0%,${a}%{stroke-dashoffset:1;opacity:1}${b}%,92%{stroke-dashoffset:0;opacity:1}97%,100%{stroke-dashoffset:0;opacity:0}`,
-        fade: `0%,${a}%{opacity:0}${b}%,92%{opacity:1}97%,100%{opacity:0}`,
-        pop: `0%,${a}%{transform:scale(0);opacity:0}${b}%{transform:scale(1.18);opacity:1}${c}%,92%{transform:scale(1);opacity:1}97%,100%{transform:scale(1);opacity:0}`,
-        rise: `0%,${a}%{transform:scaleY(0);opacity:1}${b}%,92%{transform:scaleY(1);opacity:1}97%,100%{transform:scaleY(1);opacity:0}`
-      }[it.how];
-      css += `@keyframes ${k}{${frames}}.sc .${k}{animation:${k} 10s ${it.how === "draw" ? "ease-in-out" : "ease-out"} infinite}`;
+      const k = id + n, d = it.d || .8, a = p(it.t || 0), b = p((it.t || 0) + d), c = p((it.t || 0) + d + .25), r = it.rot || 0;
+      const at = ([, x, y]) => `transform:translate(${x}px,${y}px)`;
+      const frames = it.how === "move"
+        ? `0%{${at(it.keys[0])}}` + it.keys.map(q => `${p(q[0])}%{${at(q)}}`).join("") + `92%{${at(it.keys[it.keys.length - 1])};opacity:1}97%,100%{${at(it.keys[it.keys.length - 1])};opacity:0}`
+        : {
+          draw: `0%,${a}%{stroke-dashoffset:1;opacity:1}${b}%,92%{stroke-dashoffset:0;opacity:1}97%,100%{stroke-dashoffset:0;opacity:0}`,
+          fade: `0%,${a}%{opacity:0}${b}%,92%{opacity:1}97%,100%{opacity:0}`,
+          pop: `0%,${a}%{transform:scale(0);opacity:0}${b}%{transform:scale(1.18);opacity:1}${c}%,92%{transform:scale(1);opacity:1}97%,100%{transform:scale(1);opacity:0}`,
+          rise: `0%,${a}%{transform:scaleY(0);opacity:1}${b}%,92%{transform:scaleY(1);opacity:1}97%,100%{transform:scaleY(1);opacity:0}`,
+          stamp: `0%,${a}%{transform:scale(2.6) rotate(${r}deg);opacity:0}${b}%{transform:scale(.94) rotate(${r}deg);opacity:1}${c}%,92%{transform:scale(1) rotate(${r}deg);opacity:1}97%,100%{transform:scale(1) rotate(${r}deg);opacity:0}`,
+          show: `0%,${a}%{opacity:0}${b}%,${p(it.e)}%{opacity:1}${p(it.e + .2)}%,100%{opacity:0}`
+        }[it.how];
+      css += `@keyframes ${k}{${frames}}.sc .${k}{animation:${k} 10s ${it.how === "draw" || it.how === "move" ? "ease-in-out" : "ease-out"} infinite}`;
       body += it.svg.replace("{k}", k);
     });
     return `<style>${css}</style>` + body;
+  }
+  // a floor plan as Atlas draws one, for the places and the check: graph paper, the outer walls, the inner walls with
+  // their doorways, the doors' swings, the room numbers, the furniture, and Atlas's markers (clues, a person, a secret
+  // door). put(how, t, d, svg) lays each part; the walls come back for the pencil to follow
+  const WALLS = [[[140, 16], [140, 52]], [[140, 62], [140, 104]], [[76, 56], [96, 56]], [[106, 56], [140, 56]], [[212, 16], [212, 34]], [[212, 42], [212, 64]], [[140, 64], [180, 64]], [[190, 64], [284, 64]], [[230, 64], [230, 80]], [[230, 90], [230, 104]]];
+  const ROOMS = [[108, 38], [108, 82], [176, 42], [248, 42], [185, 88], [257, 80]];
+  function floorPlan(put) {
+    let grid = ""; for (let x = 68; x < 296; x += 8) grid += `M${x} 10V110`; for (let y = 10; y < 112; y += 8) grid += `M64 ${y}H296`;
+    put("fade", 0, .5, `<path class="sc-grid {k}" d="${grid}"/>`);
+    put("draw", .3, 1.3, `<path class="sc-owall sc-dash {k}" pathLength="1" d="M76 16 H284 V104 H76 Z"/>`);
+    WALLS.forEach(([a, b], i) => put("draw", 1.8 + i * .28, .22, `<path class="sc-iwall sc-dash {k}" pathLength="1" d="M${a[0]} ${a[1]} L${b[0]} ${b[1]}"/>`));
+    ["M140 62 H150 A10 10 0 0 0 140 52", "M96 56 V66 A10 10 0 0 0 106 56", "M212 42 H220 A8 8 0 0 0 212 34", "M180 64 V74 A10 10 0 0 0 190 64", "M230 90 H240 A10 10 0 0 0 230 80"].forEach((d, i) =>
+      put("draw", 4.7 + i * .14, .3, `<path class="sc-door sc-dash {k}" pathLength="1" d="${d}"/>`));
+    ROOMS.forEach(([x, y], i) => put("pop", 5.4 + i * .12, .25, `<text class="sc-rno {k}" x="${x}" y="${y + 2.5}">${i + 1}</text>`));
+    [`<circle class="solid" cx="96" cy="28" r="5"/><path d="M96 20.5v-1.5M96 35.5v1.5M88.5 28h-1.5M103.5 28h1.5"/>`, `<path class="solid" d="M82 66h14v24h-14Z"/><path d="M84 68h10v5h-10Z"/>`,
+      `<path class="solid" d="M146 19h58v4h-58Z"/><path d="M152 19v4M160 19v4M168 19v4M176 19v4M184 19v4M192 19v4"/>`, `<path d="M262 20h18v38h-18Z M262 25h18M262 30h18M262 35h18M262 40h18M262 45h18M262 50h18"/>`,
+      `<path class="solid" d="M150 78h44v8h-44Z"/>`, `<circle class="solid" cx="272" cy="97" r="3.5"/><circle class="solid" cx="279" cy="91" r="3.5"/>`].forEach((f, i) =>
+      put("fade", 6.1 + i * .15, .4, `<g class="sc-furn {k}">${f}</g>`));
+    put("pop", 7, .3, `<g class="sc-mk {k}"><path class="c" d="M124 39 L129 44 L124 49 L119 44 Z"/><text x="124" y="46">C</text></g>`);
+    put("pop", 7.2, .3, `<g class="sc-mk {k}"><circle class="n" cx="166" cy="30" r="5"/><text x="166" y="32">N</text></g>`);
+    put("pop", 7.4, .3, `<g class="sc-mk {k}"><path class="c" d="M206 89 L211 94 L206 99 L201 94 Z"/><text x="206" y="96">C</text></g>`);
+    put("fade", 7.6, .4, `<path class="sc-secret {k}" d="M284 70 V84"/>`);
+  }
+  const PENCIL = `<path class="sc-feather" d="M0 0 L3 -7 L27 -31 L31 -27 L7 -3 Z"/><path class="sc-tip" d="M0 0 L3 -7 L7 -3 Z"/><path class="sc-tipend" d="M27 -31 L31 -27 L34 -30 L30 -34 Z"/>`;
+  // the places: the plan drawn, the pencil going round each wall as it is drawn
+  function placesScene() {
+    const items = [], put = (how, t, d, svg) => items.push({ how, t, d, svg });
+    floorPlan(put);
+    const keys = [[0, 300, 110], [.3, 76, 16], [.65, 284, 16], [.9, 284, 104], [1.3, 76, 104], [1.6, 76, 16]];
+    WALLS.forEach(([a, b], i) => { const t = 1.8 + i * .28; keys.push([t, a[0], a[1]], [t + .22, b[0], b[1]]); });
+    [[140, 62], [96, 56], [212, 42], [180, 64], [230, 90]].forEach(([x, y], i) => keys.push([4.7 + i * .14 + .2, x + 8, y + 2]));
+    [[96, 28], [89, 78], [175, 21], [271, 39], [172, 82], [275, 94], [124, 44], [166, 30], [206, 94], [284, 77]].forEach(([x, y], i) => keys.push([6.1 + i * .17, x, y]));
+    keys.push([8, 300, 112]);
+    items.push({ how: "move", keys, svg: `<g class="{k}">${PENCIL}</g>` });
+    return timeline("scp", items);
+  }
+  // the check: the plan as it stands, a glass going room by room ticking each; one room shows a fault, put right and
+  // ticked; then ALL CLEAR is stamped across it
+  function checkScene() {
+    let plan = ""; floorPlan((how, t, d, svg) => { plan += svg.replace("{k}", ""); });
+    const items = [], order = [0, 2, 3, 5, 4, 1], tick = (x, y, t) => items.push({ how: "stamp", t, d: .2, rot: -8, svg: `<text class="sc-tick2 {k}" x="${x + 13}" y="${y + 3}">✓</text>` });
+    const keys = [[0, 320, 20]];
+    order.forEach((r, i) => {
+      const [x, y] = ROOMS[r], t = .5 + i * 1.1 + (i > 2 ? .6 : 0);
+      keys.push([t, x, y], [t + (r === 3 ? 1.5 : .8), x, y]);
+      if (r === 3) { items.push({ how: "show", t: t + .3, d: .15, e: t + 1, svg: `<text class="sc-bang {k}" x="${x + 13}" y="${y + 4}">!</text>` }); tick(x, y, t + 1.25); }
+      else tick(x, y, t + .4);
+    });
+    keys.push([7.6, 324, 96]);
+    items.push({ how: "move", keys, svg: `<g class="{k}"><circle class="sc-lamp" r="22"/><circle class="sc-glass" r="11"/><path class="sc-ink" d="M8 8 L18 18" stroke-width="3.4"/></g>` });
+    items.push({ how: "stamp", t: 7.8, d: .3, rot: -9, svg: `<g class="sc-stamp {k}"><rect x="126" y="46" width="108" height="28" rx="3"/><rect class="in" x="129.5" y="49.5" width="101" height="21" rx="2"/><text x="180" y="64.5">ALL CLEAR</text></g>` });
+    return `<defs><radialGradient id="sc-glow"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>` + plan + timeline("scc", items);
   }
   // the map of the whole, as an old map is drawn: the coast inked, the sea washed in with its ripples, the mountains,
   // a river down to the sea, roads curving into a town, its houses going up round the keep, a wood, a ship in the bay.
@@ -84,10 +140,8 @@
     agree: [[180, 78], PAPER(36, 12, 288, 96) + `<path class="sc-line" d="M60 30 H300 M60 42 H290 M60 54 H296"/>` +
       ["D", "C", "P", "L", "T"].map((l, i) => `<g transform="translate(${84 + i * 48} 82)"><g class="sc-seal" style="--i:${i}"><circle r="14"/><circle class="sc-ring" r="10"/><text y="4.5">${l}</text></g></g>`).join("")],
     map: [[202, 42], PAPER(20, 6, 320, 108) + mapScene()],
-    places: [[180, 60], PAPER(60, 6, 240, 108) + PLAN + [[110, 38], [175, 40], [245, 34], [125, 80], [250, 84]].map((p, i) => `<circle class="sc-clue" style="--i:${i}" cx="${p[0]}" cy="${p[1]}" r="3.5"/>`).join("") +
-      `<g transform="translate(0 0)"><g class="sc-pencil"><path class="sc-feather" d="M0 0 L5 -2 L34 -31 L31 -34 L2 -5 Z"/><path class="sc-ink" d="M0 0 L-2 2"/></g></g>`],
-    check: [[180, 60], PAPER(60, 6, 240, 108) + PLAN.replace(/sc-room"/g, 'sc-room still"') + [[108, 38], [173, 38], [243, 38], [123, 80], [193, 80], [248, 80]].map((p, i) => `<text class="sc-tick" style="--i:${i}" x="${p[0]}" y="${p[1]}">✓</text>`).join("") +
-      `<g transform="translate(0 0)"><g class="sc-loupe"><circle class="sc-glass" cx="0" cy="0" r="16"/><path class="sc-ink" d="M11 11 L26 26" stroke-width="4"/></g></g>`],
+    places: [[180, 60], PAPER(60, 6, 240, 108) + placesScene()],
+    check: [[180, 60], PAPER(60, 6, 240, 108) + checkScene()],
     build: [[180, 40], Array.from({ length: 5 }, (_, i) => `<rect class="sc-paper sc-sheet" style="--i:${i}" x="130" y="${86 - i * 5}" width="100" height="14" rx="2"/>`).join("") +
       `<rect class="sc-cover" x="126" y="58" width="108" height="46" rx="3"/><path class="sc-ribbon" d="M206 58 V112 L212 106 L218 112 V58 Z"/>`],
     report: [[230, 54], PAPER(100, 12, 160, 96) + ["M118 32 H236", "M118 44 H240", "M118 56 H228", "M118 68 H238", "M118 80 H200"].map((d, i) => `<path class="sc-write2" style="--i:${i}" pathLength="1" d="${d}"/>`).join("") +

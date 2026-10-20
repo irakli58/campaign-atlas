@@ -262,19 +262,29 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 .sc .sc-spin { transform-origin: 50% 50%; animation: sc-spin 14s linear infinite; }
 .sc .sc-rose { fill: var(--accent); }
 @keyframes sc-spin { to { transform: rotate(360deg); } }
-/* the places: rooms appear, clues are hidden in them, a pencil goes from room to room */
-.sc .sc-wall { fill: none; stroke: var(--ink); stroke-width: 2.4; }
-.sc .sc-room { fill: var(--accent-soft); stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 1; stroke-dashoffset: 0; animation: sc-room 9s ease infinite both; animation-delay: calc(var(--i) * 1.1s); }
-.sc .sc-room.still { animation: none; stroke-dasharray: none; }
-@keyframes sc-room { 0% { stroke-dashoffset: 1; fill-opacity: 0; opacity: 1; } 9% { stroke-dashoffset: 0; fill-opacity: 0; } 14% { fill-opacity: 1; } 88% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
-.sc .sc-clue { fill: var(--accent); animation: sc-pop 9s ease infinite both; animation-delay: calc(1.6s + var(--i) * 1.3s); }
-.sc .sc-pencil { animation: sc-pencil 9s ease-in-out infinite; }
-@keyframes sc-pencil { 0%, 100% { transform: translate(110px, 38px); } 18% { transform: translate(175px, 38px); } 34% { transform: translate(245px, 38px); } 52% { transform: translate(125px, 80px); } 68% { transform: translate(195px, 80px); } 84% { transform: translate(250px, 80px); } }
-/* the check: a magnifying glass, and ticks */
+/* the places and the check: a floor plan as Atlas draws one (its timing is in scene.js, placesScene and checkScene) */
+.sc .sc-grid { stroke: var(--rule); stroke-width: .5; fill: none; }
+.sc .sc-owall { stroke: var(--ink); stroke-width: 3; }
+.sc .sc-iwall { stroke: var(--ink); stroke-width: 1.8; stroke-linecap: square; }
+.sc .sc-door { stroke: var(--muted); stroke-width: .8; }
+.sc .sc-rno { font-family: var(--f-mono); font-size: 7px; fill: var(--muted); text-anchor: middle; transform-origin: 50% 50%; }
+.sc .sc-furn path, .sc .sc-furn circle { fill: none; stroke: var(--muted); stroke-width: .8; }
+.sc .sc-furn .solid { fill: var(--muted); fill-opacity: .22; }
+.sc .sc-mk { transform-origin: 50% 50%; }
+.sc .sc-mk .c { fill: var(--accent); }
+.sc .sc-mk .n { fill: var(--bone); }
+.sc .sc-mk text { font: 700 5.5px var(--f-mono); fill: var(--on-accent); text-anchor: middle; }
+.sc .sc-secret { stroke: var(--accent); stroke-width: 3.4; stroke-dasharray: 2 2; fill: none; }
+.sc .sc-tip { fill: var(--ink); }
+.sc .sc-tipend { fill: var(--accent); }
 .sc .sc-glass { fill: rgba(255, 255, 255, .14); stroke: var(--ink); stroke-width: 2; }
-.sc .sc-loupe { animation: sc-loupe 6s ease-in-out infinite; }
-@keyframes sc-loupe { 0%, 100% { transform: translate(105px, 38px); } 25% { transform: translate(250px, 38px); } 50% { transform: translate(250px, 80px); } 75% { transform: translate(110px, 80px); } }
-.sc .sc-tick { font-size: 14px; font-weight: 700; fill: var(--ok); animation: sc-pop 6s ease infinite both; animation-delay: calc(var(--i) * .9s); }
+.sc .sc-lamp { fill: url(#sc-glow); }
+.sc .sc-tick2 { font: 700 14px var(--f-body); fill: var(--ok); text-anchor: middle; transform-origin: 50% 50%; }
+.sc .sc-bang { font: 700 14px var(--f-body); fill: var(--accent); text-anchor: middle; }
+.sc .sc-stamp { transform-origin: 50% 50%; }
+.sc .sc-stamp rect { fill: var(--paper); fill-opacity: .82; stroke: var(--ok); stroke-width: 2; }
+.sc .sc-stamp .in { fill: none; stroke-width: .8; }
+.sc .sc-stamp text { font: 600 13px var(--f-mono); letter-spacing: .14em; fill: var(--ok); text-anchor: middle; }
 /* the build: pages drop, the cover closes */
 .sc-build .sc-sheet { animation: sc-drop 6s ease infinite both; animation-delay: calc(var(--i) * .45s); }
 @keyframes sc-drop { 0% { transform: translateY(-40px); opacity: 0; } 10% { transform: translateY(0); opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
