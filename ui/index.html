@@ -102,6 +102,16 @@
             <label class="bopt"><input type="radio" name="buildings" value="custom"><span><b>Made for this place.</b> Its own landmarks and the look of its streets, designed for this story (a real city's famous buildings, a fantasy city's towers). It takes longer and uses more of your plan. Once made, it is kept for any later campaign set there.</span></label>
           </div>
         </div>
+        <div class="field buildings">
+          <span>World map</span>
+          <div class="bopts" role="radiogroup" aria-label="World map">
+            <label class="bopt"><input type="radio" name="world" value="auto" checked><span><b>Automatic.</b> A map of the wider world when the story travels between places: the real one if it is set in the real world, otherwise a land made for it. You can step from it into each city's 3D map.</span></label>
+            <label class="bopt"><input type="radio" name="world" value="drawing"><span><b>From my own map.</b> A map you drew, painted or photographed. Its places, roads, mountains and rivers are read off it; you can see it as you drew it, or redrawn as an old parchment map.
+              <input type="file" name="drawing" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Your map, as a picture"><small class="dnote" id="dnote"></small></span></label>
+            <label class="bopt"><input type="radio" name="world" value="real"><span><b>The real world:</b> <input name="worldplace" maxlength="120" placeholder="which part, e.g. Northern England" aria-label="Which part of the real world"> with its true coasts, rivers and mountains, and every place where it really is.</span></label>
+            <label class="bopt"><input type="radio" name="world" value="none"><span><b>None.</b> Only the map of the city.</span></label>
+          </div>
+        </div>
         <div class="grid2">
           <label class="field"><span>Game system <small>optional</small></span><input name="system" maxlength="120" placeholder="The rules you play by, e.g. Call of Cthulhu 7e or D&amp;D 5e"></label>
           <label class="field" id="f-model"><span>Writer</span><select name="model"></select></label>

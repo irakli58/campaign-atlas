@@ -81,6 +81,7 @@
   ${A.music ? `<div class="musicbar">${A.music.html()}</div>` : ""}
   <nav class="views" aria-label="View">
     <button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
+    ${A.worldData && A.worldMount ? `<button type="button" id="v-world" aria-pressed="false">World map</button>` : ""}
     ${(A.storyData || []).length ? `<button type="button" id="v-story" class="keeper" aria-pressed="false">The story</button>` : ""}
     ${A.music && A.music.enabled && A.music.enabled() ? `<button type="button" id="v-music" aria-pressed="false">Music</button>` : ""}
   </nav>
@@ -91,7 +92,8 @@
     <details id="trk"><summary><span class="trh">Investigation tracker</span><span class="trs" id="trk-sum"></span></summary><div id="trk-body"></div></details>
   </section>
   <dialog id="keyDlg" class="kedlg" aria-label="Key editor"></dialog>
-  ${A.cityData && A.cityMount ? `<section class="atlas" aria-label="Plan of the whole"><div class="cmap" id="citybox"></div></section>` : ""}
+  ${A.worldData && A.worldMount ? `<section class="worldv" id="worldv" aria-label="World map"></section>` : ""}
+  ${A.cityData && A.cityMount ? `<section class="atlas" aria-label="Plan of the whole"><div class="citybar" id="citybar" hidden></div><div class="cmap" id="citybox"></div></section>` : ""}
   <div class="layout">
     <aside class="index"><div class="chips" id="cats" role="group" aria-label="Filter by type of place"></div><div class="list" id="list"></div></aside>
     <main class="dossier" id="dossier" aria-live="polite"></main>
@@ -119,6 +121,67 @@
   /* ---- the plan of the whole */
   let CITY = null;
   const renderMap = () => { if (CITY) CITY.sync({ sel: state.sel, mode: state.mode, matches: p => !!byId[p.id] && matches(byId[p.id]) }); };
+  // A campaign may have several cities (city.js and cities/<id>.js), one on the plan at a time: a place opens its own
+  // city's map, and the world map's "Enter" opens the city it names. The old map is taken down first.
+  const CITIES = A.cities || {}, mainCity = (A.cityData && A.cityData.id) || "main";
+  const cityOf = id => (A.placeCity ? A.placeCity(id) : mainCity);
+  // a city is called by its place on the world map, else by its sheet's title
+  const cityLabel = id => { const L = A.worldData && (A.worldData.locations || []).find(l => l && (l.city === id || (!l.city && l.id === id))); return (L && L.name) || (CITIES[id] && CITIES[id].title) || id; };
+  let cityId = null;
+  function mountCity(id, then) {
+    if (!A.cityMount || !$("#citybox")) return;
+    if (!CITIES[id]) id = mainCity;
+    if (CITY && cityId === id) { if (then && CITY.map) then(CITY); else if (then) CITY.then = then; return; }
+    if (CITY) CITY.dispose();
+    cityId = id; store.set("city", id);
+    CITY = A.cityMount($("#citybox"), { city: id, onPick: pid => go(pid, true), onReady: c => { renderMap(); paintStatusDots(); const f = c.then || then; c.then = null; if (f) f(c); else if (byId[state.sel] && cityOf(state.sel) === id) c.flyTo(state.sel); } });
+    renderCityBar();
+  }
+  // above the 3D map: back to the world, and the campaign's other cities
+  function renderCityBar() {
+    const bar = $("#citybar"); if (!bar) return;
+    const ids = Object.keys(CITIES), loc = WORLD && WORLD.locationOf(cityId);
+    if (!A.worldData && ids.length < 2) { bar.hidden = true; return; }
+    bar.hidden = false;
+    const nm = cityLabel;
+    bar.innerHTML = `${A.worldData && A.worldMount ? `<button type="button" class="cb-back" data-world="${esc(loc || "")}">← World map</button>` : ""}<span class="cb-here"><span class="kl">Now on the map</span>${esc(nm(cityId))}</span>${ids.length > 1 ? `<label class="cb-pick"><span class="kl">Another city</span><select id="cityPick" aria-label="Show another city on the map">${ids.map(id => `<option value="${esc(id)}"${id === cityId ? " selected" : ""}>${esc(nm(id))}</option>`).join("")}</select></label>` : ""}`;
+  }
+
+  /* ---- the world map (atlas-world.js): the level above the cities. It is drawn the first time it is shown and kept,
+          so it is where it was left (its view, its choice) when the referee comes back from a city. */
+  let WORLD = null;
+  const DBP = (async () => { try { return window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (e) { return null; } })();
+  // the campaign's places in a world location: those that say location: "<its id>", or stand in the city it names
+  const inLoc = (pid, L) => { const m = A.meta[pid] || {}, c = L.city || (CITIES[L.id] ? L.id : null); if (m.location) return m.location === L.id; return !!c && cityOf(pid) === c; };
+  const WORLD_CTX = {
+    mode: () => state.mode,
+    placesAt: L => P.filter(p => inLoc(p.id, L)).map(p => ({ id: p.id, n: p.n, name: p.name, st: TR.ready ? stOf(p.id) : "", acts: p.acts })),
+    peopleAt: (L, places) => {
+      const out = [], had = new Set();
+      for (const q of places) for (const n of Object.values((byId[q.id].M || {}).npcs || {})) { const [nm, role] = who(n); if (nm && !had.has(nm)) { had.add(nm); out.push({ name: nm, role, pid: q.id }); } }
+      for (const cid of L.people || []) { const c = (A.castData || {})[cid]; if (c && !had.has(c.n)) { had.add(c.n); out.push({ name: c.n, role: c.role || "", pid: POSTED[cid] || null }); } }
+      return out;
+    },
+    leadsInto: (L, places) => { const here = new Set(places.map(p => p.id)), out = []; for (const id of here) for (const w of INTO[id] || []) if (!here.has(w.from)) out.push({ fromId: w.from, from: byId[w.from].name, text: shortClue(w.text) }); return out; },
+    hasCity: id => !!(CITIES[id] && A.cityMount),
+    cityName: id => cityLabel(id),
+    enter: (cid, locId) => enterCity(cid),
+    open: pid => { setView("gaz"); go(pid); },
+    db: DBP, store,
+    // in the Atlas app the page can make a city itself (window.ATLAS_APP, set by the app); on claude.ai it cannot
+    makeCity: window.ATLAS_APP && window.ATLAS_APP.makeCity ? (L, W) => window.ATLAS_APP.makeCity({ id: L.city || L.id, loc: L.id, name: L.name, kind: L.kind, look: W.look }) : null
+  };
+  function enterCity(cid) {
+    setView("gaz");
+    // the dossier follows: if the chosen place is in another city, choose this city's first place
+    if (!(byId[state.sel] && cityOf(state.sel) === cid)) { const first = P.find(p => cityOf(p.id) === cid); if (first) { state.sel = first.id; store.set("sel", first.id); renderAll(false); } }
+    mountCity(cid);
+    const at = document.querySelector(".atlas"); if (at) at.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  function showWorld(locId) {
+    setView("world");
+    if (WORLD && locId) WORLD.select(locId);
+  }
 
   /* ---- the dossier */
   // "Open all" / "Close all" for a list of folding entries (clues, people, rooms, scenes, connections)
@@ -138,6 +201,9 @@
     const p = byId[state.sel], M = p.M || {}, i = P.indexOf(p), prev = P[(i - 1 + P.length) % P.length], next = P[(i + 1) % P.length];
     const acts = p.acts.map(a => `<span class="tag">Act ${roman(a)}</span>`).join("");
     const bone = bonesAt(p.id).map(b => `<span class="tag bone keeper">${esc(keyWord)} ${b.k} · ${esc(b.name)}</span>`).join("");
+    // where it stands on the world map, as a way there
+    const wl = A.worldData && A.worldMount ? (A.worldData.locations || []).find(L => L && L.id && inLoc(p.id, L)) : null;
+    const wtag = wl && (state.mode === "gm" || wl.state !== "unknown") ? `<button type="button" class="tag wtag" data-world="${esc(wl.id)}" title="Show it on the world map">⌖ ${esc(wl.name)}</button>` : "";
     const links = linksOf(p.id).map(id => `<button type="button" data-go="${esc(id)}"><span class="n">${pad(byId[id].n)}</span>${esc(byId[id].name)}</button>`).join("");
     const hooks = Object.values(M.enc || {}).map(e => `<li><details class="hk"><summary>${esc(e.t || "")}</summary><p>${esc(e.d || "")}</p></details></li>`);
     // the head of the dossier, with the place's suggested song at its top right (the user asked for it there)
@@ -146,7 +212,7 @@
       <div class="eyebrow"><span>No. ${pad(p.n)}</span><span>${esc(CATS[p.cat] || "")}</span><span>${esc(p.dist)}</span></div>
       <h2>${esc(p.name)}</h2>
       ${p.sub ? `<p class="subt keeper">${esc(p.sub)}</p>` : ""}
-      <div class="meta">${acts}${bone}</div>
+      <div class="meta">${acts}${bone}${wtag}</div>
       </div>${A.music && A.music.card ? A.music.card(p.id) : ""}</div></div>
       <div id="accSlot">${accTop(p.id)}</div>
       ${M.ext ? `<section class="sec readaloud"><h3>First impressions · read aloud${A.narrateBtn ? `<span class="nar-h">${A.narrateBtn(M.ext, "first impressions")}${A.narrateSet()}</span>` : ""}</h3><p class="lead">${esc(M.ext)}</p></section>` : ""}
@@ -174,7 +240,9 @@
   function go(id, fromMap) {
     if (!byId[id]) return;
     state.sel = id; store.set("sel", id);
-    if (CITY) CITY.flyTo(id);
+    // a place in another of the campaign's cities brings that city onto the map
+    const pc = cityOf(id);
+    if (pc && CITIES[pc] && pc !== cityId) mountCity(pc, c => c.flyTo(id)); else if (CITY) CITY.flyTo(id);
     try { history.replaceState(null, "", "#" + id); } catch (e) {}
     renderAll(true);
     if (A.music) A.music.place(id);            // each place has its own theme: it changes with the place while music is on
@@ -227,8 +295,11 @@
   function setView(v) {
     if (v === "story" && (!story.length || state.mode !== "gm")) v = "gaz";
     if (v === "music" && !$("#v-music")) v = "gaz";
+    if (v === "world" && !$("#v-world")) v = "gaz";
     state.view = v; app.dataset.view = v;
     $("#v-gaz").setAttribute("aria-pressed", v === "gaz");
+    if ($("#v-world")) $("#v-world").setAttribute("aria-pressed", v === "world");
+    if (v === "world") { if (!WORLD) WORLD = A.worldMount($("#worldv"), WORLD_CTX); else WORLD.wake(); WORLD.search(state.q); renderCityBar(); }
     if ($("#v-story")) $("#v-story").setAttribute("aria-pressed", v === "story");
     if ($("#v-music")) $("#v-music").setAttribute("aria-pressed", v === "music");
     if (v === "story") renderStory();
@@ -392,7 +463,7 @@
     if (pins) for (const id in pins) { pins[id].dataset.st = TR.ready ? stOf(id) : ""; pins[id].dataset.acc = acc(id); }
     document.querySelectorAll("#list li button[data-go]").forEach(b => { b.dataset.st = TR.ready ? stOf(b.dataset.go) : ""; b.dataset.acc = acc(b.dataset.go); });
   }
-  function renderTrackerAll() { renderTracker(); renderLeads(); renderClues(); paintStatusDots(); }
+  function renderTrackerAll() { renderTracker(); renderLeads(); renderClues(); paintStatusDots(); if (WORLD && state.view === "world") WORLD.sync(); }
 
   // ---- the key editor and the new-place form (one dialog)
   function openKeyEditor(id, forPlace, foundPlace) {
@@ -496,6 +567,8 @@
     if (t.closest("#v-gaz")) { setView("gaz"); return; }
     if (t.closest("#v-story")) { setView("story"); return; }
     if (t.closest("#v-music")) { setView("music"); return; }
+    if (t.closest("#v-world")) { setView("world"); return; }
+    const wb = t.closest("[data-world]"); if (wb) { showWorld(wb.dataset.world || null); return; }
     const j = t.closest("[data-sjump]"); if (j) { const s = document.getElementById("st-" + j.dataset.sjump); if (s) s.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const fa = t.closest("[data-foldall]"); if (fa) { const box = fa.closest(".lm-blk, .sec"), list = box ? [...box.querySelectorAll("details.fold, details.clf, details.hk, details.npc, details.ci")] : [], open = list.some(d => !d.open); list.forEach(d => { d.open = open; }); fa.textContent = open ? "Close all" : "Open all"; return; }
     const nk = t.closest("[data-knew]"); if (nk) { openKeyEditor(null, nk.dataset.knew || null); return; }
@@ -518,6 +591,7 @@
   document.addEventListener("change", e => {
     const t = e.target; if (!t.matches) return;
     if (t.matches("#act")) { state.act = t.value; renderList(); renderMap(); paintStatusDots(); }
+    if (t.matches("#cityPick")) mountCity(t.value);
     if (t.matches("[data-found]")) { const k = TR.keys.find(x => x.id === t.dataset.found); if (!k) return; const on = t.checked; trWrite(db => db.collection("keys").doc(k.id).update(on ? { found: true } : { found: false, heldBy: [] })); }
     if (t.matches("#trshow")) { TR.show = t.value; renderTracker(); }
     if (t.matches("[data-clue]")) { const pl = t.dataset.clue, k = t.dataset.ck, cur = new Set(TR.clues[pl] || []); t.checked ? cur.add(k) : cur.delete(k); trWrite(db => db.collection("clues").doc(pl).set({ done: [...cur].sort() })); }
@@ -528,7 +602,7 @@
   });
   document.addEventListener("input", e => {
     const t = e.target; if (!t.matches) return;
-    if (t.matches("#q")) { state.q = t.value.trim(); renderList(); renderMap(); paintStatusDots(); }
+    if (t.matches("#q")) { state.q = t.value.trim(); renderList(); renderMap(); paintStatusDots(); if (WORLD) WORLD.search(state.q); }
     if (t.matches("#trq")) { TR.q = t.value; const pos = t.selectionStart; renderTracker(); const q = $("#trq"); q.focus(); try { q.setSelectionRange(pos, pos); } catch (_) {} }
   });
   document.addEventListener("keydown", e => {
@@ -560,19 +634,26 @@
     if (m === "player" && state.cat === "bones") state.cat = "all";
     if (m === "player" && state.view === "story") setView("gaz");
     renderAll(false);
+    if (WORLD) WORLD.sync();
   }
-  window.addEventListener("hashchange", () => { if (byId[hash()] && hash() !== state.sel) go(hash()); });
+  window.addEventListener("hashchange", () => {
+    const h = hash();
+    if (h === "world") showWorld(); else if (/^city\//.test(h) && CITIES[h.slice(5)]) enterCity(h.slice(5));
+    else if (byId[h] && h !== state.sel) go(h);
+  });
 
   /* ---- first paint */
   renderAll(false); renderTracker();
   if (A.music) { A.music.bind(app); A.music.place(state.sel); }
-  setView(["story", "music"].includes(store.get("view")) ? store.get("view") : "gaz");
-  if (A.cityData && A.cityMount) CITY = A.cityMount(document.getElementById("citybox"), { onPick: id => go(id, true), onReady: c => { renderMap(); paintStatusDots(); if (hash() && byId[hash()]) c.flyTo(hash()); } });
+  // the city on the plan: the chosen place's own (or the one shown last); #world and #city/<id> open those directly
+  if (A.cityData && A.cityMount) { const h = hash(), want = /^city\//.test(h) ? h.slice(5) : byId[state.sel] ? cityOf(state.sel) : store.get("city"); mountCity(CITIES[want] ? want : mainCity); }
+  if (/^city\//.test(hash()) && CITIES[hash().slice(5)]) enterCity(hash().slice(5));
+  else setView(hash() === "world" ? "world" : ["story", "music", "world"].includes(store.get("view")) ? store.get("view") : "gaz");
 
   /* ---- connect the tracker to the artifact's database */
   (async function initTracker() {
     let db = null, user = null;
-    try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (e) { db = null; }
+    db = await DBP;
     if (!db) { TR.db = false; renderTrackerAll(); return; }
     try { user = await window.claude.use("user"); } catch (e) { user = null; }
     TR.db = db;

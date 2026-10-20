@@ -131,6 +131,17 @@ ATLAS.kit({
 
 **Designing one.** Find out what the place looks like: its five to ten most famous buildings (from what you know; search the web when you can), and its ordinary streets (wall colours, roof material and pitch, storeys, the details that make them its own). Scale: one square is `geo.mpu` metres on a real map (in `city.js`; about 8 at 2.6 km) and about 5 on an invented one. Draw each famous building in ten to forty parts, its silhouette before its details: what someone would know it by from across the river. Then `check`, `build`, and look at it beside a photograph in your mind: the dome the right colour, the tower the right height against the houses, the colours of the street. Write what you made in the report.
 
+### 4c. Several cities in one campaign
+
+A story that travels has a world map (`world.md`) and a 3D city for each settlement that matters.
+
+- **The first city** is `city.js`, whose id is "main".
+- **Each other city** is made by the same command with `--id`: `atlas.js city <dir> --invent "Harrowgate" --id harrowgate --era fantasy --site harbour`, or a real one, `atlas.js city <dir> "Whitby, England" --year 1888 --id whitby`. It is written to `cities/<id>.js`.
+- **Places:** a place stands in a city with `city: "<id>"`; without it, in the main city.
+- **Changes** to one city go in `campaign.js` as `ATLAS.cityEdit(c => { ... }, "<id>")`.
+- **Kits:** a kit dresses the city it names (`city: "<id>"` in `ATLAS.kit`), or the main city.
+- **On the page:** the plan shows one city at a time, and the city a chosen place stands in comes onto it. "← World map" and a list of the other cities stand above it.
+
 ## 5. The age and the part of the world
 
 `look` is the age: `"medieval"` (plaster, timber and thatch, steep roofs, no lamps or factory stacks), `"industrial"` (also `"old"`: brick terraces, slate, chimney pots, gas lamps, stacks, an aged paper plan), `"modern"` (flat roofs, glass towers, a clean plan), `"fantasy"` (a medieval town's lanes and walls, roofs of blue, red, copper-green and violet, a turret on the odd house; `--era fantasy`, or `--culture fantasy` with no year), `"scifi"` (also `"future"`: white modules and domes, grey ground, black sky and stars; `--era future`, or a year from 2100). A year decides it when no era is given: before 1650 medieval, before 1946 industrial, before 2100 modern, after that the future. A look may also be an object laid over one of them: `look: { base: "industrial", lamps: false }`.

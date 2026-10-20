@@ -130,6 +130,11 @@ async function route(req, res) {
       const f = path.join(dir, "dist", "preview.html"); if (!fs.existsSync(f)) return fail(res, 404, "not built");
       res.writeHead(200, { "content-type": TYPES[".html"], "content-disposition": `attachment; filename="${mm[1]}.html"` }); return fs.createReadStream(f).pipe(res);
     }
+    // the world map's "Make its 3D map now"
+    if (m === "POST" && rest === "make-city") {
+      if (!authed) return fail(res, 403, "forbidden");
+      try { return send(res, 200, await jobs.makeCity(mm[1], await body(req, 1 << 12))); } catch (e) { return fail(res, 400, e.message); }
+    }
     if (rest === "db") {
       if (!authed) return fail(res, 403, "forbidden");
       if (m === "GET") { const d = db.get(mm[1]); return +url.searchParams.get("v") === d.v ? (res.writeHead(204), res.end()) : send(res, 200, d); }
@@ -154,7 +159,7 @@ async function route(req, res) {
       return send(res, 200, await state());
     }
     if (m === "POST" && p === "/api/disconnect") { const o = await body(req, 1 << 12), s = settings.get(); delete s[o.provider]; settings.set(s); return send(res, 200, await state()); }
-    if (m === "POST" && p === "/api/campaigns") { const j = await jobs.add(await body(req, 4 << 20)); return send(res, 200, { job: j, state: await state() }); }
+    if (m === "POST" && p === "/api/campaigns") { const j = await jobs.add(await body(req, 16 << 20)); return send(res, 200, { job: j, state: await state() }); }
     if ((mm = p.match(/^\/api\/campaigns\/([a-z0-9-]+)\/(events|stop|continue|report|open|launch)$/))) {
       const slug = mm[1], j = jobs.get(slug); if (!j) return fail(res, 404, "No such campaign.");
       if (m === "GET" && mm[2] === "events") { res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive" }); const ping = setInterval(() => res.write(": ping\n\n"), 20000); res.on("close", () => clearInterval(ping)); return jobs.subscribe(slug, res); }

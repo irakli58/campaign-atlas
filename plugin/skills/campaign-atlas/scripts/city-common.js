@@ -95,19 +95,28 @@ function ser(v, exact) {
   if (v && typeof v === "object") return "{" + Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => (/^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k)) + ":" + ser(x, exact)).join(",") + "}";
   return JSON.stringify(v);
 }
+// which city of the campaign is being made: none (the main one, city.js) or an id (one of several, cities/<id>.js, for a
+// campaign whose world map has more than one city: atlas.js city <dir> ... --id <id>)
+let TARGET = null;
+const cityTarget = id => { TARGET = id ? String(id).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : null; return TARGET; };
 // data: the object for ATLAS.city(). Long lists go one item to a line so the file can be read and compared.
 function writeCity(dir, data, head) {
   const lines = [];
+  if (TARGET) {
+    data = Object.assign({ id: TARGET }, data);
+    head = head.concat([`This is the city "${TARGET}" of the campaign's world (world.js: a location with city: "${TARGET}"). Its own changes go in`, `campaign.js as ATLAS.cityEdit(c => { ... }, "${TARGET}"); a place stands here when it says city: "${TARGET}" or location: "<that location>".`]);
+  }
   for (const [k, v] of Object.entries(data)) {
     if (v === undefined) continue;
     const key = /^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k);
     if (Array.isArray(v) && v.length > 3 && v.some(x => x && typeof x === "object")) lines.push(`  ${key}: [\n${v.map(x => "    " + ser(x)).join(",\n")}\n  ]`);
     else lines.push(`  ${key}: ${ser(v, k === "geo")}`);
   }
-  const file = path.join(dir, "city.js");
+  const file = TARGET ? path.join(dir, "cities", TARGET + ".js") : path.join(dir, "city.js");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, head.map(l => "// " + l).join("\n") + "\nATLAS.city({\n" + lines.join(",\n") + "\n});\n");
   return file;
 }
 const js = src => ({ __js: src });
 
-module.exports = { ERAS, eraOf, regionOf, REGION_WORDS, mulberry32, plen, areaOf, centroid, pip, pipRings, simplify, simplifyRing, clipLine, clipRing, writeCity, js, r1 };
+module.exports = { ERAS, eraOf, regionOf, REGION_WORDS, mulberry32, plen, areaOf, centroid, pip, pipRings, simplify, simplifyRing, clipLine, clipRing, writeCity, cityTarget, js, r1 };

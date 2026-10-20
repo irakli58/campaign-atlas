@@ -12,6 +12,7 @@ This is the order that works, with the command for each step. It was arrived at 
 | 3 | The canon sheet and the cast | `canon.md`; `ATLAS.cast({...})` in `campaign.js` | The Core and the facts are on one sheet; principals described |
 | 4 | The look | `campaign.js` | Referee's title, grid, paper, fonts, categories, standards |
 | 5 | The map of the whole | `A city ...` (`references/cities.md`) | The city or site builds; landmarks reviewed |
+| 5b | The world map, when the story travels | `world.js`, `A world ...` (`references/world.md`) | Every location stands on it; its cities are made (`city ... --id`) |
 | 6 | Every place registered | one `ATLAS.place(id, {...})` line each | Tier, category, region, tagline, position on the map |
 | 7 | The trail planned | `A check` | Every place that matters has two leads in, on paper |
 | 8 | The places, one at a time | the loop below | `A check <place>` is clean for each |
@@ -32,6 +33,13 @@ Do the steps in this order. Each one feeds the next: the council decides the pla
 **4. The look.** In `campaign.js`: what the referee is called, the grid unit, paper and ink, fonts, an accent, the categories places fall into. `A catalogue` shows what floor kinds and furnishings exist; add any the setting needs.
 
 **5. The map of the whole.** A real city, a real site, an invented city, an invented camp or base, or a base or station of the future: one command (`references/cities.md`). Choose the year from the story, and the set of buildings that fits it (the future for a story in space). Centre a real city on the quarter the story happens in. Read the landmark list and correct it from what you know of the place. When buildings **made for this place** were asked for (`story/brief.md`, or the user), dress the map in a kit: `node atlas.js kit list`, then `kit use`; if there is none for the place, design one (`cities.md`, 4b) and keep it with `kit save`. A kit already on the shelf for the story's city is worth using even when it was not asked for.
+
+**5b. The world map.** When the story travels between places (towns, a coast, a kingdom, planets), make a world map (`references/world.md`); a story in one city needs none. The brief says which kind when the game master chose:
+- their own drawing: read it, and write every place on it into `world.js` where it is drawn;
+- the real world: `A world <dir> --real "Region"`;
+- otherwise an invented land in the story's look.
+
+Every settlement the story spends time in gets its own 3D city: `A city <dir> ... --id <id>`, named by its location's `city:`. Places stand in their city (`city: "id"`), or in a location (`location: "id"`) when it has no 3D map. Write the locations' `desc` for the players and `gm` for the referee, the dangers and closures on the routes, and where the party starts.
 
 **6. Register every place, unmapped.** One line each:
 
@@ -85,6 +93,9 @@ Where there is no Artifact tool (plain Claude Code, Codex, the Campaign Atlas ap
 | "Make it bigger", "more rooms" | Add an `expand` step to that place (1.5 to 3 times the floor), each new area with something in it; the earlier size stays as a button |
 | "The map looks wrong" and you cannot see what | Ask which map and what is wrong, once, with choices. Four maps were inspected on Wormroot before asking; ask first |
 | "Change the city" | Run `city` again with other options, or `ATLAS.cityEdit`; never edit `city.js` |
+| "A map of the wider world", "here is my map", "the real coast" | `references/world.md`: an invented land, their drawing (`--drawing`), or the real world (`--real`) |
+| "Make the 3D map of X" (a location on the world map) | `A city <dir> --invent "X" --id <its city id>` (or a real city by name, with `--id`), then build |
+| "Here is world.js from the page" (Copy as world.js) | Put it in place of the old `world.js`, `A world <dir>` (keeps the land), check, build |
 | "Add a place" | Register it, give it two leads in from existing clues, map it, rebuild |
 | "Players should not see X" | `h: 1`, door type `"s"`, or `gm: 1`; then `check` |
 | A new story | A new campaign folder; start at step 0 |

@@ -46,4 +46,12 @@
   window.claude = Object.assign(window.claude || {}, {
     use: function (name) { return name === "db" ? ready.then(function () { return db; }) : name === "user" ? Promise.resolve(user) : Promise.resolve(null); }
   });
+  // what the page can ask of the app: the world map's "Make its 3D map now" (the page opens again on the new city)
+  window.ATLAS_APP = {
+    makeCity: function (o) {
+      return fetch(URL_.replace(/db$/, "make-city"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not made"); return d; }); })
+        .then(function (d) { location.hash = "city/" + d.id; location.reload(); return d; });
+    }
+  };
 })();

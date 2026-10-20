@@ -1,6 +1,6 @@
 ---
 name: campaign-atlas
-description: Turn a story into a complete, playable tabletop RPG campaign. A council of four writers (Conan Doyle, Agatha Christie, Poe, Lovecraft) debates the story, fixes its holes and adds characters, motives and clues; Tolkien judges what they wrote, strictly, and the story is finished only when all five agree; every location gets gridded floor-by-floor maps (player and GM versions), a room-by-room guide, clues with hints and where they lead, described NPCs, secrets and encounters; and a 3D map shows the whole setting, whether any REAL city recreated with its actual streets, river and landmarks in the look of the story era, an invented city (fantasy cities too), a camp or military base, or a moon base or space station of the future. Published as one interactive page. Use whenever the user gives or uploads a story, scenario, campaign notes or setting (any genre or system) and wants it developed, improved, mapped or made playable; wants locations, maps, dungeons, room keys, a gazetteer, clues or character write-ups; names a city, town, camp, base, moon base or space station and wants a 3D or playable map of it; asks to make maps bigger; or says to do "what you did for the Wormroot Idol".
+description: Turn a story into a complete, playable tabletop RPG campaign. A council of four writers (Conan Doyle, Agatha Christie, Poe, Lovecraft) debates the story, fixes its holes and adds characters, motives and clues; Tolkien judges what they wrote, strictly, and the story is finished only when all five agree; every location gets gridded floor-by-floor maps (player and GM versions), a room-by-room guide, clues with hints and where they lead, described NPCs, secrets and encounters; and a 3D map shows the whole setting, whether any REAL city recreated with its actual streets, river and landmarks in the look of the story era, an invented city (fantasy cities too), a camp or military base, or a moon base or space station of the future; and above the cities a 2D world map of the lands between them (invented, the real world, or drawn from a map the user drew), from which each city opens in 3D. Published as one interactive page. Use whenever the user gives or uploads a story, scenario, campaign notes or setting (any genre or system) and wants it developed, improved, mapped or made playable; wants locations, maps, dungeons, room keys, a gazetteer, clues or character write-ups; names a city, town, camp, base, moon base or space station and wants a 3D or playable map of it; wants a world map, a map of a region, or gives a map they drew; asks to make maps bigger; or says to do "what you did for the Wormroot Idol".
 ---
 
 # Campaign Atlas
@@ -10,7 +10,7 @@ This skill turns a story into something a referee can run at the table, and it d
 1. **The story.** A council of four writers (Conan Doyle, Christie, Poe, Lovecraft) reads the user's story, argues over it, closes its holes and fills it out into a full, playable bible: the truth and its timeline, a cast with motives and secrets, a web of clues, places, acts and endings. Tolkien then judges it as a strict examiner, grading every chapter with reasons; the writers mend what he fails; and the bible is final only when all five agree on it. The user's core idea is kept; everything else is the council's to improve.
 2. **The places.** Each location gets maps on a square grid (one per floor, a players' version and a GM's version), a guide that describes every room under the same number and name as the map, and the clues, people, secrets and dangers placed in specific rooms. Important places are big.
 3. **The trail.** Which clue in which room points to which other place, with a hint for every clue that might be missed, so no single miss stalls the game.
-4. **The map of the whole.** A 3D map above the index: any real city, fetched street by street, in the buildings of the story's age, with its landmarks; or a city invented for its time and place; or a site that is not a city.
+4. **The map of the whole.** A 3D map above the index: any real city, fetched street by street, in the buildings of the story's age, with its landmarks; or a city invented for its time and place; or a site that is not a city. A story that travels has a **world map** above its cities: an invented land, the real world (true coasts, rivers and mountains), or the game master's own drawing, read and redrawn; each city on it opens in 3D, and the referee moves the party and plans its journeys on it.
 5. **The page.** One published page with an index, search, a player-safe switch, the cast in full, the clue trail, and map-size buttons.
 6. **The music.** Every place plays its own theme, made by the page itself as it plays: a mood for what the place is (a crypt, a market, the docks), in a dark orchestral mystery style by default (piano, low strings, cello, choir), with other styles for other settings, each played on the instruments of its era. Each place shows its suggested song at the top right, with a song for each of its moments (a search, a fever, a chase); the music bar's Songs chooser lists every place's songs and every mood, with what each is played on. The referee can give any place a song of their own: one of Atlas's in any style, a link (YouTube, Spotify), a music file from their computer, or a piece they made in the page's Music tab (a band, drums, and sounds such as rain, lightning and a heartbeat, looped). The referee can switch to a chase, a battle or dread at any moment.
 
@@ -24,6 +24,7 @@ It was distilled from a long project (the Wormroot Idol gazetteer: 51 places, ab
 | `references/standards.md` | Before planning. What a finished campaign must be; most of it is enforced by `check`. |
 | `references/council.md` | When the story arrives. How the four writers work, how Tolkien judges them, how all five agree, and what they must produce. |
 | `references/cities.md` | When the story has a setting. Real cities, invented cities, camps and bases; the city data format. |
+| `references/world.md` | When the story travels between places, or the user gives a map they drew. The world map: invented, real or from a drawing; several cities in one campaign. |
 | `references/data-format.md` | When writing place files. Every field of a place, the cast and `campaign.js`. |
 | `references/workflow.md` | Before the first map. How to design a place, the quality bar for a room, enlarging, and the lessons learned. |
 
@@ -38,7 +39,7 @@ Run commands as `node "<this folder>/scripts/atlas.js" <command> <campaign folde
 0. **A permanent folder.** `init` the campaign in a folder the user can see, never a temporary one. Save their story untouched as `story/source.md`.
 1. **Convene the council** (`references/council.md`). Its job: make the story as interesting to play as possible, as faithful to the user's story as they asked, and at least as long as they asked (about a hundred pages when nothing was said; longer is better). Write the Core that may not change, then the debate, then the bible; then Tolkien's judgement (`story/judgement.md`), the mending, and the agreement of all five. Do this without being asked, and do not ask leave to change things: change them and report.
 2. **Canon and cast.** Bring `canon.md` up to date; put the principals in `ATLAS.cast`.
-3. **The look and the map of the whole.** Set `campaign.js`; run `city` for a real city, a real site, an invented city or an invented site (`references/cities.md`); review its landmarks.
+3. **The look and the map of the whole.** Set `campaign.js`; run `city` for a real city, a real site, an invented city or an invented site (`references/cities.md`); review its landmarks. When the story travels, make the world map and a 3D city for each settlement that matters (`references/world.md`).
 4. **Register every place**, unmapped, with its tier and its position on the city map. Plan which clue points where. Two leads into every place that matters.
 5. **One place at a time, completely, in tier order**: draw at full size for its tier, `check`, `ascii`, place clues and people, write every room, `check` until clean.
 6. **Build, look, publish** to one address with the Artifact tool; save the address. Without an Artifact tool, the finished campaign is `dist/preview.html`: tell the user where it is.
@@ -86,6 +87,11 @@ node scripts/atlas.js locate <dir> "an address"     where a real spot falls on a
 node scripts/atlas.js kit list | use <dir> <kit> | save <dir>
                                                     buildings made for one place (a city's own landmarks and streets):
                                                     the kits there are, one into a campaign, a campaign's kept for next time
+node scripts/atlas.js city <dir> ... --id <id>      another city of the campaign (cities/<id>.js), for a location of the world map
+node scripts/atlas.js world <dir> [--look parchment|atlas|stars] [--land continent|islands|coast|inland]
+                                                    the world map: an invented land under world.js, its locations placed
+node scripts/atlas.js world <dir> --drawing <picture>   the world map from the game master's own drawing
+node scripts/atlas.js world <dir> --real "Region"   the real world: true coasts, rivers, mountains; places found by name
 ```
 
 Write place files with the Write and Edit tools. Shell heredocs on this user's machine eat backslashes and stumble on apostrophes, which place files are full of.
@@ -94,6 +100,7 @@ Write place files with the Write and Edit tools. Shell heredocs on this user's m
 
 - "Make it bigger", "more rooms", "more to find": add an `expand` step to that place; see "Enlarging a place" in `references/workflow.md`.
 - "A different city", "another year", "more landmarks": run `city` again with other options. "This landmark is wrong": `ATLAS.cityEdit`.
+- "A map of the world", "here is a map I drew", "use the real coast": `references/world.md`.
 - "Change the story": reconvene the council on that point, update the bible and canon, then the places it touches.
 - "The players should not see X": hide it, then `check`.
 - "Add a place": register it, give it two inbound leads, map it, rebuild.

@@ -26,13 +26,24 @@
    node atlas.js locate <dir> "an address or a name"   where a real spot falls on the sheet of a fetched city
    node atlas.js kit list [<dir>] · kit use <dir> <kit> [--force] · kit save <dir> [name] [--force]
                                                  KITS: buildings made for one place (references/cities.md, "Kits")
+   node atlas.js city <dir> ... --id <id>        another city of the campaign (cities/<id>.js), for its world map
+
+   The world map (world.js, by hand; world-terrain.js, by the command):
+   node atlas.js world <dir> [--look parchment|atlas|stars] [--land continent|islands|coast|inland] [--size small|medium|large]
+                      [--seed N] [--across "600 miles"] [--names none] [--replace]
+                                                 an INVENTED land under world.js, and where its locations stand (references/world.md);
+                                                 starts a world.js from the campaign's cities when there is none
+   node atlas.js world <dir> --drawing <picture> [--look ...]
+                                                 a map the game master DREW: the picture under the world map, its coasts traced
+   node atlas.js world <dir> --real "England" [--km 800] [--unit mile|km] [--look ...]
+                                                 the REAL world: true coasts, lakes, rivers, seas and mountains; places found by name
 */
 "use strict";
 const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -40,17 +51,23 @@ function sources(dir) {
   const c = path.join(dir, "campaign.js"); if (!fs.existsSync(c)) die(`No campaign.js in ${dir}. Start one with: node atlas.js init ${dir}`);
   const pd = path.join(dir, "places"), files = [c];
   if (fs.existsSync(path.join(dir, "city.js"))) files.push(path.join(dir, "city.js"));     // a city fetched or generated for the campaign
+  const cd = path.join(dir, "cities");                                                       // its other cities, each with its own id
+  if (fs.existsSync(cd)) for (const f of fs.readdirSync(cd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(cd, f));
   if (fs.existsSync(path.join(dir, "kit.js"))) files.push(path.join(dir, "kit.js"));       // buildings made for this place (ATLAS.kit)
+  for (const f of ["world.js", "world-terrain.js"]) if (fs.existsSync(path.join(dir, f))) files.push(path.join(dir, f));   // the world map
   if (fs.existsSync(pd)) for (const f of fs.readdirSync(pd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(pd, f));
   return files;
 }
+const hasWorld = dir => fs.existsSync(path.join(dir, "world.js"));
 function load(dir) {
   if (!dir) die("Which campaign folder?");
   delete require.cache[require.resolve(path.join(ENGINE, "atlas-engine.js"))];
   const A = require(path.join(ENGINE, "atlas-engine.js"));
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-city.js"), "utf8"))(A);   // gives campaigns ATLAS.city(); loading it needs no browser
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-music.js"), "utf8"))(A);  // the lists of moods and flavours, for the checker
+  new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-world.js"), "utf8"))(A);  // gives campaigns ATLAS.world()
   for (const f of sources(dir)) { try { new Function("ATLAS", fs.readFileSync(f, "utf8"))(A); } catch (e) { die(`${path.relative(dir, f)}: ${e.message}`); } }
+  Object.defineProperty(A, "__dir", { value: dir });
   return A;
 }
 const mapped = A => A.order.filter(id => A.maps[id] && !A.maps[id].alias);
@@ -225,9 +242,10 @@ function checkStandard(A, id, P) {
   const short = Object.keys(have).filter(k => have[k] < S[k]).map(k => `${have[k]} ${k} (the standard is ${S[k]})`);
   if (short.length) P(`too small for a tier ${m.tier} place: ${short.join(", ")}`);
 }
-// the city map, if the campaign has one: is every place on it, and does it build?
-function checkCity(A) {
-  const out = [], K = A.cityKit, raw = A.cityData; let problems = 0, notes = 0;
+// a city map of the campaign (the main one, or rid: one of cities/): is every place on it, and does it build?
+function checkCity(A, rid) {
+  const out = [], K = A.cityKit, raw = rid && A.cities ? A.cities[rid] : A.cityData; let problems = 0, notes = 0;
+  const me = raw.id || "main", main = raw === A.cityData, mine = id => (A.placeCity ? A.placeCity(id) : "main") === me, label = main ? "city map" : `city map "${me}"`;
   const P = m => { out.push("   ! " + m); problems++; }, N = m => { out.push("   - " + m); notes++; };
   if (!raw.sheet || !(raw.sheet.w > 0) || !(raw.sheet.h > 0)) N("no sheet size given (sheet: { w, h }): using 320 by 200");
   if (!(raw.roads || []).length && !(raw.walls || []).some(w => w.kind === "tube")) P("the city has no roads: give at least its main streets (a station may have its tubes instead)");
@@ -245,9 +263,9 @@ function checkCity(A) {
   (raw.walls || []).forEach((w, i) => { if (!w || !Array.isArray(w.pts) || w.pts.length < 2) P(`walls ${i + 1} needs at least two points (pts)`); else if (w.kind && !["wall", "fence", "hesco", "tube"].includes(w.kind)) P(`walls ${i + 1}: unknown kind "${w.kind}" (wall, fence, hesco or tube)`); });
   if (raw.ground && !K.GROUNDS[raw.ground]) N(`unknown ground "${raw.ground}" (${Object.keys(K.GROUNDS).join(", ")})`);
   for (const k of ["basins", "parks", "plazas", "open"]) (raw[k] || []).forEach((b, i) => { if (!b || !Array.isArray(b.pts) || b.pts.length < 3) P(`${k} ${i + 1}${b && b.name ? ` (${b.name})` : ""} needs at least three points (pts)`); });
-  if (problems) return { line: "city map", out, problems, notes };
+  if (problems) return { line: label, out, problems, notes };
   const D = K.prepare(raw), PL = K.cityPlaces(D), w = D.sheet.w, h = D.sheet.h, KIT = K.kit();
-  for (const id of A.order) { const m = A.meta[id], mdl = Array.isArray(m.model) ? m.model[0] : m.model; if (!m.offmap && mdl && !K.MODEL_SIZE[mdl] && !KIT.models[mdl]) N(`${id}: unknown model "${mdl}", so it will stand as a house (see: atlas.js catalogue, or the kit's models)`); }
+  for (const id of A.order) { const m = A.meta[id], mdl = Array.isArray(m.model) ? m.model[0] : m.model; if (!mine(id)) continue; if (!m.offmap && mdl && !K.MODEL_SIZE[mdl] && !KIT.models[mdl]) N(`${id}: unknown model "${mdl}", so it will stand as a house (see: atlas.js catalogue, or the kit's models)`); }
   // a kit (buildings made for this place): every part a known shape with numbers for its place and size, every
   // landmark it dresses on the map, every dress a known kind
   for (const [nm, mo] of Object.entries(KIT.models)) {
@@ -265,20 +283,20 @@ function checkCity(A) {
     else if (!lmNames.has(lmName)) N(`the kit has a model for "${lmName}", but the map has no landmark of that name (see the list in city.js), so it is not used`);
   }
   for (const d of KIT.dress) if (!K.KIT_DRESS.includes(d.kind)) P(`kit dress: unknown kind "${d.kind}" (${K.KIT_DRESS.join(", ")})`);
-  for (const id of A.order) { const m = A.meta[id]; if (m.landmark && !(raw.landmarks || []).some(l => String(l.name).toLowerCase() === String(m.landmark).toLowerCase())) P(`${id} says it is the landmark "${m.landmark}", but the city has none of that name (see the list in city.js)`); }
+  for (const id of A.order) { const m = A.meta[id]; if (mine(id) && m.landmark && !(raw.landmarks || []).some(l => String(l.name).toLowerCase() === String(m.landmark).toLowerCase())) P(`${id} says it is the landmark "${m.landmark}", but the city has none of that name (see the list in city.js)`); }
   // The buildings fit the age, and the map fits the story: the future's own models on a map of the future and none of
   // them on an older one, and a story in space drawn as the future (the user caught a moon station built of 1888's
   // houses on a desert base, 15 Oct 2026: "you used 1888 house models for a moon base").
   const lookName = typeof raw.look === "string" ? raw.look : raw.look && raw.look.base, future = lookName === "scifi" || lookName === "future";
   for (const id of A.order) {
-    const m = A.meta[id], mdl = Array.isArray(m.model) ? m.model[0] : m.model; if (!mdl || m.offmap || !K.MODEL_SIZE[mdl]) continue;
+    const m = A.meta[id], mdl = Array.isArray(m.model) ? m.model[0] : m.model; if (!mine(id) || !mdl || m.offmap || !K.MODEL_SIZE[mdl]) continue;
     const fut = K.FUTURE_MODELS.includes(mdl);
     if (future && !fut) P(`${id} wears "${mdl}", a building of the past, on a map of the future: give it one of ${K.FUTURE_MODELS.join(", ")}, or no model (one is chosen from the place's name)`);
     else if (!future && fut) P(`${id} wears "${mdl}", a building of the future, on a ${lookName || "old"} map`);
     // fantasy's buildings belong to fantasy's map (or a medieval one, at a pinch)
     else if (K.FANTASY_MODELS.includes(mdl) && !["fantasy", "medieval"].includes(lookName)) N(`${id} wears "${mdl}", a fantasy building, on a ${lookName || "old"} map`);
   }
-  {
+  if (main) {
     const cfg = A.config || {}, said = [cfg.setting, cfg.system, cfg.subtitle, cfg.strap, cfg.title].filter(x => typeof x === "string").join(" · ");
     const space = said.toLowerCase().match(/\b(space ?station|spaceship|starship|in orbit|orbital|orbiting|moon ?base|lunar|martian|asteroid|colony ship|mothership|starfinder|stars without number|2[2-9]\d\d)\b/);
     if (!future && space) P(`the story is set in space or in the future ("${space[0]}" in the campaign's setting), but the map is ${lookName || "old"}: make it with city --invent "Name" --kind moonbase, outpost, colony or station, so it is built of the future's modules, domes and tubes, not houses`);
@@ -292,7 +310,7 @@ function checkCity(A) {
   }
   const placed = PL.filter(e => e.x != null);
   for (let i = 0; i < placed.length; i++) for (let j = i + 1; j < placed.length; j++) { const a = placed[i], b = placed[j]; if (Math.hypot(a.x - b.x, a.y - b.y) < a.lr + b.lr) N(`${a.id} and ${b.id} stand on top of each other on the city map`); }
-  let line = "city map";
+  let line = label;
   if (!problems) try {
     const c = K.buildCity(D, placed), pl = K.plan();
     // nothing stands off the paper (the sheet and its margin): the engine leaves such things out, and this guards that it
@@ -309,6 +327,76 @@ function checkCity(A) {
     if (c.buildings.length > 26000) N("a very large city: slower devices will struggle. Consider a smaller sheet.");
   } catch (e) { P("the city cannot be built: " + e.message); }
   return { line, out, problems, notes };
+}
+// the world map: every location known and standing on the map, every route between two of them, every 3D city it names
+// made, every place that says it stands in a location in one
+function checkWorld(A) {
+  const out = [], K = A.worldKit, W0 = A.worldData || {}; let problems = 0, notes = 0;
+  const P = m => { out.push("   ! " + m); problems++; }, N = m => { out.push("   - " + m); notes++; };
+  if (W0.look && !K.LOOK_OF[String(W0.look).toLowerCase()]) P(`unknown look "${W0.look}": parchment, atlas or stars`);
+  if (W0.size && !(Array.isArray(W0.size) && W0.size[0] > 0 && W0.size[1] > 0)) P("size must be [width, height]");
+  const ids = new Set();
+  (W0.locations || []).forEach((l, i) => {
+    if (!l || !l.id || !l.name) { P(`location ${i + 1} needs an id and a name`); return; }
+    if (ids.has(l.id)) P(`two locations are called "${l.id}"`); ids.add(l.id);
+    if (l.kind && !K.KINDS[l.kind]) N(`${l.id}: unknown kind "${l.kind}", so it shows a plain mark (known: ${Object.keys(K.KINDS).join(", ")})`);
+    if (l.state && !K.STATES.some(s => s[0] === l.state)) P(`${l.id}: unknown state "${l.state}" (${K.STATES.map(s => s[0]).join(", ")})`);
+    if (l.at && !(Array.isArray(l.at) && l.at.length === 2 && l.at.every(Number.isFinite))) P(`${l.id}: at must be [x, y]`);
+    if (l.city && !(A.cities || {})[l.city]) N(`${l.id} names the 3D city "${l.city}", which has not been made: the map offers to make it. To make it now: atlas.js city <dir> --invent "${l.name}" --id ${l.city} (or a real city by name, with --id ${l.city})`);
+    for (const pid of l.people || []) if (!(A.castData || {})[pid]) N(`${l.id}: people names "${pid}", who is not one of the cast`);
+  });
+  const D = K.prepareWorld(W0, A.worldTerrainData, null), [w, h] = D.size;
+  for (const l of D.locs) {
+    if (l.unplaced) P(TD.drawing ? `${l.id} has no place on the drawing: give it at: [x, y], read off the picture (the map is ${w} across, ${h} down)` : `${l.id} has no place on the map: run atlas.js world (it stands each location where its kind belongs), or give it at: [x, y]`);
+    else if (l.at[0] < 0 || l.at[1] < 0 || l.at[0] > w || l.at[1] > h) P(`${l.id} stands at ${l.at.map(Math.round).join(", ")}, off the map (0 to ${w} by 0 to ${h})`);
+  }
+  const own = W0.routes || [];
+  own.forEach((r, i) => {
+    if (!r || !ids.has(r.from) || !ids.has(r.to)) P(`route ${i + 1}${r && r.from ? ` (${r.from} to ${r.to})` : ""} must join two of the locations (from, to)`);
+    else if (r.kind && !K.ROUTES[r.kind]) P(`route ${r.from} to ${r.to}: unknown kind "${r.kind}" (${Object.keys(K.ROUTES).join(", ")})`);
+    else if (r.days != null && !(typeof r.days === "number" && r.days >= 0)) P(`route ${r.from} to ${r.to}: days must be a number`);
+  });
+  for (const cid of Object.keys(A.cities || {})) if (!(W0.locations || []).some(l => l && (l.city === cid || (!l.city && l.id === cid)))) N(`the 3D city "${cid}" stands nowhere on the world map: give a location city: "${cid}"`);
+  for (const id of A.order) {
+    const m = A.meta[id];
+    if (m.location && !ids.has(m.location)) P(`${id} stands in the location "${m.location}", which the world map does not have`);
+    if (m.city && !(A.cities || {})[m.city]) P(`${id} stands in the city "${m.city}", which has not been made (atlas.js city <dir> ... --id ${m.city})`);
+  }
+  if (W0.party && W0.party.at && !ids.has(W0.party.at)) P(`the party stands at "${W0.party.at}", which is not one of the locations`);
+  if (W0.scale && !(W0.scale.per > 0)) P("scale needs per: how far one unit of the map is (scale: { unit: \"mile\", per: 0.6 })");
+  if (!A.worldTerrainData && D.locs.length) N("no land under the map yet: run atlas.js world");
+  const TD = A.worldTerrainData || {};
+  if (TD.drawing && !fs.existsSync(path.join(A.__dir || ".", TD.drawing))) P(`the drawing ${TD.drawing} is missing from the campaign folder: run atlas.js world <dir> --drawing <the picture>`);
+  const FK = ["mountains", "hills", "forest", "swamp", "marsh", "desert", "lake", "sea", "river"];
+  (W0.features || []).forEach((f, i) => {
+    if (!f || !FK.includes(f.kind)) P(`feature ${i + 1}: kind must be one of ${FK.join(", ")}`);
+    else if (!(Array.isArray(f.pts) && f.pts.length > 2) && !(Array.isArray(f.line) && f.line.length > 1) && !(Array.isArray(f.at) && (f.r || f.kind === "sea"))) P(`feature ${i + 1} (${f.kind}${f.name ? " " + f.name : ""}) needs pts: [[x, y], ...] (an area), line: [[x, y], ...] (a river, or a range with width:), or at: [x, y] with r:`);
+  });
+  const routes = D.routes, c3 = D.locs.filter(l => l.city && (A.cities || {})[l.city]).length;
+  if (!routes.length && D.locs.length > 1) N("no routes between the locations: add routes: in world.js, or run atlas.js world to have them suggested");
+  const line = `world map: ${D.look} · ${D.locs.length} location${D.locs.length === 1 ? "" : "s"} (${c3} with a 3D map) · ${routes.length} route${routes.length === 1 ? "" : "s"}${own.length ? "" : routes.length ? " (suggested)" : ""}${D.scale ? ` · 1 unit = ${D.scale.per} ${D.scale.unit || ""}` : " · no scale"}${D.party.at ? ` · the party at ${D.party.at}` : ""}`;
+  return { line, out, problems, notes };
+}
+// the world map's land: made, or made again keeping the land and every location already placed
+async function cmdWorld(dir) {
+  if (!dir || !fs.existsSync(path.join(dir, "campaign.js"))) die("Which campaign folder? node atlas.js world <dir>");
+  const WI = require("./world-invent.js");
+  if (!hasWorld(dir)) {
+    let size = null;
+    if (flags.drawing && flags.drawing !== true && fs.existsSync(flags.drawing)) { const z = WI.imageSize(fs.readFileSync(flags.drawing)); if (z) size = z.w >= z.h ? [1000, Math.round(1000 * z.h / z.w)] : [Math.round(1000 * z.w / z.h), 1000]; }
+    const n = WI.starter(dir, load(dir), flags, size);
+    const next = flags.drawing ? "Look at the drawing and add every place on it, at: [x, y] where it is drawn, its roads as routes and its mountains, forests, rivers and lakes as features (references/world.md, \"From a drawing\")" : flags.real ? "Add the story's other places to it: each is found on the real map by its name (or geo: \"Place, Country\")" : "Add the story's other places to it (references/world.md), then run this again to place them";
+    console.log(`wrote ${path.join(dir, "world.js")}: ${n ? `a location for each of the campaign's ${n} cit${n === 1 ? "y" : "ies"}` : "no locations yet"}. ${next}.`);
+  }
+  let A = load(dir);
+  const old = A.worldTerrainData || {}, log = m => console.log(m);
+  const mode = flags.drawing ? "drawing" : flags.real ? "real" : flags.land || flags.seed || flags.replace ? "invent" : old.drawing ? "drawing" : old.real ? "real" : "invent";
+  const { T, summary } = mode === "drawing" ? WI.fromDrawing(dir, A, flags.drawing, flags, log) : mode === "real" ? await require("./world-real.js").realWorld(dir, A, flags, log) : WI.invent(A, flags, log);
+  WI.writeTerrain(dir, T, A.config.title);
+  console.log(`wrote ${path.join(dir, "world-terrain.js")}: ${summary}`);
+  if (flags.across && !(A.worldData || {}).scale) console.log("  (--across sets the scale only when it starts a world.js: add scale: { unit, per } to world.js by hand)");
+  A = load(dir); const r = checkWorld(A); console.log("\n" + r.line + (r.problems ? "" : " OK")); for (const l of r.out) console.log(l);
+  console.log(`\nNext: node atlas.js build ${dir}   (the page shows it under "World map")`);
 }
 // music: every place plays a theme; a theme it names must exist
 function checkMusic(A) {
@@ -382,7 +470,9 @@ function cmdCheck(dir, want) {
     console.log(`clue trail: ${leads.length} lead${leads.length === 1 ? "" : "s"} between ${A.order.length} places${out.length ? "" : "  OK"}`); out.forEach(l => console.log(l));
     if (A.config.music !== false) { const c = checkMusic(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
     if (A.castData) { const c = checkCast(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
-    if (A.cityData) { const c = checkCity(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
+    for (const cid of Object.keys(A.cities || {})) { const c = checkCity(A, cid); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
+    if (A.worldData) { const c = checkWorld(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
+    else for (const id of A.order) { const m = A.meta[id]; if (m.location) { console.log(`   ! ${id} stands in the world location "${m.location}", but the campaign has no world map (world.js)`); problems++; } }
     if (flags.names) nameReview(A);
   }
   console.log(problems ? `${problems} problem(s), ${notes} note(s)` : notes ? `no problems, ${notes} note(s)` : "all clear");
@@ -446,7 +536,7 @@ function cmdStatus(dir) {
   // --json: the same table for the Atlas app's progress view; nothing is written
   if (flags.json) {
     const places = rows.map(r => Object.assign({ id: r.id, name: r.m.name || r.id, tier: r.m.tier || null, category: r.m.category || "", mapped: r.mapped }, r.mapped ? { rooms: r.rooms, done: r.done, floors: r.floors, clues: r.clues, people: r.npcs } : {}));
-    console.log(JSON.stringify({ title: A.config.title, city: !!A.cityData, places }));
+    console.log(JSON.stringify({ title: A.config.title, city: !!A.cityData, cities: Object.keys(A.cities || {}), world: !!A.worldData, places }));
     return;
   }
   const catName = c => (cats.find(x => x.id === c) || {}).name || c || "Places";
@@ -476,8 +566,12 @@ function pageParts(dir) {
   const over = `:root { ${light.join("; ")} }` + (dark.length ? `\n@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${dark.join("; ")} } }\n:root[data-theme="dark"] { ${dark.join("; ")} }` : "");
   const css = fs.readFileSync(path.join(ENGINE, "atlas.css"), "utf8");
   const city = !!A.cityData;       // a campaign with a city map also needs the city engine and three.js
+  const world = hasWorld(dir);     // and one with a world map, the world engine (it needs nothing else)
   const three = city ? `<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\n<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>\n` : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
+  // the game master's drawing rides in the page itself, before the page is drawn
+  const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
+  const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw };
@@ -558,17 +652,20 @@ function cmdInit(dir) {
 // the city map: fetch a real city, invent one, or find where a real spot falls on a fetched city's sheet
 async function cmdCity(dir, place) {
   if (!dir || !fs.existsSync(path.join(dir, "campaign.js"))) die("Which campaign folder? node atlas.js city <dir> \"City, Country\"   or   node atlas.js city <dir> --invent \"Name\"");
+  const id = flags.id && flags.id !== true ? require("./city-common.js").cityTarget(flags.id) : null;
+  if (flags.id === true) die("--id needs a name for the city: --id harrowgate");
   try {
     if (flags.invent) require("./city-invent.js").inventCity(dir, flags.invent === true ? place : flags.invent, flags);
     else await require("./city-real.js").importCity(dir, place, flags);
   } catch (e) { die("city: " + e.message); }
-  const r = checkCity(load(dir)); console.log("\n" + r.line + (r.problems ? "" : " OK")); for (const l of r.out) console.log(l);
+  const A = load(dir), r = checkCity(A, id); console.log("\n" + r.line + (r.problems ? "" : " OK")); for (const l of r.out) console.log(l);
+  if (id && !(A.worldData && (A.worldData.locations || []).some(l => l.city === id))) console.log(`\nThis city stands on the world map once a location in world.js says city: "${id}". Places stand in it with city: "${id}" (or the location's id as location:).`);
   console.log(`\nNext: node atlas.js build ${dir}   (the page shows the city above the index)`);
 }
 async function cmdLocate(dir, what) {
   if (!dir || !what) die("node atlas.js locate <dir> \"an address or a name\"");
-  const A = load(dir); if (!A.cityData) die("this campaign has no city yet");
-  try { await require("./city-real.js").locate(dir, A.cityData.geo, what); } catch (e) { die("locate: " + e.message); }
+  const A = load(dir), C = flags.id && A.cities ? A.cities[flags.id] : A.cityData; if (!C) die(flags.id ? `this campaign has no city "${flags.id}"` : "this campaign has no city yet");
+  try { await require("./city-real.js").locate(dir, C.geo, what); } catch (e) { die("locate: " + e.message); }
 }
 
 // ---- kits: buildings made for one place, kept so the next campaign set there uses them again (the user, 15 and 20 Oct
@@ -628,5 +725,6 @@ switch (cmd) {
   case "export": cmdExport(pos[0], pos.slice(1)); break;
   case "catalogue": case "catalog": cmdCatalogue(pos[0]); break;
   case "kit": cmdKit(pos[0], pos[1], pos[2]); break;
+  case "world": cmdWorld(pos[0]).catch(e => die("world: " + e.message)); break;
   default: console.log(fs.readFileSync(__filename, "utf8").split("*/")[0].replace(/^#!.*\n\/\* ?/, ""));
 }

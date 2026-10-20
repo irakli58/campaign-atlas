@@ -1,0 +1,1099 @@
+/* The world map: a large 2D map of the whole world a campaign travels (a realm, a coast, a country, a star system), the
+   level above its cities. Each location on it may be one of the campaign's 3D cities (location.city = that city's id),
+   and "Enter" opens that city in the page's own 3D map (ATLAS.cityMount, the very view the Gazetteer shows: nothing here
+   draws a city). Locations and routes come from world.js (ATLAS.world); the land, the rivers and where unplaced
+   locations stand come from world-terrain.js (ATLAS.worldTerrain, written by atlas.js world). What the referee changes
+   on the page (a location moved, added or deleted, a route, what the party knows, where the party is and where it is
+   going) is kept in the page's database (collection "world"), or in this browser when there is none, and laid over the
+   campaign's own world; "Copy as world.js" gives it back to the campaign. Drawn in SVG; it needs no three.js.
+   The user asked for it on 20 Oct 2026 ("Interactive 2D World Map Connected to Existing 3D City Maps"). */
+(function (A) {
+  "use strict";
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const r1 = v => Math.round(v * 10) / 10;
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const hex = c => { const n = parseInt(c.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const ramp = (stops, t) => {
+    if (t <= stops[0][0]) return stops[0][1];
+    for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) { const [t0, c0] = stops[i - 1], [t1, c1] = stops[i]; return mix(c0, c1, (t - t0) / (t1 - t0)); }
+    return stops[stops.length - 1][1];
+  };
+  const hash = (x, y, s) => { let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1274126177)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const strHash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return (h >>> 0) / 4294967296; };
+
+  /* ---- what a world can hold */
+  // the look of the map: a parchment map (fantasy, and the past), an atlas (the modern world) or a star map (the future)
+  const LOOK_OF = { parchment: "parchment", fantasy: "parchment", old: "parchment", antique: "parchment", medieval: "parchment", industrial: "parchment", historical: "parchment",
+    atlas: "atlas", modern: "atlas", political: "atlas", stars: "stars", star: "stars", scifi: "stars", future: "stars", space: "stars" };
+  // what the party knows of a place. Unknown places are not shown on the players' map.
+  const STATES = [["unknown", "Unknown to the party"], ["rumoured", "Rumoured"], ["known", "Known"], ["visited", "Visited"], ["done", "Done with"]];
+  // kinds of location: [importance 1 to 3 (1 is always named on the map), name]
+  const KINDS = {
+    capital: [1, "Capital"], city: [1, "City"], town: [2, "Town"], village: [3, "Village"], hamlet: [3, "Hamlet"], port: [2, "Port"],
+    castle: [2, "Castle"], keep: [2, "Keep"], fort: [2, "Fort"], manor: [3, "Manor"], farm: [3, "Farm"], inn: [3, "Inn"], tower: [3, "Tower"],
+    ruin: [3, "Ruin"], dungeon: [3, "Dungeon"], cave: [3, "Cave"], lair: [3, "Lair"], temple: [3, "Temple"], shrine: [3, "Shrine"], monastery: [3, "Monastery"],
+    camp: [3, "Camp"], mine: [3, "Mine"], landmark: [3, "Landmark"], stones: [3, "Standing stones"], battlefield: [3, "Battlefield"], bridge: [3, "Bridge"],
+    lighthouse: [3, "Lighthouse"], grove: [3, "Grove"], wreck: [3, "Wreck"],
+    base: [2, "Base"], airport: [2, "Airport"], station: [2, "Station"], site: [3, "Site"],
+    star: [1, "Star"], planet: [1, "Planet"], moon: [2, "Moon"], outpost: [2, "Outpost"], asteroid: [3, "Asteroid"], belt: [3, "Belt"], gate: [2, "Gate"], ship: [3, "Ship"], anomaly: [3, "Anomaly"]
+  };
+  // the kinds of place a 3D city map is made for (the others are sites: their places are mapped floor by floor)
+  const SETTLED = ["capital", "city", "town", "village", "hamlet", "port", "castle", "keep", "fort", "camp", "base", "station", "outpost", "planet", "moon", "monastery"];
+  const ROUTES = { road: "Road", trail: "Trail", pass: "Mountain pass", river: "River", sea: "Sea route", rail: "Railway", air: "Air route", tunnel: "Tunnel", portal: "Portal", lane: "Space lane", jump: "Jump route" };
+  const OVERLAND = { road: 1, trail: 1, pass: 1, river: 1, rail: 1, tunnel: 1 };
+
+  // each look's colours, its route lines [colour, width, dashes] and its type
+  const STYLE = {
+    parchment: {
+      ink: "#3b2a1a", paper: "#efe3c3", mk: "#f6ecd2", river: "#58788c", label: "#3b2a1a",
+      sea: [[0, hex("#c9cdb6")], [.5, hex("#b6bea9")], [1, hex("#a3ad9c")]],
+      land: [[0, hex("#f2e8ca")], [.35, hex("#ecdeb8")], [.6, hex("#e0cc9f")], [.84, hex("#d2b98c")], [.93, hex("#ece4d2")], [1, hex("#f6f1e4")]],
+      wet: hex("#d6dbab"), dry: hex("#f3dfaa"), tree: "#c8c48c",
+      routes: { road: ["#7a2e1d", 1.9, "7 3"], trail: ["#6e5233", 1.6, "1.6 3.4"], pass: ["#5a3a22", 1.7, "5 2 1.6 2"], river: ["#3e6a86", 1.9, "6 3"], sea: ["#2f4f6f", 1.7, "9 5"], rail: ["#2b2119", 2.2, "10 3"], air: ["#55504a", 1.3, "3 4"], tunnel: ["#5a5048", 1.7, "3 3"], portal: ["#6a3f9e", 1.9, "2 3"], lane: ["#2f4f6f", 1.7, "8 4"], jump: ["#6a3f9e", 1.7, "2 4"] }
+    },
+    atlas: {
+      ink: "#2b3440", paper: "#f4f1e8", mk: "#ffffff", river: "#6f9fc8", label: "#26303a",
+      sea: [[0, hex("#c7deee")], [1, hex("#98bcd9")]],
+      land: [[0, hex("#d6e6bd")], [.3, hex("#e4e2b8")], [.55, hex("#dccfa2")], [.8, hex("#c8b18f")], [.93, hex("#eeeae2")], [1, hex("#fbfbf8")]],
+      wet: hex("#bdd8a6"), dry: hex("#ede0b6"), tree: "#a9c98f",
+      routes: { road: ["#c0392b", 2.2, ""], trail: ["#8a6d4a", 1.5, "4 3"], pass: ["#8a5a2a", 1.7, "5 2 1.5 2"], river: ["#3f7fb5", 1.9, "6 3"], sea: ["#2d6da3", 1.6, "8 5"], rail: ["#222", 2.2, "9 4"], air: ["#666", 1.3, "3 4"], tunnel: ["#666", 1.7, "3 3"], portal: ["#7b4fb5", 1.8, "2 3"], lane: ["#2d6da3", 1.6, "8 4"], jump: ["#7b4fb5", 1.6, "2 4"] }
+    },
+    stars: {
+      ink: "#9fd9ff", paper: "#05070d", mk: "#0b1424", river: "#4a7aa0", label: "#cfe6ff",
+      routes: { lane: ["#5ad1e6", 1.6, "8 5"], jump: ["#e07ad8", 1.6, "2 4"], portal: ["#c08aff", 1.8, "2 3"], road: ["#7fa8c9", 1.5, "6 3"], trail: ["#7fa8c9", 1.2, "2 3"], pass: ["#7fa8c9", 1.4, "4 2"], river: ["#4a7aa0", 1.5, "6 3"], sea: ["#4a7aa0", 1.5, "8 5"], rail: ["#9fb5c9", 1.8, "9 3"], air: ["#9fb5c9", 1.2, "3 4"], tunnel: ["#9fb5c9", 1.4, "3 3"] }
+    }
+  };
+
+  // icons, drawn in a 24-square box about the location's point. .k is filled with the ink.
+  const CITY_ICON = '<path d="M-10 7V-5h5v4h2V-9l3-3 3 3v8h2v-4h5V7Z"/><path class="k" d="M-1.6 7V4.4a1.6 1.6 0 0 1 3.2 0V7Z"/>';
+  const TEMPLE_ICON = '<path d="M-9-2L0-8l9 6Z"/><path d="M-8 7h16V5.6H-8Z"/><path d="M-6-2v7.5M-2-2v7.5M2-2v7.5M6-2v7.5" fill="none"/>';
+  const CAVE_ICON = '<path d="M-10 7Q0-11 10 7Z"/><path class="k" d="M-3.6 7V3.5a3.6 3.6 0 0 1 7.2 0V7Z"/>';
+  const CASTLE_ICON = '<path d="M-7 7V-6h2.3v2h2.3v-2h4.8v2h2.3v-2H7V7Z"/><path class="k" d="M-1.8 7V3.6a1.8 1.8 0 0 1 3.6 0V7Z"/>';
+  const PORT_ICON = '<circle cx="0" cy="-8.5" r="2" fill="none"/><path d="M0-6.5V7M-6 1.5a6 6 0 0 0 12 0M-3.5-3.5h7" fill="none" stroke-width="1.6"/>';
+  const ICONS = {
+    parchment: {
+      capital: CITY_ICON + '<path class="k" d="M0-12v-6.5l5.5 1.8L0-14.8Z"/>', city: CITY_ICON,
+      town: '<path d="M-9 7V0l4-4.5L-1 0v7Z"/><path d="M-2 7V-2.5l5-5 5 5V7Z"/>', village: '<path d="M-6 7V0l6-5.5L6 0v7Z"/>', hamlet: '<path d="M-4.5 7V1.5l4.5-4 4.5 4V7Z"/>',
+      manor: '<path d="M-9 7V-1h18v8Z"/><path d="M-10-1l3-5h14l3 5Z"/>', farm: '<path d="M-7 7V0l7-5 7 5v7Z"/><path d="M-3 7V3h6v4" fill="none"/>',
+      castle: CASTLE_ICON, keep: CASTLE_ICON, fort: '<path d="M-10 7V-1h3v-2.5h3V-1h8v-2.5h3V-1h3v8Z"/><path class="k" d="M-1.8 7V4a1.8 1.8 0 0 1 3.6 0V7Z"/>',
+      tower: '<path d="M-3 7V-4h6V7Z"/><path d="M-4.2-4L0-12l4.2 8Z"/>', ruin: '<path d="M-7 7V-4l1.5 1.2L-4-6l1.4 2.5L-1-3V7Z"/><path d="M2 7V1.5l1.6-1 1.2 1.6L6.5.6 7 7Z"/>',
+      dungeon: CAVE_ICON, cave: CAVE_ICON, mine: '<path d="M-9 7Q0-6 9 7Z"/><path d="M-4 4L4-6M-1-8q5 0 8 6" fill="none" stroke-width="1.5"/>',
+      lair: '<path d="M-6-2a6 6 0 1 1 12 0c0 3-1.6 4.2-2.6 4.8V6h-6.8V2.8C-4.4 2.2-6 1-6-2Z"/><circle class="k" cx="-2.4" cy="-1.6" r="1.6"/><circle class="k" cx="2.4" cy="-1.6" r="1.6"/>',
+      temple: TEMPLE_ICON, monastery: TEMPLE_ICON, shrine: '<path d="M-6 0L0-6l6 6Z"/><path d="M-4 0v7M4 0v7M-6 7h12" fill="none"/>',
+      port: PORT_ICON, lighthouse: '<path d="M-3 7l1.2-14h3.6L3 7Z"/><path class="k" d="M-2.4-7h4.8v-3h-4.8Z"/><path d="M-5-9.5h-3M5-9.5h3" fill="none"/>',
+      camp: '<path d="M-8 7L0-7l8 14Z"/><path d="M0-7V7M0 7l-2.5-6" fill="none"/>', inn: '<path d="M-7 7V0l6-5 6 5v7Z"/><path d="M5-1h4M8-1v2" fill="none"/><path d="M6.4 1h3.2v3H6.4Z"/>',
+      landmark: '<path d="M-2.4 7l.9-13.5L0-9.5l1.5 3L2.4 7Z"/><path d="M-5 7h10" fill="none"/>', site: '<path d="M-2.4 7l.9-13.5L0-9.5l1.5 3L2.4 7Z"/><path d="M-5 7h10" fill="none"/>',
+      stones: '<path d="M-8 7V-1.5q1.5-2 3 0V7Z"/><path d="M-1.5 7V-4q1.5-2 3 0V7Z"/><path d="M5 7V-.5q1.5-2 3 0V7Z"/>',
+      battlefield: '<path d="M-7-7L7 7M7-7L-7 7M-6-2.5l3.5-3.5M6-2.5L2.5-6" fill="none" stroke-width="1.7"/>',
+      bridge: '<path d="M-10 0h20v2.2h-20Z"/><path d="M-8 2.2q8 7 16 0M-8 2.2V7M8 2.2V7" fill="none"/>',
+      grove: '<circle cx="-3.5" cy="-1" r="4"/><circle cx="3.5" cy="-2" r="4.2"/><path d="M-3.5 3v4M3.5 2.2V7" fill="none"/>',
+      wreck: '<path d="M-9 2h16l-3 5h-10Z"/><path d="M-1 2V-8l5 6h-5" fill="none"/>', base: CASTLE_ICON,
+      _: '<circle r="4.6"/><circle class="k" r="1.7"/>'
+    },
+    atlas: {
+      capital: '<circle r="6.5"/><circle class="k" r="3"/>', city: '<circle class="k" r="5.2"/><circle r="2"/>', town: '<circle r="4.2" stroke-width="1.7"/>',
+      village: '<circle class="k" r="2.7"/>', hamlet: '<circle class="k" r="2.2"/>', port: PORT_ICON,
+      airport: '<path class="k" d="M0-7l1.3 5 5.7 2.6v1.6l-5.7-1.2-.5 4.4 2 1.6v1.2L0 6.4l-2.8.8V6l2-1.6-.5-4.4L-7 1.2V-.4l5.7-2.6Z"/>',
+      castle: '<rect x="-4.5" y="-4.5" width="9" height="9"/>', keep: '<rect x="-4.5" y="-4.5" width="9" height="9"/>', fort: '<rect x="-4.5" y="-4.5" width="9" height="9"/>',
+      base: '<rect x="-4.5" y="-4.5" width="9" height="9"/><circle class="k" r="1.8"/>', station: '<rect x="-4" y="-4" width="8" height="8" transform="rotate(45)"/>',
+      _: '<path d="M0-6L6 5H-6Z"/>'
+    },
+    stars: {
+      star: '<circle class="g" r="10"/><circle class="k" r="4.6"/><path d="M0-11V-6.6M0 11V6.6M-11 0h4.4M11 0H6.6" fill="none"/>',
+      planet: '<circle class="pf" r="6"/><ellipse rx="11" ry="3.4" transform="rotate(-18)" fill="none"/>', moon: '<circle class="pf" r="4.2"/>',
+      station: '<path d="M0-8L7-4V4L0 8-7 4V-4Z" fill="none"/><circle class="k" r="2.6"/><path d="M0-8v5.4M0 8V2.6M-7-4l4.7 2.6M7 4L2.3 1.4M7-4L2.3-1.4M-7 4l4.7-2.6" fill="none"/>',
+      outpost: '<rect x="-5" y="-3" width="10" height="7"/><path d="M0-3v-6M-2.5-9h5" fill="none"/>', base: '<rect x="-5" y="-3" width="10" height="7"/><path d="M0-3v-6M-2.5-9h5" fill="none"/>',
+      gate: '<circle r="8" fill="none" stroke-width="2.2"/><circle r="4.5" fill="none" stroke-dasharray="2 2"/>',
+      asteroid: '<path d="M-6-1l2-4 5-1 4 3 1 4-3 4h-6l-3-3Z"/>', belt: '<path d="M-6-1l2-4 5-1 4 3 1 4-3 4h-6l-3-3Z"/>',
+      ship: '<path d="M8 0L-6-5-3 0-6 5Z"/>', wreck: '<path d="M8 0L-6-5-3 0-6 5Z" stroke-dasharray="2 1.5"/>',
+      anomaly: '<circle r="7" fill="none" stroke-dasharray="1.5 2.5"/><circle class="k" r="2"/>',
+      _: '<path d="M0-6L6 0 0 6-6 0Z"/>'
+    }
+  };
+  const PLANETS = ["#c97b4a", "#5f8fc9", "#8fbf6a", "#c9b36a", "#9b6ac9", "#6ac9c0", "#d9d2c4", "#c96a7e"];
+  const iconOf = (look, L) => {
+    const set = ICONS[look], k = String(L.kind || "").toLowerCase();
+    let s = set[k] || set._;
+    if (look === "stars" && /class="pf"/.test(s)) s = s.replace(/class="pf"/g, `class="pf" style="fill:${PLANETS[Math.floor(strHash(L.id) * PLANETS.length)]}"`);
+    return s;
+  };
+  const impOf = L => (KINDS[L.kind] || [3])[0];
+
+  /* ---- registering a world, and laying the referee's changes over it */
+  A.world = data => { A.worldData = data || {}; return A; };
+  A.worldTerrain = data => { A.worldTerrainData = data || {}; return A; };
+  const unb64 = s => {
+    if (!s) return null; if (typeof s !== "string") return Uint8Array.from(s);
+    const bin = typeof atob === "function" ? atob(s) : Buffer.from(s, "base64").toString("binary"), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return u;
+  };
+  // the world as the page draws it: the campaign's world.js, its terrain, and the referee's changes (OV) laid over them
+  function prepareWorld(W, T, OV) {
+    W = W || {}; T = T || {}; OV = OV || {};
+    const look = LOOK_OF[String(W.look || T.look || "parchment").toLowerCase()] || "parchment";
+    const size = Array.isArray(W.size) && W.size[0] > 0 ? W.size.slice(0, 2) : T.w ? [T.w, T.h] : [1000, 700];
+    const G = T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist) } : null;
+    const spots = T.spots || {}, locs = [], byId = {};
+    for (const l of W.locations || []) {
+      if (!l || !l.id || byId[l.id]) continue;
+      const o = Object.assign({ kind: "town", state: "known" }, l);
+      o.at = Array.isArray(l.at) ? l.at.slice(0, 2) : Array.isArray(spots[l.id]) ? spots[l.id].slice(0, 2) : null;
+      // a city made with the location's own id is its 3D map, whether or not world.js says so (the page made it)
+      if (!o.city && A.cities && A.cities[o.id]) o.city = o.id;
+      locs.push(o); byId[o.id] = o;
+    }
+    for (const [id, d] of Object.entries(OV.loc || {})) {
+      if (!d || typeof d !== "object") continue;
+      if (byId[id]) { if (d.gone) byId[id].gone = true; else Object.assign(byId[id], d, { edited: true }); }
+      else if (!d.gone && d.name) { const o = Object.assign({ kind: "town", state: "known" }, d, { id, added: true }); locs.push(o); byId[id] = o; }
+    }
+    // a location with nowhere to stand (written by hand, the terrain not made again since) waits in a row at the foot
+    let un = 0; for (const l of locs) if (!l.gone && !Array.isArray(l.at)) { l.at = [size[0] * (.08 + (un % 12) * .075), size[1] * (.93 - Math.floor(un / 12) * .05)]; l.unplaced = true; un++; }
+    const routes = [], rById = {};
+    const from = (W.routes && W.routes.length ? W.routes : T.routes || []);
+    for (const r of from) { if (!r || !r.from || !r.to) continue; const id = r.id || r.from + "~" + r.to; if (rById[id]) continue; const o = Object.assign({ kind: "road" }, r, { id }); routes.push(o); rById[id] = o; }
+    for (const [id, d] of Object.entries(OV.route || {})) {
+      if (!d || typeof d !== "object") continue;
+      if (rById[id]) { if (d.gone) rById[id].gone = true; else Object.assign(rById[id], d, { edited: true }); }
+      else if (!d.gone && d.from && d.to) { const o = Object.assign({ kind: "road" }, d, { id, added: true }); routes.push(o); rById[id] = o; }
+    }
+    const live = locs.filter(l => !l.gone), ok = id => byId[id] && !byId[id].gone;
+    const party = Object.assign({ at: null, plan: [], trail: [] }, W.party || {}, OV.party || {});
+    party.plan = (party.plan || []).filter(ok); party.trail = (party.trail || []).filter(ok); if (!ok(party.at)) party.at = null;
+    // a real map knows its own scale (the terrain says it); world.js may still give another
+    return { look, title: W.title || "", size, scale: W.scale && W.scale.per > 0 ? W.scale : T.scale && T.scale.per > 0 ? T.scale : null, speeds: W.speeds || null, G, rivers: T.rivers || [], stars: T.stars || null,
+      labels: [...(T.labels || []), ...(W.labels || [])], locs: live, byId, routes: routes.filter(r => !r.gone && ok(r.from) && ok(r.to)), rById, party, W, T };
+  }
+
+  /* ---- the land: heights and wetness on a grid of cells (world-terrain.js) */
+  function sampler(G) {
+    const { cols, rows, cell } = G;
+    return (x, y, arr) => {
+      arr = arr || G.H; const fx = x / cell - .5, fy = y / cell - .5, i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j;
+      const g = (a, b) => arr[clamp(b, 0, rows - 1) * cols + clamp(a, 0, cols - 1)];
+      return (g(i, j) * (1 - tx) + g(i + 1, j) * tx) * (1 - ty) + (g(i, j + 1) * (1 - tx) + g(i + 1, j + 1) * tx) * ty;
+    };
+  }
+  // the colours of the land and the sea, shaded as if lit from the north-west; a star map's nebulae
+  function paintTerrain(WD) {
+    const G = WD.G, k = 2, cw = G.cols * k, ch = G.rows * k, st = STYLE[WD.look], S = sampler(G), sea = G.sea;
+    const NEB = [hex("#3b1f5e"), hex("#123f4c"), hex("#4b1a33"), hex("#1d2f63")], stars = WD.look === "stars";
+    const paint = colour => {
+      const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
+      const cx = cv.getContext("2d"), img = cx.createImageData(cw, ch), d = img.data;
+      for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
+        const x = (px + .5) / k * G.cell, y = (py + .5) / k * G.cell, c = colour(x, y, S(x, y), G.M ? S(x, y, G.M) : 128), o = (py * cw + px) * 4;
+        d[o] = clamp(c[0], 0, 255); d[o + 1] = clamp(c[1], 0, 255); d[o + 2] = clamp(c[2], 0, 255); d[o + 3] = 255;
+      }
+      cx.putImageData(img, 0, 0); return cv.toDataURL();
+    };
+    // nebulae: the wetness grid is their density, the height grid their colour
+    if (stars) return { sea: paint((x, y, hv, mv) => { const dens = clamp((mv - 120) / 135, 0, 1), hue = hv / 256 * NEB.length, a = NEB[Math.floor(hue) % NEB.length], b = NEB[(Math.floor(hue) + 1) % NEB.length]; return mix([5, 7, 13], mix(a, b, hue % 1), dens * dens * .9); }) };
+    return {
+      sea: paint((x, y, hv) => ramp(st.sea, clamp((sea - hv) / Math.max(1, sea) * 2.2, 0, 1))),
+      land: paint((x, y, hv, mv) => {
+        const t = Math.max(0, (hv - sea) / (255 - sea)); let c = ramp(st.land, t);
+        if (t < .62) { const wv = (mv - 128) / 127; c = wv > 0 ? mix(c, st.wet, wv * .8) : mix(c, st.dry, -wv * .7); }
+        const dx = S(x + G.cell, y) - S(x - G.cell, y), dy = S(x, y + G.cell) - S(x, y - G.cell), sh = hv > sea ? clamp(1 - (dx + dy) * (WD.T && WD.T.real ? .006 : .011), .72, 1.16) : 1;
+        return [c[0] * sh, c[1] * sh, c[2] * sh];
+      })
+    };
+  }
+  // the coast: where the land meets the sea, as closed rings (marching squares over the grid, the edge counted as sea)
+  function coastRings(G) {
+    const { cols, rows, cell, H, sea } = G, v = (i, j) => (i < 0 || j < 0 || i >= cols || j >= rows) ? -1 : H[j * cols + i];
+    const pts = [], segs = [], key = new Map();
+    const pid = (x, y) => { const k = Math.round(x * 64) + "," + Math.round(y * 64); let i = key.get(k); if (i == null) { i = pts.length; pts.push([(x + .5) * cell, (y + .5) * cell]); key.set(k, i); } return i; };
+    const t = (p, q) => (sea + .5 - p) / (q - p);
+    for (let j = -1; j < rows; j++) for (let i = -1; i < cols; i++) {
+      const a = v(i, j), b = v(i + 1, j), c = v(i + 1, j + 1), d = v(i, j + 1), L = sea + .5;
+      const idx = (a > L ? 8 : 0) | (b > L ? 4 : 0) | (c > L ? 2 : 0) | (d > L ? 1 : 0);
+      if (!idx || idx === 15) continue;
+      const T = () => pid(i + t(a, b), j), R = () => pid(i + 1, j + t(b, c)), B = () => pid(i + t(d, c), j + 1), Lf = () => pid(i, j + t(a, d));
+      const add = (p, q) => segs.push([p, q]);
+      switch (idx) {
+        case 1: case 14: add(Lf(), B()); break;
+        case 2: case 13: add(B(), R()); break;
+        case 3: case 12: add(Lf(), R()); break;
+        case 4: case 11: add(T(), R()); break;
+        case 6: case 9: add(T(), B()); break;
+        case 7: case 8: add(Lf(), T()); break;
+        case 5: if ((a + b + c + d) / 4 > L) { add(Lf(), T()); add(B(), R()); } else { add(Lf(), B()); add(T(), R()); } break;
+        case 10: if ((a + b + c + d) / 4 > L) { add(T(), R()); add(Lf(), B()); } else { add(Lf(), T()); add(B(), R()); } break;
+      }
+    }
+    const at = pts.map(() => []); segs.forEach((s, n) => { at[s[0]].push(n); at[s[1]].push(n); });
+    const used = new Uint8Array(segs.length), rings = [];
+    for (let n = 0; n < segs.length; n++) {
+      if (used[n]) continue; used[n] = 1;
+      const ring = [segs[n][0], segs[n][1]];
+      for (let guard = 0; guard < 200000; guard++) {
+        const last = ring[ring.length - 1], next = at[last].find(m => !used[m]);
+        if (next == null) break; used[next] = 1; const s = segs[next]; ring.push(s[0] === last ? s[1] : s[0]);
+      }
+      if (ring.length > 3) rings.push(ring.map(i => pts[i]));
+    }
+    return rings;
+  }
+  function chaikin(p, n, closed) {
+    for (let k = 0; k < n; k++) {
+      const out = closed ? [] : [p[0]], m = p.length;
+      for (let i = 0; i < (closed ? m : m - 1); i++) { const a = p[i], b = p[(i + 1) % m]; out.push([a[0] * .75 + b[0] * .25, a[1] * .75 + b[1] * .25], [a[0] * .25 + b[0] * .75, a[1] * .25 + b[1] * .75]); }
+      if (!closed) out.push(p[m - 1]); p = out;
+    }
+    return p;
+  }
+  function rdp(p, eps) {
+    if (p.length < 3) return p;
+    const keep = new Uint8Array(p.length); keep[0] = keep[p.length - 1] = 1; const stack = [[0, p.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop(); let best = -1, bd = eps;
+      const [x1, y1] = p[a], [x2, y2] = p[b], L = Math.hypot(x2 - x1, y2 - y1) || 1;
+      for (let i = a + 1; i < b; i++) { const d = Math.abs((x2 - x1) * (y1 - p[i][1]) - (x1 - p[i][0]) * (y2 - y1)) / L; if (d > bd) { bd = d; best = i; } }
+      if (best > 0) { keep[best] = 1; stack.push([a, best], [best, b]); }
+    }
+    return p.filter((_, i) => keep[i]);
+  }
+  // a closed ring is simplified in two halves (from its first point to the point farthest from it, and back): as one
+  // line its ends meet, and every point would seem to lie on it
+  function rdpRing(r, eps) {
+    if (r.length < 4) return r;
+    let m = 1, far = -1; for (let i = 1; i < r.length; i++) { const d = (r[i][0] - r[0][0]) ** 2 + (r[i][1] - r[0][1]) ** 2; if (d > far) { far = d; m = i; } }
+    const a = rdp(r.slice(0, m + 1), eps), b = rdp(r.slice(m), eps);
+    return a.concat(b.slice(1, b.length - (b.length > 1 && b[b.length - 1][0] === r[0][0] && b[b.length - 1][1] === r[0][1] ? 1 : 0)));
+  }
+  const pathD = (p, closed) => "M" + p.map(q => r1(q[0]) + " " + r1(q[1])).join("L") + (closed ? "Z" : "");
+  const plen = p => { let s = 0; for (let i = 1; i < p.length; i++) s += Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); return s; };
+  const midOf = p => { const half = plen(p) / 2; let s = 0; for (let i = 1; i < p.length; i++) { const l = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); if (s + l >= half) { const t = (half - s) / (l || 1); return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * t, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * t]; } s += l; } return p[0]; };
+
+  /* ---- a world the game master drew: the picture (ATLAS.worldDrawingSrc, put in the page by the build), its coasts
+          traced so it can be redrawn in Atlas's look, and its features (world.js features:) raised as mountains,
+          planted as forests, run as rivers. A coloured map's blue is its sea; on an ink drawing the sea is the paper
+          the sheet's edge reaches without crossing a line. */
+  function vnoise(seed) {
+    const P = new Float32Array(1024); let s = seed >>> 0 || 1; for (let i = 0; i < 1024; i++) { s = Math.imul(s ^ (s >>> 15), 2246822507) + 0x9e3779b9 >>> 0; P[i] = s / 4294967296; }
+    const at = (i, j) => P[(Math.imul(i, 73856093) ^ Math.imul(j, 19349663)) & 1023], sm = t => t * t * (3 - 2 * t);
+    const n = (x, y) => { const i = Math.floor(x), j = Math.floor(y), u = sm(x - i), v = sm(y - j), a = at(i, j), b = at(i + 1, j), c = at(i, j + 1), d = at(i + 1, j + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; };
+    return (x, y) => (n(x, y) * 4 + n(x * 2.1, y * 2.1) * 2 + n(x * 4.3, y * 4.3)) / 7;
+  }
+  function bfs(cols, rows, is) {
+    const N = cols * rows, D = new Float32Array(N).fill(1e9), q = [];
+    for (let n = 0; n < N; n++) if (is(n)) { D[n] = 0; q.push(n); }
+    for (let h = 0; h < q.length; h++) { const n = q[h], i = n % cols, j = (n / cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < cols - 1 ? n + 1 : -1, j > 0 ? n - cols : -1, j < rows - 1 ? n + cols : -1]) if (m >= 0 && D[m] > D[n] + 1) { D[m] = D[n] + 1; q.push(m); } }
+    return D;
+  }
+  // patches of like cells (4-way) no bigger than max, handed to fix: a word written in the sea is not an island
+  function specks(cols, rows, is, max, fix) {
+    const N = cols * rows, seen = new Uint8Array(N);
+    for (let n = 0; n < N; n++) {
+      if (seen[n] || !is(n)) continue;
+      const cells = [n]; seen[n] = 1;
+      for (let h = 0; h < cells.length; h++) { const c = cells[h], i = c % cols, j = (c / cols) | 0; for (const m of [i > 0 ? c - 1 : -1, i < cols - 1 ? c + 1 : -1, j > 0 ? c - cols : -1, j < rows - 1 ? c + cols : -1]) if (m >= 0 && !seen[m] && is(m)) { seen[m] = 1; cells.push(m); } }
+      if (cells.length <= max) for (const c of cells) fix(c);
+    }
+  }
+  const pip = (x, y, P) => { let inside = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside; } return inside; };
+  const lineDist = (x, y, L) => { let best = 1e9; for (let i = 1; i < L.length; i++) { const [ax, ay] = L[i - 1], [bx, by] = L[i], dx = bx - ax, dy = by - ay, t = clamp(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1), 0, 1); best = Math.min(best, Math.hypot(x - ax - dx * t, y - ay - dy * t)); } return best; };
+  function traceDrawing(img, W, H, feats) {
+    const cell = 4, cols = Math.round(W / cell), rows = Math.round(H / cell), N = cols * rows;
+    const iw = Math.max(cols * 2, Math.min(1800, img.naturalWidth || 1800)), ih = Math.max(rows * 2, Math.round(iw * (img.naturalHeight || H) / (img.naturalWidth || W)));
+    const cv = document.createElement("canvas"); cv.width = iw; cv.height = ih;
+    const cx = cv.getContext("2d", { willReadFrequently: true }); cx.fillStyle = "#fff"; cx.fillRect(0, 0, iw, ih); cx.drawImage(img, 0, 0, iw, ih);
+    const px = cx.getImageData(0, 0, iw, ih).data, minL = new Float32Array(N).fill(255), sum = new Float32Array(N * 4), cnt = new Float32Array(N);
+    for (let y = 0; y < ih; y++) { const j = Math.min(rows - 1, Math.floor(y * rows / ih)); for (let x = 0; x < iw; x++) { const n = j * cols + Math.min(cols - 1, Math.floor(x * cols / iw)), o = (y * iw + x) * 4, r = px[o], g = px[o + 1], b = px[o + 2], l = .3 * r + .59 * g + .11 * b; if (l < minL[n]) minL[n] = l; sum[n * 4] += r; sum[n * 4 + 1] += g; sum[n * 4 + 2] += b; sum[n * 4 + 3] += l; cnt[n]++; } }
+    const avgL = new Float32Array(N), blue = new Uint8Array(N); let nb = 0;
+    for (let n = 0; n < N; n++) { const c = cnt[n] || 1, r = sum[n * 4] / c, g = sum[n * 4 + 1] / c, b = sum[n * 4 + 2] / c; avgL[n] = sum[n * 4 + 3] / c; if (b - (r + g) / 2 > 14 && b > 80) { blue[n] = 1; nb++; } }
+    const paper = Float32Array.from(avgL).sort()[Math.floor(N * .75)];
+    let sea = new Uint8Array(N), how = "lines", wall = null;
+    if (nb > N * .08 && nb < N * .94) { sea = blue; how = "colour"; }
+    else {
+      wall = new Uint8Array(N);
+      for (let n = 0; n < N; n++) if (minL[n] < paper * .68 || avgL[n] < paper * .82) { const i = n % cols, j = (n / cols) | 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const I = i + di, J = j + dj; if (I >= 0 && J >= 0 && I < cols && J < rows) wall[J * cols + I] = 1; } }
+      const q = [], seed = n => { if (!wall[n] && !sea[n]) { sea[n] = 1; q.push(n); } };
+      for (let i = 0; i < cols; i++) { seed(i); seed((rows - 1) * cols + i); } for (let j = 0; j < rows; j++) { seed(j * cols); seed(j * cols + cols - 1); }
+      for (const f of feats) if (f && f.kind === "sea" && Array.isArray(f.at)) seed(clamp(Math.floor(f.at[1] / cell), 0, rows - 1) * cols + clamp(Math.floor(f.at[0] / cell), 0, cols - 1));
+      for (let h = 0; h < q.length; h++) { const n = q[h], i = n % cols, j = (n / cols) | 0; if (i > 0) seed(n - 1); if (i < cols - 1) seed(n + 1); if (j > 0) seed(n - cols); if (j < rows - 1) seed(n + cols); }
+    }
+    if (wall) {
+      const seen = new Uint8Array(N);
+      for (let n = 0; n < N; n++) {
+        if (seen[n] || sea[n]) continue;
+        const cells = [n]; seen[n] = 1; let paperIn = 0;
+        for (let h = 0; h < cells.length; h++) { const c = cells[h], i = c % cols, j = (c / cols) | 0; if (!wall[c]) paperIn++; for (const m of [i > 0 ? c - 1 : -1, i < cols - 1 ? c + 1 : -1, j > 0 ? c - cols : -1, j < rows - 1 ? c + cols : -1]) if (m >= 0 && !seen[m] && !sea[m]) { seen[m] = 1; cells.push(m); } }
+        if (cells.length < N * .02 && paperIn < Math.max(3, cells.length * .12)) for (const c of cells) sea[c] = 1;
+      }
+    }
+    specks(cols, rows, n => !sea[n], Math.max(3, N * .0004), n => { sea[n] = 1; });
+    specks(cols, rows, n => !!sea[n], Math.max(3, N * .0006), n => { sea[n] = 0; });
+    let land = 0; for (let n = 0; n < N; n++) if (!sea[n]) land++;
+    const share = land / N, ok = share > .05 && share < .985;
+    if (share <= .05) sea.fill(0);                      // the coast did not close, or there is none: all of it is land
+    const dS = bfs(cols, rows, n => !!sea[n]), dL = bfs(cols, rows, n => !sea[n]), nz = vnoise(11), nm = vnoise(23);
+    const Hh = new Uint8Array(N), M = new Uint8Array(N);
+    for (let n = 0; n < N; n++) {
+      const i = n % cols, j = (n / cols) | 0, f = nz(i / 14, j / 14), g = nm(i / 18, j / 18);
+      Hh[n] = sea[n] ? clamp(Math.round(128 - Math.min(118, dL[n] * 7)), 0, 128) : clamp(Math.round(132 + Math.min(26, dS[n] * 1.6) + f * 16), 129, 176);
+      M[n] = clamp(Math.round(92 + g * 46 + (dS[n] < 4 ? 14 : 0)), 0, 148);
+    }
+    const rivers = [], labels = [];
+    for (const f of feats) {
+      if (!f || !f.kind) continue;
+      const area = Array.isArray(f.pts) && f.pts.length > 2 ? f.pts : null, line = Array.isArray(f.line) && f.line.length > 1 ? f.line : null, w2 = (f.width || (f.kind === "river" ? 0 : 36)) / 2;
+      if (f.kind === "river" && line) rivers.push({ pts: line, w: f.width || 1.8 });
+      else if (area || (line && w2) || (Array.isArray(f.at) && f.r)) {
+        const inF = (x, y) => area ? pip(x, y, area) : line ? lineDist(x, y, line) < w2 : Math.hypot(x - f.at[0], y - f.at[1]) < f.r;
+        for (let n = 0; n < N; n++) {
+          const i = n % cols, j = (n / cols) | 0, x = (i + .5) * cell, y = (j + .5) * cell; if (!inF(x, y)) continue;
+          const t = nz(i / 6 + 40, j / 6);
+          if (f.kind === "lake" || f.kind === "sea") { Hh[n] = f.kind === "lake" ? 112 : 70; continue; }
+          if (sea[n]) continue;
+          if (f.kind === "mountains") Hh[n] = Math.max(Hh[n], clamp(Math.round(204 + t * 50), 0, 255));
+          else if (f.kind === "hills") Hh[n] = Math.max(Hh[n], clamp(Math.round(181 + t * 16), 0, 255));
+          else if (f.kind === "forest") M[n] = 228;
+          else if (f.kind === "swamp" || f.kind === "marsh") { M[n] = 250; Hh[n] = Math.min(Hh[n], 136); }
+          else if (f.kind === "desert") M[n] = 18;
+        }
+      }
+      if (f.name) {
+        const at = Array.isArray(f.at) ? f.at : area ? [area.reduce((s, p) => s + p[0], 0) / area.length, area.reduce((s, p) => s + p[1], 0) / area.length] : line ? midOf(line) : null;
+        const kind = { mountains: "range", hills: "range", forest: "forest", lake: "lake", sea: "sea", river: "river" }[f.kind] || "region";
+        if (at) labels.push({ name: f.name, kind, at, angle: f.angle || 0, size: f.size });
+      }
+    }
+    return { G: { cols, rows, cell, sea: 128, H: Hh, M }, rivers, labels, ok, how, share };
+  }
+
+  /* ---- routes: the way a route takes over the land (or the sea), worked out from the map so it follows the valleys
+          and the coast; a route with via: [[x, y], ...] goes through those points instead */
+  function pathGrid(WD) {
+    const G = WD.G; if (!G) return null;
+    const f = 2, nc = Math.ceil(G.cols / f), nr = Math.ceil(G.rows / f), S = sampler(G), H = new Float32Array(nc * nr), M = new Float32Array(nc * nr), R = new Uint8Array(nc * nr), size = G.cell * f;
+    for (let j = 0; j < nr; j++) for (let i = 0; i < nc; i++) { const x = (i + .5) * size, y = (j + .5) * size; H[j * nc + i] = S(x, y); M[j * nc + i] = G.M ? S(x, y, G.M) : 128; }
+    for (const rv of WD.rivers) { const p = rv.pts || []; for (let n = 1; n < p.length; n++) { const steps = Math.ceil(Math.hypot(p[n][0] - p[n - 1][0], p[n][1] - p[n - 1][1]) / (size / 2)); for (let s = 0; s <= steps; s++) { const x = p[n - 1][0] + (p[n][0] - p[n - 1][0]) * s / steps, y = p[n - 1][1] + (p[n][1] - p[n - 1][1]) * s / steps, i = Math.floor(x / size), j = Math.floor(y / size); if (i >= 0 && j >= 0 && i < nc && j < nr) R[j * nc + i] = 1; } } }
+    return { nc, nr, size, H, M, R, sea: G.sea };
+  }
+  function astar(P, cost, s, t) {
+    const { nc, nr } = P, N = nc * nr, g = new Float64Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), done = new Uint8Array(N);
+    const hp = [], hk = [], push = (n, k) => { hp.push(n); hk.push(k); let i = hp.length - 1; while (i) { const q = (i - 1) >> 1; if (hk[q] <= hk[i]) break; [hp[q], hp[i]] = [hp[i], hp[q]]; [hk[q], hk[i]] = [hk[i], hk[q]]; i = q; } };
+    const pop = () => { const top = hp[0], ln = hp.pop(), lk = hk.pop(); if (hp.length) { hp[0] = ln; hk[0] = lk; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < hp.length && hk[l] < hk[m]) m = l; if (r < hp.length && hk[r] < hk[m]) m = r; if (m === i) break; [hp[m], hp[i]] = [hp[i], hp[m]]; [hk[m], hk[i]] = [hk[i], hk[m]]; i = m; } } return top; };
+    const tx = t % nc, ty = (t / nc) | 0, hdist = n => { const dx = Math.abs(n % nc - tx), dy = Math.abs(((n / nc) | 0) - ty); return Math.max(dx, dy) + .414 * Math.min(dx, dy); };
+    g[s] = 0; push(s, hdist(s));
+    for (let guard = 0; hp.length && guard < N * 3; guard++) {
+      const n = pop(); if (done[n]) continue; done[n] = 1; if (n === t) break;
+      const x = n % nc, y = (n / nc) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue; const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= nc || Y >= nr) continue;
+        const m = Y * nc + X; if (done[m]) continue; const c = cost(m, m === t || m === s); if (c === Infinity) continue;
+        const ng = g[n] + c * (dx && dy ? 1.414 : 1); if (ng < g[m]) { g[m] = ng; came[m] = n; push(m, ng + hdist(m)); }
+      }
+    }
+    if (came[t] < 0 && s !== t) return null;
+    const out = []; for (let n = t; n >= 0; n = came[n]) { out.push(n); if (n === s) break; }
+    return out.reverse();
+  }
+  function wayOf(WD, P, r) {
+    const a = WD.byId[r.from], b = WD.byId[r.to]; if (!a || !b) return null;
+    const ends = [a.at, b.at];
+    if (Array.isArray(r.via) && r.via.length) return chaikin([a.at, ...r.via.filter(v => Array.isArray(v)), b.at], 2, false);
+    if (!P || !OVERLAND[r.kind] && r.kind !== "sea") {
+      // over the void: a gentle curve, the same way every time
+      const mx = (a.at[0] + b.at[0]) / 2, my = (a.at[1] + b.at[1]) / 2, dx = b.at[0] - a.at[0], dy = b.at[1] - a.at[1], bend = (strHash(r.id) - .5) * .25;
+      return chaikin([a.at, [mx - dy * bend, my + dx * bend], b.at], 3, false);
+    }
+    const { nc, nr, size, H, M, R, sea } = P, cell = (x, y) => clamp(Math.floor(y / size), 0, nr - 1) * nc + clamp(Math.floor(x / size), 0, nc - 1);
+    const land = n => H[n] > sea;
+    let s = cell(...ends[0]), t = cell(...ends[1]), cost;
+    if (r.kind === "sea") {
+      // a ship leaves from the water nearest each end
+      const wet = n0 => { if (!land(n0)) return n0; const x0 = n0 % nc, y0 = (n0 / nc) | 0; let best = -1, bd = 1e9; for (let y = y0 - 24; y <= y0 + 24; y++) for (let x = x0 - 24; x <= x0 + 24; x++) { if (x < 0 || y < 0 || x >= nc || y >= nr) continue; const n = y * nc + x; if (!land(n)) { const d = (x - x0) ** 2 + (y - y0) ** 2; if (d < bd) { bd = d; best = n; } } } return best; };
+      const ws = wet(s), wt = wet(t); if (ws < 0 || wt < 0) return chaikin([a.at, b.at], 0, false);
+      // the way to the water from an inland port (London to the Thames estuary) is drawn too
+      const toWater = (n, end) => { const p = [(n % nc + .5) * size, (((n / nc) | 0) + .5) * size]; return Math.hypot(p[0] - end[0], p[1] - end[1]) > size * 1.5 ? [p] : []; };
+      const path = astar(P, (n, end) => land(n) && !end ? Infinity : 1 + (land(n) ? 2 : 0) + (H[n] > sea - 18 ? .6 : 0), ws, wt);
+      if (!path) return chaikin([a.at, b.at], 0, false);
+      const pts = rdp(path.map(n => [(n % nc + .5) * size, (((n / nc) | 0) + .5) * size]), size * .7);
+      return chaikin([a.at, ...toWater(ws, a.at), ...pts, ...toWater(wt, b.at), b.at], 2, false);
+    }
+    const pass = r.kind === "pass" || r.kind === "tunnel", river = r.kind === "river";
+    cost = (n, end) => {
+      if (!land(n)) return end ? 1 : Infinity;
+      const tt = (H[n] - sea) / (255 - sea);
+      let c = 1 + (tt > .62 ? (pass ? 1.4 : 7) : tt > .42 ? 1.1 : 0) + (r.kind === "road" && M[n] > 175 ? .5 : 0);
+      if (river) c = R[n] ? .35 : c * 2.2;
+      return c;
+    };
+    const path = astar(P, cost, s, t);
+    if (!path) return chaikin([a.at, b.at], 0, false);
+    const pts = rdp(path.map(n => [(n % nc + .5) * size, (((n / nc) | 0) + .5) * size]), size * .55);
+    pts[0] = a.at; pts[pts.length - 1] = b.at;
+    return chaikin(pts.length > 1 ? pts : [a.at, b.at], 2, false);
+  }
+  // how far, and how long: from the map's scale and the world's speeds only; a route that says days: N is taken at its word
+  function travel(WD, r, way) {
+    const out = { dist: null, days: null, basis: "" };
+    if (WD.scale && way) out.dist = plen(way) * WD.scale.per;
+    if (typeof r.days === "number" && r.days >= 0) { out.days = r.days; out.basis = "as the campaign gives it"; }
+    else if (out.dist != null && WD.speeds && WD.speeds[r.kind] > 0) { out.days = out.dist / WD.speeds[r.kind]; out.basis = `at ${WD.speeds[r.kind]} ${plural(WD.scale.unit || "unit", WD.speeds[r.kind])} a day`; }
+    return out;
+  }
+  // miles, leagues, light-years; but km, AU and million km as they are
+  const plural = (u, n) => n >= 1.5 && /[a-z]{3,}$/.test(u) && !/s$/.test(u) ? u + "s" : u;
+  const nice = n => { if (n >= 100) return String(Math.round(n / 10) * 10); if (n >= 10) return String(Math.round(n)); return String(Math.round(n * 10) / 10); };
+  const daysText = d => d == null ? "" : d === 0 ? "at once" : d < .9 ? `about ${Math.max(1, Math.round(d * 24))} hours` : `about ${d < 3 ? Math.round(d * 2) / 2 : Math.round(d)} day${d >= 1.25 ? "s" : ""}`;
+  const distText = (WD, d) => d == null ? "" : `about ${nice(d)} ${plural(WD.scale.unit || "unit", d)}`;
+
+  /* ---- putting the world on the page. box: an empty element. ctx: what the page around it knows (see atlas-shell.js):
+          mode(), placesAt(loc), peopleAt(loc, places), leadsInto(loc, places), hasCity(id), cityName(id), enter(cityId,
+          locId), open(placeId), db (a promise of the page's database, or of null), store {get, set}, makeCity(loc) when
+          the page can make a city itself (the Atlas app). Returns { wake(), select(id), sync(), search(q), dispose() }. */
+  A.worldMount = function (box, ctx) {
+    const uid = "w" + Math.floor(Math.random() * 1e6).toString(36);
+    const OV = { loc: {}, route: {}, party: null };
+    let WD = prepareWorld(A.worldData, A.worldTerrainData, OV);
+    // the game master's own drawing, shown as drawn, or redrawn from its traced coasts (the choice is kept)
+    const DRAW = WD.T.drawing && A.worldDrawingSrc ? { src: A.worldDrawingSrc, trace: null, mode: ctx.store.get("world-drawn") || "" } : null;
+    const drawn = () => DRAW && (DRAW.mode === "drawn" || !DRAW.trace || WD.look === "stars");
+    const traced = () => { if (DRAW && DRAW.trace) { WD.G = DRAW.trace.G; WD.rivers = DRAW.trace.rivers; WD.labels = [...DRAW.trace.labels, ...WD.labels]; } };
+    const st = STYLE[WD.look], gm = () => ctx.mode() === "gm";
+    const [W, H] = WD.size;
+    const filt = Object.assign({ kinds: {}, know: "all", only3d: false, routes: {} }, (() => { try { return JSON.parse(ctx.store.get("world-filter") || "{}"); } catch (e) { return {}; } })());
+    const S = { sel: null, selRoute: null, hover: null, edit: false, tool: null, first: null, q: "", hits: null, journey: null, drag: null, note: "" };
+    const ways = new Map();      // route id -> its way, worked out once for where its ends stand
+    let PG = null;               // the grid routes are found on
+    box.innerHTML = `<div class="wm wm-${WD.look}">
+      <div class="wm-bar">
+        <span class="wm-title">${esc(WD.title || "The world")}</span>
+        <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
+        <span class="wm-sp"></span>
+        <span class="wm-editbar keeper"></span>
+        ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
+        <button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false">Edit map</button>
+      </div>
+      <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-routes"></g><g class="wm-jour"></g></g><g class="wm-over"></g></svg>
+        <div class="wm-grain"></div>
+        <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
+        <div class="wm-scale" aria-hidden="true"></div>
+        <div class="wm-tip" hidden></div>
+        <div class="wm-results" hidden></div>
+        <div class="wm-journey keeper" hidden></div>
+        <aside class="wm-panel" hidden aria-live="polite"></aside>
+        <div class="wm-note" hidden></div>
+      </div>
+      <div class="maphint wm-hint"></div>
+      <dialog class="kedlg wm-dlg" aria-label="World map editor"></dialog>
+    </div>`;
+    const $ = s => box.querySelector(s), root = $(".wm"), stage = $(".wm-stage"), svg = $(".wm-svg"), cam = $(".wm-cam"), over = $(".wm-over"), panel = $(".wm-panel"), tip = $(".wm-tip"), dlg = $(".wm-dlg");
+    const V = { k: 1, tx: 0, ty: 0, sw: 1, sh: 1, k0: 1 };
+    let raf = 0, anim = null, gone = false, started = false;
+
+    /* ---- the land, drawn once */
+    function drawLand() {
+      let s = `<rect width="${W}" height="${H}" fill="${WD.look === "stars" ? "#05070d" : WD.look === "atlas" ? "#c7deee" : "#d8cfb1"}"/>`;
+      if (drawn()) { $(".wm-land").innerHTML = s + `<image href="${DRAW.src}" width="${W}" height="${H}" preserveAspectRatio="none"/><rect width="${W}" height="${H}" fill="none" stroke="${st.ink}" stroke-opacity=".55" stroke-width="2"/>`; return; }
+      const G = WD.G;
+      if (G) {
+        const img = paintTerrain(WD), pat = (id, src) => src ? `<pattern id="${uid}-${id}" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${src}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern>` : "";
+        s += `<defs>${pat("s", img.sea)}${pat("l", img.land)}<clipPath id="${uid}-c"><rect width="${W}" height="${H}"/></clipPath></defs><g clip-path="url(#${uid}-c)">`;
+        s += `<rect width="${W}" height="${H}" fill="url(#${uid}-s)"/>`;
+        if (WD.look !== "stars") {
+          const d = coastRings(G).map(r => pathD(chaikin(rdpRing(r, .7), 2, true), true)).join("");
+          if (WD.look === "parchment") for (const [wd, op] of [[17, .22], [11, .3], [5.6, .42]]) s += `<path d="${d}" fill="none" stroke="${st.ink}" stroke-opacity="${op}" stroke-width="${wd}"/><path d="${d}" fill="none" stroke="url(#${uid}-s)" stroke-width="${wd - 2}"/>`;
+          else s += `<path d="${d}" fill="none" stroke="#e3f0f8" stroke-opacity=".7" stroke-width="7"/>`;
+          s += `<path d="${d}" fill="url(#${uid}-l)" fill-rule="evenodd" stroke="${WD.look === "atlas" ? "#6d93b3" : st.ink}" stroke-width="${WD.look === "atlas" ? .7 : 1.25}" stroke-linejoin="round"/>`;
+          for (const rv of WD.rivers) if (rv.pts && rv.pts.length > 1) {
+            const p = rv.pts, wd = rv.w || 1.2, n = p.length;
+            // a river widens as it runs to the sea: drawn in three reaches
+            for (let q = 0; q < 3; q++) { const a = Math.floor(q * (n - 1) / 3), b = Math.min(n - 1, Math.ceil((q + 1) * (n - 1) / 3)); if (b > a) s += `<path d="${pathD(p.slice(a, b + 1))}" fill="none" stroke="${st.river}" stroke-width="${r1(wd * (.55 + q * .3))}" stroke-linecap="round" stroke-linejoin="round"/>`; }
+          }
+          if (WD.look === "parchment") s += symbols(G);
+        }
+        s += `</g>`;
+      }
+      if (WD.look === "stars") s += starfield();
+      for (const L of WD.labels) if (L && L.name && Array.isArray(L.at)) {
+        const water = /sea|ocean|lake|bay|gulf|strait|sound|river/.test(L.kind || ""), fs = (L.size || (L.kind === "river" ? 10 : water ? 20 : L.kind === "region" ? 24 : 15)) * 1.15;
+        s += `<text class="wm-rl${water ? " w" : ""}" x="${r1(L.at[0])}" y="${r1(L.at[1])}" font-size="${fs}" text-anchor="middle"${L.angle ? ` transform="rotate(${r1(L.angle)} ${r1(L.at[0])} ${r1(L.at[1])})"` : ""}>${esc(L.name)}</text>`;
+      }
+      s += `<rect width="${W}" height="${H}" fill="none" stroke="${st.ink}" stroke-opacity=".55" stroke-width="2"/>`;
+      $(".wm-land").innerHTML = s;
+    }
+    // the parchment's mountains, hills and woods, drawn as a cartographer would, nearest last
+    function symbols(G) {
+      const Sm = sampler(G), sea = G.sea, items = [], ink = st.ink;
+      let trees = "";
+      for (let y = 6, row = 0; y < H - 4; y += 9, row++) for (let x = 6 + (row % 2) * 6; x < W - 4; x += 12) {
+        const jx = x + (hash(x, y, 1) - .5) * 6, jy = y + (hash(x, y, 2) - .5) * 5, hv = Sm(jx, jy); if (hv <= sea + 3) continue;
+        const t = (hv - sea) / (255 - sea), mv = G.M ? Sm(jx, jy, G.M) : 128, r = hash(x, y, 3);
+        if (t > .6) { if ((row % 2 && t < .75) || r < .22) continue; const w = 6 + (t - .6) * 14 + r * 2, h = w * 1.25; items.push([jy, `<path d="M${r1(jx - w)} ${r1(jy)}L${r1(jx - w * .08)} ${r1(jy - h)}L${r1(jx + w)} ${r1(jy)}Z" fill="${t > .88 ? "#f6f2e8" : "#eadcb6"}" stroke="none"/><path d="M${r1(jx - w * .08)} ${r1(jy - h)}L${r1(jx + w)} ${r1(jy)}L${r1(jx + w * .3)} ${r1(jy)}L${r1(jx + w * .02)} ${r1(jy - h * .55)}Z" fill="${ink}" fill-opacity=".28"/><path d="M${r1(jx - w)} ${r1(jy)}L${r1(jx - w * .08)} ${r1(jy - h)}L${r1(jx + w)} ${r1(jy)}" fill="none" stroke="${ink}" stroke-width="1" stroke-linejoin="round"/>`]); }
+        else if (t > .42 && r < .3) { const w = 5 + r * 4; items.push([jy, `<path d="M${r1(jx - w)} ${r1(jy)}Q${r1(jx)} ${r1(jy - w * 1.2)} ${r1(jx + w)} ${r1(jy)}" fill="none" stroke="${ink}" stroke-width=".8"/>`]); }
+        else if (mv > 150 && t > .02 && r < (mv - 150) / 105 * 1.6) { for (let q = 0; q < 2; q++) { const tx = jx + (q ? 3.2 : -2.4), ty = jy + (q ? 1.2 : 0), rr = 2.5 + hash(x, y, 5 + q) * .8; trees += `M${r1(tx + rr)} ${r1(ty - rr)}a${r1(rr)} ${r1(rr)} 0 1 0 ${r1(-2 * rr)} 0a${r1(rr)} ${r1(rr)} 0 1 0 ${r1(2 * rr)} 0M${r1(tx)} ${r1(ty)}v${r1(rr * .9)}`; } }
+      }
+      items.sort((a, b) => a[0] - b[0]);
+      return (trees ? `<path d="${trees}" fill="${st.tree}" stroke="${ink}" stroke-width=".55" stroke-opacity=".8"/>` : "") + items.map(i => i[1]).join("");
+    }
+    function starfield() {
+      const n = Math.round(W * H / 900), seed = WD.stars && WD.stars.seed || 7; let s = "", big = "";
+      for (let i = 0; i < n; i++) { const x = hash(i, 1, seed) * W, y = hash(i, 2, seed) * H, r = hash(i, 3, seed); if (r > .97) big += `<circle cx="${r1(x)}" cy="${r1(y)}" r="1.5"/>`; else s += `M${r1(x)} ${r1(y)}h.01`; }
+      let grid = ""; for (let x = 100; x < W; x += 100) grid += `M${x} 0V${H}`; for (let y = 100; y < H; y += 100) grid += `M0 ${y}H${W}`;
+      return `<path d="${s}" stroke="#dfe9ff" stroke-width="1.1" stroke-linecap="round" stroke-opacity=".75"/><g fill="#fff6dc">${big}</g><path d="${grid}" stroke="#5ad1e6" stroke-opacity=".09" stroke-width="1"/>`;
+    }
+
+    /* ---- what the viewer may see */
+    const seen = L => gm() || L.state !== "unknown";
+    const routeSeen = r => gm() || (!r.hidden && seen(WD.byId[r.from]) && seen(WD.byId[r.to]));
+    const kindsHere = () => [...new Set(WD.locs.filter(seen).map(l => l.kind))].sort((a, b) => impOf({ kind: a }) - impOf({ kind: b }) || a.localeCompare(b));
+    const routeKindsHere = () => [...new Set(WD.routes.filter(routeSeen).map(r => r.kind))];
+    function passes(L) {
+      if (!seen(L)) return false;
+      if (filt.kinds[L.kind] === false) return false;
+      if (filt.only3d && !(L.city && ctx.hasCity(L.city))) return false;
+      if (filt.know === "known" && !["known", "visited", "done"].includes(L.state)) return false;
+      if (filt.know === "visited" && !["visited", "done"].includes(L.state)) return false;
+      if (filt.know === "new" && ["visited", "done"].includes(L.state)) return false;
+      return true;
+    }
+    const routeShown = r => routeSeen(r) && filt.routes[r.kind] !== false && passes(WD.byId[r.from]) && passes(WD.byId[r.to]);
+    function wayFor(r) {
+      const a = WD.byId[r.from], b = WD.byId[r.to], k = [r.kind, a.at, b.at, JSON.stringify(r.via || "")].join("|"), c = ways.get(r.id);
+      if (c && c.k === k) return c.way;
+      if (!PG && WD.G) PG = pathGrid(WD);
+      const way = wayOf(WD, PG, r) || [a.at, b.at]; ways.set(r.id, { k, way }); return way;
+    }
+
+    /* ---- the routes, under the camera (their lines keep one width on the screen at any zoom) */
+    function drawRoutes() {
+      let s = "";
+      for (const r of WD.routes) {
+        if (!routeShown(r)) continue;
+        const way = wayFor(r), d = pathD(way), [col, wd, dash] = st.routes[r.kind] || st.routes.road, sel = S.selRoute === r.id;
+        const blocked = !!r.blocked, hid = r.hidden ? " hid" : "";
+        s += `<g class="wr${sel ? " sel" : ""}${hid}" data-route="${esc(r.id)}">${sel ? `<path d="${d}" class="wr-under"/>` : ""}${WD.look === "stars" ? `<path d="${d}" fill="none" stroke="${col}" stroke-opacity=".18" stroke-width="${wd + 5}" vector-effect="non-scaling-stroke"/>` : WD.look === "atlas" && r.kind === "road" ? `<path d="${d}" fill="none" stroke="#fff" stroke-width="${wd + 2.2}" vector-effect="non-scaling-stroke"/>` : ""}<path d="${d}" fill="none" stroke="${blocked ? "#b3261e" : col}" stroke-width="${wd}" stroke-dasharray="${dash}" stroke-linecap="round" vector-effect="non-scaling-stroke"/><path d="${d}" class="wr-hit"/></g>`;
+      }
+      $(".wm-routes").innerHTML = s;
+      drawJourney();
+    }
+    // the party's journey: where it has been (a solid line) and where it is going (a moving dashed line)
+    function legWay(a, b) {
+      const r = WD.routes.find(x => (x.from === a && x.to === b) || (x.from === b && x.to === a));
+      if (!r) return [WD.byId[a].at, WD.byId[b].at];
+      const w = wayFor(r); return r.from === a ? w : w.slice().reverse();
+    }
+    function drawJourney() {
+      const P = WD.party, el = $(".wm-jour"); let s = "";
+      if (P.at) {
+        const been = [...P.trail, P.at], ahead = [P.at, ...P.plan];
+        for (let i = 1; i < been.length; i++) s += `<path d="${pathD(legWay(been[i - 1], been[i]))}" class="wj-been"/>`;
+        for (let i = 1; i < ahead.length; i++) s += `<path d="${pathD(legWay(ahead[i - 1], ahead[i]))}" class="wj-plan"/>`;
+      }
+      if (S.journey && S.journey.legs) for (const [a, b] of S.journey.legs) s += `<path d="${pathD(legWay(a, b))}" class="wj-try"/>`;
+      el.innerHTML = s;
+      const J = $(".wm-journey");
+      if (P.at && P.plan.length && gm()) {
+        const legs = [P.at, ...P.plan], next = WD.byId[P.plan[0]];
+        J.hidden = false;
+        J.innerHTML = `<span class="kl">The party's journey</span><span>${legs.map(id => esc(WD.byId[id].name)).join(" → ")}</span><span class="wm-jb"><button type="button" data-w="arrive">Arrived at ${esc(next.name)}</button><button type="button" data-w="cancel">Call it off</button></span>`;
+      } else J.hidden = true;
+    }
+
+    /* ---- the locations, over the camera: they keep their size on the screen, and the lesser ones are named only
+            as the map comes closer */
+    function drawMarkers() {
+      let s = "";
+      for (const L of WD.locs) {
+        if (!passes(L)) continue;
+        const imp = impOf(L), here = WD.party.at === L.id, has3d = L.city && ctx.hasCity(L.city);
+        const cls = ["wl", "i" + imp, L.state === "rumoured" ? "rum" : "", L.state === "unknown" ? "unk" : "", L.state === "done" ? "dn" : "", S.sel === L.id ? "sel" : "", here ? "here" : "", S.hits ? (S.hits.has(L.id) ? "hit" : "dim") : "", L.unplaced ? "unp" : ""].filter(Boolean).join(" ");
+        s += `<g class="${cls}" data-loc="${esc(L.id)}" tabindex="0" role="button" aria-label="${esc(L.name)}, ${esc((KINDS[L.kind] || [0, L.kind])[1])}${has3d ? ", has a 3D map" : ""}"><circle class="wl-ring" r="14"/><g class="wi">${iconOf(WD.look, L)}</g>${has3d ? `<g class="wl-3d" transform="translate(${imp === 1 ? 10 : 8} -17)"><rect width="15" height="10" rx="2"/><text x="7.5" y="7.6">3D</text></g>` : ""}${gm() && L.state !== "known" ? `<circle class="wl-st st-${esc(L.state)}" cx="-10" cy="-9" r="3"/>` : ""}${here ? `<g class="wl-party" transform="translate(-13 -9)"><path d="M0 10V-8"/><path d="M0-8h9l-2.5 3.5L9-1H0Z"/></g>` : ""}<text class="wl-t" x="${imp === 1 ? 14 : 12}" y="4.5">${esc(L.name)}${L.state === "rumoured" ? "?" : ""}</text></g>`;
+      }
+      for (const r of WD.routes) if (routeShown(r) && (r.blocked || r.danger)) s += `<g class="wr-warn${r.blocked ? " blk" : ""}" data-route="${esc(r.id)}"><circle r="7.5"/><text y="4">${r.blocked ? "✕" : "!"}</text></g>`;
+      over.innerHTML = s;
+      place();
+    }
+    // where each marker stands on the screen, which are named, and the scale bar
+    function place() {
+      const k = V.k, z = k / V.k0, boxes = [], crowd = over.querySelectorAll(".wl").length;
+      const items = [];
+      for (const g of over.querySelectorAll(".wl")) {
+        const L = WD.byId[g.dataset.loc]; if (!L) continue;
+        const x = L.at[0] * k + V.tx, y = L.at[1] * k + V.ty, imp = impOf(L), sc = imp === 1 ? 1.12 : imp === 2 ? 1 : z < 1.4 ? .78 : .92;
+        g.setAttribute("transform", `translate(${r1(x)} ${r1(y)})`);
+        const wi = g.firstElementChild.nextElementSibling; if (wi && wi.dataset.sc !== String(sc)) { wi.dataset.sc = sc; wi.setAttribute("transform", `scale(${sc})`); }
+        const t = g.querySelector(".wl-t"), pri = (S.sel === L.id || S.hover === L.id ? 0 : WD.party.at === L.id ? .5 : (S.hits && S.hits.has(L.id)) ? .7 : imp) + (L.state === "rumoured" ? .3 : 0);
+        // every name shows on a small world; on a crowded one the lesser places are named as the map comes closer
+        const want = pri < 1 || imp === 1 || (imp === 2 && (z > .95 || crowd < 40)) || (imp === 3 && (z > 1.9 || crowd < 26));
+        items.push({ t, x, y, pri, want, w: (L.name.length + 1) * (imp === 1 ? 8.6 : 7.2) * sc, sc });
+      }
+      items.sort((a, b) => a.pri - b.pri);
+      for (const it of items) {
+        let on = it.want;
+        if (on) { const b = [it.x + 10 * it.sc, it.y - 9, it.w, 17]; if (it.pri >= 1 && boxes.some(o => b[0] < o[0] + o[2] && o[0] < b[0] + b[2] && b[1] < o[1] + o[3] && o[1] < b[1] + b[3])) on = false; else boxes.push(b); }
+        it.t.style.display = on ? "" : "none";
+      }
+      for (const g of over.querySelectorAll(".wr-warn")) {
+        const r = WD.rById[g.dataset.route]; if (!r) continue; const m = midOf(wayFor(r));
+        g.setAttribute("transform", `translate(${r1(m[0] * k + V.tx)} ${r1(m[1] * k + V.ty)})`);
+      }
+      cam.setAttribute("transform", `matrix(${k} 0 0 ${k} ${r1(V.tx)} ${r1(V.ty)})`);
+      for (const t of cam.querySelectorAll(".wm-rl")) t.style.opacity = z > 5 ? 0 : z > 3 ? (5 - z) / 2 : 1;
+      const sc = $(".wm-scale");
+      if (WD.scale) {
+        const per = WD.scale.per / k, want = 110 * per, p10 = Math.pow(10, Math.floor(Math.log10(want))), step = [1, 2, 5, 10].map(m => m * p10).filter(v => v <= want).pop() || p10, px = step / per;
+        sc.hidden = false; sc.innerHTML = `<span style="width:${Math.round(px)}px"></span>${nice(step)} ${esc(plural(WD.scale.unit || "unit", step))}`;
+      } else sc.hidden = true;
+      clearTimeout(place.t); place.t = setTimeout(() => { try { ctx.store.set("world-view", JSON.stringify({ cx: (V.sw / 2 - V.tx) / V.k, cy: (V.sh / 2 - V.ty) / V.k, z: V.k / V.k0 })); } catch (e) {} }, 400);
+    }
+    const frame = () => { raf = 0; if (gone) return; if (anim) { const t = Math.min(1, (performance.now() - anim.t0) / anim.ms), e = t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; V.k = Math.exp(Math.log(anim.k0) + (Math.log(anim.k1) - Math.log(anim.k0)) * e); const cx = anim.c0[0] + (anim.c1[0] - anim.c0[0]) * e, cy = anim.c0[1] + (anim.c1[1] - anim.c0[1]) * e; V.tx = V.sw / 2 - cx * V.k; V.ty = V.sh / 2 - cy * V.k; if (t < 1) request(); else anim = null; } place(); };
+    const request = () => { if (!raf && !gone) raf = requestAnimationFrame(frame); };
+
+    /* ---- the camera */
+    function size() {
+      const r = stage.getBoundingClientRect(); if (r.width < 10 || r.height < 10) return false;
+      const cx = (V.sw / 2 - V.tx) / V.k, cy = (V.sh / 2 - V.ty) / V.k, had = V.sw > 1;
+      V.sw = r.width; V.sh = r.height; V.k0 = Math.min(V.sw / W, V.sh / H) * .96;
+      svg.setAttribute("viewBox", `0 0 ${V.sw} ${V.sh}`);
+      if (had) { V.tx = V.sw / 2 - cx * V.k; V.ty = V.sh / 2 - cy * V.k; }
+      return true;
+    }
+    function bound() {
+      V.k = clamp(V.k, V.k0 * .6, V.k0 * 16);
+      const m = Math.min(V.sw, V.sh) * .3, w = W * V.k, h = H * V.k;
+      V.tx = clamp(V.tx, m - w, V.sw - m); V.ty = clamp(V.ty, m - h, V.sh - m);
+    }
+    function home(now) { const k = V.k0; fly([W / 2, H / 2], k, now); }
+    function fly(c, k, now) {
+      k = clamp(k, V.k0 * .6, V.k0 * 16);
+      if (now) { anim = null; V.k = k; V.tx = V.sw / 2 - c[0] * k; V.ty = V.sh / 2 - c[1] * k; bound(); request(); return; }
+      anim = { t0: performance.now(), ms: 520, k0: V.k, k1: k, c0: [(V.sw / 2 - V.tx) / V.k, (V.sh / 2 - V.ty) / V.k], c1: c }; request();
+    }
+    function zoomAt(f, sx, sy) { anim = null; const wx = (sx - V.tx) / V.k, wy = (sy - V.ty) / V.k; V.k = clamp(V.k * f, V.k0 * .6, V.k0 * 16); V.tx = sx - wx * V.k; V.ty = sy - wy * V.k; bound(); request(); }
+
+    /* ---- the panel: a location, a route, or the way to somewhere */
+    function placesOf(L) { try { return ctx.placesAt ? ctx.placesAt(L) : []; } catch (e) { return []; } }
+    function routeRow(r, fromId) {
+      const other = WD.byId[r.from === fromId ? r.to : r.from], tv = travel(WD, r, wayFor(r));
+      const facts = [ROUTES[r.kind] || r.kind, distText(WD, tv.dist), daysText(tv.days)].filter(Boolean).join(" · ");
+      return `<li><button type="button" class="wm-rt" data-wroute="${esc(r.id)}"><span class="wm-rn">${esc(r.name ? r.name + " to " : "To ")}${esc(other.name)}</span><span class="wm-rf">${esc(facts)}${r.hidden ? " · hidden from the players" : ""}</span>${r.blocked ? `<span class="wm-bad">Blocked: ${esc(r.blocked === true ? "the way is shut" : r.blocked)}</span>` : ""}${r.danger ? `<span class="wm-dgr">Danger: ${esc(r.danger === true ? "a dangerous way" : r.danger)}</span>` : ""}</button></li>`;
+    }
+    function locPanel(L) {
+      const places = placesOf(L), keeper = gm(), has3d = L.city && ctx.hasCity(L.city), settled = SETTLED.includes(L.kind);
+      const people = keeper && ctx.peopleAt ? ctx.peopleAt(L, places) : [], leads = keeper && ctx.leadsInto ? ctx.leadsInto(L, places) : [];
+      const routes = WD.routes.filter(r => (r.from === L.id || r.to === L.id) && routeSeen(r) && seen(WD.byId[r.from === L.id ? r.to : r.from]));
+      const P = WD.party, here = P.at === L.id, acts = [...new Set(places.flatMap(p => p.acts || []))].sort((a, b) => a - b);
+      const stName = (STATES.find(s => s[0] === L.state) || [0, L.state])[1];
+      let enter = "";
+      if (has3d) enter = `<button type="button" class="prim wm-enter" data-w="enter">Enter ${esc(L.name)} · 3D map</button>`;
+      else if (keeper && (settled || L.city)) {
+        const flag = WD.look === "stars" ? `--kind ${/station|ship/.test(L.kind) ? "station" : "moonbase"}` : WD.look === "atlas" ? "--era modern" : (A.cityData && A.cityData.look === "fantasy") || (A.config && /fantas/i.test(String(A.config.setting || ""))) ? "--era fantasy" : "--era medieval";
+        const cid = L.city || L.id, cmd = `node atlas.js city <campaign folder> --invent "${L.name}" --id ${cid} ${flag}`;
+        enter = `<div class="wm-no3d"><p><strong>No 3D map of ${esc(L.name)} yet.</strong></p>${ctx.makeCity ? `<button type="button" class="prim" data-w="make">Make its 3D map now</button><p class="kn">It takes a few seconds; the page then opens on it. Its streets and landmarks are generated for its age and site, and can be changed afterwards.</p>` : `<p class="kn">Ask Claude to make it: “make the 3D map of ${esc(L.name)} for the world map”.</p><details class="wm-how"><summary>The command, for Claude Code</summary><code class="wm-cmd">${esc(cmd)}</code></details>`}</div>`;
+      } else if (L.city && !has3d) enter = `<p class="kn">This place has no map to enter.</p>`;
+      const ev = keeper ? (L.events || []).filter(e => e && (e.t || e.d)) : [];
+      return `<button type="button" class="wm-x" data-w="close" aria-label="Close">×</button>
+        <div class="eyebrow"><span>${esc((KINDS[L.kind] || [0, L.kind])[1])}</span>${L.region ? `<span>${esc(L.region)}</span>` : ""}${here ? `<span class="wm-here">The party is here</span>` : ""}</div>
+        <h3>${esc(L.name)}</h3>
+        ${keeper ? `<div class="wm-stseg" role="group" aria-label="What the party knows">${STATES.map(([v, l]) => `<button type="button" data-wstate="${v}" aria-pressed="${L.state === v}" title="${esc(l)}"><span class="sd st-w-${v}"></span>${esc(l.split(" ")[0])}</button>`).join("")}</div>` : L.state !== "known" ? `<p class="kn">${esc(stName)}</p>` : ""}
+        ${acts.length ? `<div class="meta">${acts.map(a => `<span class="tag">Act ${a}</span>`).join("")}</div>` : ""}
+        ${L.desc ? `<p class="wm-desc">${esc(L.desc)}</p>` : ""}
+        ${keeper && L.gm ? `<div class="sec secret"><p>${esc(L.gm)}</p></div>` : ""}
+        ${L.unplaced && keeper ? `<p class="warn">This place has no position on the map yet: it waits at the foot of the map. Drag it where it belongs (Edit map).</p>` : ""}
+        ${enter}
+        ${places.length ? `<h4>Places here</h4><ul class="wm-pl">${places.map(p => `<li><button type="button" data-wopen="${esc(p.id)}">${p.st ? `<span class="sd st-${esc(p.st)}"></span>` : ""}<span class="n">${String(p.n).padStart(2, "0")}</span>${esc(p.name)}</button></li>`).join("")}</ul>` : ""}
+        ${people.length ? `<h4 class="keeper">People met here</h4><ul class="wm-pp keeper">${people.slice(0, 40).map(p => `<li>${p.pid ? `<button type="button" data-wopen="${esc(p.pid)}">${esc(p.name)}</button>` : esc(p.name)}${p.role ? `<span class="kn"> — ${esc(p.role)}</span>` : ""}</li>`).join("")}</ul>` : ""}
+        ${leads.length ? `<h4 class="keeper">What leads here</h4><ul class="wm-ld keeper">${leads.slice(0, 30).map(l => `<li><span class="kn">From</span> <button type="button" data-wopen="${esc(l.fromId)}">${esc(l.from)}</button>: ${esc(l.text)}</li>`).join("")}</ul>` : ""}
+        ${ev.length ? `<h4 class="keeper">Scenes here</h4><ul class="hks keeper">${ev.map(e => `<li><details class="hk"><summary>${esc(e.t || "A scene")}</summary><p>${esc(e.d || "")}</p></details></li>`).join("")}</ul>` : ""}
+        <h4>Routes from here</h4>${routes.length ? `<ul class="wm-rl2">${routes.map(r => routeRow(r, L.id)).join("")}</ul>` : `<p class="kn">No routes${keeper ? " yet (Edit map, then + Route)" : ""}.</p>`}
+        ${keeper ? journeyBox(L) : ""}
+        ${keeper && S.edit ? `<div class="wm-eb"><button type="button" data-w="editloc">Edit details</button><button type="button" data-w="delloc">Delete</button>${L.edited && !L.added ? `<button type="button" data-w="resetloc">Undo my changes</button>` : ""}</div>` : ""}`;
+    }
+    function journeyBox(L) {
+      const P = WD.party;
+      if (!P.at) return `<div class="wm-jbox"><button type="button" data-w="partyhere">The party is here</button></div>`;
+      if (P.at === L.id) return P.plan.length ? "" : `<p class="kn">Choose another place to plan the party's way there.</p>`;
+      const J = S.journey && S.journey.to === L.id ? S.journey : null;
+      let s = `<div class="wm-jbox"><button type="button" data-w="partyhere">The party is here</button><button type="button" data-w="plan">How do they get here?</button></div>`;
+      if (J) {
+        if (!J.legs) s += `<p class="warn">No way from ${esc(WD.byId[P.at].name)} to here by the routes on the map${J.blocked ? " (a blocked route stands in the way)" : ""}. Add a route, or open one.</p>`;
+        else {
+          const legs = J.legs.map(([a, b]) => { const r = WD.routes.find(x => (x.from === a && x.to === b) || (x.from === b && x.to === a)); const tv = travel(WD, r, wayFor(r)); return { a, b, r, tv }; });
+          const allDays = legs.every(l => l.tv.days != null), allDist = legs.every(l => l.tv.dist != null);
+          const tot = allDays ? daysText(legs.reduce((s, l) => s + l.tv.days, 0)) : allDist ? distText(WD, legs.reduce((s, l) => s + l.tv.dist, 0)) : `${legs.length} leg${legs.length > 1 ? "s" : ""}`;
+          const risks = legs.filter(l => l.r.danger);
+          s += `<div class="wm-way"><p><strong>The way:</strong> ${tot}${allDays ? "" : WD.scale ? " (travel times are not known for every leg: set days on the routes in Edit map)" : " (the map has no scale, so no distances; set days on the routes in Edit map for travel times)"}</p><ol>${legs.map(l => `<li>${esc(WD.byId[l.b].name)} <span class="kn">by ${esc((ROUTES[l.r.kind] || l.r.kind).toLowerCase())}${l.tv.days != null ? ", " + daysText(l.tv.days) : l.tv.dist != null ? ", " + distText(WD, l.tv.dist) : ""}</span>${l.r.danger ? ` <span class="wm-dgr">${esc(l.r.danger === true ? "danger" : l.r.danger)}</span>` : ""}</li>`).join("")}</ol>${risks.length ? `<p class="warn">${risks.length} dangerous leg${risks.length > 1 ? "s" : ""} on the way.</p>` : ""}<button type="button" class="prim" data-w="setoff">Set this as the party's journey</button></div>`;
+        }
+      }
+      return s;
+    }
+    function routePanel(r) {
+      const a = WD.byId[r.from], b = WD.byId[r.to], tv = travel(WD, r, wayFor(r)), keeper = gm();
+      const enc = keeper ? (r.enc || []).filter(e => e && (e.t || e.d)) : [];
+      return `<button type="button" class="wm-x" data-w="close" aria-label="Close">×</button>
+        <div class="eyebrow"><span>${esc(ROUTES[r.kind] || r.kind)}</span>${r.hidden ? `<span>Hidden from the players</span>` : ""}</div>
+        <h3>${r.name ? esc(r.name) : `${esc(a.name)} to ${esc(b.name)}`}</h3>
+        ${r.name ? `<p class="kn">${esc(a.name)} to ${esc(b.name)}</p>` : ""}
+        <dl class="wm-facts">
+          <div><dt>Distance</dt><dd>${tv.dist != null ? esc(distText(WD, tv.dist)) : `<span class="kn">${WD.scale ? "—" : "The map has no scale."}</span>`}</dd></div>
+          <div><dt>Travel</dt><dd>${tv.days != null ? `${esc(daysText(tv.days))} <span class="kn">(${esc(tv.basis)})</span>` : `<span class="kn">Not known${keeper ? ": set the days in Edit map" : ""}.</span>`}</dd></div>
+          ${r.danger ? `<div><dt>Danger</dt><dd class="wm-dgr">${esc(r.danger === true ? "A dangerous way." : r.danger)}</dd></div>` : ""}
+          ${r.blocked ? `<div><dt>Blocked</dt><dd class="wm-bad">${esc(r.blocked === true ? "The way is shut." : r.blocked)}</dd></div>` : ""}
+        </dl>
+        ${r.desc ? `<p class="wm-desc">${esc(r.desc)}</p>` : ""}
+        ${keeper && r.gm ? `<div class="sec secret"><p>${esc(r.gm)}</p></div>` : ""}
+        ${enc.length ? `<h4>On the way</h4><ul class="hks">${enc.map(e => `<li><details class="hk"><summary>${esc(e.t || "An encounter")}</summary><p>${esc(e.d || "")}</p></details></li>`).join("")}</ul>` : ""}
+        <div class="wm-eb"><button type="button" data-wloc="${esc(a.id)}">${esc(a.name)}</button><button type="button" data-wloc="${esc(b.id)}">${esc(b.name)}</button></div>
+        ${keeper && S.edit ? `<div class="wm-eb"><button type="button" data-w="editroute">Edit route</button><button type="button" data-w="delroute">Delete</button>${r.edited && !r.added ? `<button type="button" data-w="resetroute">Undo my changes</button>` : ""}</div>` : ""}`;
+    }
+    function renderPanel() {
+      const L = S.sel && WD.byId[S.sel], r = S.selRoute && WD.rById[S.selRoute];
+      if (L && seen(L)) { panel.hidden = false; panel.innerHTML = locPanel(L); }
+      else if (r && routeSeen(r)) { panel.hidden = false; panel.innerHTML = routePanel(r); }
+      else { panel.hidden = true; panel.innerHTML = ""; }
+    }
+
+    /* ---- the bars: filters, the editing tools, the key */
+    function renderBars() {
+      const kinds = kindsHere(), rk = routeKindsHere();
+      $(".wm-fbody").innerHTML = `
+        <fieldset><legend>Places</legend>${kinds.map(k => `<label><input type="checkbox" data-fk="${esc(k)}"${filt.kinds[k] === false ? "" : " checked"}> ${esc((KINDS[k] || [0, k])[1])}</label>`).join("")}</fieldset>
+        <fieldset><legend>The party knows</legend>${[["all", "Everything"], ["known", "What they know"], ["visited", "Where they have been"], ["new", "Where they have not been"]].map(([v, l]) => `<label><input type="radio" name="${uid}-k" value="${v}" data-fknow${filt.know === v ? " checked" : ""}> ${l}</label>`).join("")}</fieldset>
+        ${rk.length ? `<fieldset><legend>Routes</legend>${rk.map(k => `<label><input type="checkbox" data-fr="${esc(k)}"${filt.routes[k] === false ? "" : " checked"}> ${esc(ROUTES[k] || k)}</label>`).join("")}</fieldset>` : ""}
+        <label class="wm-f3"><input type="checkbox" data-f3${filt.only3d ? " checked" : ""}> Only places with a 3D map</label>`;
+      const eb = $(".wm-editbar");
+      eb.innerHTML = S.edit && gm() ? `<button type="button" class="wm-btn" data-w="addloc" aria-pressed="${S.tool === "loc"}">+ Place</button><button type="button" class="wm-btn" data-w="addroute" aria-pressed="${S.tool === "route"}">+ Route</button><button type="button" class="wm-btn" data-w="export">Copy as world.js</button>` : "";
+      $('[data-w="edit"]').setAttribute("aria-pressed", S.edit);
+      const dw = $('[data-w="drawn"]'); if (dw) { dw.setAttribute("aria-pressed", !!drawn()); dw.hidden = WD.look === "stars" || !DRAW.trace; }
+      const sw = (k) => { const [c, w, d] = st.routes[k] || st.routes.road; return `<svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" stroke="${c}" stroke-width="${w}" stroke-dasharray="${d}" stroke-linecap="round"/></svg>`; };
+      const how = S.tool === "loc" ? "Click the map where the new place stands." : S.tool === "route" ? (S.first ? `Now click where the route from ${esc(WD.byId[S.first] ? WD.byId[S.first].name : "")} goes.` : "Click the place the route starts from.") : S.edit ? "Drag a place to move it. Click a place or a route to change it." : `Drag to pan · scroll or pinch to zoom · click a place for what is there${Object.keys(A.cities || {}).length ? " and to enter its 3D map" : ""}.`;
+      $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
+    }
+    function rebuild() {
+      const keepSel = S.sel, keepR = S.selRoute;
+      WD = prepareWorld(A.worldData, A.worldTerrainData, OV); traced();
+      if (keepSel && !WD.byId[keepSel]) S.sel = null; if (keepR && !WD.rById[keepR]) S.selRoute = null;
+      drawRoutes(); drawMarkers(); renderPanel(); renderBars();
+    }
+    function note(t) { const n = $(".wm-note"); n.textContent = t; n.hidden = !t; clearTimeout(note.t); if (t) note.t = setTimeout(() => { n.hidden = true; }, 5000); }
+
+    /* ---- what the referee changes, kept in the page's database (or this browser), laid over the campaign's world */
+    let DB = null;
+    function fromDocs(docs) { OV.loc = {}; OV.route = {}; OV.party = null; for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id === "party") OV.party = d; } }
+    const localAll = () => { try { return JSON.parse(ctx.store.get("world-edits") || "{}") || {}; } catch (e) { return {}; } };
+    function save(doc, data) {
+      // the change shows at once; the database follows
+      const all = DB ? null : localAll();
+      if (doc === "party") OV.party = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; }
+      rebuild();
+      if (DB) { const ref = DB.collection("world").doc(doc); return Promise.resolve(data ? ref.set(data) : ref.delete()).catch(e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); }); }
+      if (data) all[doc] = data; else delete all[doc];
+      ctx.store.set("world-edits", JSON.stringify(all));
+      return Promise.resolve();
+    }
+    const ownOf = (kind, id) => Object.assign({}, (kind === "l" ? OV.loc : OV.route)[id] || {});
+    (async function connect() {
+      let db = null; try { db = ctx.db ? await ctx.db : null; } catch (e) { db = null; }
+      if (gone) return;
+      if (db) { DB = db; try { db.collection("world").onSnapshot(s => { if (gone) return; fromDocs(s.docs.map(d => [d.id, d.data() || {}])); rebuild(); }, e => console.warn("world map", e)); } catch (e) { console.warn("world map", e); } }
+      else { fromDocs(Object.entries(localAll())); rebuild(); }
+    })();
+
+    /* ---- choosing */
+    function select(id, flyTo) {
+      S.sel = id && WD.byId[id] ? id : null; S.selRoute = null; S.journey = null;
+      try { ctx.store.set("world-sel", S.sel || ""); } catch (e) {}
+      drawMarkers(); drawRoutes(); renderPanel();
+      if (S.sel && flyTo) { const L = WD.byId[S.sel]; fly(L.at, Math.max(V.k, V.k0 * 2.2)); }
+      else if (S.sel) reveal(WD.byId[S.sel].at);
+    }
+    // a chosen place (or route) the panel would hide slides into the open part of the map
+    function reveal(at) {
+      if (panel.hidden || !at) return;
+      const x = at[0] * V.k + V.tx, y = at[1] * V.k + V.ty, pr = panel.getBoundingClientRect(), sr = stage.getBoundingClientRect(), left = pr.left - sr.left, top = pr.top - sr.top;
+      let dx = 0, dy = 0;
+      if (pr.width < V.sw * .75) { if (x > left - 36) dx = left / 2 - x; }
+      else if (y > top - 36) dy = top / 2 - y;
+      if (dx || dy) fly([(V.sw / 2 - V.tx - dx) / V.k, (V.sh / 2 - V.ty - dy) / V.k], V.k);
+    }
+    function selectRoute(id) { S.selRoute = WD.rById[id] ? id : null; S.sel = null; S.journey = null; drawMarkers(); drawRoutes(); renderPanel(); if (S.selRoute) reveal(midOf(wayFor(WD.rById[id]))); }
+    // the shortest way by the routes (by days where every route has them, else by distance on the map), around blocked ones
+    function plan(to) {
+      const from = WD.party.at, R = WD.routes.filter(r => !r.blocked && routeSeen(r));
+      const byDays = R.every(r => travel(WD, r, wayFor(r)).days != null), w = r => { const tv = travel(WD, r, wayFor(r)); return byDays ? tv.days : plen(wayFor(r)); };
+      const dist = { [from]: 0 }, prev = {}, todo = new Set(WD.locs.map(l => l.id));
+      while (todo.size) {
+        let u = null; for (const v of todo) if (dist[v] != null && (u == null || dist[v] < dist[u])) u = v;
+        if (u == null || u === to) break; todo.delete(u);
+        for (const r of R) { const v = r.from === u ? r.to : r.to === u ? r.from : null; if (!v || !todo.has(v)) continue; const d = dist[u] + w(r); if (dist[v] == null || d < dist[v]) { dist[v] = d; prev[v] = u; } }
+      }
+      if (dist[to] == null) return { to, legs: null, blocked: WD.routes.some(r => r.blocked && (r.from === to || r.to === to)) };
+      const seq = [to]; while (seq[0] !== from) seq.unshift(prev[seq[0]]);
+      return { to, legs: seq.slice(1).map((b, i) => [seq[i], b]) };
+    }
+
+    /* ---- the editor's form */
+    function openDlg(html, onSave) {
+      dlg.innerHTML = `<form method="dialog" class="ke">${html}<div class="ka"><button type="submit" value="cancel" formnovalidate>Cancel</button><button type="submit" value="save" class="prim">Save</button></div></form>`;
+      const f = dlg.querySelector("form");
+      f.addEventListener("submit", e => { if (!e.submitter || e.submitter.value !== "save") return; e.preventDefault(); if (!f.reportValidity()) return; const v = {}; for (const el of f.elements) if (el.name) v[el.name] = el.type === "checkbox" ? el.checked : el.value.trim(); if (onSave(v) !== false) closeDlg(); });
+      if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+      setTimeout(() => { const i = dlg.querySelector("input,select,textarea"); if (i) i.focus(); }, 30);
+    }
+    const closeDlg = () => { if (dlg.close) dlg.close(); else dlg.removeAttribute("open"); };
+    const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(cur) === String(v) ? " selected" : ""}>${esc(l)}</option>`).join("");
+    function locForm(L, at) {
+      const cities = Object.entries(A.cities || {}).map(([id, c]) => [id, (c && c.title) || id]);
+      const kinds = Object.entries(KINDS).filter(([k]) => WD.look === "stars" ? !["village", "hamlet", "farm", "manor", "inn", "grove", "stones"].includes(k) : !["star", "planet", "moon", "asteroid", "belt", "gate", "anomaly"].includes(k)).map(([k, v]) => [k, v[1]]);
+      openDlg(`<h3>${L ? "Change " + esc(L.name) : "A new place"}</h3>
+        <label><span>Name</span><input name="name" maxlength="80" required value="${esc(L ? L.name : "")}"></label>
+        <label><span>Kind</span><select name="kind">${opt(kinds, L ? L.kind : WD.look === "stars" ? "station" : "town")}</select></label>
+        <label><span>What the party knows</span><select name="state">${opt(STATES, L ? L.state : "known")}</select></label>
+        <label><span>Region (optional)</span><input name="region" maxlength="60" value="${esc(L && L.region || "")}"></label>
+        <label><span>What it is (the players may read this)</span><textarea name="desc" rows="3" maxlength="1200">${esc(L && L.desc || "")}</textarea></label>
+        <label><span>For the referee only</span><textarea name="gm" rows="3" maxlength="2000">${esc(L && L.gm || "")}</textarea></label>
+        <label><span>Its 3D map</span><select name="city">${opt([["", "None"], ...cities], L && L.city || "")}</select></label>`, v => {
+        const body = { name: v.name.slice(0, 80), kind: v.kind, state: v.state, region: v.region, desc: v.desc, gm: v.gm, city: v.city || undefined };
+        if (L) save("l-" + L.id, Object.assign(ownOf("l", L.id), body, L.added ? { at: L.at } : {}));
+        else {
+          let id = String(v.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "place"; while (WD.byId[id] || OV.loc[id]) id += "-" + Math.floor(Math.random() * 90 + 10);
+          S.sel = id; S.selRoute = null;
+          save("l-" + id, Object.assign(body, { at: [r1(at[0]), r1(at[1])] }));
+        }
+      });
+    }
+    function routeForm(r, from, to) {
+      const a = WD.byId[r ? r.from : from], b = WD.byId[r ? r.to : to];
+      const kinds = Object.entries(ROUTES).filter(([k]) => WD.look === "stars" ? !["road", "trail", "pass", "river", "rail"].includes(k) : !["lane", "jump"].includes(k));
+      openDlg(`<h3>${r ? "Change the route" : "A new route"}</h3><p class="kn">${esc(a.name)} to ${esc(b.name)}</p>
+        <label><span>Kind</span><select name="kind">${opt(kinds, r ? r.kind : WD.look === "stars" ? "lane" : "road")}</select></label>
+        <label><span>Name (optional)</span><input name="name" maxlength="80" value="${esc(r && r.name || "")}" placeholder="e.g. The King's Road"></label>
+        <label><span>Days to travel (leave empty to work it out from the map)</span><input name="days" type="number" min="0" step="0.5" value="${r && typeof r.days === "number" ? r.days : ""}"></label>
+        <label><span>Danger (leave empty if none)</span><input name="danger" maxlength="200" value="${esc(r && typeof r.danger === "string" ? r.danger : r && r.danger ? "A dangerous way" : "")}"></label>
+        <label><span>Blocked: why (leave empty if open)</span><input name="blocked" maxlength="200" value="${esc(r && typeof r.blocked === "string" ? r.blocked : r && r.blocked ? "The way is shut" : "")}"></label>
+        <label class="wm-ck"><input type="checkbox" name="hidden"${r && r.hidden ? " checked" : ""}> Hidden from the players (a secret way)</label>
+        <label><span>For the referee only</span><textarea name="gm" rows="2" maxlength="1500">${esc(r && r.gm || "")}</textarea></label>`, v => {
+        const body = { kind: v.kind, name: v.name || undefined, days: v.days === "" ? undefined : Math.max(0, +v.days), danger: v.danger || undefined, blocked: v.blocked || undefined, hidden: v.hidden || undefined, gm: v.gm || undefined };
+        if (r) { const own = ownOf("r", r.id); for (const k of ["name", "days", "danger", "blocked", "hidden", "gm"]) if (body[k] === undefined) own[k] = null; save("r-" + r.id, Object.assign(own, JSON.parse(JSON.stringify(body)), r.added ? { from: r.from, to: r.to } : {})); }
+        else { const id = "x" + Date.now().toString(36); S.selRoute = id; S.sel = null; save("r-" + id, Object.assign({ from, to }, JSON.parse(JSON.stringify(body)))); }
+      });
+    }
+    // the world as the referee has left it, written as world.js, to give back to the campaign
+    function exportJS() {
+      const W0 = A.worldData || {}, keep = (o, ks) => { const x = {}; for (const k of ks) if (o[k] != null && o[k] !== "") x[k] = o[k]; return x; };
+      const out = Object.assign(keep(W0, ["title", "look", "size", "scale", "speeds", "labels"]), {
+        locations: WD.locs.map(l => keep(Object.assign({}, l, { at: [r1(l.at[0]), r1(l.at[1])] }), ["id", "name", "kind", "at", "city", "state", "region", "desc", "gm", "people", "events", "tags"])),
+        routes: WD.routes.map(r => keep(r, ["id", "from", "to", "kind", "name", "via", "days", "danger", "blocked", "hidden", "desc", "gm", "enc"])),
+        party: WD.party
+      });
+      const js = `// world.js, as the referee left it on the page on ${new Date().toISOString().slice(0, 10)}. Put it in the campaign folder in place of\n// the old one, then: node atlas.js world <campaign> (keeps the land), check and build.\nATLAS.world(${JSON.stringify(out, null, 2)});\n`;
+      dlg.innerHTML = `<div class="ke"><h3>Copy as world.js</h3><p class="kn">Everything on this map, with your changes, as the campaign's world.js.</p><textarea rows="14" readonly class="wm-js">${esc(js)}</textarea><div class="ka"><button type="button" data-w="dlgclose">Close</button><button type="button" class="prim" data-w="copy">Copy</button></div></div>`;
+      if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+      const ta = dlg.querySelector("textarea"); ta.focus(); ta.select();
+    }
+    let sure = null;
+    function twice(btn, fn) {
+      if (sure === btn) { sure = null; fn(); return; }
+      sure = btn; btn.dataset.lbl = btn.textContent; btn.textContent = "Really?"; btn.classList.add("sure");
+      setTimeout(() => { if (sure === btn) { btn.textContent = btn.dataset.lbl; btn.classList.remove("sure"); sure = null; } }, 4000);
+    }
+    const setParty = p => save("party", { at: p.at || null, plan: p.plan || [], trail: (p.trail || []).slice(-60) });
+
+    /* ---- events */
+    const ptr = new Map(); let gest = null, moved = false, downAt = null;
+    const local = e => { const r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    const world = (sx, sy) => [(sx - V.tx) / V.k, (sy - V.ty) / V.k];
+    function onDown(e) {
+      if (e.button && e.button !== 0) return;
+      if (e.target.closest(".wm-panel, .wm-ctl, .wm-results, .wm-journey")) return;
+      stage.focus({ preventScroll: true });
+      const p = local(e); ptr.set(e.pointerId, p); moved = false; if (ptr.size === 1) downAt = e.target;
+      const m = e.target.closest(".wl");
+      if (ptr.size === 1) gest = { p0: p, t0: [V.tx, V.ty], loc: S.edit && gm() && !S.tool && m ? m.dataset.loc : null };
+      else if (ptr.size === 2) { const [a, b] = [...ptr.values()]; gest = { pinch: Math.hypot(a[0] - b[0], a[1] - b[1]), k: V.k, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], t0: [V.tx, V.ty] }; }
+      try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+    function onMove(e) {
+      const p = local(e);
+      if (!ptr.has(e.pointerId)) { hover(e, p); return; }
+      ptr.set(e.pointerId, p);
+      if (!gest) return;
+      if (gest.pinch && ptr.size >= 2) {
+        const [a, b] = [...ptr.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const k = clamp(gest.k * d / gest.pinch, V.k0 * .6, V.k0 * 16), wx = (gest.mid[0] - gest.t0[0]) / gest.k, wy = (gest.mid[1] - gest.t0[1]) / gest.k;
+        V.k = k; V.tx = mid[0] - wx * k; V.ty = mid[1] - wy * k; bound(); anim = null; moved = true; request(); return;
+      }
+      const dx = p[0] - gest.p0[0], dy = p[1] - gest.p0[1];
+      if (!moved && Math.hypot(dx, dy) < 4) return;
+      moved = true; tip.hidden = true;
+      if (gest.loc) { const L = WD.byId[gest.loc], w = world(p[0], p[1]); L.at = [clamp(w[0], 0, W), clamp(w[1], 0, H)]; S.drag = gest.loc; ways.clear(); drawRoutes(); place(); return; }
+      anim = null; V.tx = gest.t0[0] + dx; V.ty = gest.t0[1] + dy; bound(); request();
+    }
+    function onUp(e) {
+      const had = ptr.has(e.pointerId); ptr.delete(e.pointerId);
+      if (!had) return;
+      if (ptr.size === 1 && gest && gest.pinch) { const [q] = [...ptr.values()]; gest = { p0: q, t0: [V.tx, V.ty] }; return; }
+      if (ptr.size) return;
+      const g = gest; gest = null;
+      if (g && g.loc && moved) { const L = WD.byId[g.loc]; S.drag = null; save("l-" + L.id, Object.assign(ownOf("l", L.id), { at: [r1(L.at[0]), r1(L.at[1])] }, L.added ? { name: L.name, kind: L.kind, state: L.state } : {})); return; }
+      if (moved) return;
+      click(downAt, local(e));
+    }
+    // a click: the element pressed (the stage holds the pointer while it is down, so the release cannot say)
+    function click(target, p) {
+      const m = target && target.closest ? target.closest(".wl") : null, r = target && target.closest ? target.closest("[data-route]") : null;
+      if (S.tool === "loc") { S.tool = null; renderBars(); locForm(null, world(p[0], p[1])); return; }
+      if (S.tool === "route") {
+        if (!m) return;
+        if (!S.first) { S.first = m.dataset.loc; renderBars(); select(S.first); return; }
+        if (m.dataset.loc === S.first) return;
+        const a = S.first; S.first = null; S.tool = null; renderBars(); routeForm(null, a, m.dataset.loc); return;
+      }
+      if (m) { select(m.dataset.loc); return; }
+      if (r) { selectRoute(r.dataset.route); return; }
+      if (S.sel || S.selRoute) { S.sel = null; S.selRoute = null; S.journey = null; drawMarkers(); drawRoutes(); renderPanel(); }
+    }
+    function hover(e, p) {
+      const m = e.target.closest && e.target.closest(".wl"), r = !m && e.target.closest && e.target.closest("[data-route]");
+      const id = m ? m.dataset.loc : null;
+      if (id !== S.hover) { S.hover = id; place(); }
+      if (m) {
+        const L = WD.byId[id], pl = placesOf(L).length;
+        tip.innerHTML = `<strong>${esc(L.name)}</strong> · ${esc((KINDS[L.kind] || [0, L.kind])[1])}${L.state !== "known" ? " · " + esc((STATES.find(s => s[0] === L.state) || [0, ""])[1]) : ""}${L.city && ctx.hasCity(L.city) ? " · 3D map" : ""}${pl ? ` · ${pl} place${pl > 1 ? "s" : ""}` : ""}${L.desc ? `<br><span>${esc(L.desc.length > 120 ? L.desc.slice(0, 117) + "…" : L.desc)}</span>` : ""}`;
+      } else if (r) {
+        const R = WD.rById[r.dataset.route]; if (!R) { tip.hidden = true; return; }
+        const tv = travel(WD, R, wayFor(R));
+        tip.innerHTML = `<strong>${esc(R.name || ROUTES[R.kind] || R.kind)}</strong> · ${esc(WD.byId[R.from].name)} to ${esc(WD.byId[R.to].name)}${tv.dist != null ? " · " + esc(distText(WD, tv.dist)) : ""}${tv.days != null ? " · " + esc(daysText(tv.days)) : ""}${R.blocked ? "<br><span>Blocked</span>" : R.danger ? "<br><span>Dangerous</span>" : ""}`;
+      } else { tip.hidden = true; return; }
+      tip.hidden = false;
+      const x = Math.min(p[0] + 16, V.sw - tip.offsetWidth - 8), y = p[1] + 18 + tip.offsetHeight > V.sh ? p[1] - tip.offsetHeight - 10 : p[1] + 18;
+      tip.style.transform = `translate(${Math.round(Math.max(4, x))}px, ${Math.round(y)}px)`;
+    }
+    function onWheel(e) { if (e.target.closest(".wm-panel, .wm-results, .wm-journey")) return; e.preventDefault(); const p = local(e); zoomAt(Math.exp(-(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) * .0016), p[0], p[1]); }
+    function onKey(e) {
+      if (e.target.closest && e.target.closest("input, textarea, select, .wm-panel")) return;
+      const step = 60;
+      if (e.key === "ArrowLeft") V.tx += step; else if (e.key === "ArrowRight") V.tx -= step; else if (e.key === "ArrowUp") V.ty += step; else if (e.key === "ArrowDown") V.ty -= step;
+      else if (e.key === "+" || e.key === "=") { zoomAt(1.4, V.sw / 2, V.sh / 2); e.preventDefault(); return; }
+      else if (e.key === "-") { zoomAt(1 / 1.4, V.sw / 2, V.sh / 2); e.preventDefault(); return; }
+      else if (e.key === "Escape") { if (S.tool) { S.tool = null; S.first = null; renderBars(); } else { S.sel = null; S.selRoute = null; drawMarkers(); drawRoutes(); renderPanel(); } return; }
+      else if (e.key === "Enter" && e.target.closest && e.target.closest(".wl")) { select(e.target.closest(".wl").dataset.loc); return; }
+      else return;
+      e.preventDefault(); anim = null; bound(); request();
+    }
+    function onClick(e) {
+      const t = e.target; if (!t.closest) return;
+      const z = t.closest("[data-z]");
+      if (z) { const d = z.dataset.z; if (d === "in") zoomAt(1.6, V.sw / 2, V.sh / 2); else if (d === "out") zoomAt(1 / 1.6, V.sw / 2, V.sh / 2); else if (d === "home") home(); else if (document.fullscreenElement) document.exitFullscreen(); else if (root.requestFullscreen) root.requestFullscreen().catch(() => {}); return; }
+      const o = t.closest("[data-wopen]"); if (o) { ctx.open(o.dataset.wopen); return; }
+      const wl = t.closest("[data-wloc]"); if (wl) { select(wl.dataset.wloc, true); return; }
+      const wr = t.closest("[data-wroute]"); if (wr) { selectRoute(wr.dataset.wroute); const m = midOf(wayFor(WD.rById[wr.dataset.wroute])); fly(m, V.k); return; }
+      const ws = t.closest("[data-wstate]"); if (ws && S.sel) { const L = WD.byId[S.sel]; save("l-" + L.id, Object.assign(ownOf("l", L.id), { state: ws.dataset.wstate }, L.added ? { name: L.name, kind: L.kind, at: L.at } : {})); return; }
+      const b = t.closest("[data-w]"); if (!b) return;
+      const L = S.sel && WD.byId[S.sel], R = S.selRoute && WD.rById[S.selRoute], P = WD.party;
+      switch (b.dataset.w) {
+        case "close": S.sel = null; S.selRoute = null; S.journey = null; drawMarkers(); drawRoutes(); renderPanel(); break;
+        case "enter": if (L && L.city) ctx.enter(L.city, L.id); break;
+        case "make": if (L && ctx.makeCity) { b.disabled = true; b.textContent = "Making the map…"; Promise.resolve(ctx.makeCity(L, WD)).catch(err => { b.disabled = false; b.textContent = "Make its 3D map now"; note("The map could not be made: " + ((err && err.message) || err)); }); } break;
+        case "edit": S.edit = !S.edit; S.tool = null; S.first = null; root.classList.toggle("editing", S.edit); renderBars(); renderPanel(); break;
+        case "addloc": S.tool = S.tool === "loc" ? null : "loc"; S.first = null; renderBars(); break;
+        case "addroute": S.tool = S.tool === "route" ? null : "route"; S.first = null; renderBars(); break;
+        case "export": exportJS(); break;
+        case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
+        case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }
+        case "dlgclose": closeDlg(); break;
+        case "editloc": if (L) locForm(L); break;
+        case "delloc": if (L) twice(b, () => { const id = L.id, own = WD.routes.filter(r => r.added && (r.from === id || r.to === id)).map(r => r.id); S.sel = null; for (const rid of own) save("r-" + rid, null); save("l-" + id, L.added ? null : { gone: true }); }); break;
+        case "resetloc": if (L) save("l-" + L.id, null); break;
+        case "editroute": if (R) routeForm(R); break;
+        case "delroute": if (R) twice(b, () => { S.selRoute = null; save("r-" + R.id, R.added ? null : { gone: true }); }); break;
+        case "resetroute": if (R) save("r-" + R.id, null); break;
+        case "partyhere": if (L) setParty({ at: L.id, plan: [], trail: P.at && P.at !== L.id ? [...P.trail, P.at] : P.trail }); break;
+        case "plan": if (L && P.at) { S.journey = plan(L.id); drawJourney(); renderPanel(); } break;
+        case "setoff": if (S.journey && S.journey.legs) { const pl = S.journey.legs.map(l => l[1]); S.journey = null; setParty({ at: P.at, plan: pl, trail: P.trail }); } break;
+        case "arrive": if (P.plan.length) setParty({ at: P.plan[0], plan: P.plan.slice(1), trail: [...P.trail, P.at] }); break;
+        case "cancel": setParty({ at: P.at, plan: [], trail: P.trail }); break;
+      }
+    }
+    function onChange(e) {
+      const t = e.target;
+      if (t.matches("[data-fk]")) filt.kinds[t.dataset.fk] = t.checked;
+      else if (t.matches("[data-fr]")) filt.routes[t.dataset.fr] = t.checked;
+      else if (t.matches("[data-fknow]")) filt.know = t.value;
+      else if (t.matches("[data-f3]")) filt.only3d = t.checked;
+      else return;
+      try { ctx.store.set("world-filter", JSON.stringify(filt)); } catch (_) {}
+      drawRoutes(); drawMarkers();
+    }
+    stage.addEventListener("pointerdown", onDown);
+    stage.addEventListener("pointermove", onMove);
+    stage.addEventListener("pointerup", onUp);
+    stage.addEventListener("pointercancel", onUp);
+    stage.addEventListener("pointerleave", () => { if (!ptr.size) { tip.hidden = true; if (S.hover) { S.hover = null; place(); } } });
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    stage.addEventListener("dblclick", e => { if (e.target.closest(".wm-panel, .wm-ctl")) return; const p = local(e); zoomAt(1.8, p[0], p[1]); });
+    stage.addEventListener("keydown", onKey);
+    root.addEventListener("click", onClick);
+    root.addEventListener("change", onChange);
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(() => { if (!started) wake(); else if (size()) { bound(); request(); } }) : null;
+    if (ro) ro.observe(stage);
+
+    /* ---- search: the page's own search box drives it (ctl.search) */
+    function search(q) {
+      S.q = String(q || "").trim().toLowerCase();
+      const res = $(".wm-results");
+      if (!S.q) { S.hits = null; res.hidden = true; drawMarkers(); return; }
+      const hits = [];
+      for (const L of WD.locs) {
+        if (!seen(L)) continue;
+        const why = [];
+        if ([L.name, L.region, (KINDS[L.kind] || [0, L.kind])[1], L.desc, ...(L.tags || [])].join(" ").toLowerCase().includes(S.q)) why.push("");
+        for (const p of placesOf(L)) if (p.name.toLowerCase().includes(S.q)) why.push(p.name);
+        if (gm() && ctx.peopleAt) for (const p of ctx.peopleAt(L, placesOf(L))) if (p.name.toLowerCase().includes(S.q)) why.push(p.name);
+        if (why.length) hits.push([L, why.filter(Boolean)]);
+      }
+      S.hits = new Set(hits.map(h => h[0].id));
+      res.hidden = false;
+      res.innerHTML = hits.length ? `<ul>${hits.slice(0, 12).map(([L, why]) => `<li><button type="button" data-wloc="${esc(L.id)}"><strong>${esc(L.name)}</strong>${why.length ? `<span class="kn"> · ${esc(why.slice(0, 2).join(", "))}${why.length > 2 ? "…" : ""}</span>` : ""}</button></li>`).join("")}</ul>` : `<p class="kn">Nothing on the map matches.</p>`;
+      drawMarkers();
+    }
+
+    /* ---- first paint */
+    drawLand(); renderBars();
+    if (DRAW) {
+      // trace the picture once it has loaded; the map is drawn again from what was found
+      const img = new Image();
+      img.onload = () => {
+        if (gone) return;
+        try { DRAW.trace = traceDrawing(img, W, H, (WD.W && WD.W.features) || []); } catch (e) { console.warn("world map: the drawing could not be traced", e); return; }
+        if (!DRAW.mode) DRAW.mode = DRAW.trace.ok ? "redrawn" : "drawn";
+        traced(); PG = null; ways.clear(); drawLand(); drawRoutes(); drawMarkers(); renderBars();
+      };
+      img.src = DRAW.src;
+    }
+    function wake() {
+      if (!size()) return;
+      if (!started) {
+        started = true;
+        let v = null; try { v = JSON.parse(ctx.store.get("world-view") || "null"); } catch (e) {}
+        if (v && v.z > 0) fly([v.cx, v.cy], v.z * V.k0, true); else home(true);
+        const s = ctx.store.get("world-sel"); if (s && WD.byId[s]) S.sel = s;
+        drawRoutes(); drawMarkers(); renderPanel();
+      } else { bound(); request(); }
+    }
+    wake();
+    return {
+      wake, search,
+      // choose a place from outside (the way back from a city): the world stays as it was left when that place is
+      // already the chosen one; otherwise it is chosen and brought into view at the same zoom
+      select(id) { wake(); if (!WD.byId[id] || S.sel === id) return; select(id); const L = WD.byId[id], x = L.at[0] * V.k + V.tx, y = L.at[1] * V.k + V.ty; if (x < 30 || y < 30 || x > V.sw - 30 || y > V.sh - 30) fly(L.at, V.k); else reveal(L.at); },
+      // what the page changed (the referee/player switch, a place's status): draw again
+      sync() { if (!gm()) { S.edit = false; S.tool = null; root.classList.remove("editing"); } drawRoutes(); drawMarkers(); renderPanel(); renderBars(); },
+      locationOf(cityId) { const L = WD.locs.find(l => l.city === cityId); return L ? L.id : null; },
+      name(id) { return WD.byId[id] ? WD.byId[id].name : ""; },
+      dispose() { gone = true; if (ro) ro.disconnect(); if (raf) cancelAnimationFrame(raf); box.innerHTML = ""; }
+    };
+  };
+
+  // for the checker (atlas.js check) and the generator
+  A.worldKit = { prepareWorld, KINDS, ROUTES, STATES, LOOK_OF, SETTLED, OVERLAND, travel, plen, unb64 };
+})(ATLAS);

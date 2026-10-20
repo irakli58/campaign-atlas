@@ -162,10 +162,12 @@
   // kind of place; a kit fits one: Tbilisi's carved balconies and its cathedral, not a modern city's boxes (the user's
   // idea, 20 Oct 2026). Several kits merge, the later winning. A kit's look is laid over the city's age.
   let KIT = { look: null, models: {}, landmarks: {}, dress: [] };
-  function mergeKits() {
+  // a kit dresses the city it names (city: "id" or ["id", ...]); one that names none dresses the campaign's main city
+  function mergeKits(rid, main) {
     const K = { look: null, models: {}, landmarks: {}, dress: [], names: [] };
     for (const k of A.kits || []) {
       if (!k) continue;
+      if (k.city ? ![].concat(k.city).includes(rid) : !main) continue;
       if (k.look) K.look = Object.assign({}, K.look || {}, k.look, { plan: Object.assign({}, (K.look && K.look.plan) || {}, k.look.plan || {}) });
       Object.assign(K.models, k.models || {}); Object.assign(K.landmarks, k.landmarks || {}); K.dress.push(...(k.dress || [])); if (k.name) K.names.push(k.name);
     }
@@ -176,7 +178,8 @@
   // fill in everything the campaign left out, and make this city the current one
   function prepare(raw) {
     // a campaign's own changes to a city that was fetched or generated for it: ATLAS.cityEdit(c => { ... }), applied once
-    if (raw && A.cityEdits && !raw.__edited) { Object.defineProperty(raw, "__edited", { value: true }); for (const f of A.cityEdits) f(raw); }
+    // an edit with no city named is for the campaign's main city (city.js); ATLAS.cityEdit(fn, "id") is for that city
+    if (raw && A.cityEdits && !raw.__edited) { Object.defineProperty(raw, "__edited", { value: true }); const rid = raw.id || "main", main = raw === A.cityData; for (const e of A.cityEdits) { const f = typeof e === "function" ? e : e.fn, id = typeof e === "function" ? null : e.id; if (id ? id === rid : main) f(raw); } }
     const D = Object.assign({ seed: 1888, look: "old", title: "", subtitle: "", scaleLabel: "", roads: [], rivers: [], basins: [], parks: [], squares: [], rails: [], forts: [], towers: [], gasworks: [], signs: [], districts: {}, roofs: {}, roof: "#7a2e3a", plazas: [], open: [], walls: [], landmarks: [], rows: [], footprints: [], ruin: 0, credit: "", real: false }, raw || {});
     D.sheet = Object.assign({ w: 320, h: 200, margin: 30 }, (raw && raw.sheet) || {});
     // a landmark given only its outline (pts) stands at the outline's centre (without this it was skipped, and a place
@@ -191,7 +194,7 @@
       if (D.look && typeof D.look === "object") L = Object.assign({}, L, D.look, { plan: Object.assign({}, L.plan, D.look.plan || {}) });
       if (GROUNDS[D.ground]) L = Object.assign({}, L, { plan: Object.assign({}, L.plan, GROUNDS[D.ground]) });
       // a kit's look: the place's own colours, its share of pitched roofs (pitched: 0.4) and its storeys (tall: [1.1, 2.4])
-      KIT = mergeKits();
+      KIT = mergeKits((raw && raw.id) || "main", !raw || !A.cityData || raw === A.cityData);
       if (KIT.look) {
         const k = KIT.look; L = Object.assign({}, L, k, { plan: Object.assign({}, L.plan, k.plan || {}) });
         if (typeof k.pitched === "number") L.pitched = (i, b) => b.type === "church" || b.type === "chapel" || h01(i + 11) < k.pitched;
@@ -211,13 +214,18 @@
     if (D.boats == null) D.boats = D.rivers.length ? 40 : 0;
     const m = D.sheet.margin; PLAN = { X0: -m, Y0: -m, X1: D.sheet.w + m, Y1: D.sheet.h + m };
     ({ INK, PAPER, BLOCK, ROADF, MAJORF, WATERC, PARKC, FOOT, LOT, WHARF, RAILC, HATCH, FORTC } = LOOK.plan);
+    Object.defineProperty(D, "__cur", { value: { LOOK, KIT, PLAN } });
     CD = D; return D;
   }
+  // make a prepared city the current one again (another may have been prepared since)
+  function use(D) { ({ LOOK, KIT, PLAN } = D.__cur); ({ INK, PAPER, BLOCK, ROADF, MAJORF, WATERC, PARKC, FOOT, LOT, WHARF, RAILC, HATCH, FORTC } = LOOK.plan); CD = D; }
   // where each place stands: its own `at: [x, y]`, or a spiral round the centre of its district
   function cityPlaces(D) {
-    const out = [], byD = {};
+    const out = [], byD = {}, did = D.id || "main", mainId = (A.cityData && A.cityData.id) || "main";
     A.order.forEach((id, i) => {
       const m = A.meta[id]; if (!m || m.offmap) return;
+      // a campaign with several cities: each place stands on the map of its own (its city, or its world location's)
+      if ((A.placeCity ? A.placeCity(id) : mainId) !== did) return;
       // no model named: the look chooses (the future picks one of its own from the place's name), else a house
       const mdl = Array.isArray(m.model) ? m.model : [m.model || (LOOK && LOOK.guess ? LOOK.guess(m) : "house")], kind = MODEL_SIZE[mdl[0]] || KIT.models[mdl[0]] ? mdl[0] : "house";
       const e = { id, kind, lr: mdl[1] || MODEL_SIZE[kind] || (KIT.models[kind] && KIT.models[kind].claim) || 3.4, x: null, y: null, p: { id, n: i + 1, name: m.name || id, dist: m.district || m.region || "", cat: m.category || "", badge: m.badge || "" } };
@@ -1112,6 +1120,7 @@ function createMap3D(host, C, planCanvas, hooks) {
   const T = THREE;
   const SW = CD.sheet.w, SH = CD.sheet.h, wx = x => x - SW / 2, wz = y => y - SH / 2, SPAN = PLAN.X1 - PLAN.X0;
   const renderer = new T.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  let gone = false;                              // set when the map is taken down (another city mounted in its place)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
   renderer.domElement.setAttribute("role", "img");
@@ -1160,6 +1169,7 @@ function createMap3D(host, C, planCanvas, hooks) {
     const jobs = []; for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) jobs.push([i, j]);
     const idle = window.requestIdleCallback ? f => window.requestIdleCallback(f, { timeout: 1500 }) : f => setTimeout(f, 80);
     const step = () => {
+      if (gone) { for (const m of made) { m.material.map.dispose(); m.material.dispose(); m.geometry.dispose(); } return; }   // taken down meanwhile
       const job = jobs.shift();
       if (!job) {
         // every tile is printed and already on the graphics card: change over
@@ -1753,9 +1763,10 @@ function createMap3D(host, C, planCanvas, hooks) {
   let pending = false, anim = null;
   const pv = new T.Vector3();
   function size() { const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); request(); }
-  function request() { if (!pending) { pending = true; requestAnimationFrame(frame); } }
+  function request() { if (!pending && !gone) { pending = true; requestAnimationFrame(frame); } }
   function frame(now) {
     pending = false;
+    if (gone) return;
     if (anim) {
       const t = Math.min(1, (now - anim.t0) / anim.dur), k = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
       controls.target.lerpVectors(anim.ft, anim.tt, k); camera.position.lerpVectors(anim.fp, anim.tp, k);
@@ -1798,7 +1809,7 @@ function createMap3D(host, C, planCanvas, hooks) {
     }
   }
   controls.addEventListener("change", request);
-  new ResizeObserver(size).observe(host);
+  const ro = new ResizeObserver(size); ro.observe(host);
 
   // ---- picking
   const ray = new T.Raycaster(), ndc = new T.Vector2();
@@ -1861,7 +1872,14 @@ function createMap3D(host, C, planCanvas, hooks) {
   renderer.shadowMap.needsUpdate = true;
   size();
   setTimeout(() => sharpen(hooks.sharp), 700);
-  return { flyTo, zoom, home, sync, setNight, request, pins, dbg: { renderer, scene, camera, controls, frame, groundMats } };
+  // take the map down: free the graphics card's memory, so another city can be mounted in its place (a browser allows
+  // only a few live 3D views at once)
+  function dispose() {
+    if (gone) return; gone = true; anim = null; ro.disconnect(); if (controls.dispose) controls.dispose();
+    scene.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) { if (m.map) m.map.dispose(); m.dispose(); } });
+    renderer.dispose(); if (renderer.forceContextLoss) renderer.forceContextLoss(); renderer.domElement.remove();
+  }
+  return { flyTo, zoom, home, sync, setNight, request, pins, dispose, dbg: { renderer, scene, camera, controls, frame, groundMats } };
 }
 
   /* ---- the flat map: what a device without 3D gets instead. Places, water, main roads, district names. */
@@ -1885,7 +1903,7 @@ function createMap3D(host, C, planCanvas, hooks) {
   /* ---- putting the map on the page. box: an empty element. hooks.onPick(id) is called when a place is clicked.
           Returns { flyTo(id), sync({ sel, mode, matches(p) }) }; both are safe to call before the map is ready. */
   A.cityMount = function (box, hooks) {
-    const D = prepare(A.cityData), PL = cityPlaces(D), placed = PL.filter(e => e.x != null), P = LOOK.plan;
+    const D = prepare((hooks.city && A.cities && A.cities[hooks.city]) || A.cityData), PL = cityPlaces(D), placed = PL.filter(e => e.x != null), P = LOOK.plan;
     const hex = n => "#" + n.toString(16).padStart(6, "0");
     const sw = (fill, hgt) => `<svg width="26" height="10" aria-hidden="true"><rect x=".5" y="${(10 - hgt) / 2}" width="25" height="${hgt}" fill="${fill}" stroke="${P.INK}"/></svg>`;
     box.innerHTML = `<div class="map3d" style="background:${hex(LOOK.table)}"><div class="loading" style="background:${hex(LOOK.table)}">Surveying the streets, one by one…</div><div class="pins"></div><div class="tip" hidden></div>
@@ -1896,8 +1914,17 @@ function createMap3D(host, C, planCanvas, hooks) {
         ? `${(D.walls || []).some(w => w.kind === "tube") ? `<span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="${P.INK}" stroke-width="6"/><line x1="0" y1="5" x2="26" y2="5" stroke="${P.ROADF}" stroke-width="4"/></svg>Pressurised tube</span>` : ""}${D.roads.length ? `<span class="lg">${sw(P.ROADF, 5)}Track</span>` : ""}`
         : `<span class="lg">${sw(P.MAJORF, 7)}Main road</span><span class="lg">${sw(P.ROADF, 5)}Street</span><span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="${P.INK}" stroke-width="2"/></svg>Lane, alley, court</span>`}${D.rails.length ? `<span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="0" y1="5" x2="26" y2="5" stroke="${P.INK}" stroke-width="3.4"/><line x1="0" y1="5" x2="26" y2="5" stroke="${P.ROADF}" stroke-width="1.2" stroke-dasharray="3 3"/></svg>Railway</span>` : ""}<span class="how">Drag to pan · scroll or pinch to zoom · right-drag or two fingers to turn. Click a numbered building to open it.</span>${D.credit ? `<span class="credit">${A.esc(D.credit)}${D.creditUrl ? ` (<a href="${A.esc(D.creditUrl)}" target="_blank" rel="noopener">terms</a>)` : ""}</span>` : ""}</div>`;
     const host = box.querySelector(".map3d"), loading = box.querySelector(".loading"), tip = box.querySelector(".tip"), flat = box.querySelector(".cityflatbox"), how = box.querySelector(".how");
-    let last = { sel: null, mode: "gm", matches: () => true };
-    const ctl = { map: null, flyTo(id) { if (ctl.map) ctl.map.flyTo(id); }, sync(st) { last = st; if (ctl.map) ctl.map.sync(st); else if (!flat.hidden) flat.innerHTML = flatSVG(D, placed, last); } };
+    let last = { sel: null, mode: "gm", matches: () => true }, dead = false;
+    const undo = [];
+    const ctl = { map: null, city: D.id || "main", flyTo(id) { if (ctl.map) ctl.map.flyTo(id); }, sync(st) { last = st; if (ctl.map) ctl.map.sync(st); else if (!flat.hidden) flat.innerHTML = flatSVG(D, placed, last); },
+      // take the map down (another city is going up in this box): frees the graphics memory and every listener
+      dispose() {
+        if (dead) return; dead = true;
+        if (document.fullscreenElement === box && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+        for (const f of undo) f();
+        if (ctl.map && ctl.map.dispose) ctl.map.dispose();
+        ctl.map = null; box.innerHTML = "";
+      } };
     const fallback = msg => { host.hidden = true; flat.hidden = false; how.textContent = msg; ctl.map = null; flat.innerHTML = flatSVG(D, placed, last); };
     flat.addEventListener("click", e => { const t = e.target.closest("[data-go]"); if (t && hooks.onPick) hooks.onPick(t.dataset.go); });
     flat.addEventListener("keydown", e => { if (e.key !== "Enter" && e.key !== " ") return; const t = e.target.closest("[data-go]"); if (t && hooks.onPick) { e.preventDefault(); hooks.onPick(t.dataset.go); } });
@@ -1908,6 +1935,8 @@ function createMap3D(host, C, planCanvas, hooks) {
         if (!gl) throw new Error("webgl");
         await new Promise(r => setTimeout(r, 30));                                   // let the page paint first
         try { await Promise.race([Promise.all([`20px ${D.fonts.text}`, `italic 20px ${D.fonts.text}`, `20px ${D.fonts.caps}`].map(f => document.fonts.load(f))), new Promise(r => setTimeout(r, 2500))]); } catch (e) {}
+        if (dead) return;
+        use(D);
         const city = buildCity(D, placed);
         const span = PLAN.X1 - PLAN.X0, area = span * (PLAN.Y1 - PLAN.Y0), maxTex = gl.getParameter(0x0D33) || 4096;
         const ppu = Math.max(3, Math.min(7, Math.floor(Math.min(maxTex, 5600) / span)));
@@ -1932,8 +1961,8 @@ function createMap3D(host, C, planCanvas, hooks) {
         });
         const dark = window.matchMedia("(prefers-color-scheme: dark)");
         const theme = () => { const t = document.documentElement.getAttribute("data-theme"); if (ctl.map) ctl.map.setNight(t === "dark" || (t !== "light" && dark.matches)); };
-        theme(); if (dark.addEventListener) dark.addEventListener("change", theme);
-        new MutationObserver(theme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+        theme(); if (dark.addEventListener) { dark.addEventListener("change", theme); undo.push(() => dark.removeEventListener("change", theme)); }
+        const mo = new MutationObserver(theme); mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] }); undo.push(() => mo.disconnect());
         box.querySelector(".mctl").addEventListener("click", e => {
           const b = e.target.closest("[data-z]"); if (!b || !ctl.map) return;
           if (b.dataset.z === "in") ctl.map.zoom(.62); else if (b.dataset.z === "out") ctl.map.zoom(1.6); else if (b.dataset.z === "home") ctl.map.home();
@@ -1943,6 +1972,7 @@ function createMap3D(host, C, planCanvas, hooks) {
         ctl.map.sync(last);
         if (hooks.onReady) hooks.onReady(ctl);
       } catch (err) {
+        if (dead) return;
         if (typeof console !== "undefined") console.warn("3D street plan unavailable:", err);
         loading.remove();
         fallback("A simple map, not to scale. Click a number to open that place. (This browser could not draw the 3D street plan.)");
@@ -1951,11 +1981,21 @@ function createMap3D(host, C, planCanvas, hooks) {
     return ctl;
   };
 
-  A.city = data => { A.cityData = data; return A; };
+  // a campaign's cities: city.js is the main one; cities/<id>.js hold others, each with its own id. A.cityData is the
+  // main city (the first registered, or one that says main: true)
+  A.city = data => { const id = (data && data.id) || "main"; (A.cities = A.cities || {})[id] = data; if (!A.cityData || (data && data.main)) A.cityData = data; return A; };
+  // which city a place stands in: its own city: "id", else its world location's city, else the main one; null when it's
+  // in a world location that has no 3D map
+  A.placeCity = pid => {
+    const m = A.meta[pid] || {}, mainId = (A.cityData && A.cityData.id) || "main";
+    if (m.city) return m.city;
+    if (m.location && A.worldData) { const loc = (A.worldData.locations || []).find(l => l.id === m.location); return loc ? loc.city || null : mainId; }
+    return mainId;
+  };
   // buildings made for one place: ATLAS.kit({ name, look, dress, models, landmarks }) (references/cities.md, "Kits")
   A.kit = def => { (A.kits = A.kits || []).push(def); return A; };
   // a campaign's own changes to a city that was fetched or generated for it (city.js is rewritten whenever the city is
   // fetched again, so changes made there would be lost): ATLAS.cityEdit(c => { c.title = "..."; c.landmarks.push({...}); })
-  A.cityEdit = fn => { (A.cityEdits = A.cityEdits || []).push(fn); return A; };
+  A.cityEdit = (fn, id) => { (A.cityEdits = A.cityEdits || []).push(id ? { fn, id } : fn); return A; };
   A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, FANTASY_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN, kit: () => KIT, KIT_SHAPES: ["box", "roof", "cylinder", "cone", "tube", "dome", "ball", "pyramid", "spire", "obelisk", "frustum", "ring", "arch"], KIT_MATS: ["wall", "roof", "dark", "glow", "green", "glass", "gold", "copper", "stone", "brick", "wood", "white", "black", "water"], KIT_DRESS: ["balcony", "dome", "turret"] };
 })(ATLAS);

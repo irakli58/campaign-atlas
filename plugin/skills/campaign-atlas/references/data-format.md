@@ -24,6 +24,8 @@ ATLAS.place("old-mill", {
   tagline: "One sentence for the index.",
   at: [204, 98],                 // where it stands on the city map, in plan units; or landmark: "Name" (it IS that landmark); or leave both out and let region place it; or offmap: true
   model: "town",                 // the building it wears on the city map ("church", ["hall", 4], ...; see: atlas.js catalogue)
+  city: "harrowgate",            // a campaign with several cities: the one it stands in (cities/<id>.js; city.js is "main", the default)
+  location: "barrow",            // or the world map's location it is in, when that location has no 3D map (references/world.md)
   badge: "II",                   // a short GM-only mark on its pin
   music: "crypt",                // the theme this place plays (a mood; see: atlas.js catalogue). Without it the mood is guessed from the name.
                                  // Or music: { mood: "crypt", also: { "The search": "dread", "Out by the drain": "chase" } }: the suggested
