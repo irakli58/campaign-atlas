@@ -88,7 +88,7 @@
   <nav class="views" aria-label="View">
     <button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
     ${A.worldData && A.worldMount ? `<button type="button" id="v-world" aria-pressed="false">World map</button>` : ""}
-    ${A.tableUI ? `<button type="button" id="v-table" class="keeper" aria-pressed="false">At the table</button>` : ""}
+    ${A.tableUI ? `<button type="button" id="v-table" class="keeper v-play" aria-pressed="false" title="Everything for game night: the players' screen, handouts, clocks, dice and more">${A.table.icon("play")}At the table</button>` : ""}
     ${(A.storyData || []).length ? `<button type="button" id="v-story" class="keeper" aria-pressed="false">The story</button>` : ""}
     ${A.music && A.music.enabled && A.music.enabled() ? `<button type="button" id="v-music" aria-pressed="false">Music</button>` : ""}
   </nav>
@@ -430,7 +430,7 @@
     const rows = ROWS[p.id] || [];
     const lead = (r, done) => r.to.length ? `<div class="cl-to"><span class="kn">${TR.ready ? (done ? "Opened" : "Would open") : "Leads to"}</span>${r.to.map(t => `<span class="pc">${accBadge(t)}<button type="button" class="pcg" data-go="${esc(t)}">${esc(placeName(t))}</button></span>`).join("")}</div>` : "";
     const hint = r => r.hint ? `<details class="chint"><summary>${r.to.length === 1 ? "How to hint at " + esc(placeName(r.to[0])) : r.to.length ? "How to hint where it leads" : "If it is missed"}</summary><p>${esc(r.hint)}</p></details>` : "";
-    const fold = (r, done) => `<details class="clf"><summary>${esc(r.short)}${r.roll && A.tableUI ? " " + A.tableUI.roll(r.roll) : ""}${r.handout ? ` <span class="ho-b" title="A handout">✉</span>` : ""}</summary><p class="clx">${esc(r.text)}</p>${lead(r, done)}${hint(r)}${r.rescue ? `<details class="chint"><summary>If they're stuck</summary><p>${esc(r.rescue)}</p></details>` : ""}${r.handout && A.tableUI ? `<p class="cl-ho">${A.tableUI.handoutBtns(r.handout)}</p>` : ""}</details>`;
+    const fold = (r, done) => `<details class="clf"><summary>${esc(r.short)}${r.roll && A.tableUI ? " " + A.tableUI.roll(r.roll) : ""}${r.handout && A.tableUI ? ` <button type="button" class="ho-b" data-t="hview" data-id="${esc(r.handout)}" title="Read this handout, or give it to the players">${A.table.icon("handout")}Handout</button>` : ""}</summary><p class="clx">${esc(r.text)}</p>${lead(r, done)}${hint(r)}${r.rescue ? `<details class="chint"><summary>If they're stuck</summary><p>${esc(r.rescue)}</p></details>` : ""}${r.handout && A.tableUI ? `<p class="cl-ho">${A.tableUI.handoutBtns(r.handout)}</p>` : ""}</details>`;
     if (!TR.ready) return `<section class="sec"><h3>Clues to find${rows.length ? FOLDALL : ""}</h3>${rows.length ? `<ul class="cls">${rows.map(r => `<li class="cl"><span class="ckx"></span>${fold(r)}</li>`).join("")}</ul>` : `<p class="kn">None here.</p>`}</section>`;
     const ro = TR.canWrite ? "" : " disabled";
     const main = rows.map(r => { const done = clueDone(p.id, r.k); return `<li class="cl${done ? " done" : ""}"><input type="checkbox" data-clue="${esc(p.id)}" data-ck="${esc(r.k)}" aria-label="Found: ${esc(r.short)}"${done ? " checked" : ""}${ro}>${fold(r, done)}</li>`; }).join("");

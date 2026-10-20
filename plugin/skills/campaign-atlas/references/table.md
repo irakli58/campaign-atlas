@@ -20,7 +20,15 @@ A campaign is played, not only read. Every page Atlas builds has an **At the tab
 
 ## 1. What the page does by itself
 
-The **At the table** view (referee only) has these tabs:
+**Finding one's way** (the user found the first version hard to find their way in, 20 Oct 2026, so it was laid out again):
+
+- The **At the table** button stands apart from the other views (its own colour, a die), and a referee who has not opened it yet sees a one-time hint under the views saying what is there.
+- The view opens on **Start here**: the two things a game night turns on (the players' screen, with whether it is open, and tonight's sheet), every other tool as a card saying what it is for and where things stand, and "How a game night goes" from session zero to the notes afterwards.
+- The tools are listed down the side, each with a line on what it does, grouped *During the game* and *Before and after* (along the top on a narrow screen, along the bottom in the table-side view).
+- A **toolbar at the bottom right of every page** holds what is wanted mid-scene without leaving the place being read: Dice, A person, Stuck?, Ask, and the Players' screen (a green dot when it is open; its panel shows a small copy of what the players see).
+- Each place's page has an **At the table** row under its name: show its map to the players (a dialog where each room is clicked open as they enter), its handouts (each to read, give or print), its random tables, and its maps for online tables. A clue that is a handout has a *Handout* mark on its line that opens it.
+
+The **At the table** view (referee only) has these tools:
 
 | Tab | What is there |
 |---|---|
