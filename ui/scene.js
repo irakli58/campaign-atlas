@@ -71,7 +71,8 @@
   const SCENES = {
     story: [[180, 60], `<path class="sc-paper" d="M180 94 C150 84 110 84 80 92 V28 C110 20 150 20 180 30 Z"/><path class="sc-paper" d="M180 94 C210 84 250 84 280 92 V28 C250 20 210 20 180 30 Z"/>
       <path class="sc-line" d="M96 40 H164 M96 50 H160 M96 60 H166 M96 70 H150 M196 40 H264 M196 50 H258 M196 60 H262 M196 70 H240"/>
-      <path class="sc-paper sc-turn" d="M180 94 C210 84 250 84 280 92 V28 C250 20 210 20 180 30 Z"/>`],
+      <path class="sc-ribbon" d="M176 30 V100 L179 96 L182 100 V31 Z"/>
+      <g class="sc-turn"><path class="sc-paper" d="M180 94 C210 84 250 84 280 92 V28 C250 20 210 20 180 30 Z"/><path class="sc-line" d="M196 40 H262 M196 50 H264 M196 60 H256 M196 70 H262 M196 80 H236"/></g>`],
     council: [[180, 74], PAPER(26, 58, 308, 44) + ["Doyle", "Christie", "Poe", "Lovecraft"].map((n, i) => {
       const x = 44 + i * 76;
       return `<path class="sc-write" style="--i:${i}" pathLength="1" d="M${x} 76 q7 -5 14 0 t14 0 t14 0 t14 0"/><path class="sc-write" style="--i:${i}" pathLength="1" d="M${x} 88 q7 -5 14 0 t14 0 t14 0"/>
