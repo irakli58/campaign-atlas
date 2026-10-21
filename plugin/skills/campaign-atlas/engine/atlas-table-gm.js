@@ -215,6 +215,8 @@
     return f.id;
   }
   T.flyPlace = flyPlace;
+  // (the same plans start a place the game master makes in a city: atlas-locations.js)
+  T.flyPlans = { PLANS, RENAME, FLOOR, KIND_WORD };
 
   /* ================================================================ the board, the clocks, the session */
   function clockSVG(n, at, size) {
@@ -1026,6 +1028,7 @@
       if (pref.get("tablet") === "1") app().dataset.tablet = "1";
       dockInit(); intro();
       if (A.mapEditor) A.mapEditor.init(S, ctx);
+      if (A.locations) A.locations.init(S, ctx);
       for (const p of TPLUGS) if (p.init) p.init(S, ctx);
       const MAP = { screen: ["screen", "home"], fog: ["screen"], clocks: ["clocks", "tonight", "home"], log: ["tonight", "home"], combat: ["combat", "home"], board: ["board", "home"], journal: ["party", "home"], safety: ["safety", "tonight", "home"], fly: ["make", "screen", "home"], clues: ["tonight", "board", "home"], status: ["tonight", "board"] };
       for (const f of Object.keys(MAP)) S.watch(f, () => {

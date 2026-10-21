@@ -237,6 +237,9 @@
       // using the ones that are native to the map". native: false keeps the old model; native: true asks for it on an
       // invented map too.
       e.native = !lm && (m.native === true || (m.native !== false && !!D.real));
+      // a place the game master made in the city (atlas-locations.js) is set in after the city is built, clearing only the
+      // ground under it, so that the city around it never changes (setCustom)
+      if (m.custom) { const [fw, fd] = A.customSize ? A.customSize(m.ext) : [4.2, 3.4]; Object.assign(e, { custom: true, kind: "custom", ext: m.ext || {}, ang: +m.ang || 0, lr: Math.hypot(fw, fd) / 2, native: false }); }
       if (lm) { e.x = lm.at[0]; e.y = lm.at[1]; e.kind = "landmark"; e.lm = lm; e.lr = 2.4; }
       else if (Array.isArray(m.at)) { e.x = m.at[0]; e.y = m.at[1]; } else (byD[e.p.dist] = byD[e.p.dist] || []).push(e);
       out.push(e);
@@ -909,6 +912,7 @@ function drawPlan(C, ppu, view) {
   // building footprints (the 3D blocks stand on these)
   g.lineWidth = .1; g.strokeStyle = INK; g.globalAlpha = .75; g.fillStyle = FOOT;
   for (const b of C.buildings) {
+    if (b.gone) continue;                   // (cleared for a building of the game master's own: setCustom)
     g.save(); g.translate(b.x, b.y); g.rotate(b.a);
     g.fillRect(-b.w / 2 - .08, -b.d / 2 - .08, b.w + .16, b.d + .16); g.strokeRect(-b.w / 2 - .08, -b.d / 2 - .08, b.w + .16, b.d + .16);
     g.restore();
@@ -1206,6 +1210,8 @@ function createMap3D(host, C, planCanvas, hooks) {
   }
   const coneG = new T.ConeGeometry(.5, 1, 8); coneG.translate(0, .5, 0);
   const cylG = new T.CylinderGeometry(.5, .5, 1, 14); cylG.translate(0, .5, 0);
+  // (a hipped roof, for the game master's own buildings)
+  const coneG4 = new T.ConeGeometry(.5, 1, 4); coneG4.translate(0, .5, 0);
   // a cylinder lying along x, resting on the ground: a habitat module, a tube between modules
   const tubeG = new T.CylinderGeometry(.5, .5, 1, 18); tubeG.rotateZ(Math.PI / 2); tubeG.translate(0, .5, 0);
   const m4 = new T.Matrix4(), q = new T.Quaternion(), e = new T.Euler(), v = new T.Vector3(), sc = new T.Vector3(), col = new T.Color();
@@ -1231,6 +1237,8 @@ function createMap3D(host, C, planCanvas, hooks) {
   // ---- ordinary buildings
   const walls = [], roofs = [], chim = [], spires = [], stacks = [], lampPosts = [], lampHeads = [], dressDomes = [], DRESS = (LOOK.dress || []).concat(KIT.dress);
   for (const b of C.buildings) {
+    // a house cleared for a building of the game master's own (setCustom) takes its turn, and leaves nothing standing
+    const keep0 = b.gone ? [walls.length, roofs.length, chim.length, spires.length, stacks.length, dressDomes.length] : null;
     const wall = b.type === "ware" ? pick(WARE) : b.type === "church" || b.type === "chapel" || b.type === "school" ? mixHex(pick(STONE), "#9a8f7c", .3) : mixHex(pick(BRICK), pick(STONE), b.west * .85);
     const ry = -b.a, x = wx(b.x), z = wz(b.y);
     // ruin: 0 to 1, the share of houses that stand roofless and broken (a town that has been fought over)
@@ -1270,6 +1278,7 @@ function createMap3D(host, C, planCanvas, hooks) {
       walls.push({ x: tx, z: tz, sx: tw, sy: H * 2.1, sz: tw, ry, c: "#b5a98f" });
       spires.push({ x: tx, y: H * 2.1, z: tz, sx: tw * 1.15, sy: H * 1.9, sz: tw * 1.15, ry, c: "#5e5a52" });
     }
+    if (keep0) { walls.length = keep0[0]; roofs.length = keep0[1]; chim.length = keep0[2]; spires.length = keep0[3]; stacks.length = keep0[4]; dressDomes.length = keep0[5]; }
   }
   // rows of huts and tents the site gives outright
   const barrels = [], modules = [];
@@ -1301,7 +1310,7 @@ function createMap3D(host, C, planCanvas, hooks) {
   lod.push([instanced(boxG, lampHeads, lampMat, false), 280]);
   // trees, boats
   const trunks = [], crowns = [];
-  for (const [x, y, s] of C.trees) { trunks.push({ x: wx(x), z: wz(y), sx: .18, sy: s * 1.1, sz: .18, c: "#4a3a2a" }); crowns.push({ x: wx(x), y: s * .9, z: wz(y), sx: s * 1.5, sy: s * 1.4, sz: s * 1.5, ry: rnd() * 6, c: pick(["#6f7550", "#66704a", "#7a7d55", "#5e6644"]) }); }
+  for (const [x, y, s] of C.trees) { const ry = rnd() * 6, c = pick(["#6f7550", "#66704a", "#7a7d55", "#5e6644"]); if (C.cleared && C.cleared(x, y)) continue; trunks.push({ x: wx(x), z: wz(y), sx: .18, sy: s * 1.1, sz: .18, c: "#4a3a2a" }); crowns.push({ x: wx(x), y: s * .9, z: wz(y), sx: s * 1.5, sy: s * 1.4, sz: s * 1.5, ry, c }); }
   lod.push([instanced(boxG, trunks, wallMat, false), 380]);
   const crownG = new T.IcosahedronGeometry(.5, 0); crownG.translate(0, .5, 0);
   instanced(crownG, crowns, new T.MeshLambertMaterial({ color: 0xffffff }));
@@ -1688,6 +1697,42 @@ function createMap3D(host, C, planCanvas, hooks) {
         for (const u of [-1.4, 1.4]) add(obeliskG, mats.wall, u, 0, 2.4, .5, 1.6, .5, 0, false); break;
       case "hut":
         add(cylG, mats.wall, 0, 0, 0, 2.6, 1.2, 2.6); add(coneG, mats.thatch || mats.roof, 0, 1.2, 0, 3.4, 1.9, 3.4); add(boxG, mats.dark, 0, 0, 1.31, .6, .9, .05, 0, false); break;
+      case "custom": {
+        // a building the game master made (atlas-locations.js): its size, storeys, roof, colours, sign and state as chosen.
+        // Its own small randomness, so that the city's own (the colour of every house and tree) is not touched.
+        const x = L.ext || {}, [w, d] = A.customSize(x), fl = Math.max(1, Math.min(40, +x.floors || 2)), fh = .95;
+        const ruin = x.cond === "ruined", aband = ruin || x.cond === "abandoned", worn = aband || x.cond === "worn", H = fl * fh * (ruin ? .55 : 1);
+        let hs = 7; for (const ch of String(L.id)) hs = (hs * 31 + ch.charCodeAt(0)) >>> 0; const r2 = mulberry32(hs);
+        if (x.wall) mats.wall.color.set(x.wall); if (x.roofc) mats.roof.color.set(x.roofc); if (worn) mats.wall.color.lerp(new T.Color(0x4f4840), aband ? .32 : .14);
+        add(boxG, mats.wall, 0, 0, 0, w, H, d);
+        for (let i = 1; i < fl && !ruin; i++) add(boxG, mats.dark, 0, i * fh - .03, 0, w + .06, .06, d + .06, 0, false);
+        // windows on every face, a door in the front (the side that faces the street)
+        const win = aband || x.lights === false ? mats.dark : mats.glow, nw = Math.max(1, Math.floor(w / .9)), nd = Math.max(1, Math.floor(d / .9));
+        for (let f = 0; f < Math.max(1, Math.floor(H / fh)); f++) {
+          for (let i = 0; i < nw; i++) { const u = -w / 2 + (i + .5) * w / nw; for (const s of [-1, 1]) { if (f === 0 && s > 0 && Math.abs(u) < .5) continue; add(boxG, aband && r2() < .4 ? mats.wall : win, u, f * fh + .32, s * (d / 2 + .02), .34, .38, .04, 0, false); } }
+          for (let i = 0; i < nd; i++) { const v = -d / 2 + (i + .5) * d / nd; for (const s of [-1, 1]) add(boxG, win, s * (w / 2 + .02), f * fh + .32, v, .04, .38, .34, 0, false); }
+        }
+        add(boxG, mats.dark, 0, 0, d / 2 + .03, .62, .78, .06, 0, false);
+        const rf = ruin ? "none" : x.roof || "pitched", rh = Math.min(1.8, d * .45);
+        if (rf === "pitched") add(roofG, mats.roof, 0, H, 0, w + .2, rh, d + .2);
+        else if (rf === "flat") add(boxG, mats.roof, 0, H, 0, w + .12, .16, d + .12);
+        else if (rf === "hip") add(coneG4, mats.roof, 0, H, 0, (w + .2) * 1.42, rh * .9, (d + .2) * 1.42, Math.PI / 4);
+        else if (rf === "dome") { add(boxG, mats.roof, 0, H, 0, w + .1, .12, d + .1); add(domeG, mats.roof, 0, H + .12, 0, Math.min(w, d) * .9, Math.min(w, d) * .55, Math.min(w, d) * .9); }
+        else if (rf === "spire") { add(roofG, mats.roof, 0, H, 0, w + .2, rh * .8, d + .2); add(boxG, mats.wall, w * .32, H, 0, .9, 1.5, .9); add(coneG, mats.roof, w * .32, H + 1.5, 0, 1.15, 2.6, 1.15); }
+        else if (rf === "tower") { add(roofG, mats.roof, 0, H, 0, w + .2, rh * .8, d + .2); add(cylG, mats.wall, -w / 2 + .3, 0, d / 2 - .3, 1.4, H + 1.6, 1.4); add(coneG, mats.roof, -w / 2 + .3, H + 1.6, d / 2 - .3, 1.75, 1.7, 1.75); }
+        if (x.chimney && rf !== "none") add(boxG, mats.dark, w * .3, H, -d * .2, .36, rh + .5, .36);
+        if (ruin) for (let i = 0; i < 7; i++) add(boxG, mats.wall, (r2() - .5) * w * 1.2, 0, d / 2 + .4 + r2() * .7, .3 + r2() * .4, .14 + r2() * .22, .3 + r2() * .4, r2() * 3, false);
+        // the sign over the door, the place's name painted on it
+        if (x.sign && typeof document !== "undefined") {
+          const cv = document.createElement("canvas"); cv.width = 320; cv.height = 72; const g2 = cv.getContext("2d");
+          g2.fillStyle = x.signbg || "#2b2219"; g2.fillRect(0, 0, 320, 72); g2.strokeStyle = "#c9a15a"; g2.lineWidth = 4; g2.strokeRect(3, 3, 314, 66);
+          let fs = 34; g2.font = `bold ${fs}px Georgia, serif`; while (g2.measureText(x.sign).width > 296 && fs > 12) { fs -= 2; g2.font = `bold ${fs}px Georgia, serif`; }
+          g2.fillStyle = "#f2e6c8"; g2.textAlign = "center"; g2.textBaseline = "middle"; g2.fillText(String(x.sign).slice(0, 40), 160, 38);
+          const sw = Math.min(w * .85, 2.8), sm = new T.Mesh(new T.PlaneGeometry(sw, sw * 72 / 320), new T.MeshBasicMaterial({ map: new T.CanvasTexture(cv) }));
+          sm.position.set(0, Math.min(H - .15, 1.05), d / 2 + .07); sm.userData.id = L.id; grp.add(sm); pickables.push(sm);
+        }
+        break;
+      }
       default: house(3.4, 2.8, 3.3, 1.1);
     }
     // rings on the ground: selection (accent) and fingerbone site (bone)
@@ -1695,9 +1740,11 @@ function createMap3D(host, C, planCanvas, hooks) {
     const sel = new T.Mesh(new T.RingGeometry(rr + .5, rr + 1.05, 48), selRingMat); sel.rotation.x = -Math.PI / 2; sel.position.y = .08; sel.visible = false; grp.add(sel);
     const bone = new T.Mesh(new T.RingGeometry(rr + 1.3, rr + 1.7, 48), boneRingMat); bone.rotation.x = -Math.PI / 2; bone.position.y = .07; bone.visible = false; grp.add(bone);
     // campaign buildings stand a storey above their neighbours (a kit model stands as it was drawn)
-    if (!fp && !kitOwn) grp.scale.set(1, 1.35, 1);
+    // (one the game master made stands as tall as they said)
+    const tall = !fp && !kitOwn && L.kind !== "custom";
+    if (tall) grp.scale.set(1, 1.35, 1);
     scene.add(grp);
-    LM[L.id] = { L, grp, mats, sel, bone, top: Math.max(top, 2) * (fp || kitOwn ? 1 : 1.35), roofCol };
+    LM[L.id] = { L, grp, mats, sel, bone, top: Math.max(top, 2) * (tall ? 1.35 : 1), roofCol };
   }
   // the landmarks of the city itself, those that are not also one of the campaign places
   const marks = [];
@@ -1879,7 +1926,24 @@ function createMap3D(host, C, planCanvas, hooks) {
     scene.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) { if (m.map) m.map.dispose(); m.dispose(); } });
     renderer.dispose(); if (renderer.forceContextLoss) renderer.forceContextLoss(); renderer.domElement.remove();
   }
-  return { flyTo, zoom, home, sync, setNight, request, pins, dispose, dbg: { renderer, scene, camera, controls, frame, groundMats } };
+  // putting a building down by hand (atlas-locations.js): the ground under the pointer, in plan units, and a ghost of the
+  // building where it would stand: green where it may, amber where it may with a warning, red where it may not
+  const groundPlane = new T.Plane(new T.Vector3(0, 1, 0), 0);
+  function planAt(cx, cy) { const r = renderer.domElement.getBoundingClientRect(); ndc.set((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera); const v3 = new T.Vector3(); return ray.ray.intersectPlane(groundPlane, v3) ? [v3.x + SW / 2, v3.z + SH / 2] : null; }
+  let ghostG = null;
+  function ghost(g, verdict) {
+    if (ghostG) { scene.remove(ghostG); ghostG.traverse(o => { if (o.geometry && o.geometry !== boxG) o.geometry.dispose(); if (o.material) o.material.dispose(); }); ghostG = null; }
+    if (g) {
+      const [w, d] = A.customSize(g.ext), H = Math.max(1, +((g.ext || {}).floors) || 2) * .95, col = !verdict || verdict.ok ? (verdict && verdict.warn ? 0xe0a030 : 0x3aa860) : 0xc0392b;
+      ghostG = new T.Group();
+      const body = new T.Mesh(boxG, new T.MeshBasicMaterial({ color: col, transparent: true, opacity: .42, depthWrite: false })); body.scale.set(w, H, d); ghostG.add(body);
+      const edges = new T.LineSegments(new T.EdgesGeometry(boxG), new T.LineBasicMaterial({ color: col })); edges.scale.set(w, H, d); ghostG.add(edges);
+      const door = new T.Mesh(boxG, new T.MeshBasicMaterial({ color: 0x2b2219 })); door.scale.set(.62, .78, .1); door.position.set(0, 0, d / 2 + .05); ghostG.add(door);
+      ghostG.position.set(wx(g.x), 0, wz(g.y)); ghostG.rotation.y = g.ang || 0; scene.add(ghostG);
+    }
+    request();
+  }
+  return { flyTo, zoom, home, sync, setNight, request, pins, dispose, planAt, ghost, dbg: { renderer, scene, camera, controls, frame, groundMats } };
 }
 
   /* ---- the flat map: what a device without 3D gets instead. Places, water, main roads, district names. */
@@ -1903,11 +1967,12 @@ function createMap3D(host, C, planCanvas, hooks) {
   /* ---- putting the map on the page. box: an empty element. hooks.onPick(id) is called when a place is clicked.
           Returns { flyTo(id), sync({ sel, mode, matches(p) }) }; both are safe to call before the map is ready. */
   A.cityMount = function (box, hooks) {
-    const D = prepare((hooks.city && A.cities && A.cities[hooks.city]) || A.cityData), PL = cityPlaces(D), placed = PL.filter(e => e.x != null), P = LOOK.plan;
+    // (the game master's own buildings are set in after the city is built: setCustom)
+    const D = prepare((hooks.city && A.cities && A.cities[hooks.city]) || A.cityData), PL = cityPlaces(D), placed = PL.filter(e => e.x != null && !e.custom), customs = PL.filter(e => e.x != null && e.custom), every = placed.concat(customs), P = LOOK.plan;
     const hex = n => "#" + n.toString(16).padStart(6, "0");
     const sw = (fill, hgt) => `<svg width="26" height="10" aria-hidden="true"><rect x=".5" y="${(10 - hgt) / 2}" width="25" height="${hgt}" fill="${fill}" stroke="${P.INK}"/></svg>`;
     box.innerHTML = `<div class="map3d" style="background:${hex(LOOK.table)}"><div class="loading" style="background:${hex(LOOK.table)}">Surveying the streets, one by one…</div><div class="pins"></div><div class="tip" hidden></div>
-      <div class="mctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Reset view" title="Reset view">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div></div>
+      <div class="mctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Reset view" title="Reset view">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>${hooks.addLocation ? `<button type="button" class="addloc gm-only" data-addloc title="Make a place of your own in this city: name it, put it where you want, build inside it">+ Add location</button><div class="placebar" hidden role="status" aria-live="polite"></div>` : ""}</div>
       <div class="cityflatbox" hidden></div>
       <div class="maphint">${LOOK.future
         // the future's key: its tubes, and its tracks only where it has any
@@ -1916,7 +1981,9 @@ function createMap3D(host, C, planCanvas, hooks) {
     const host = box.querySelector(".map3d"), loading = box.querySelector(".loading"), tip = box.querySelector(".tip"), flat = box.querySelector(".cityflatbox"), how = box.querySelector(".how");
     let last = { sel: null, mode: "gm", matches: () => true }, dead = false;
     const undo = [];
-    const ctl = { map: null, city: D.id || "main", flyTo(id) { if (ctl.map) ctl.map.flyTo(id); }, sync(st) { last = st; if (ctl.map) ctl.map.sync(st); else if (!flat.hidden) flat.innerHTML = flatSVG(D, placed, last); },
+    const ctl = { map: null, city: D.id || "main", D, flyTo(id) { if (ctl.map) ctl.map.flyTo(id); }, sync(st) { last = st; if (ctl.map) ctl.map.sync(st); else if (!flat.hidden) flat.innerHTML = flatSVG(D, every, last); },
+      // putting a building down by hand (atlas-locations.js): while placing, a click does not open a place
+      placing: false,
       // take the map down (another city is going up in this box): frees the graphics memory and every listener
       dispose() {
         if (dead) return; dead = true;
@@ -1925,9 +1992,10 @@ function createMap3D(host, C, planCanvas, hooks) {
         if (ctl.map && ctl.map.dispose) ctl.map.dispose();
         ctl.map = null; box.innerHTML = "";
       } };
-    const fallback = msg => { host.hidden = true; flat.hidden = false; how.textContent = msg; ctl.map = null; flat.innerHTML = flatSVG(D, placed, last); };
-    flat.addEventListener("click", e => { const t = e.target.closest("[data-go]"); if (t && hooks.onPick) hooks.onPick(t.dataset.go); });
+    const fallback = msg => { host.hidden = true; flat.hidden = false; how.textContent = msg; ctl.map = null; flat.innerHTML = flatSVG(D, every, last); };
+    flat.addEventListener("click", e => { const t = e.target.closest("[data-go]"); if (t && hooks.onPick && !ctl.placing) hooks.onPick(t.dataset.go); });
     flat.addEventListener("keydown", e => { if (e.key !== "Enter" && e.key !== " ") return; const t = e.target.closest("[data-go]"); if (t && hooks.onPick) { e.preventDefault(); hooks.onPick(t.dataset.go); } });
+    const addBtn = box.querySelector("[data-addloc]"); if (addBtn) addBtn.addEventListener("click", () => hooks.addLocation(ctl));
     (async function start() {
       try {
         if (!window.THREE || !THREE.MapControls) throw new Error("three");
@@ -1938,6 +2006,8 @@ function createMap3D(host, C, planCanvas, hooks) {
         if (dead) return;
         use(D);
         const city = buildCity(D, placed);
+        setCustom(city, customs);
+        ctl.city3 = city; ctl.judge = g => judge(city, g); ctl.footprint = (g, k) => footprint(g, k);
         const span = PLAN.X1 - PLAN.X0, area = span * (PLAN.Y1 - PLAN.Y0), maxTex = gl.getParameter(0x0D33) || 4096;
         const ppu = Math.max(3, Math.min(7, Math.floor(Math.min(maxTex, 5600) / span)));
         // how sharply to reprint the plan once the map is up: as fine as a fixed budget of pixels allows.
@@ -1950,9 +2020,9 @@ function createMap3D(host, C, planCanvas, hooks) {
           detail: (view, k) => drawPlan(city, k, view),
           sharp: sharp > ppu ? sharp : 0,
           onLost: () => fallback("A simple map, not to scale. Click a number to open that place. (The 3D street plan ran out of graphics memory on this device.)"),
-          onPick: id => hooks.onPick && hooks.onPick(id),
+          onPick: id => hooks.onPick && !ctl.placing && hooks.onPick(id),
           onHover: (id, ev) => {
-            const e = id && placed.find(q => q.id === id);
+            const e = id && every.find(q => q.id === id);
             if (!e) { tip.hidden = true; return; }
             const r = host.getBoundingClientRect();
             tip.textContent = `${String(e.p.n).padStart(2, "0")} · ${e.p.name}${e.p.dist ? " — " + e.p.dist : ""}`;
@@ -1980,6 +2050,42 @@ function createMap3D(host, C, planCanvas, hooks) {
     })();
     return ctl;
   };
+
+  /* ---- the game master's own buildings (atlas-locations.js), set into a city already built. Each clears the houses,
+          trees, lamps and huts under its footprint; a cleared house keeps its turn in the city's sequence (gone, not
+          removed), so that no other house moves or changes colour, and the city around it is the city it was. */
+  function footprint(e, grow) {
+    const [w, d] = A.customSize ? A.customSize(e.ext) : [4.2, 3.4], k = grow || 0, c = Math.cos(e.ang || 0), s = Math.sin(e.ang || 0);
+    const corner = (lx, lz) => [e.x + lx * c + lz * s, e.y - lx * s + lz * c];
+    return [corner(-w / 2 - k, -d / 2 - k), corner(w / 2 + k, -d / 2 - k), corner(w / 2 + k, d / 2 + k), corner(-w / 2 - k, d / 2 + k)];
+  }
+  const inPoly = (x, y, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  function setCustom(C, list) {
+    if (!list.length) return;
+    const polys = list.map(e => footprint(e, .45)), under = (x, y) => polys.some(q => inPoly(x, y, q));
+    const boxUnder = (x, y, w, d, a) => { const c = Math.cos(a || 0), s = Math.sin(a || 0); return [[0, 0], [-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]].some(([u, v]) => under(x + u * c - v * s, y + u * s + v * c)); };
+    for (const b of C.buildings) if (boxUnder(b.x, b.y, b.w, b.d, b.a)) b.gone = true;
+    C.lamps = C.lamps.filter(([x, y]) => !under(x, y));
+    C.huts = C.huts.filter(b => !boxUnder(b.x, b.y, b.w, b.d, b.a));
+    if (C.specials) for (const k of ["stacks", "gas"]) if (C.specials[k]) C.specials[k] = C.specials[k].filter(s => !under(s.x, s.y));
+    C.cleared = under;
+    for (const e of list) { C.LMS.push({ id: e.id, p: e.p, x: e.x, y: e.y, kind: "custom", lr: e.lr, ang: e.ang, face: e.ang, ext: e.ext, custom: true, at0: [e.x, e.y] }); C.lots.push({ id: e.id, pts: footprint(e, .6) }); }
+  }
+  // where a building put down by hand may stand: what lies under its footprint
+  function judge(C, g) {
+    const pts = footprint(g), out = { ok: true, why: "", warn: "", houses: 0 }, SW = CD.sheet.w, SH = CD.sheet.h;
+    if (pts.some(([x, y]) => x < 1 || y < 1 || x > SW - 1 || y > SH - 1)) return Object.assign(out, { ok: false, why: "It runs off the edge of the map." });
+    let n = 0, road = 0, water = 0, rail = 0; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    for (let x = Math.min(...xs); x <= Math.max(...xs); x += .4) for (let y = Math.min(...ys); y <= Math.max(...ys); y += .4) { if (!inPoly(x, y, pts)) continue; n++; const v = C.gat(x, y); if (v & 2) water++; if (v & 32) rail++; if (v & 1) road++; }
+    if (water > n * .05) return Object.assign(out, { ok: false, why: "It would stand in the water." });
+    if (rail > n * .05) return Object.assign(out, { ok: false, why: "It would stand on the railway." });
+    if (road > n * .2) return Object.assign(out, { ok: false, why: "It would block the street: move it off the road, beside it." });
+    for (const L of C.LMS) { if (L.id === g.id) continue; if (Math.hypot(L.x - g.x, L.y - g.y) < (L.lr || 2) * .8 + g.lr * .8) return Object.assign(out, { ok: false, why: `It would stand on ${L.p ? L.p.name : "another place"}.` }); }
+    for (const L of C.landmarks) { if (L.place || L.flat) continue; if ((L.pts && pts.some(([x, y]) => inPoly(x, y, L.pts))) || (L.pts && inPoly(L.x, L.y, pts))) { out.warn = `It covers the landmark ${L.name || ""}: the landmark stays where it is.`; break; } }
+    for (const b of C.buildings) if (!b.gone && inPoly(b.x, b.y, footprint(g, .45))) out.houses++;
+    if (road && !out.warn) out.warn = "It touches the street.";
+    return out;
+  }
 
   // a campaign's cities: city.js is the main one; cities/<id>.js hold others, each with its own id. A.cityData is the
   // main city (the first registered, or one that says main: true)

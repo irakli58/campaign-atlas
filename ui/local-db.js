@@ -63,6 +63,11 @@
       return fetch(URL_.replace(/db$/, "save-story"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ story: story }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not kept"); return d; }); });
     },
+    // places made in the city on the page (atlas-locations.js): all of them, kept in the campaign's files
+    savePlaces: function (places) {
+      return fetch(URL_.replace(/db$/, "save-places"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ places: places }) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not kept"); return d; }); });
+    },
     // the model library: keep a model the game master brought in with the campaign (null meta forgets it)
     saveModel: function (id, meta, data, ext) {
       return fetch(URL_.replace(/db$/, "save-model"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ id: id, meta: meta, data: data, ext: ext }) })

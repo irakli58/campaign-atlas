@@ -571,6 +571,33 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .
 .mctl { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px; z-index: 9; }
 .mctl button { width: 32px; height: 32px; display: grid; place-items: center; background: #f4ecd6; color: #2b2119; border: 1px solid #2b2119; border-radius: 2px; cursor: pointer; font: 17px/1 Georgia, serif; padding: 0; }
 .mctl button:hover { background: #e7d9b8; }
+/* places of the game master's own (atlas-locations.js): the button on the city, the bar while putting one down */
+.addloc { position: absolute; left: 10px; top: 10px; z-index: 9; background: #f4ecd6; color: #2b2119; border: 1px solid #2b2119; border-radius: 3px; padding: 6px 12px; font: 600 13.5px/1.2 var(--f-mono); cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, .18); }
+.addloc:hover { background: #e7d9b8; }
+.placebar { position: absolute; left: 10px; right: 52px; bottom: 10px; z-index: 10; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; background: rgba(244, 236, 214, .97); color: #2b2119; border: 1px solid #2b2119; border-radius: 4px; padding: 8px 12px; font-size: 14px; box-shadow: 0 4px 14px rgba(0, 0, 0, .22); }
+.placebar[hidden] { display: none; }
+.placebar .pb-b { display: flex; gap: 6px; flex-wrap: wrap; }
+.placebar .pb-ok { color: #2f7a43; } .placebar .pb-no { color: #a3281e; }
+.loc-dlg { width: min(720px, 94vw); max-height: 92vh; padding: 0; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--ink); }
+.loc-dlg::backdrop { background: rgba(0, 0, 0, .55); }
+.loc-form { display: grid; gap: 10px; padding: 16px 18px 18px; }
+.loc-form h3 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; }
+.loc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.loc-form label { display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.loc-form label.loc-ck { display: flex; gap: 8px; align-items: center; color: var(--ink); }
+.loc-g2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.loc-g3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.loc-row, .loc-go, .loc-ai, .loc-acts { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.loc-more { border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; display: grid; gap: 8px; }
+.loc-more > summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.loc-more[open] > summary { margin-bottom: 4px; }
+.loc-form input[type="color"] { height: 34px; padding: 2px; }
+.loc-panel .loc-sum { margin: 0 0 8px; color: var(--muted); }
+.loc-panel .ic { width: 20px; height: 20px; vertical-align: -3px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.loc-panel .loc-notes, .loc-panel .loc-links { margin: 10px 0 0; }
+.loc-panel .loc-links ul { margin: 4px 0 8px; padding-left: 18px; }
+.loc-link { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.loc-del { color: #a3281e; }
 .cityflat { display: block; width: 100%; height: auto; border-radius: 4px 4px 0 0; }
 .cityflat .fp { cursor: pointer; }
 .cityflat text { font-family: var(--f-mono); }

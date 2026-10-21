@@ -56,6 +56,32 @@
     return changed;
   }
 
+  /* ---- places the game master made in a city (atlas-locations.js). The user asked (21 Oct 2026) to add their own
+          locations to a city already made: named, put where they want, built inside with the map editor, revisited.
+          Each is a place of the campaign like any other (its page, its maps, its clues and people, its place in the
+          index and the search), with a persistent id, flagged custom; the city sets its building in after it is built
+          (atlas-city.js, setCustom). From the campaign's files (edits/0-places.js: ATLAS.customPlaces({...})) or the
+          page's database (collection "customplaces"). A place's interior, once drawn, is a map edit like any other
+          (edits/<id>.js, collection "mapedits"): changing its name, its outside or its spot never touches it. */
+  A.customs = A.customs || {};
+  // how big one of them stands in the city, in the plan's units: a size, or its own width and depth
+  const CSIZES = { small: [3, 2.6], medium: [4.2, 3.4], large: [6, 4.6], huge: [9, 7] };
+  A.customSize = ext => { ext = ext || {}; const s = CSIZES[ext.size] || CSIZES.medium; return [+ext.w > 0 ? +ext.w : s[0], +ext.d > 0 ? +ext.d : s[1]]; };
+  const customMeta = def => ({ name: def.name || "A new place", category: def.cat || "custom", region: def.district || "", district: def.district || "", tagline: def.typeName || "", tier: def.tier || 3, custom: true, city: def.city || undefined, at: def.at, ang: +def.ang || 0, ext: def.ext || {}, kind: def.type || "", status: def.status || "", offmap: !Array.isArray(def.at) });
+  A.customPlace = (id, def) => {
+    if (!def || def.off) {
+      // taken away: the place goes; its interior (a map edit) and its connections are left where they are, not deleted
+      if (A.customs[id]) { delete A.customs[id]; const i = A.order.indexOf(id); if (i >= 0) A.order.splice(i, 1); delete A.meta[id]; delete A.maps[id]; delete A.mapOrig[id]; A.state.cache = {}; }
+      return A;
+    }
+    const known = !!A.customs[id] && !!A.meta[id]; A.customs[id] = def;
+    // known already: only what it is and where it stands change (its maps are its own, and may have been redrawn)
+    if (known) { Object.assign(A.meta[id], customMeta(def)); if (!def.at) A.meta[id].offmap = true; const M0 = (A.mapOrig[id] || {}).map || A.maps[id]; if (M0) { M0.t = def.name || M0.t; M0.ext = def.pd || ""; M0.ov = def.kp || ""; } A.state.cache = {}; return A; }
+    A.place(id, Object.assign(customMeta(def), { map: def.map ? Object.assign(JSON.parse(JSON.stringify(def.map)), { t: def.name, ext: def.pd || "", ov: def.kp || "" }) : undefined }));
+    return A;
+  };
+  A.customPlaces = defs => { for (const [id, def] of Object.entries(defs || {})) A.customPlace(id, def); return A; };
+
   /* ---- the age the story is set in: it dresses the handouts and names the people */
   function era() {
     const c = A.config || {}; if (c.era) return c.era;

@@ -30,7 +30,7 @@
   const ids = A.order.slice();
   const P = ids.map((id, i) => { const m = A.meta[id]; return { id, n: i + 1, name: m.name || id, dist: m.region || "", cat: m.category || "", acts: toList(m.acts).map(Number).filter(x => x > 0), sub: m.tagline || "", start: !!m.start, M: A.maps[id] ? A.get(id, 99) : null }; });
   const byId = Object.fromEntries(P.map(p => [p.id, p]));
-  const CATS = {}; for (const c of cfg.categories || []) CATS[c.id] = c.name; for (const p of P) if (!(p.cat in CATS)) CATS[p.cat] = p.cat || "Places";
+  const CATS = {}; for (const c of cfg.categories || []) CATS[c.id] = c.name; for (const p of P) if (!(p.cat in CATS)) CATS[p.cat] = p.cat === "custom" ? "Places of your own" : p.cat || "Places";
   const ACTS = [...new Set(P.flatMap(p => p.acts))].sort((a, b) => a - b);
   const actTitle = a => { const t = Array.isArray(cfg.acts) ? cfg.acts[a - 1] : (cfg.acts || {})[a]; return "Act " + roman(a) + (t ? " · " + t : ""); };
   const castOf = n => (n && n.who && A.castData && A.castData[n.who]) || null;
@@ -148,9 +148,10 @@
     if (CITY && cityId === id) { if (then && CITY.map) then(CITY); else if (then) CITY.then = then; return; }
     if (CITY) CITY.dispose();
     cityId = id; store.set("city", id);
-    CITY = A.cityMount($("#citybox"), { city: id, onPick: pid => go(pid, true), onReady: c => { renderMap(); paintStatusDots(); const f = c.then || then; c.then = null; if (f) f(c); else if (byId[state.sel] && cityOf(state.sel) === id) c.flyTo(state.sel); } });
+    CITY = A.cityMount($("#citybox"), { city: id, onPick: pid => go(pid, true), addLocation: A.locations ? c => A.locations.create(c) : null, onReady: c => { if (A.locations) A.locations.setCity(c); renderMap(); paintStatusDots(); const f = c.then || then; c.then = null; if (f) f(c); else if (byId[state.sel] && cityOf(state.sel) === id) c.flyTo(state.sel); } });
     renderCityBar();
   }
+  if (A.locations) A.locations.__shell = { mountCity };
   // above the 3D map: back to the world, and the campaign's other cities
   function renderCityBar() {
     const bar = $("#citybar"); if (!bar) return;
@@ -160,6 +161,27 @@
     const nm = cityLabel;
     bar.innerHTML = `${A.worldData && A.worldMount ? `<button type="button" class="cb-back" data-world="${esc(loc || "")}">← World map</button>` : ""}<span class="cb-here"><span class="kl">Now on the map</span>${esc(nm(cityId))}</span>${ids.length > 1 ? `<label class="cb-pick"><span class="kl">Another city</span><select id="cityPick" aria-label="Show another city on the map">${ids.map(id => `<option value="${esc(id)}"${id === cityId ? " selected" : ""}>${esc(nm(id))}</option>`).join("")}</select></label>` : ""}`;
   }
+
+  /* ---- places the game master makes in a city (atlas-locations.js): taken into the index as they come, renamed,
+          moved or taken away, and the city drawn again with its buildings (the city itself is the same: atlas-city.js) */
+  function syncPlaces() {
+    for (let i = P.length - 1; i >= 0; i--) if (!A.meta[P[i].id]) { delete byId[P[i].id]; P.splice(i, 1); }
+    for (let i = ids.length - 1; i >= 0; i--) if (!A.meta[ids[i]]) ids.splice(i, 1);
+    for (const id of A.order) {
+      const m = A.meta[id]; if (!m) continue;
+      let p = byId[id]; if (!p) { p = byId[id] = { id }; P.push(p); ids.push(id); }
+      Object.assign(p, { name: m.name || id, dist: m.region || "", cat: m.category || "", acts: toList(m.acts).map(Number).filter(x => x > 0), sub: m.tagline || "", start: !!m.start, M: A.maps[id] ? A.get(id, 99) : null });
+    }
+    const pos = id => A.order.indexOf(id); P.sort((a, b) => pos(a.id) - pos(b.id)); ids.sort((a, b) => pos(a) - pos(b)); P.forEach((p, i) => { p.n = i + 1; });
+    for (const p of P) if (!(p.cat in CATS)) CATS[p.cat] = p.cat === "custom" ? "Places of your own" : p.cat || "Places";
+    if (!byId[state.sel]) state.sel = ids[0];
+  }
+  document.addEventListener("atlas-places", ev => {
+    syncPlaces(); index(); renderAll(false);
+    const want = ev.detail && ev.detail.go;
+    if (CITY && cityId) { const c = cityId; CITY.dispose(); CITY = null; cityId = null; mountCity(c, cc => { const s = byId[want] ? want : state.sel; if (byId[s] && cityOf(s) === c) cc.flyTo(s); }); }
+    if (byId[want]) go(want);
+  });
 
   /* ---- the world map (atlas-world.js): the level above the cities. It is drawn the first time it is shown and kept,
           so it is where it was left (its view, its choice) when the referee comes back from a city. */
@@ -229,6 +251,7 @@
       ${A.tableUI ? A.tableUI.dossierBar(p) : ""}
       </div>${A.music && A.music.card ? A.music.card(p.id) : ""}</div></div>
       <div id="accSlot">${accTop(p.id)}</div>
+      ${A.locations && A.customs && A.customs[p.id] ? A.locations.panel(p) : ""}
       ${M.ext ? `<section class="sec readaloud"><h3>First impressions · read aloud${A.narrateBtn ? `<span class="nar-h">${A.narrateBtn(M.ext, "first impressions")}${A.narrateSet()}</span>` : ""}</h3><p class="lead">${esc(M.ext)}</p></section>` : ""}
       ${p.M ? A.section(p.id) : `<section class="sec"><h3>Maps of the location</h3><p class="empty">This place has not been mapped yet.</p></section>`}
       ${M.ov ? `<section class="sec secret keeper"><h3>What's really going on</h3><p>${esc(M.ov)}</p></section>` : ""}

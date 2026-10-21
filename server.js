@@ -161,6 +161,20 @@ async function route(req, res) {
         return send(res, 200, { ok: true });
       } catch (e) { return fail(res, 400, e.message); }
     }
+    // places the game master made in a city on the page (atlas-locations.js): all of them, in edits/0-places.js (read
+    // before the interiors drawn for them, edits/<id>.js); none left, the file goes
+    if (m === "POST" && rest === "save-places") {
+      if (!authed) return fail(res, 403, "forbidden");
+      try {
+        const o = await body(req, 8 << 20), pl = o.places && typeof o.places === "object" ? o.places : {};
+        const keep = {}; for (const [id, def] of Object.entries(pl)) if (/^c-[\w-]{1,60}$/.test(id) && def && typeof def === "object" && !def.off) keep[id] = def;
+        const dir2 = path.join(dir, "edits"), f = path.join(dir2, "0-places.js");
+        if (!Object.keys(keep).length) { if (fs.existsSync(f)) fs.unlinkSync(f); return send(res, 200, { ok: true }); }
+        fs.mkdirSync(dir2, { recursive: true });
+        fs.writeFileSync(f, "// Places the game master made in the city on the page (" + new Date().toISOString().slice(0, 10) + "): what each is, where it stands,\n// how it looks outside, and the interior it started with (its interior as they built it is edits/<id>.js). They are theirs: keep them as they are.\nATLAS.customPlaces(" + JSON.stringify(keep) + ");\n");
+        return send(res, 200, { ok: true });
+      } catch (e) { return fail(res, 400, e.message); }
+    }
     // the model library: a model the game master brought in (a .glb or .gltf file) is kept with the campaign
     // (models/<id>.glb and models/<id>.js), so the page carries it when it is built again; null forgets it
     if (m === "POST" && rest === "save-model") {
