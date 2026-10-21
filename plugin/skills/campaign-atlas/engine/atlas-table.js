@@ -529,6 +529,9 @@
     for (const c of ["clues", "status"]) st.watch(c, () => { if (now.kind === "board") render(); if (tab === "board" || tab === "places") renderPage(); });
     st.watch("given", () => { badges(); if (tab === "handouts") renderPage(); });
     st.watch("mapedits", d => { if (applyMapEdits(d)) { if (now.kind === "map") render(); if (tab === "places") renderPage(); } });
+    // the furnishings' pictures come as they are drawn (atlas-models.js), and models the game master brought in
+    document.addEventListener("atlas-models", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
+    if (A.models && A.models.watchLibrary) A.models.watchLibrary(st);
     st.watch("journal", () => paintNotes());
     window.addEventListener("resize", () => { fit(); fitBoard(); });
 

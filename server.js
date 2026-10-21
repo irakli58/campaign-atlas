@@ -115,7 +115,7 @@ async function route(req, res) {
   if (m === "GET" && p.startsWith("/ui/")) { const f = path.join(UI, path.normalize(p.slice(4)).replace(/^(\.\.[\\/])+/, "")); return f.startsWith(UI + path.sep) ? file(res, f) : fail(res, 404, "not found"); }
 
   // a finished campaign, opened from the app: its page, with the app's database in place of claude.ai's
-  let mm;
+  let mm, mm2;
   if ((mm = p.match(/^\/play\/([a-z0-9-]+)\/(.*)$/))) {
     const dir = campDir(mm[1]); if (!dir) return fail(res, 404, "No such campaign.");
     const rest = mm[2];
@@ -149,6 +149,27 @@ async function route(req, res) {
         return send(res, 200, { ok: true });
       } catch (e) { return fail(res, 400, e.message); }
     }
+    // the model library: a model the game master brought in (a .glb or .gltf file) is kept with the campaign
+    // (models/<id>.glb and models/<id>.js), so the page carries it when it is built again; null forgets it
+    if (m === "POST" && rest === "save-model") {
+      if (!authed) return fail(res, 403, "forbidden");
+      try {
+        const o = await body(req, 22 << 20), id = String(o.id || ""), ext = o.ext === "gltf" ? "gltf" : "glb";
+        if (!/^my-[a-z0-9-]{1,60}$/.test(id)) return fail(res, 400, "Which model?");
+        const dir2 = path.join(dir, "models");
+        if (!o.meta) { for (const f of [id + ".js", id + ".glb", id + ".gltf"]) { try { fs.unlinkSync(path.join(dir2, f)); } catch (e) {} } return send(res, 200, { ok: true }); }
+        const buf = Buffer.from(String(o.data || ""), "base64");
+        if (!buf.length || buf.length > 16 << 20) return fail(res, 400, "That model is empty or too big.");
+        if (ext === "glb" && buf.readUInt32LE(0) !== 0x46546c67) return fail(res, 400, "That is not a .glb file.");
+        const meta = {}; for (const k of ["id", "n", "c", "s", "g", "mount", "e", "ry", "p", "src", "lic", "t"]) if (o.meta[k] !== undefined) meta[k] = o.meta[k];
+        meta.id = id;
+        fs.mkdirSync(dir2, { recursive: true });
+        fs.writeFileSync(path.join(dir2, id + "." + ext), buf);
+        fs.writeFileSync(path.join(dir2, id + ".js"), "// A model the game master brought into the library (" + new Date().toISOString().slice(0, 10) + "). Its file, " + id + "." + ext + ", rides in the page.\nATLAS.models.addCustom(" + JSON.stringify(meta) + ");\n");
+        return send(res, 200, { ok: true, url: "models/" + id + "." + ext });
+      } catch (e) { return fail(res, 400, e.message); }
+    }
+    if (m === "GET" && (mm2 = rest.match(/^models\/(my-[a-z0-9-]{1,60})\.(glb|gltf)$/))) return file(res, path.join(dir, "models", mm2[1] + "." + mm2[2]), mm2[2] === "glb" ? "model/gltf-binary" : "model/gltf+json");
     // the map editor: a floor plan or sketch read into rooms by the game master's own Claude Code
     if (m === "POST" && rest === "trace") {
       if (!authed) return fail(res, 403, "forbidden");

@@ -1,6 +1,6 @@
 # Data format
 
-A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the map of the whole, written by `atlas.js city`; its format is in `cities.md`), `edits/<place>.js` (a map as the game master redrew it with the page's map editor: `ATLAS.mapEdit("place", { level, floors, rooms })`, read after the places; never edited by hand), `table.js` (the clocks, the session plan, the players' characters and the rest for the table: `table.md`), `places/*.js` (one file per place, read in file-name order; names starting with `_` are skipped), `story/` (the user's story, the council's transcript, the bible), `canon.md` and `checklist.md`. `build` writes `dist/`.
+A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the map of the whole, written by `atlas.js city`; its format is in `cities.md`), `edits/<place>.js` (a map as the game master redrew it with the page's map editor: `ATLAS.mapEdit("place", { level, floors, rooms })`, read after the places; never edited by hand), `models/<id>.js` (3D models the game master brought into the model library, each with its .glb file beside it), `table.js` (the clocks, the session plan, the players' characters and the rest for the table: `table.md`), `places/*.js` (one file per place, read in file-name order; names starting with `_` are skipped), `story/` (the user's story, the council's transcript, the bible), `canon.md` and `checklist.md`. `build` writes `dist/`.
 
 ## Contents
 
@@ -53,7 +53,7 @@ map: {
   entry: ["R1"],        // rooms that count as ways in, when the map has no open ground
   start: 0,             // which floor shows first
   compass: false,       // hide the north arrow on this map
-  floors: [ { n: "GROUND FLOOR", w: 24, h: 16, note: "Floor note (GM).", gm: 0, R: [], D: [], I: [], ST: [], M: [] } ],
+  floors: [ { n: "GROUND FLOOR", w: 24, h: 16, note: "Floor note (GM).", gm: 0, R: [], D: [], I: [], ST: [], M: [], P: [] } ],
   rooms: {}, clues: {}, npcs: {}, secrets: {}, enc: {}
 }
 ```
@@ -95,6 +95,15 @@ A door must separate two different areas, at least one of them a room. Open grou
 `[code, x, y, w, h, rotation, gmOnly, colour]`
 
 Position and size in squares; fractions are fine (`["desk", 4.2, 3.1, 1.6, 1.2]`). An item is drawn with its back to the top; `rotation` is 0, 90, 180 or 270. Put `1` in the seventh slot to show an item to the GM only. The eighth slot recolours items that take a colour (`rug`, `heap`, `fig`, `box`, `disc`, `vehicle`). Items inside a hidden room never show on the players' map.
+
+### P: models from the library
+
+`{ a, x, y, r, s, z, c, m, col, h, p }`: a 3D model from the model library (`engine/atlas-models-cat.js`; search it with `node atlas.js models <words> [--genre scifi]`, its kits with `node atlas.js models --kits`), drawn on the map as the model seen from above, at its real size, and standing in the room's 3D view.
+
+- `a`: the model's id (`"desk-office"`, `"barrel"`, `"cryopod"`). `x, y`: its centre, in squares (fractions are fine). `r`: degrees turned clockwise; a model faces down the map (south) at 0, and one for a wall has its back to the north at 0.
+- `s` size (1 as the library has it), `z` metres above the floor (a candle on a table: the table's height), `c` its condition (`used`, `dirty`, `worn`, `damaged`, `rusty`, `ruined`, `burned`), `m` its main material (`walnut`, `steel`...), `col` a tint (`"#a03030"`), `h: 1` hidden from the players, `p` its own shape (`{ w: 2.4, h: .9 }` in metres; `{ text: "THE CROWN" }` for a sign).
+- Models stand under the walls; those for a wall or a ceiling are drawn over them. Only what the place needs: the rooms the story turns on, furnished so the players can picture them (a laboratory's benches and its specimen tank, the throne room's dais and braziers). The game master furnishes the rest in the map editor, and what they put down comes back in `edits/<place>.js`. `check` names a model the library does not have.
+- A model the game master brought in (a .glb file) lives in `models/<id>.js` (`ATLAS.models.addCustom({...})`) with its file beside it; the page carries the file.
 
 ### ST: stairs
 

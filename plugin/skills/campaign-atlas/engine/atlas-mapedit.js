@@ -32,6 +32,10 @@
     minus: `<circle cx="11" cy="11" r="6.5"/><path d="M8 11h6M16 16l4 4"/>`
   };
   const icon = k => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${IC[k] || ""}</svg>`;
+  // what other files add to the editor (atlas-modelui.js: furnishing a floor with models from the library): their
+  // tools, their part of the panel and of the map, and first say on the pointer, the keys and the buttons
+  const PLUGS = [], api = {};
+  const ask = (k, ...a) => { for (const p of PLUGS) if (p[k] && p[k](...a)) return true; return false; };
   const TOOLS = [["select", "Choose and move", "Click a room, stair, door or marker to choose it. Drag a room to move it, drag its corners to resize it, drag a marker to move it."], ["room", "Draw a room", "Drag across the grid to draw a room. Draw two that touch with the same name for an L-shaped room."], ["door", "Doors and windows", "Click on a wall to put the chosen kind there; click it again to take it away."], ["stairs", "Stairs", "Drag to draw a stair. It is linked to the floor above (or below), where its other end appears."], ["erase", "Rubber", "Click a room, a door or a stair to take it away."]];
 
   /* ---- the editable copy of a place's map */
@@ -44,7 +48,7 @@
   function draftOf(id) {
     const M = A.get(id);
     return { t: M.t, rooms: copy((A.mapEdits[id] || {}).rooms || {}), order: M.order ? M.order.slice() : null,
-      floors: M.floors.map(F => { const o = { n: F.n, w: F.w, h: F.h, R: copy(F.R || []), D: copy(F.D || []), ST: copy(F.ST || []), M: copy(F.M || []), I: copy(loose(F)) }; if (F.gm || F.k) o.gm = 1; if (F.note) o.note = F.note; return o; }) };
+      floors: M.floors.map(F => { const o = { n: F.n, w: F.w, h: F.h, R: copy(F.R || []), D: copy(F.D || []), ST: copy(F.ST || []), M: copy(F.M || []), I: copy(loose(F)), P: copy(F.P || []) }; if (F.gm || F.k) o.gm = 1; if (F.note) o.note = F.note; return o; }) };
   }
   const finished = F0 => { const F = copy(F0); F.D = F.D || []; F.ST = F.ST || []; F.M = F.M || []; F.I = (F.I || []).slice(); return A.finishFloor(F, F.R); };
   const cur = () => E.draft.floors[E.fi];
@@ -75,14 +79,18 @@
     if (sel && sel.kind === "stair" && F.ST[sel.i]) { const r = F.ST[sel.i]; s += `<rect class="me-sel" x="${r[1] * C}" y="${r[2] * C}" width="${r[3] * C}" height="${r[4] * C}"/>`; }
     if (sel && sel.kind === "door" && F.D[sel.i]) { const [x, y, o, , len = 1] = F.D[sel.i]; s += o === "h" ? `<line class="me-seld" x1="${x * C}" y1="${y * C}" x2="${(x + len) * C}" y2="${y * C}"/>` : `<line class="me-seld" x1="${x * C}" y1="${y * C}" x2="${x * C}" y2="${(y + len) * C}"/>`; }
     if (sel && sel.kind === "marker" && F.M[sel.i]) s += `<circle class="me-sel" cx="${F.M[sel.i][1] * C}" cy="${F.M[sel.i][2] * C}" r="13"/>`;
+    for (const p of PLUGS) if (p.overlay) s += p.overlay(api);
     return s + `<rect class="me-ghost" x="0" y="0" width="0" height="0" visibility="hidden"/>`;
+  }
+  // the draft drawn as a map (the map's own drawing, so it looks as it will), floor fi, for whoever asks
+  function draftSVG(fi, view, pre) {
+    A.maps.__medit = Object.assign({}, A.get(E.id), { t: E.draft.t, floors: E.draft.floors.map(finished), big: 0 }); delete A.maps.__medit.order; delete A.maps.__medit.alias; A.state.cache = {};
+    try { return A.svg("__medit", fi, view || "gm", pre || "me" + (A.state.n++), 0); } finally { delete A.maps.__medit; A.state.cache = {}; }
   }
   function paintCanvas() {
     const box = $("#meCanvas"); if (!box) return;
     const F = cur(), sx = box.scrollLeft, sy = box.scrollTop;
-    A.maps.__medit = Object.assign({}, A.get(E.id), { t: E.draft.t, floors: E.draft.floors.map(finished), big: 0 }); delete A.maps.__medit.order; delete A.maps.__medit.alias; A.state.cache = {};
-    let s = A.svg("__medit", E.fi, "gm", "me" + (A.state.n++), 0);
-    delete A.maps.__medit; A.state.cache = {};
+    let s = draftSVG(E.fi);
     s = s.replace(` class="lmap2"`, ` class="me-svg"`).replace(/ style="min-width:[^"]*"/, "").replace(/<\/svg>$/, overlay() + "</svg>");
     box.innerHTML = s;
     const svg = box.querySelector("svg"); svg.style.width = Math.round((F.w * C + 20) * 1.5 * E.zoom) + "px";
@@ -97,12 +105,14 @@
     dlg.querySelectorAll("[data-tool]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tool === E.tool));
     dlg.querySelector(".me-tip").textContent = (TOOLS.find(t => t[0] === E.tool) || [])[2] || "";
     dlg.querySelector('[data-me="save"]').textContent = E.dirty ? "Save" : "Saved";
+    for (const p of PLUGS) if (p.top) p.top(api, dlg);
   }
   const num = (k, v, label, min) => `<label class="me-num"><span>${label}</span><input type="number" data-mv="${k}" value="${v}" min="${min == null ? 0 : min}" step="1"></label>`;
   function paintSide() {
     const side = $("#meSide"); if (!side) return;
     const F = cur(), sel = E.sel; let h = "";
-    if (E.tool === "door") h += `<section><h4>Which kind</h4><div class="me-kinds">${DOORS.map(([k, l]) => `<button type="button" data-dt="${k}" aria-pressed="${E.doorType === k}">${l}</button>`).join("")}</div><p class="me-help">Click on a wall line to put one there. A secret door is hidden from the players.</p></section>`;
+    for (const p of PLUGS) if (p.side) { const ph = p.side(api); if (ph) h += ph; }
+    if (E.tool === "door") h +=`<section><h4>Which kind</h4><div class="me-kinds">${DOORS.map(([k, l]) => `<button type="button" data-dt="${k}" aria-pressed="${E.doorType === k}">${l}</button>`).join("")}</div><p class="me-help">Click on a wall line to put one there. A secret door is hidden from the players.</p></section>`;
     if (sel && sel.kind === "room" && F.R[sel.i]) {
       const r = F.R[sel.i], o = r[7] || {}, g = guide(r[0]), isR = /^R\d/.test(r[0]);
       h += `<section><h4>${isR ? `Room ${esc(r[0])}` : "Ground"}</h4>
@@ -157,14 +167,16 @@
     if (!dlg) {
       dlg = document.createElement("dialog"); dlg.id = "meDlg"; dlg.className = "me-dlg"; document.body.appendChild(dlg);
       dlg.innerHTML = `<div class="me-top"><b class="me-title"></b><div class="me-floors" role="group" aria-label="Floor"></div><span class="t-sp"></span>
+          ${PLUGS.map(p => p.topHTML ? p.topHTML(api) : "").join("")}
           <button type="button" data-me="undo" title="Undo">${icon("undo")}</button><button type="button" data-me="redo" title="Redo">${icon("redo")}</button>
           <button type="button" data-me="close">Close</button><button type="button" class="prim" data-me="save">Save</button></div>
         <div class="me-body"><div class="me-tools" role="toolbar" aria-label="Tools">${TOOLS.map(([k, l]) => `<button type="button" data-tool="${k}" title="${esc(l)}">${icon(k)}<span>${esc(l)}</span></button>`).join("")}<span class="me-gap"></span><button type="button" data-me="zin" title="Closer">${icon("plus")}</button><button type="button" data-me="zout" title="Further">${icon("minus")}</button></div>
-          <div class="me-canvas" id="meCanvas"></div><aside class="me-side" id="meSide"></aside></div>
+          <div class="me-canvas" id="meCanvas"></div><aside class="me-side" id="meSide"></aside>${PLUGS.map(p => p.bodyHTML ? p.bodyHTML(api) : "").join("")}</div>
         <p class="me-tip" aria-live="polite"></p>`;
       bind(dlg);
     }
     dlg.querySelector(".me-title").textContent = "Editing the map: " + ((A.meta[id] || {}).name || id);
+    for (const p of PLUGS) if (p.open) p.open(api);
     paint();
     if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute("open", "");
   }
@@ -201,6 +213,7 @@
     for (const it of F.I) { const cx = it[1] + (it[3] || 1) / 2, cy = it[2] + (it[4] || 1) / 2; if (within(cx, cy)) { it[1] += dx; it[2] += dy; } }
     for (const m of F.M) if (within(m[1], m[2])) { m[1] += dx; m[2] += dy; }
     for (const st of F.ST) if (within(st[1] + st[3] / 2, st[2] + st[4] / 2)) { st[1] += dx; st[2] += dy; }
+    for (const p of F.P || []) if (within(p.x, p.y)) { p.x += dx; p.y += dy; }
     for (const d of F.D) { const len = d[4] || 1; const on = d[2] === "h" ? (d[1] === y || d[1] === y + h) && d[0] >= x && d[0] + len <= x + w : (d[0] === x || d[0] === x + w) && d[1] >= y && d[1] + len <= y + h; if (on) { d[0] += dx; d[1] += dy; } }
     r[1] += dx; r[2] += dy; if (r[7] && r[7].l) r[7].l = [r[7].l[0] + dx, r[7].l[1] + dy];
   }
@@ -220,7 +233,7 @@
   }
   function grow(side, n) {
     const F = cur(), stretch = k => { const d = A.kindOf(k); return !!(d && d.stretch); };
-    const shift = (dx, dy) => { for (const r of F.R) { r[1] += dx; r[2] += dy; if (r[7] && r[7].l) r[7].l = [r[7].l[0] + dx, r[7].l[1] + dy]; } for (const d of F.D) { d[0] += dx; d[1] += dy; } for (const it of F.I) { it[1] += dx; it[2] += dy; } for (const st of F.ST) { st[1] += dx; st[2] += dy; } for (const m of F.M) { m[1] += dx; m[2] += dy; } };
+    const shift = (dx, dy) => { for (const r of F.R) { r[1] += dx; r[2] += dy; if (r[7] && r[7].l) r[7].l = [r[7].l[0] + dx, r[7].l[1] + dy]; } for (const d of F.D) { d[0] += dx; d[1] += dy; } for (const it of F.I) { it[1] += dx; it[2] += dy; } for (const st of F.ST) { st[1] += dx; st[2] += dy; } for (const m of F.M) { m[1] += dx; m[2] += dy; } for (const p of F.P || []) { p.x += dx; p.y += dy; } };
     // ground that ran to the old edge (a street, grass, rock) runs to the new one
     if (side === "left") { shift(n, 0); for (const r of F.R) if (stretch(r[6]) && r[1] === n) { r[1] = 0; r[3] += n; } F.w += n; }
     if (side === "top") { shift(0, n); for (const r of F.R) if (stretch(r[6]) && r[2] === n) { r[2] = 0; r[4] += n; } F.h += n; }
@@ -288,6 +301,7 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
   function pt(e) { const svg = $("#meCanvas svg"); if (!svg) return { x: 0, y: 0 }; const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return { x: q.x / C, y: q.y / C }; }
   function ghost(x, y, w, h) { const g = $("#meCanvas .me-ghost"); if (!g) return; g.setAttribute("x", x * C); g.setAttribute("y", y * C); g.setAttribute("width", Math.max(0, w * C)); g.setAttribute("height", Math.max(0, h * C)); g.setAttribute("visibility", "visible"); }
   function down(e) {
+    if (ask("down", e, pt(e), api)) return;
     if (e.button && e.button !== 0) return;
     const p = pt(e), F = cur(); E.drag = null;
     if (E.tool === "select") {
@@ -313,6 +327,7 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
     }
   }
   function move(e) {
+    if (ask("move", e, pt(e), api)) return;
     const d = E.drag; if (!d) return;
     const p = pt(e), F = cur();
     if (d.kind === "under") { E.under.x = d.ux + (p.x - d.x0); E.under.y = d.uy + (p.y - d.y0); const im = $("#meCanvas image"); if (im) { im.setAttribute("x", E.under.x * C); im.setAttribute("y", E.under.y * C); } return; }
@@ -322,6 +337,7 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
     if (d.kind === "draw") { const cx = Math.floor(p.x), cy = Math.floor(p.y), x = Math.min(cx, d.cx), y = Math.min(cy, d.cy); d.box = [x, y, Math.abs(cx - d.cx) + 1, Math.abs(cy - d.cy) + 1]; ghost(...d.box); }
   }
   function up(e) {
+    if (ask("up", e, pt(e), api)) return;
     const d = E.drag; E.drag = null; if (!d) return;
     const p = pt(e), F = cur();
     if (d.kind === "under") { saveUnder(); paintSide(); return; }
@@ -345,8 +361,9 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
     cv.addEventListener("pointermove", move);
     cv.addEventListener("pointerup", up);
     cv.addEventListener("pointercancel", () => { E.drag = null; paintCanvas(); });
-    dlg.addEventListener("cancel", e => { if (E.dirty) { e.preventDefault(); close(); } });
+    dlg.addEventListener("cancel", e => { if (ask("cancel", e, api)) { e.preventDefault(); return; } if (E.dirty) { e.preventDefault(); close(); } });
     dlg.addEventListener("click", e => {
+      if (ask("click", e, api)) return;
       const t = e.target;
       const tb = t.closest("[data-tool]"); if (tb) { E.tool = tb.dataset.tool; E.sel = E.tool === "select" ? E.sel : null; paint(); return; }
       const fb = t.closest("[data-mf]"); if (fb) { E.fi = +fb.dataset.mf; E.sel = null; paint(); return; }
@@ -373,6 +390,7 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
       }
     });
     dlg.addEventListener("change", e => {
+      if (ask("change", e, api)) return;
       const t = e.target, F = cur();
       if (t.matches("[data-me-pic]")) { if (t.files && t.files[0]) loadPicture(t.files[0]); return; }
       if (t.matches("[data-me-grow]")) { E.grow = +t.value || 4; return; }
@@ -410,8 +428,10 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
         if (t.dataset.fv === "gm") change(() => { if (t.checked) F.gm = 1; else delete F.gm; });
       }
     });
+    dlg.addEventListener("input", e => { ask("input", e, api); });
     dlg.addEventListener("keydown", e => {
       if (e.target.matches("input, textarea, select")) return;
+      if (ask("key", e, api)) return;
       const k = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
       if ((e.ctrlKey || e.metaKey) && k === "y") { e.preventDefault(); redo(); return; }
@@ -421,11 +441,17 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
   }
 
   /* ---- connecting it to the page: the edits in the database are laid over the places as they arrive */
+  const tip = t => { const n = $("#meDlg .me-tip"); if (n) n.textContent = t; };
+  Object.assign(api, { E, cur, change, paint, paintCanvas, paintSide, paintTop, pt, toast, tip, draftSVG, icon, finished, close: () => close(), store: () => S, ctx: () => X });
   A.mapEditor = {
     open,
+    // another file's part of the editor: { tools: [[key, label, tip]], icons: {key: svg paths}, topHTML, bodyHTML, open,
+    // top, side, overlay, down, move, up, click, change, input, key } (each handler returns true when it dealt with it)
+    plug(p) { PLUGS.push(p); for (const t of p.tools || []) TOOLS.push(t); Object.assign(IC, p.icons || {}); },
     init(store, ctx) {
       S = store; X = ctx;
       S.watch("mapedits", d => { if (T.applyMapEdits(d) && X && X.redraw) X.redraw(); });
+      if (A.models && A.models.watchLibrary) A.models.watchLibrary(S);
       document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-medit]"); if (b) open(b.dataset.medit); });
     }
   };

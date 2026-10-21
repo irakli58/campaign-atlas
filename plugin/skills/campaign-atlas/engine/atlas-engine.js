@@ -499,6 +499,9 @@ var ATLAS = (function () {
     for (const it of (F.I || [])) { if (!gm && (it[6] || inHidden(it[1] + (it[3] || 1) / 2, it[2] + (it[4] || 1) / 2))) continue; s += drawItem(it); }
     const gst = new Set(); M.floors.forEach(G => { if (isGmFloor(G)) (G.ST || []).forEach(x => gst.add(x[0])); });
     for (const st of (F.ST || [])) { if (!gm && (gst.has(st[0]) || inHidden(st[1] + st[3] / 2, st[2] + st[4] / 2))) continue; s += stair(st, gm); }
+    // the game master's own furnishings (models from the library, atlas-models.js): those on the floor under the walls
+    const props = F.P && F.P.length && A.propsSVG && !A.__noProps;
+    if (props) s += A.propsSVG(F, gm, pre, "floor", inHidden);
     // walls: thick between a room and anything that is not a room (or another building), thin between rooms
     let walls = "", inner = "", wins = "";
     for (let j = 0; j <= F.h; j++) for (let i = 0; i < F.w; i++) {
@@ -516,6 +519,7 @@ var ATLAS = (function () {
     s += `<path d="${inner}" stroke="${P.ink}" stroke-width="4" stroke-linecap="square" fill="none"/>`;
     s += `<path d="${walls}" stroke="${P.ink}" stroke-width="7" stroke-linecap="square" fill="none"/>`;
     s += wins + doorSVG.join("");
+    if (props) s += A.propsSVG(F, gm, pre, "over", inHidden);
     // room numbers and names: the same ones the guide uses
     for (const rid in first) {
       const [, x, y, w, h, name, kind, o = {}] = first[rid];
@@ -686,7 +690,7 @@ var ATLAS = (function () {
     return `<section class="sec lmap-sec" data-loc="${id}"><h3>Maps of the location</h3>
       <div class="lm-bar"><div class="lm-floors" role="group" aria-label="Floor">${floorBtns(id)}</div>
         <div class="lm-views gm-only" role="group" aria-label="Map view"><button type="button" data-lmv="player" aria-pressed="${v === "player"}">Player view</button><button type="button" data-lmv="gm" aria-pressed="${v !== "player"}">${esc(gmName)} view</button></div>
-        <button type="button" class="lm-full" data-lmfull="${id}">Full size</button>${A.mapEditor && !String(id).startsWith("fly-") ? `<button type="button" class="lm-edit gm-only" data-medit="${id}" title="Change this map yourself: rooms, doors, stairs, floors, size">Edit this map</button>` : ""}${n ? `<div class="lm-sizes" role="group" aria-label="Map size">${Array.from({ length: n + 1 }, (_, i) => `<button type="button" data-lmsize="${i}" aria-pressed="${levelFor(id) === i}">${esc(i ? (A.exp[keyOf(id)][i - 1].label || sizeName(i)) : sizeName(0))}</button>`).join("")}</div>` : ""}</div>
+        <button type="button" class="lm-full" data-lmfull="${id}">Full size</button>${A.models && A.models.page3D ? `<button type="button" class="lm-3d" data-m3d="${id}" title="See this floor in 3D, with its furnishings">3D</button>` : ""}${A.mapEditor && !String(id).startsWith("fly-") ? `<button type="button" class="lm-edit gm-only" data-medit="${id}" title="Change this map yourself: rooms, doors, stairs, floors, size">Edit this map</button>` : ""}${n ? `<div class="lm-sizes" role="group" aria-label="Map size">${Array.from({ length: n + 1 }, (_, i) => `<button type="button" data-lmsize="${i}" aria-pressed="${levelFor(id) === i}">${esc(i ? (A.exp[keyOf(id)][i - 1].label || sizeName(i)) : sizeName(0))}</button>`).join("")}</div>` : ""}</div>
       <div class="lm-stage">${svg(id, fi, v, "m" + (A.state.n++))}</div>
       ${legend()}
       <div class="lm-ref">${ref(id)}</div>

@@ -58,6 +58,11 @@
       return fetch(URL_.replace(/db$/, "save-map"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ id: id, edit: edit }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not saved"); return d; }); });
     },
+    // the model library: keep a model the game master brought in with the campaign (null meta forgets it)
+    saveModel: function (id, meta, data, ext) {
+      return fetch(URL_.replace(/db$/, "save-model"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ id: id, meta: meta, data: data, ext: ext }) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not kept"); return d; }); });
+    },
     trace: function (image, prompt) {
       return fetch(URL_.replace(/db$/, "trace"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ image: image, prompt: prompt }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not read"); return d.plan; }); });

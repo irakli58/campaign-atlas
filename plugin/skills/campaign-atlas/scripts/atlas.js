@@ -9,6 +9,7 @@
    node atlas.js build <dir>                     write dist/<slug>.html (to publish) and dist/preview.html (to open)
    node atlas.js export <dir> [place ...]        write every floor as SVG files to dist/maps/
    node atlas.js catalogue [<dir>]               list floor kinds, items and furnishing presets (and dist/catalogue.html)
+   node atlas.js models [words] [--genre scifi] [--kits]   search the 3D model library, for furnishing maps (floor P:)
 
    The city map (writes <dir>/city.js):
    node atlas.js city <dir> "Florence, Italy" [--year 1478 | --era medieval|industrial|modern|fantasy|future] [--km 2]
@@ -43,7 +44,7 @@ const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -59,7 +60,16 @@ function sources(dir) {
   if (fs.existsSync(pd)) for (const f of fs.readdirSync(pd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(pd, f));
   const ed = path.join(dir, "edits");                                                       // maps the game master redrew (the map editor)
   if (fs.existsSync(ed)) for (const f of fs.readdirSync(ed).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(ed, f));
+  const md = path.join(dir, "models");                                                      // models the game master brought in (ATLAS.models.addCustom)
+  if (fs.existsSync(md)) for (const f of fs.readdirSync(md).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(md, f));
   return files;
+}
+// the model library (engine/atlas-models*.js): loaded before the campaign's own files, which may add to it
+const MODEL_FILES = ["atlas-models.js", "atlas-models-lib.js", "atlas-models-lib2.js", "atlas-models-cat.js"];
+// the files of models brought in ride in the page itself
+function modelsJS(dir) {
+  const md = path.join(dir, "models"); if (!fs.existsSync(md)) return "";
+  return fs.readdirSync(md).filter(f => /\.(glb|gltf)$/i.test(f)).sort().map(f => `ATLAS.models.blobs[${JSON.stringify(f.replace(/\.(glb|gltf)$/i, ""))}] = "${fs.readFileSync(path.join(md, f)).toString("base64")}";`).join("\n");
 }
 const hasWorld = dir => fs.existsSync(path.join(dir, "world.js"));
 function load(dir) {
@@ -70,6 +80,7 @@ function load(dir) {
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-music.js"), "utf8"))(A);  // the lists of moods and flavours, for the checker
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-world.js"), "utf8"))(A);  // gives campaigns ATLAS.world()
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-table.js"), "utf8"))(A);  // gives campaigns ATLAS.clocks(), sessions(), pcs(), tables(), handouts(), rescues()
+  for (const f of MODEL_FILES) new Function("ATLAS", fs.readFileSync(path.join(ENGINE, f), "utf8"))(A);  // the model library, for the checker
   for (const f of sources(dir)) { try { new Function("ATLAS", fs.readFileSync(f, "utf8"))(A); } catch (e) { die(`${path.relative(dir, f)}: ${e.message}`); } }
   Object.defineProperty(A, "__dir", { value: dir });
   return A;
@@ -462,6 +473,12 @@ function checkTable(A) {
     if (!has(c.done)) N(`the clock "${nm}" does not say what happens when it is full (done)`);
   }
   for (const id of A.__badEdits || []) P(`edits: a redrawn map for "${id}", which is not a mapped place`);
+  // the furnishings put on maps from the model library: models the library has, on the floor they stand on
+  if (A.models) for (const id of mapped(A)) (A.maps[id].floors || []).forEach(F => {
+    const P0 = F.P || [], gone = [...new Set(P0.filter(p => !p || !A.models.entry(p.a)).map(p => (p && p.a) || "?"))], off = P0.filter(p => p && (p.x < 0 || p.y < 0 || p.x > F.w || p.y > F.h)).length;
+    if (gone.length) P(`${id}, ${F.n}: model${gone.length > 1 ? "s" : ""} the library does not have: ${gone.join(", ")} (a model brought in needs its models/<id>.js and file)`);
+    if (off) N(`${id}, ${F.n}: ${off} model${off > 1 ? "s stand" : " stands"} off the floor's edge`);
+  });
   if (!clocks.length) N(`no villains' clocks: give each enemy working in the background a clock (ATLAS.clocks in table.js)`);
   // the sessions
   const ses = A.sessionsData || [], inSession = new Set();
@@ -651,7 +668,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw };
@@ -793,7 +810,19 @@ function cmdKit(sub, dir, name) {
   die("node atlas.js kit list [<dir>] · kit use <dir> <kit> · kit save <dir> [name]");
 }
 
+// The model library (engine/atlas-models*.js): what can be put on a floor's P, by words, genre and kind; or its kits
+function cmdModels(words) {
+  const A = require(path.join(ENGINE, "atlas-engine.js"));
+  for (const f of MODEL_FILES) new Function("ATLAS", fs.readFileSync(path.join(ENGINE, f), "utf8"))(A);
+  const M = A.models, m2 = v => (Math.round(v * 100) / 100) + "";
+  if (flags.kits) { for (const k of M.kits()) console.log(`${k.id.padEnd(12)} ${k.n}: ${k.d}\n${"".padEnd(13)}${k.ids.join(", ")}`); return; }
+  const list = M.find(words.join(" "), { genre: flags.genre ? String(flags.genre).split(",") : [], cat: flags.cat || "" });
+  for (const { e, cond } of list.slice(0, +flags.max || 80)) { const [w, d, h] = M.dims(e); console.log(`${e.id.padEnd(22)} ${e.n.padEnd(32)} ${(m2(w) + "×" + m2(d) + "×" + m2(h) + " m").padEnd(18)} ${e.mount.padEnd(8)} ${e.c} / ${e.s}${cond ? "  (as " + cond + ")" : ""}`); }
+  console.log(`${list.length} of ${M.all().length} models${list.length > (+flags.max || 80) ? `; the first ${+flags.max || 80} shown (--max N for more)` : ""}. On a floor: P: [{ a: "<id>", x, y, r, s, z, c, m, h }] (references/data-format.md).`);
+}
+
 switch (cmd) {
+  case "models": cmdModels(pos); break;
   case "city": cmdCity(pos[0], pos[1]); break;
   case "locate": cmdLocate(pos[0], pos.slice(1).join(" ")); break;
   case "init": cmdInit(pos[0]); break;
