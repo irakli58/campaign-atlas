@@ -32,7 +32,7 @@
     const copy = o => JSON.parse(JSON.stringify(o));
     if (!A.mapOrig[id]) A.mapOrig[id] = { map: A.maps[id], exp: A.exp[id] };
     A.maps[id] = A.mapOrig[id].map; if (A.mapOrig[id].exp) A.exp[id] = A.mapOrig[id].exp; A.state.cache = {};
-    const src = A.get(id, ed.level == null ? 99 : ed.level);
+    A.__noOverlay = true; let src; try { src = A.get(id, ed.level == null ? 99 : ed.level); } finally { A.__noOverlay = false; }
     const floors = ed.floors.map(F0 => { const F = Object.assign({ D: [], I: [], ST: [], M: [] }, copy(F0)); F.R = F.R || []; F.I = (F.I || []).slice(); return A.finishFloor ? A.finishFloor(F, F.R) : F; });
     const M = Object.assign({}, src, { floors, edited: ed.t || 1 }); delete M.order; if (ed.order) M.order = ed.order;
     M.rooms = Object.assign({}, src.rooms || {}); for (const [rid, r] of Object.entries(ed.rooms || {})) M.rooms[rid] = Object.assign({}, M.rooms[rid] || {}, r);
@@ -305,6 +305,20 @@
       for (const n of Object.values(M.npcs || {})) if (n.who && cast[n.who]) edges.push({ a: "p:" + n.who, b: "l:" + id, kind: "at", place: id });
     }
     for (const [cid, c] of Object.entries(cast)) if (c.ties && typeof c.ties === "object") for (const to of Object.keys(c.ties)) { const t = cast[to] ? to : Object.keys(cast).find(k => name(cast[k]).toLowerCase() === to.toLowerCase()); if (t && t !== cid && !edges.some(e => (e.a === "p:" + t && e.b === "p:" + cid))) edges.push({ a: "p:" + cid, b: "p:" + t, kind: "tie", text: c.ties[to] }); }
+    // the connections the referee saved in the investigation (atlas-story.js): string between the cards they join, a
+    // card added for a clue, a person or a story element not yet on the board. The players see one only when pinned up.
+    if (A.story && A.story.links) {
+      const St = A.story, card = ref => {
+        const [k, rest] = [ref.slice(0, ref.indexOf(":")), ref.slice(ref.indexOf(":") + 1)], e = St.ent(ref); if (!e) return null;
+        if (k === "cast") return add({ id: "p:" + rest, kind: "person", title: e.name, sub: e.role || "" }).id;
+        if (k === "place") return add({ id: "l:" + rest, kind: "place", title: e.name, sub: e.sub || "", place: rest }).id;
+        if (k === "clue") { const [pl, cid] = rest.split("/"); return add({ id: "c:" + pl + "." + cid, kind: "clue", title: e.name, sub: "", place: pl, clue: cid }).id; }
+        if (k === "npc") return add({ id: "p:" + ref, kind: "person", title: e.name, sub: e.role || "" }).id;
+        if (k === "room") return card("place:" + rest.split("/")[0]);
+        return add({ id: "s:" + ref, kind: "item", title: e.name, sub: e.sub || "" }).id;
+      };
+      for (const [lid, l] of Object.entries(St.links())) { const a = card(l.a), b = card(l.b); if (a && b && a !== b) edges.push({ a, b, kind: "story", rel: l.rel, shown: !!l.shown, id: lid }); }
+    }
     return { nodes, edges: edges.filter(e => byId[e.a] && byId[e.b]), byId };
   }
   // how big the board is: room for its cards, wider than tall
@@ -436,7 +450,8 @@
     // the players' own board: only what they have, laid out on its own
     function theirBoard() {
       const all = boardModel(), keep = new Set(all.nodes.filter(nd => ctx.found(nd.id)).map(nd => nd.id));
-      const model = { nodes: all.nodes.filter(nd => keep.has(nd.id)), edges: all.edges.filter(e => keep.has(e.a) && keep.has(e.b)) }, [W, H] = boardSize(Math.max(6, model.nodes.length));
+      // a connection the referee saved shows only once they pin it up: finding two clues does not tell the players how they join
+      const model = { nodes: all.nodes.filter(nd => keep.has(nd.id)), edges: all.edges.filter(e => keep.has(e.a) && keep.has(e.b) && (e.kind !== "story" || e.shown)) }, [W, H] = boardSize(Math.max(6, model.nodes.length));
       return [model, boardLayout(model, W, H), W, H];
     }
     function safetyHTML() {
@@ -470,7 +485,8 @@
           const l = known();
           return `<h2>Places</h2><p class="ps-hint">The places you know of, what you found there, and the rooms you have seen.</p>${l.length ? l.map(({ id, m, s, fog, seen }) => {
             const M = A.maps[id] ? A.get(id, 99) : null, done = (st.get("clues", id) || {}).done || [];
-            const found = M ? done.map(k => (M.clues || {})[k]).filter(Boolean).map(c => `<li>${esc(String(c.t || "").replace(/\s*\(.*\)\s*$/, ""))}</li>`).join("") : "";
+            // what they found: its name, and what the referee wrote for the players to see (never what only the referee knows)
+            const found = M ? done.map(k => (M.clues || {})[k]).filter(c => c && !c.arch).map(c => `<li>${esc(String(c.t || "").replace(/\s*\(.*\)\s*$/, ""))}${c.pd ? `<span class="ps-pd">${esc(c.pd)}</span>` : ""}</li>`).join("") : "";
             const floors = M ? M.floors.map((F, fi) => [F, fi]).filter(([F, fi]) => !A.isGmFloor(F) && (fog[fi] || []).length) : [];
             const more = s !== "rumoured" || seen;
             return `<section class="ps-place"><div class="ps-ph"><h3>${esc(m.name || id)}</h3>${m.region ? `<span class="ps-reg">${esc(m.region)}</span>` : ""}${STATUS_WORDS[s] ? `<span class="ps-st st-${s}">${STATUS_WORDS[s]}</span>` : ""}</div>
@@ -532,6 +548,8 @@
     // the furnishings' pictures come as they are drawn (atlas-models.js), and models the game master brought in
     document.addEventListener("atlas-models", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
     if (A.models && A.models.watchLibrary) A.models.watchLibrary(st);
+    // the clues as the referee wrote them, and the connections they pinned up
+    if (A.story && A.story.connect) { A.story.connect(st); document.addEventListener("atlas-story", () => { if (now.kind === "board") render(); if (tab === "places" || tab === "board") renderPage(); }); }
     st.watch("journal", () => paintNotes());
     window.addEventListener("resize", () => { fit(); fitBoard(); });
 
@@ -574,6 +592,10 @@
     make: `<path d="M4.5 19.5 15 9M13.5 4.5v3M12 6h3M19 10v3M17.5 11.5h3M18.5 3.5v2M17.5 4.5h2"/>`,
     ask: `<path d="M4 5h16v11H9.5L5 19.5V16H4z"/><path d="M10 9.2a2 2 0 1 1 2.9 1.8c-.6.3-.9.7-.9 1.3M12 14.3v.1"/>`,
     board: `<rect x="3.5" y="4.5" width="17" height="15" rx="1"/><path d="M7.5 15.5l3.5-5 3 3 3.5-6"/><circle cx="7.5" cy="15.5" r="1.3"/><circle cx="11" cy="10.5" r="1.3"/><circle cx="14" cy="13.5" r="1.3"/><circle cx="17.5" cy="7.5" r="1.3"/>`,
+    clue: `<circle cx="10" cy="10" r="5.5"/><path d="M14 14l5.5 5.5M8 10h4M10 8v4"/>`,
+    know: `<circle cx="8.5" cy="9" r="3.2"/><path d="M3 19c.6-3.4 2.8-5 5.5-5s4.9 1.6 5.5 5"/><path d="M14 4.5h6.5v4.2h-3.3l-1.9 1.7V8.7H14z"/>`,
+    link: `<path d="M10 14l4-4"/><path d="M8.5 11.5l-2 2a3 3 0 0 0 4.2 4.2l2-2"/><path d="M15.5 12.5l2-2a3 3 0 0 0-4.2-4.2l-2 2"/>`,
+    spark: `<path d="M12 3.5l1.6 5 5 1.6-5 1.6-1.6 5-1.6-5-5-1.6 5-1.6z"/><path d="M18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>`,
     party: `<circle cx="9" cy="8.5" r="3"/><path d="M3.5 19.5c.5-3.5 2.8-5 5.5-5s5 1.5 5.5 5"/><circle cx="16.5" cy="9" r="2.4"/><path d="M15.8 14.3c2.5-.2 4.3 1.4 4.8 4.7"/>`,
     safety: `<path d="M12 3.5 19 6v5.5c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6z"/><path d="M9 12l2.2 2.2L15.2 10"/>`,
     export: `<path d="M7 8V3.5h10V8M7 17H4.5V9.5c0-.8.7-1.5 1.5-1.5h12c.8 0 1.5.7 1.5 1.5V17H17"/><rect x="7" y="13.5" width="10" height="7"/>`,

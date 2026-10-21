@@ -1,6 +1,6 @@
 # Data format
 
-A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the map of the whole, written by `atlas.js city`; its format is in `cities.md`), `edits/<place>.js` (a map as the game master redrew it with the page's map editor: `ATLAS.mapEdit("place", { level, floors, rooms })`, read after the places; never edited by hand), `models/<id>.js` (3D models the game master brought into the model library, each with its .glb file beside it), `table.js` (the clocks, the session plan, the players' characters and the rest for the table: `table.md`), `places/*.js` (one file per place, read in file-name order; names starting with `_` are skipped), `story/` (the user's story, the council's transcript, the bible), `canon.md` and `checklist.md`. `build` writes `dist/`.
+A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the map of the whole, written by `atlas.js city`; its format is in `cities.md`), `edits/<place>.js` (a map as the game master redrew it with the page's map editor: `ATLAS.mapEdit("place", { level, floors, rooms })`, read after the places; never edited by hand), `models/<id>.js` (3D models the game master brought into the model library, each with its .glb file beside it), `edits/story.js` (the investigation as the game master built it on the page: section 8), `table.js` (the clocks, the session plan, the players' characters and the rest for the table: `table.md`), `places/*.js` (one file per place, read in file-name order; names starting with `_` are skipped), `story/` (the user's story, the council's transcript, the bible), `canon.md` and `checklist.md`. `build` writes `dist/`.
 
 ## Contents
 
@@ -11,6 +11,7 @@ A campaign is a folder: `campaign.js` (settings and the cast), `city.js` (the ma
 5. Campaign settings (`campaign.js`)
 6. Floor kinds, items and furnishing presets
 7. For the table
+8. The investigation: `edits/story.js`
 
 ## 1. A place
 
@@ -137,6 +138,8 @@ secrets: { S1: { t: "Title", at: "R2", acc: "How it opens.", dest: "Where it lea
 enc:     { E1: { t: "Title", at: "R1", d: "What happens, when, what it costs.", roll: "Dodge", stats: { ... }, count: 3 } }   // stats: the game's own numbers (table.md, section 7); a person may have stats too
 ```
 
+A clue may also say, for the investigation (`table.md`, section 14): `k` its kind (`physical`, `document`, `testimony`, `digital`, `environment`, `object`, `secret`, `magic`, `lead`, `other`; the sign on its marker), `sum` a one-line summary, `pd` what the players are told when they find it (the only words of a clue the players' screen ever shows), `kp` what only the referee knows, `notes`, `tags: ["the Okafor mystery"]`, `on: "the desk"` (what it lies on), and `arch: true` (archived: kept, but off the map and out of lists).
+
 `to` (a place id or a list of them) is a lead. `at` is a room id, or the id of a piece of ground. `check` requires a `hint` on every clue of a tier 1 place that has a `to`, and, for every person in every place, the four things every person has (their own or the cast's): `look` (what they look like), `bg` (their story), `manner` (how they act) and `ties` (who they know).
 
 **Ties** are the web of the story: `ties: { okafor: "her doctor; owes her his wife's last good year", "Bram Tellis": "drinks with him; suspects him" }`. A key is one of the cast's ids, or anyone else's name written as their `n` gives it (before the comma). The page shows each person's ties with links to the place where that person is met, and under **Named by** the people elsewhere who name them, so the web reads both ways. A sentence (`ties: "..."`) is allowed when the ties are not worth naming one by one; a key that looks like an id but is nobody in the cast is noted by `check`.
@@ -253,3 +256,19 @@ Run `node scripts/atlas.js catalogue <dir>` for the current list and a drawn she
 ## 7. For the table
 
 `table.js` holds `ATLAS.clocks([...])`, `ATLAS.sessions([...])`, `ATLAS.pcs({...})`, `ATLAS.rescues([...])`, `ATLAS.tables({...})` and `ATLAS.handouts([...])`; the places and their clues, people and encounters carry `intensity`, `content`, `tables`, `roll`, `rescue`, `handout` and `stats`; `campaign.js` may say `era` and `people`. Every one of them is described, with an example, in `references/table.md`.
+
+## 8. The investigation: `edits/story.js`
+
+What the game master builds in the page's Investigation (`table.md`, section 14) is kept in one call, read after the places:
+
+```js
+ATLAS.storyEdit({
+  cluebook:  { "med-lab": { C4: { t: "A bloody glove", at: "R1", k: "physical", pd: "...", kp: "...", tags: ["..."] } } },  // clues written or changed on the page, laid over the place's own; off: true removes one
+  links:     { L1: { a: "clue:med-lab/C1", b: "cast:okafor", rel: "implicates", why: "...", basis: "...", conf: "likely", cert: "hypothesis", src: "dm", shown: false } },
+  items:     { I1: { kind: "faction", n: "The Ring Council", d: "...", when: "" } },   // story elements the campaign has no place for: mystery, faction, quest, event, secret, thing, other
+  questions: { Q1: { text: "Who brought Ines to the ward?", about: ["clue:med-lab/C1"], state: "open" } },   // state: open, intentional, develop, resolved
+  knowledge: { K1: { who: "npc:docking-bay/N1", about: "clue:docking-bay/C2", text: "saw the glove dropped", type: "fact", how: "witnessed", from: "", when: "that night", rel: "reliable", share: "hides", why: "fears the quartermaster" } }
+});
+```
+
+A thing is named by a reference: `clue:<place>/<id>`, `cast:<id>`, `npc:<place>/<id>`, `place:<id>`, `room:<place>/<id>`, `secret:<place>/<id>`, `enc:<place>/<id>`, `clock:<id>`, `session:<n>`, `pc:<id>`, `chapter:<n>`, `item:<id>`, `question:<id>`. `rel` is one of `leads to`, `reveals`, `implicates`, `contradicts`, `confirms`, `explains`, `opens`, `belongs to`, `advances`, `helps solve`, `matches`, `involves`, `witnessed`, `knows about`, `concerns`, or the game master's own word. `src` says who made it: `dm` (the game master: never changed by a suggestion), `ai` (a suggestion they approved), `file`. Knowledge: `type` is `fact`, `report`, `rumour`, `deduction`, `suspicion` or `false`; `how` is `witnessed`, `present`, `found`, `told`, `read`, `accessed`, `rumour`, `inferred` or `assigned`; `share` is `shares`, `pressed`, `hides` or `refuses`. `check` names a reference that points nowhere. The file is the game master's: never rewrite what is in it, only add to it when they ask.

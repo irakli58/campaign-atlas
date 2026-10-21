@@ -85,7 +85,10 @@
   // the draft drawn as a map (the map's own drawing, so it looks as it will), floor fi, for whoever asks
   function draftSVG(fi, view, pre) {
     A.maps.__medit = Object.assign({}, A.get(E.id), { t: E.draft.t, floors: E.draft.floors.map(finished), big: 0 }); delete A.maps.__medit.order; delete A.maps.__medit.alias; A.state.cache = {};
-    try { return A.svg("__medit", fi, view || "gm", pre || "me" + (A.state.n++), 0); } finally { delete A.maps.__medit; A.state.cache = {}; }
+    for (const p of PLUGS) if (p.draftMap) p.draftMap(A.maps.__medit, api);
+    // the editor shows the clue markers unless its own switch hides them (the page's switch is the page's)
+    const nc = A.state.noClues; A.state.noClues = !!E.hideClues;
+    try { return A.svg("__medit", fi, view || "gm", pre || "me" + (A.state.n++), 0); } finally { A.state.noClues = nc; delete A.maps.__medit; A.state.cache = {}; }
   }
   function paintCanvas() {
     const box = $("#meCanvas"); if (!box) return;
@@ -190,6 +193,7 @@
     const ed = { t: Date.now(), level: E.level, floors: copy(E.draft.floors), rooms: Object.fromEntries(Object.entries(E.draft.rooms).filter(([, r]) => Object.values(r).some(v => String(v || "").trim()))) };
     if (E.draft.order) ed.order = E.draft.order.filter(i => i < ed.floors.length);
     A.mapEdit(E.id, ed); S.set("mapedits", E.id, ed);
+    for (const p of PLUGS) if (p.save) { try { await p.save(api, ed); } catch (e) { console.warn(e); } }
     let where = "Saved in this campaign's page.";
     if (window.ATLAS_APP && window.ATLAS_APP.saveMap) { try { await window.ATLAS_APP.saveMap(E.id, ed); where = "Saved into the campaign: it stays when the campaign is rebuilt."; } catch (e) { where = "Saved in the page, but not into the campaign's files: " + (e.message || e); } }
     E.dirty = false; close(true); if (X && X.redraw) X.redraw(); toast(where);
@@ -442,11 +446,12 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
 
   /* ---- connecting it to the page: the edits in the database are laid over the places as they arrive */
   const tip = t => { const n = $("#meDlg .me-tip"); if (n) n.textContent = t; };
-  Object.assign(api, { E, cur, change, paint, paintCanvas, paintSide, paintTop, pt, toast, tip, draftSVG, icon, finished, close: () => close(), store: () => S, ctx: () => X });
+  Object.assign(api, { E, cur, change, paint, paintCanvas, paintSide, paintTop, pt, toast, tip, draftSVG, icon, finished, close: () => close(), save: () => save(), store: () => S, ctx: () => X });
   A.mapEditor = {
     open,
     // another file's part of the editor: { tools: [[key, label, tip]], icons: {key: svg paths}, topHTML, bodyHTML, open,
-    // top, side, overlay, down, move, up, click, change, input, key } (each handler returns true when it dealt with it)
+    // top, side, overlay, down, move, up, click, change, input, key, cancel, save } (each handler returns true when it
+    // dealt with it; save(api, edit) runs when the map is saved)
     plug(p) { PLUGS.push(p); for (const t of p.tools || []) TOOLS.push(t); Object.assign(IC, p.icons || {}); },
     init(store, ctx) {
       S = store; X = ctx;

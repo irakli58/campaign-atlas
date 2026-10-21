@@ -149,6 +149,18 @@ async function route(req, res) {
         return send(res, 200, { ok: true });
       } catch (e) { return fail(res, 400, e.message); }
     }
+    // the investigation: the clues, connections, story elements, questions and knowledge the game master wrote on the
+    // page, kept in the campaign (edits/story.js) so a rebuild, and Claude working on it again, have them
+    if (m === "POST" && rest === "save-story") {
+      if (!authed) return fail(res, 403, "forbidden");
+      try {
+        const o = await body(req, 6 << 20), s = o.story || {};
+        const keep = {}; for (const k of ["cluebook", "links", "items", "questions", "knowledge"]) if (s[k] && typeof s[k] === "object") keep[k] = s[k];
+        const dir2 = path.join(dir, "edits"); fs.mkdirSync(dir2, { recursive: true });
+        fs.writeFileSync(path.join(dir2, "story.js"), "// The investigation as the game master wrote it on the page (" + new Date().toISOString().slice(0, 10) + "): clues written or placed there,\n// connections, story elements, questions, and what each person knows. It is theirs: keep it as it is.\nATLAS.storyEdit(" + JSON.stringify(keep) + ");\n");
+        return send(res, 200, { ok: true });
+      } catch (e) { return fail(res, 400, e.message); }
+    }
     // the model library: a model the game master brought in (a .glb or .gltf file) is kept with the campaign
     // (models/<id>.glb and models/<id>.js), so the page carries it when it is built again; null forgets it
     if (m === "POST" && rest === "save-model") {

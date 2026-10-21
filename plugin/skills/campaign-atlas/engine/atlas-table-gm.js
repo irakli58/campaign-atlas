@@ -417,6 +417,10 @@
     ["export", "Print and export", "export", "prep", "The book, handouts, maps for online tables"]
   ];
   const GROUPS = { play: "During the game", prep: "Before and after" };
+  // tools other files add (atlas-clueui.js: the investigation): { key, label, icon, group, desc, after, html(), bind(),
+  // status(), watch: [collections] }
+  const TPLUGS = [];
+  function addTab(p) { TPLUGS.push(p); const at = p.after ? TABS.findIndex(t => t[0] === p.after) + 1 : TABS.length; TABS.splice(at > 0 ? at : TABS.length, 0, [p.key, p.label, p.icon, p.group, p.desc]); }
   const navBtn = ([k, l, ic, , desc]) => `<button type="button" role="tab" data-t="tab" data-tab="${k}" aria-selected="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>`;
   function view() {
     const box = $("#tablev"); if (!box) return;
@@ -438,9 +442,11 @@
     const body = $("#tvBody"); if (!body) return;
     const a = document.activeElement; if (a && body.contains(a) && /^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName) && a.type !== "button") { UI.dirty = true; return; }
     UI.dirty = false;
-    const f = { home: homeHTML, tonight: tonightHTML, screen: screenHTML, clocks: clocksHTML, combat: combatHTML, make: makeHTML, board: boardHTML, party: partyHTML, safety: safetyHTML, ask: askHTML, export: exportHTML }[UI.tab] || homeHTML;
+    const plug = TPLUGS.find(p => p.key === UI.tab);
+    const f = plug ? plug.html : { home: homeHTML, tonight: tonightHTML, screen: screenHTML, clocks: clocksHTML, combat: combatHTML, make: makeHTML, board: boardHTML, party: partyHTML, safety: safetyHTML, ask: askHTML, export: exportHTML }[UI.tab] || homeHTML;
     body.innerHTML = f();
     if (UI.tab === "board") bindBoard();
+    if (plug && plug.bind) plug.bind(body);
     fitPreviews(); requestAnimationFrame(fitPreviews);
   }
   const visible = () => X && X.state.view === "table";
@@ -449,6 +455,7 @@
   /* ---- Start here */
   const plural = (n, w, ws) => `${n} ${n === 1 ? w : ws || w + "s"}`;
   function statusOf(k) {
+    const plug = TPLUGS.find(p => p.key === k); if (plug) return plug.status ? plug.status() : "";
     switch (k) {
       case "clocks": { const l = A.clocksData || [], ticked = l.reduce((n, c) => n + clockAt(c), 0); return l.length ? plural(l.length, "clock") + (ticked ? ` · ${plural(ticked, "tick")} so far` : " · none ticked yet") : "None in this campaign"; }
       case "combat": { const c = cnow(); return c.round ? `Round ${c.round} · ${c.list.length} in the fight` : c.list.length ? `${c.list.length} ready to fight` : "No fight now"; }
@@ -474,8 +481,8 @@
         <article class="th-big">${T.icon("tonight", "big")}<div><h3>Tonight</h3><p>${s ? `Session ${esc(s.n)}${s.title ? ": " + esc(s.title) : ""}. ` : ""}${plural(places.length, "place")} they are likely to visit, ${plural(left, "clue")} still to find there.</p>${s && s.start ? `<p class="th-quote">${esc(s.start)}</p>` : ""}
           <div class="t-row"><button type="button" class="t-btn prim" data-t="tab" data-tab="tonight">Open tonight's sheet</button><button type="button" class="t-btn" data-t="printsheet">Print it</button></div></div></article>
       </div>
-      <h3 class="th-h">During the game</h3><div class="th-grid">${["clocks", "combat", "make", "ask", "board"].map(card).join("")}</div>
-      <h3 class="th-h">Before and after</h3><div class="th-grid">${["party", "safety", "export"].map(card).join("")}</div>
+      <h3 class="th-h">During the game</h3><div class="th-grid">${["clocks", "combat", "make", "ask", "board"].concat(TPLUGS.filter(p => p.group === "play").map(p => p.key)).map(card).join("")}</div>
+      <h3 class="th-h">Before and after</h3><div class="th-grid">${["party", "safety", "export"].concat(TPLUGS.filter(p => p.group === "prep").map(p => p.key)).map(card).join("")}</div>
       <section class="th-how"><h3>How a game night goes</h3><ol>
         <li><b>Before the first game.</b> Ask the table what must stay out of the story and what may only happen off screen, and write it under ${go("safety", "Safety")}. See how the players' characters are woven in under ${go("party", "The party")}.</li>
         <li><b>Before each game.</b> Read ${go("tonight", "tonight's sheet")}. Print it, or the handouts, if you like paper (${go("export", "Print and export")}).</li>
@@ -1009,13 +1016,17 @@
 
   /* ================================================================ connecting it to the page */
   A.tableUI = {
-    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity,
+    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab,
+    // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
+    api: { store: () => S, ctx: () => X, note: t => note(t), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s) => askRaw(p, f || (() => {}), s), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); } },
     init(ctx) {
       X = ctx; S = T.makeStore(ctx.db, cfg().storageKey); found = T.foundIn(S);
+      if (A.story && A.story.connect) A.story.connect(S);
       UI.tab = pref.get("tab") || "home"; if (!TABS.some(([k]) => k === UI.tab)) UI.tab = "home";
       if (pref.get("tablet") === "1") app().dataset.tablet = "1";
       dockInit(); intro();
       if (A.mapEditor) A.mapEditor.init(S, ctx);
+      for (const p of TPLUGS) if (p.init) p.init(S, ctx);
       const MAP = { screen: ["screen", "home"], fog: ["screen"], clocks: ["clocks", "tonight", "home"], log: ["tonight", "home"], combat: ["combat", "home"], board: ["board", "home"], journal: ["party", "home"], safety: ["safety", "tonight", "home"], fly: ["make", "screen", "home"], clues: ["tonight", "board", "home"], status: ["tonight", "board"] };
       for (const f of Object.keys(MAP)) S.watch(f, () => {
         if (f === "fly") for (const x of Object.values(S.get("fly") || {})) if (x.kind && x.kind !== "person") flyPlace(x);

@@ -44,14 +44,20 @@
   const bonesAt = id => BONES.filter(b => b.place === id);
 
   // What the referee ticks off at a place: its clues, and the people there who point somewhere else
+  // (built again when the clues change on the page: the investigation, atlas-story.js)
   const ROWS = {}, INTO = {};
+  function index() {
+  for (const k of Object.keys(ROWS)) delete ROWS[k]; for (const k of Object.keys(INTO)) delete INTO[k];
   for (const p of P) {
+    if (A.maps[p.id]) p.M = A.get(p.id, 99);
     const M = p.M, rows = ROWS[p.id] = []; if (!M) continue;
-    for (const [k, c] of Object.entries(M.clues || {})) rows.push({ k, short: c.t || k, text: (c.t || k) + (c.rev ? ": " + c.rev : c.d ? ": " + c.d : ""), to: toList(c.to).filter(t => byId[t] && t !== p.id), hint: c.hint || "", roll: c.roll || "", handout: c.handout ? p.id + "." + k : "", rescue: c.rescue || "" });
+    for (const [k, c] of Object.entries(M.clues || {})) if (!c.arch) rows.push({ k, short: c.t || k, text: (c.t || k) + (c.rev ? ": " + c.rev : c.d ? ": " + c.d : ""), to: toList(c.to).filter(t => byId[t] && t !== p.id), hint: c.hint || "", roll: c.roll || "", handout: c.handout ? p.id + "." + k : "", rescue: c.rescue || "" });
     for (const [k, n] of Object.entries(M.npcs || {})) { const to = toList(n.to).filter(t => byId[t] && t !== p.id); if (!to.length) continue; const [nm] = who(n), pr = n.press || (castOf(n) || {}).press; rows.push({ k, short: "Talking to " + nm, text: nm + ": " + (n.rev || n.knows || "points the way on"), to, hint: pr ? "What makes them talk: " + pr : "", person: nm }); }
     for (const l of A.meta[p.id].leads || []) if (byId[l.to]) rows.push({ k: "L" + rows.length, short: l.why || "A lead", text: l.why || "A lead", to: [l.to], hint: "" });
     for (const r of rows) for (const t of r.to) (INTO[t] = INTO[t] || []).push({ from: p.id, k: r.k, short: r.short, text: r.text, person: r.person });
   }
+  }
+  index();
   const outOf = id => [...new Set((ROWS[id] || []).flatMap(r => r.to))];
   const linksOf = id => ids.filter(q => q !== id && (outOf(id).includes(q) || outOf(q).includes(id)));
 
@@ -658,6 +664,8 @@
   /* ---- the table (atlas-table-gm.js): its context, before the first paint */
   if (A.tableUI) A.tableUI.init({ P, byId, ROWS, INTO, who, castOf, state, TR, POSTED, md, inl, db: DBP, prefs: store, go, setView: v => setView(v),
     stOf, accessInfo, clueDone, redraw: () => { if (byId[state.sel]) renderDossier(false); } });
+  // the clues changed on the page (the investigation, the map editor): the lists are made again, the place drawn again
+  document.addEventListener("atlas-story", () => { clearTimeout(index.t); index.t = setTimeout(() => { index(); if (byId[state.sel] && state.view === "gaz") renderDossier(false); renderTrackerAll(); }, 60); });
 
   /* ---- first paint */
   renderAll(false); renderTracker();

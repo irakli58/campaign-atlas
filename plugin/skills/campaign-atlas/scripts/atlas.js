@@ -64,8 +64,9 @@ function sources(dir) {
   if (fs.existsSync(md)) for (const f of fs.readdirSync(md).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(md, f));
   return files;
 }
-// the model library (engine/atlas-models*.js): loaded before the campaign's own files, which may add to it
-const MODEL_FILES = ["atlas-models.js", "atlas-models-lib.js", "atlas-models-lib2.js", "atlas-models-cat.js"];
+// the model library (engine/atlas-models*.js) and the story's web (atlas-story.js): loaded before the campaign's own
+// files, which may add to them (ATLAS.models.addCustom, ATLAS.storyEdit)
+const MODEL_FILES = ["atlas-story.js", "atlas-models.js", "atlas-models-lib.js", "atlas-models-lib2.js", "atlas-models-cat.js"];
 // the files of models brought in ride in the page itself
 function modelsJS(dir) {
   const md = path.join(dir, "models"); if (!fs.existsSync(md)) return "";
@@ -473,6 +474,12 @@ function checkTable(A) {
     if (!has(c.done)) N(`the clock "${nm}" does not say what happens when it is full (done)`);
   }
   for (const id of A.__badEdits || []) P(`edits: a redrawn map for "${id}", which is not a mapped place`);
+  // the story's web (atlas-story.js, from ATLAS.storyEdit and edits/story.js): what it joins must be in the campaign
+  if (A.story) {
+    const St = A.story;
+    for (const [id, l] of Object.entries(St.links())) for (const end of [l.a, l.b]) if (!St.ent(end)) N(`story: the connection ${id} (${l.rel}) joins ${end}, which is not in the campaign (archived, deleted or misnamed)`);
+    for (const [id, k] of Object.entries(St.knowledge())) { if (!St.ent(k.who)) P(`story: the knowledge ${id} belongs to ${k.who}, who is not in the campaign`); else if (k.about && !St.ent(k.about)) N(`story: ${St.name(k.who)} knows about ${k.about}, which is not in the campaign`); else if (!k.how) N(`story: ${St.name(k.who)} knows "${k.text || St.name(k.about)}", but how is not recorded`); }
+  }
   // the furnishings put on maps from the model library: models the library has, on the floor they stand on
   if (A.models) for (const id of mapped(A)) (A.maps[id].floors || []).forEach(F => {
     const P0 = F.P || [], gone = [...new Set(P0.filter(p => !p || !A.models.entry(p.a)).map(p => (p && p.a) || "?"))], off = P0.filter(p => p && (p.x < 0 || p.y < 0 || p.x > F.w || p.y > F.h)).length;
@@ -668,7 +675,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw };

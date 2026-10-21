@@ -109,5 +109,6 @@ Write place files with the Write and Edit tools. Shell heredocs on this user's m
 - "Change the story": reconvene the council on that point, update the bible and canon, then the places it touches.
 - "The players should not see X": hide it, then `check`.
 - "Add a place": register it, give it two inbound leads, map it, rebuild.
+- "Place a clue on the map", "connect this clue to the story", "who knows about this", "an investigation board": the page's Investigation and the map editor's Clues tool do it, with Claude's suggestions approved one by one (`references/table.md`, section 14). What the game master built there comes back as `edits/story.js` (`references/workflow.md`, "Taking in the investigation"): theirs, never rewritten.
 - "Here are my players' characters", "add a clock", "make this a handout": `references/table.md`. "How do I show the map to my players": the page's At the table view does it; tell them.
 - Something looks wrong and you cannot see what: ask which map and what is wrong, once, before inspecting anything.

@@ -424,7 +424,8 @@ var ATLAS = (function () {
     return (A.state.cache[ck] = layer(expanded(k, level - 1), X, X.label || sizeName(level)));
   }
   const levelFor = id => Math.min(A.state.level, levels(id));
-  function get(id, level) { if (!A.maps[id]) return null; return expanded(keyOf(id), level == null ? levelFor(id) : level); }
+  // a place's map at a size; the clues the referee wrote or changed on the page are laid over it (atlas-story.js)
+  function get(id, level) { if (!A.maps[id]) return null; const M = expanded(keyOf(id), level == null ? levelFor(id) : level); return A.overlay && !A.__noOverlay ? A.overlay(keyOf(id), M) : M; }
   const isGmFloor = F => !!(F.gm || F.k);
 
   /* ---- drawing one floor */
@@ -533,10 +534,14 @@ var ATLAS = (function () {
       s += `<text x="${lx}" y="${ly}"${rot} text-anchor="middle" font-family="${lab}" font-size="${fs}" ${out ? 'font-style="italic" letter-spacing="1.5"' : 'letter-spacing=".4"'} fill="${P.ink}" paint-order="stroke" stroke="${P.halo}" stroke-width="${dark ? 3.6 : 3}">${esc(name)}</text></g>`;
     }
     if (gm) {
-      const MK = markers();
+      // a clue's marker wears the sign of its kind (atlas-story.js); a clue archived or taken away is not drawn, and the
+      // referee may hide every clue's marker (A.state.noClues) without touching the clues
+      const MK = markers(), cl = M.clues || {}, pk = keyOf(id);
       for (const [mid, x, y] of (F.M || [])) {
-        const k = MK[mid[0]] || MK.C;
-        s += `<g class="lm-mk" data-ref="${mid}"><circle cx="${x * C}" cy="${y * C}" r="9.5" fill="${k[0]}" stroke="${P.halo}" stroke-width="2"/><text x="${x * C}" y="${y * C + 3.2}" text-anchor="middle" font-family="${mono}" font-size="8.5" font-weight="700" fill="#fff">${mid}</text></g>`;
+        const k = MK[mid[0]] || MK.C, isClue = dirOf(mid) === "clues", c = isClue ? cl[mid] : null;
+        if (isClue && (A.state.noClues || (c && c.arch) || (!c && A.clueGone && A.clueGone(pk, mid)))) continue;
+        const g = c && c.k && A.clueGlyph ? A.clueGlyph(c.k) : "";
+        s += `<g class="lm-mk${isClue ? " lm-mk-c" : ""}" data-ref="${mid}"><circle cx="${x * C}" cy="${y * C}" r="9.5" fill="${k[0]}" stroke="${P.halo}" stroke-width="2"/><text x="${x * C}" y="${y * C + 3.2}" text-anchor="middle" font-family="${mono}" font-size="8.5" font-weight="700" fill="#fff">${mid}</text>${g ? `<g transform="translate(${(x * C + 9).toFixed(1)} ${(y * C - 9).toFixed(1)})"><circle r="6.6" fill="#fff" stroke="${k[0]}" stroke-width="1.5"/><path d="${g}" fill="none" stroke="${k[0]}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></g>` : ""}</g>`;
       }
     }
     // frame, title, scale, north
@@ -634,7 +639,9 @@ var ATLAS = (function () {
         return `<details class="lm-card fold" id="lm-${id}-${x}"><summary class="lm-ch"><b class="lm-b${x[0]}">${x}</b> ${h.slice(0, cut)}${obj[x].at ? ` <i>${esc(where(M, obj[x].at))}</i>` : ""}</summary>${h.slice(cut + 6, -5)}</details>`;
       }).join("") + `</div>`);
     };
-    dir("Clue directory", M.clues, c => `${esc(c.t || "")}</div>${f("Where", where(M, c.at) + (c.p ? " · " + c.p : ""))}${f("What it is", c.d)}${f("How it is found", c.how)}${f("What it reveals", c.rev)}${f("If the players miss it", c.hint)}${fh("Leads to", goLinks(c.to))}<div>`);
+    // the clues (archived ones only in the investigation), with what the referee wrote on the page (atlas-story.js)
+    const live = Object.fromEntries(Object.entries(M.clues || {}).filter(([, c]) => !c.arch));
+    dir("Clue directory", live, (c, x) => `${esc(c.t || "")}</div>${f("Kind", c.k && A.clueTypeName ? A.clueTypeName(c.k) : "")}${f("Where", where(M, c.at) + (c.p ? " · " + c.p : ""))}${f("What the players see", c.pd)}${f("What it is", c.d)}${f("Only you know", c.kp)}${f("How it is found", c.how)}${f("What it reveals", c.rev)}${f("If the players miss it", c.hint)}${fh("Leads to", goLinks(c.to))}${f("Tags", (c.tags || []).join(", "))}${A.clueUI ? `<p><button type="button" class="lm-go lm-ic" data-ic="${esc(id)}/${esc(x)}">Open it in the investigation</button></p>` : ""}<div>`);
     // a person who is one of the cast (who: "id") is described there once; anything said here is added to it
     // ties: { castId or "A name": "how they know them" }, or a sentence
     const tieText = t => !t ? "" : typeof t === "string" ? t : Object.entries(t).map(([to, how]) => ((A.castData || {})[to] ? A.castData[to].n : to) + ": " + how).join("; ");
@@ -690,7 +697,7 @@ var ATLAS = (function () {
     return `<section class="sec lmap-sec" data-loc="${id}"><h3>Maps of the location</h3>
       <div class="lm-bar"><div class="lm-floors" role="group" aria-label="Floor">${floorBtns(id)}</div>
         <div class="lm-views gm-only" role="group" aria-label="Map view"><button type="button" data-lmv="player" aria-pressed="${v === "player"}">Player view</button><button type="button" data-lmv="gm" aria-pressed="${v !== "player"}">${esc(gmName)} view</button></div>
-        <button type="button" class="lm-full" data-lmfull="${id}">Full size</button>${A.models && A.models.page3D ? `<button type="button" class="lm-3d" data-m3d="${id}" title="See this floor in 3D, with its furnishings">3D</button>` : ""}${A.mapEditor && !String(id).startsWith("fly-") ? `<button type="button" class="lm-edit gm-only" data-medit="${id}" title="Change this map yourself: rooms, doors, stairs, floors, size">Edit this map</button>` : ""}${n ? `<div class="lm-sizes" role="group" aria-label="Map size">${Array.from({ length: n + 1 }, (_, i) => `<button type="button" data-lmsize="${i}" aria-pressed="${levelFor(id) === i}">${esc(i ? (A.exp[keyOf(id)][i - 1].label || sizeName(i)) : sizeName(0))}</button>`).join("")}</div>` : ""}</div>
+        <button type="button" class="lm-full" data-lmfull="${id}">Full size</button>${A.models && A.models.page3D ? `<button type="button" class="lm-3d" data-m3d="${id}" title="See this floor in 3D, with its furnishings">3D</button>` : ""}${Object.keys((get(id) || {}).clues || {}).length ? `<button type="button" class="lm-ctog gm-only" data-lmclues="1" aria-pressed="${!A.state.noClues}" title="Show or hide the clue markers on the maps; the clues stay">Clue markers</button>` : ""}${A.mapEditor && !String(id).startsWith("fly-") ? `<button type="button" class="lm-edit gm-only" data-medit="${id}" title="Change this map yourself: rooms, doors, stairs, floors, size">Edit this map</button>` : ""}${n ? `<div class="lm-sizes" role="group" aria-label="Map size">${Array.from({ length: n + 1 }, (_, i) => `<button type="button" data-lmsize="${i}" aria-pressed="${levelFor(id) === i}">${esc(i ? (A.exp[keyOf(id)][i - 1].label || sizeName(i)) : sizeName(0))}</button>`).join("")}</div>` : ""}</div>
       <div class="lm-stage">${svg(id, fi, v, "m" + (A.state.n++))}</div>
       ${legend()}
       <div class="lm-ref">${ref(id)}</div>
@@ -724,6 +731,7 @@ var ATLAS = (function () {
     document.addEventListener("click", e => {
       const t = e.target; if (!t || !t.closest) return;
       const sz = t.closest("[data-lmsize]"); if (sz) { setLevel(+sz.dataset.lmsize); return; }
+      const ct = t.closest("[data-lmclues]"); if (ct) { A.state.noClues = !A.state.noClues; try { localStorage.setItem(A.config.storageKey + "-noclues", A.state.noClues ? "1" : ""); } catch (e) {} document.querySelectorAll(".lmap-sec").forEach(sec => rerender(sec.dataset.loc)); document.querySelectorAll("[data-lmclues]").forEach(b => b.setAttribute("aria-pressed", !A.state.noClues)); return; }
       const fb = t.closest("[data-lmf]");
       if (fb) { const id = fb.dataset.loc; A.state.f[keyOf(id)] = +fb.dataset.lmf; rerender(id); if (fb.classList.contains("lm-flb")) { const st = document.querySelector(`.lmap-sec[data-loc="${id}"] .lm-stage`); if (st) st.scrollIntoView({ behavior: "smooth", block: "center" }); } return; }
       const vb = t.closest("[data-lmv]");
@@ -742,7 +750,7 @@ var ATLAS = (function () {
       }
     });
   }
-  A.loadPrefs = () => { try { const v = localStorage.getItem(A.config.storageKey + "-size"); if (v !== null && v !== "") A.state.level = +v; } catch (e) {} };
+  A.loadPrefs = () => { try { const v = localStorage.getItem(A.config.storageKey + "-size"); if (v !== null && v !== "") A.state.level = +v; A.state.noClues = localStorage.getItem(A.config.storageKey + "-noclues") === "1"; } catch (e) {} };
 
   Object.assign(A, { C, esc, isRoom, kindOf, isOut, isSolid, isIndoorKind, KINDS, PATS, GEN, ITEMS: LMI, FX: LMX_FX, itemFn, markers, dirOf, levels, levelFor, expanded, get, keyOf, isGmFloor, svg, ref, section, rerender, connections, roomEntry, nameOf, leads, sizeName, label, paper, furnishRoom: furnish, finishFloor: finish });
   return A;
