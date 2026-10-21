@@ -56,7 +56,9 @@
   /* ---- where a model goes when put down: snapped to the grid, against a wall, on a table */
   const SURF = new Set(["table", "counter", "cabinet", "chest", "crate", "barrel", "altar", "pallet", "platform", "stove", "appliance", "smithy", "office"]);
   const snapOn = () => E().snap !== false;
-  const snapXY = v => snapOn() ? Math.round(v * 4) / 4 : Math.round(v * 100) / 100;
+  // models snap to quarter squares, or halves, or whole squares, as the game master chooses
+  const step = () => +(E().snapStep || .25);
+  const snapXY = v => snapOn() ? Math.round(v / step()) * step() : Math.round(v * 100) / 100;
   const snapR = r => { r = ((r % 360) + 360) % 360; return snapOn() ? Math.round(r / 15) * 15 % 360 : Math.round(r) % 360; };
   function roomRect(x, y) { const R = F().R || []; for (let i = R.length - 1; i >= 0; i--) { const r = R[i]; if (x >= r[1] && x < r[1] + r[3] && y >= r[2] && y < r[2] + r[4] && A.isIndoorKind(r[6])) return r; } return null; }
   // a model for a wall, put against the nearest wall of the room it is in, facing into the room
@@ -138,6 +140,43 @@
     remember(pl.spec.a);
   }
 
+  /* ---- the furniture drawn with the map (beds, tables, pods...): chosen, it becomes a model of the library, to move,
+          turn and change like any other. The user could not move the ready-made sleeping pods (21 Oct 2026). */
+  const sameItem = (a, b) => a[0] === b[0] && Math.abs(a[1] - b[1]) < .02 && Math.abs(a[2] - b[2]) < .02;
+  function itemAt(x, y) {
+    if (!A.room3d) return null;
+    const f = api.finished(F()), I = f.I || [];
+    for (let i = I.length - 1; i >= 0; i--) { const it = I[i], [, ix, iy, w = 1, h = 1] = it; if (x > ix + .02 && x < ix + w - .02 && y > iy + .02 && y < iy + h - .02 && A.room3d.raise(it, f)) return { it, f }; }
+    return null;
+  }
+  // the piece under (x, y) made a model (or a row of them, for a row of shelves), chosen; its index, or -1. A piece laid
+  // out by its room's furniture preset: the room's other pieces are written out as they are and the preset let go, so
+  // the room looks the same. Undo puts the drawing back.
+  function adopt(x, y) {
+    const hit = itemAt(x, y); if (!hit) return -1;
+    const it = hit.it, specs = A.room3d.raise(it, hit.f), name = ((M.entry(specs[0].a) || {}).n || "piece").toLowerCase();
+    let n0 = -1;
+    api.change(() => {
+      const f = F(); f.I = f.I || [];
+      const k = f.I.findIndex(q => sameItem(q, it));
+      if (k >= 0) f.I.splice(k, 1);
+      else {
+        const room = (f.R || []).find(r => r[7] && r[7].fx && A.furnishRoom(r).some(q => sameItem(q, it)));
+        if (room) {
+          const mine = A.furnishRoom(room), pieces = (hit.f.I || []).filter(q => mine.some(m => sameItem(m, q)) && !sameItem(q, it));
+          f.I = f.I.concat(copy(pieces)); const o = Object.assign({}, room[7]); delete o.fx; if (Object.keys(o).length) room[7] = o; else room.length = 7;
+        }
+      }
+      n0 = P().length;
+      for (const sp of specs) { const p = { a: sp.a, x: sp.x, y: sp.y, r: sp.r, s: sp.s }; if (sp.p) p.p = sp.p; if (sp.col) p.col = sp.col; if (it[6]) p.h = 1; P().push(clean(p)); }
+      setSel(specs.map((_, j) => n0 + j)); E().sel = null;
+    });
+    api.tip(`The ${name} is now a model: drag it to move it, R or its round handle turns it, Del takes it away. Undo puts the drawing back.`);
+    return n0;
+  }
+  const markerNear = p => (F().M || []).some(m => Math.hypot(m[1] - p.x, m[2] - p.y) < .45);
+  const handleNear = p => { const s = E().sel, r = s && s.kind === "room" && F().R[s.i]; return !!r && [[r[1], r[2]], [r[1] + r[3], r[2]], [r[1], r[2] + r[4]], [r[1] + r[3], r[2] + r[4]]].some(([x, y]) => Math.abs(x - p.x) < .4 && Math.abs(y - p.y) < .4); };
+
   /* ---- changing what is chosen */
   function edit(fn) { const l = sel(); if (!l.length) return; api.change(() => { for (const i of l) fn(P()[i], i); for (const i of l) P()[i] = clean(P()[i]); }); }
   function removeSel() { const l = sel(); if (!l.length) return; api.change(() => { const f = F(); f.P = P().filter((_, i) => !l.includes(i)); setSel([]); }); }
@@ -178,6 +217,7 @@
       <button type="button" class="prim me-libbtn" data-pf="lib">${icon("lib")} Open the library</button>
       ${rec.length ? `<h5>Used lately</h5><div class="me-recent">${rec.map(id => `<button type="button" class="me-rc" data-qadd="${esc(id)}" title="${esc(M.entry(id).n)}"><img alt="${esc(M.entry(id).n)}" data-th='${esc(JSON.stringify({ a: id }))}'></button>`).join("")}</div>` : ""}
       <h5>Kits</h5><div class="me-kits">${M.kits().map(k => `<button type="button" data-kitset="${k.id}" title="${esc(k.d)}">${esc(k.n)}</button>`).join("")}</div>
+      <label class="me-f"><span>Snap models to</span><select data-pfs="step">${[[.25, "a quarter of a square"], [.5, "half a square"], [1, "whole squares"]].map(([v, n]) => `<option value="${v}"${v === step() ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <p class="me-help">Keys: <kbd>R</kbd> turn, <kbd>[</kbd> <kbd>]</kbd> smaller and bigger, <kbd>PgUp</kbd> <kbd>PgDn</kbd> raise and lower, arrows nudge, <kbd>Ctrl+C</kbd> <kbd>Ctrl+V</kbd> copy and paste, <kbd>Ctrl+D</kbd> duplicate, <kbd>Del</kbd> take away.</p></section>`;
   }
   function propPanel(p) {
@@ -414,62 +454,36 @@
     api.tip("Forgotten. Maps that use it show an outline marked missing.");
   }
 
-  /* ---- a floor in 3D */
-  let three = null;
-  async function show3D(host, id, fi, o) {
-    if (three) { try { three.dispose(); } catch (e) {} three = null; }
-    host.innerHTML = `<p class="m3-wait">Building the room…</p>`;
-    try { three = await M.room3D(host, id, fi, o); }
-    catch (err) { host.innerHTML = `<p class="m3-wait">The 3D view cannot start here: ${esc(err.message || err)}</p>`; }
-  }
-  function close3D() { if (three) { try { three.dispose(); } catch (e) {} three = null; } }
-  function editor3D(low) {
-    const box = $("#meThree"); if (!box) return; box.hidden = false;
-    const e = E(), f = F(); box.querySelector(".m3-t").textContent = `${f.n || "This floor"} in 3D`;
-    box.querySelector('[data-pf="walls"]').textContent = low ? "Tall walls" : "Low walls"; box.dataset.low = low ? "1" : "";
-    show3D(box.querySelector(".m3-view"), e.id, e.fi, { map: { floors: e.draft.floors.map(api.finished) }, svg: (id, fi, view, pre) => api.draftSVG(fi, view, pre), low });
-  }
-  function page3D(id, fi, low) {
-    let dlg = document.getElementById("m3Dlg");
-    if (!dlg) {
-      dlg = document.createElement("dialog"); dlg.id = "m3Dlg"; dlg.className = "m3-dlg";
-      dlg.innerHTML = `<div class="m3-bar"><b class="m3-t"></b><div class="lm-floors m3-fl"></div><span class="t-sp"></span><button type="button" data-m3="walls">Low walls</button><button type="button" data-m3="x">Close</button></div><div class="m3-view"></div><p class="m3-help">Drag to turn, the wheel to come closer, right-drag to slide.</p>`;
-      document.body.appendChild(dlg);
-      dlg.addEventListener("close", close3D);
-      dlg.addEventListener("click", ev => {
-        const b = ev.target.closest("[data-m3], [data-m3f]"); if (!b) return;
-        if (b.dataset.m3 === "x") dlg.close();
-        else if (b.dataset.m3 === "walls") page3D(dlg.dataset.id, +dlg.dataset.fi, !dlg.dataset.low);
-        else page3D(dlg.dataset.id, +b.dataset.m3f, !!dlg.dataset.low);
-      });
-    }
-    const Mp = A.get(id), pv = document.getElementById("app") && document.getElementById("app").dataset.mode === "player";
-    dlg.dataset.id = id; dlg.dataset.fi = fi; dlg.dataset.low = low ? "1" : "";
-    dlg.querySelector(".m3-t").textContent = `${(A.meta[id] || {}).name || Mp.t}: ${Mp.floors[fi].n}`;
-    dlg.querySelector('[data-m3="walls"]').textContent = low ? "Tall walls" : "Low walls";
-    dlg.querySelector(".m3-fl").innerHTML = Mp.floors.map((G, i) => pv && A.isGmFloor(G) ? "" : `<button type="button" data-m3f="${i}" aria-pressed="${i === fi}">${esc(G.n)}</button>`).join("");
-    if (!dlg.open) dlg.showModal();
-    show3D(dlg.querySelector(".m3-view"), id, fi, { low, view: pv || A.state.v === "player" ? "player" : "gm" });
-  }
+  /* ---- what the room in 3D (atlas-room3d.js) asks of this tool: where a model being put down would stand, and
+          where a chosen model's turning handle is */
+  M.ui = {
+    ghostAt(pl, x, y) {
+      if (!pl) return [];
+      if (!pl.spec.set) return [settle(Object.assign({}, pl.spec, { r: pl.r || 0 }), x, y)];
+      const a = (pl.r || 0) * Math.PI / 180, cx = snapXY(x), cy = snapXY(y), k = kitScale(), out = [];
+      for (let [id, dx, dy, rr, o] of pl.spec.set) { if (!M.entry(id)) continue; dx *= k; dy *= k; const p = Object.assign({ a: id }, o || {}); p.x = cx + dx * Math.cos(a) - dy * Math.sin(a); p.y = cy + dx * Math.sin(a) + dy * Math.cos(a); p.r = snapR((rr || 0) + (pl.r || 0)); onTop(p); out.push(p); }
+      return out;
+    },
+    handle(p) { const [, d] = foot(p), a = (p.r || 0) * Math.PI / 180; return [p.x + Math.sin(a) * (d / 2 + .55), p.y - Math.cos(a) * (d / 2 + .55)]; },
+    corners, foot
+  };
 
   /* ---- the plug: the editor's Furnish tool */
   A.mapEditor.plug({
     tools: [["furnish", "Furnish", "Put models from the library on the map: furniture, props, machines, trees, walls and doors. Choose one in the library, then click the map."]],
     icons: { furnish: IC.furnish },
-    topHTML: () => `<button type="button" data-pf="lib" title="The model library (L)">${icon("lib")}<span>Library</span></button><button type="button" data-pf="snap" class="me-snap" title="Snap models to quarter squares and 15° turns">${icon("snap")}<span>Snap</span></button><button type="button" data-pf="3d" title="See this floor in 3D">${icon("cube")}<span>3D</span></button>`,
+    topHTML: () => `<button type="button" data-pf="lib" title="The model library (L)">${icon("lib")}<span>Library</span></button><button type="button" data-pf="snap" class="me-snap" title="Snap models to the grid and to 15° turns">${icon("snap")}<span>Snap</span></button>`,
     bodyHTML: () => `<div class="ml" id="mlLib" hidden role="dialog" aria-label="The model library">
         <div class="ml-head">${icon("lib")}<b>The model library</b><input type="search" class="ml-q" placeholder="Search: rusty barrel, wooden chair, sci-fi crate…" aria-label="Search the library">
           <label class="ml-imp" title="A .glb file (or a .gltf with everything inside it)">Bring in a model<input type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" data-ml-import></label><button type="button" data-ml="close">Close</button></div>
         <div class="ml-filters"></div>
-        <div class="ml-main"><nav class="ml-nav" aria-label="Categories"></nav><div class="ml-list"><div class="ml-grid"></div><div class="ml-more"></div></div><aside class="ml-detail"></aside></div></div>
-      <div class="m3 me-three" id="meThree" hidden><div class="m3-bar"><b class="m3-t"></b><span class="t-sp"></span><button type="button" data-pf="walls">Low walls</button><button type="button" data-pf="x3d">Back to the map</button></div><div class="m3-view"></div><p class="m3-help">Drag to turn, the wheel to come closer, right-drag to slide. What you see is the map as it is now, before saving.</p></div>`,
-    open(a) { api = a; const e = E(); e.psel = []; e.place = null; e.pdrag = null; if (e.snap == null) e.snap = store("snap", true); const box = $("#meThree"); if (box) { box.hidden = true; close3D(); } closeLib(); bindOnce(); },
+        <div class="ml-main"><nav class="ml-nav" aria-label="Categories"></nav><div class="ml-list"><div class="ml-grid"></div><div class="ml-more"></div></div><aside class="ml-detail"></aside></div></div>`,
+    open(a) { api = a; const e = E(); e.psel = []; e.place = null; e.pdrag = null; if (e.snap == null) e.snap = store("snap", true); if (e.snapStep == null) e.snapStep = store("step", .25); closeLib(); bindOnce(); },
     top(a, dlg) { const b = dlg.querySelector('[data-pf="snap"]'); if (b) b.setAttribute("aria-pressed", snapOn()); },
-    // Esc closes what is open on top of the map first: the library, the 3D view; then stops putting down, then lets go
+    // Esc closes the library first, if it is open; then stops putting down, then lets go
     cancel() {
-      const lib = $("#mlLib"), t3 = $("#meThree"), ed = E();
+      const lib = $("#mlLib"), ed = E();
       if (lib && !lib.hidden) { closeLib(); return true; }
-      if (t3 && !t3.hidden) { t3.hidden = true; close3D(); return true; }
       if (ed.place) { stopPlacing(); return true; }
       if (sel().length) { setSel([]); api.paintCanvas(); api.paintSide(); return true; }
       return false;
@@ -478,29 +492,36 @@
     overlay: () => overlay(),
     down(e, p) {
       const ed = E(); ed.lastPt = p;
-      if (ed.tool !== "furnish") return false;
-      if (e.button === 2) { if (ed.place) { stopPlacing(); return true; } return false; }
+      // Furnish, and Choose and move: what is under the pointer is taken, a model (or a piece of the drawn furniture)
+      // before the room it stands in; a marker or a room's corner first, for Choose and move
+      const choose = ed.tool === "select";
+      if (ed.tool !== "furnish" && !choose) return false;
+      if (e.button === 2) { if (ed.place && !choose) { stopPlacing(); return true; } return false; }
       if (e.button && e.button !== 0) return false;
-      if (ed.place) { placeAt(p.x, p.y); return true; }
+      if (ed.place && !choose) { placeAt(p.x, p.y); return true; }
       const l = sel();
       if (l.length === 1) { const q = P()[l[0]], [, d] = foot(q), a = (q.r || 0) * Math.PI / 180, hx = q.x + Math.sin(a) * (d / 2 + .55), hy = q.y - Math.cos(a) * (d / 2 + .55); if (Math.hypot(p.x - hx, p.y - hy) < .35) { ed.pdrag = { kind: "rot", i: l[0], r0: q.r || 0, a0: Math.atan2(p.y - q.y, p.x - q.x) }; return true; } }
-      const i = propAt(p.x, p.y);
+      if (choose && (markerNear(p) || handleNear(p))) { if (l.length) setSel([]); return false; }
+      let i = propAt(p.x, p.y), took = false;
+      if (i < 0) { i = adopt(p.x, p.y); took = i >= 0; }
       if (i >= 0) {
-        if (e.shiftKey) { setSel(l.includes(i) ? l.filter(x => x !== i) : l.concat(i)); api.paintCanvas(); api.paintSide(); return true; }
-        if (!l.includes(i)) setSel([i]);
+        if (choose) ed.sel = null;
+        if (e.shiftKey && !took) { setSel(l.includes(i) ? l.filter(x => x !== i) : l.concat(i)); api.paintCanvas(); api.paintSide(); return true; }
+        if (!took && !l.includes(i)) setSel([i]);
         ed.pdrag = { kind: "move", x0: p.x, y0: p.y, idx: sel(), at: sel().map(j => [P()[j].x, P()[j].y]) };
         api.paintCanvas(); api.paintSide(); return true;
       }
+      if (choose) { if (l.length) setSel([]); return false; }
       ed.pdrag = { kind: "box", x0: p.x, y0: p.y, add: e.shiftKey ? l : [] };
       if (!e.shiftKey && l.length) { setSel([]); api.paintCanvas(); api.paintSide(); }
       return true;
     },
     move(e, p) {
-      const ed = E(); ed.lastPt = p; if (ed.tool !== "furnish") return false;
-      if (ed.place && !ed.pdrag) { moveGhost(p.x, p.y); return true; }
+      const ed = E(); ed.lastPt = p; if (ed.tool !== "furnish" && !ed.pdrag) return false;
+      if (ed.place && !ed.pdrag && ed.tool === "furnish") { moveGhost(p.x, p.y); return true; }
       const d = ed.pdrag; if (!d) return false;
       if (d.kind === "move") {
-        let dx = p.x - d.x0, dy = p.y - d.y0; if (snapOn()) { dx = Math.round(dx * 4) / 4; dy = Math.round(dy * 4) / 4; }
+        let dx = p.x - d.x0, dy = p.y - d.y0; if (snapOn()) { dx = Math.round(dx / step()) * step(); dy = Math.round(dy / step()) * step(); }
         if (Math.abs(dx) + Math.abs(dy) > 0) d.moved = true; d.dx = dx; d.dy = dy;
         d.idx.forEach((j, k) => { const q = P()[j]; $(`#meCanvas`).querySelectorAll(`.lm-prop[data-prop="${j}"]`).forEach(el => el.setAttribute("transform", `translate(${((d.at[k][0] + dx) * C).toFixed(1)} ${((d.at[k][1] + dy) * C).toFixed(1)}) rotate(${q.r || 0}) scale(${q.s || 1})`)); });
         $("#meCanvas").classList.add("me-dragging");
@@ -524,7 +545,7 @@
     click(e) {
       const t = e.target, ed = E();
       // choosing Furnish on a floor with nothing on it yet opens the library
-      const tb = t.closest("[data-tool]"); if (tb) { ed.place = null; setSel([]); if (tb.dataset.tool === "furnish" && !P().length) setTimeout(() => openLib(), 0); return false; }
+      const tb = t.closest("button[data-tool]"); if (tb) { ed.place = null; setSel([]); if (tb.dataset.tool === "furnish" && !P().length) setTimeout(() => openLib(), 0); return false; }
       if (t.closest("[data-mf]")) { setSel([]); ed.place = ed.place && ed.place.spec ? ed.place : null; return false; }
       const fav = t.closest("[data-fav]"); if (fav) { const id = fav.dataset.fav; favs = favs.includes(id) ? favs.filter(x => x !== id) : [id].concat(favs); keep("fav", favs); document.querySelectorAll(`#meDlg [data-fav="${CSS.escape(id)}"]`).forEach(b => b.setAttribute("aria-pressed", favs.includes(id))); if (L.view === "fav") paintList(); paintNav(); return true; }
       const qa = t.closest("[data-qadd]"); if (qa) { const sp = { a: qa.dataset.qadd }; if (qa.dataset.c) sp.c = qa.dataset.c; startPlacing(sp); return true; }
@@ -561,10 +582,7 @@
           case "nocol": edit(p => { delete p.col; }); break;
           case "reshape": edit(p => { delete p.p; }); break;
           case "fav": { const l = sel(); if (l.length === 1) { const id = P()[l[0]].a; favs = favs.includes(id) ? favs.filter(x => x !== id) : [id].concat(favs); keep("fav", favs); pf.setAttribute("aria-pressed", favs.includes(id)); } break; }
-          case "snap": ed.snap = !snapOn(); keep("snap", ed.snap); pf.setAttribute("aria-pressed", snapOn()); api.tip(snapOn() ? "Snapping on: models go to quarter squares and turn by 15°." : "Snapping off: models go exactly where you put them."); break;
-          case "3d": editor3D(false); break;
-          case "walls": editor3D(!$("#meThree").dataset.low); break;
-          case "x3d": { const b = $("#meThree"); b.hidden = true; close3D(); break; }
+          case "snap": ed.snap = !snapOn(); keep("snap", ed.snap); pf.setAttribute("aria-pressed", snapOn()); api.tip(snapOn() ? "Snapping on: models go to the grid and turn by 15°." : "Snapping off: models go exactly where you put them."); break;
         }
         return true;
       }
@@ -573,6 +591,7 @@
     change(e) {
       const t = e.target;
       if (t.matches("[data-ml-import]")) { if (t.files && t.files[0]) importFile(t.files[0]); t.value = ""; return true; }
+      if (t.dataset.pfs === "step") { E().snapStep = +t.value || .25; keep("step", E().snapStep); return true; }
       if (t.dataset.lf) { L[t.dataset.lf] = t.value; L.shown = 60; saveUI(); paintNav(); paintList(); return true; }
       if (t.dataset.im && L.imp && L.imp.meta) { const m = L.imp.meta, k = t.dataset.im; if (k === "h") m.p.h = Math.max(.02, +t.value || 1); else if (k === "ry") m.ry = +t.value; else m[k] = t.value; if (k === "h" || k === "ry") { sizeImport(); impPreview(); } return true; }
       if (t.dataset.pk && L.pick) {
@@ -609,10 +628,10 @@
     key(e) {
       const ed = E(), k = e.key, lk = k.toLowerCase(), ctrl = e.ctrlKey || e.metaKey, lib = $("#mlLib");
       if (lib && !lib.hidden) { if (k === "Escape") { e.preventDefault(); closeLib(); return true; } if (k === "Enter" && L.pick && !e.target.closest("button")) { e.preventDefault(); const sp = copy(L.pick); remember(sp.a); startPlacing(sp); return true; } return false; }
-      const three3 = $("#meThree"); if (three3 && !three3.hidden) { if (k === "Escape") { e.preventDefault(); three3.hidden = true; close3D(); } return true; }
       if (!ctrl && lk === "f") { ed.tool = "furnish"; ed.sel = null; api.paint(); return true; }
       if (!ctrl && lk === "l") { if (ed.tool !== "furnish") { ed.tool = "furnish"; api.paint(); } openLib(); e.preventDefault(); return true; }
-      if (ed.tool !== "furnish") return false;
+      // a model chosen with Choose and move answers the same keys as in Furnish
+      if (ed.tool !== "furnish" && !(ed.tool === "select" && sel().length)) return false;
       if (k === "Escape") { if (ed.place) stopPlacing(); else if (sel().length) { setSel([]); api.paintCanvas(); api.paintSide(); } return true; }
       if (ed.place && lk === "r") { ed.place.r = snapR((ed.place.r || 0) + (e.shiftKey ? -1 : 1) * (snapOn() ? 15 : 5)); const g = $("#meCanvas .me-pghost"); if (g) { g.innerHTML = ghostInner(ed.place.spec, ed.place.r); if (ed.lastPt) moveGhost(ed.lastPt.x, ed.lastPt.y); } return true; }
       if (ctrl && lk === "a") { e.preventDefault(); setSel(P().map((_, i) => i)); api.paintCanvas(); api.paintSide(); return true; }
@@ -626,7 +645,7 @@
       if (k === "[" || k === "]") { edit(p => { p.s = Math.max(.1, Math.min(10, Math.round((p.s || 1) * (k === "]" ? 1.1 : 1 / 1.1) * 100) / 100)); }); return true; }
       if (k === "PageUp" || k === "PageDown") { e.preventDefault(); edit(p => { p.z = Math.max(0, Math.round(((p.z || 0) + (k === "PageUp" ? .1 : -.1)) * 100) / 100); }); return true; }
       const ar = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[k];
-      if (ar) { e.preventDefault(); const st = e.shiftKey ? 1 : snapOn() ? .25 : .05; edit(p => { p.x = Math.max(0, Math.min(F().w, p.x + ar[0] * st)); p.y = Math.max(0, Math.min(F().h, p.y + ar[1] * st)); }); return true; }
+      if (ar) { e.preventDefault(); const st = e.shiftKey ? 1 : snapOn() ? step() : .05; edit(p => { p.x = Math.max(0, Math.min(F().w, p.x + ar[0] * st)); p.y = Math.max(0, Math.min(F().h, p.y + ar[1] * st)); }); return true; }
       return false;
     }
   });
@@ -649,7 +668,4 @@
     if (dlg && dlg.open && api && !E().pdrag) { api.paintCanvas(); if (ev.detail && ev.detail.library && $("#mlLib") && !$("#mlLib").hidden) { paintNav(); paintList(true); } }
     document.querySelectorAll(".lmap-sec").forEach(sec => { if (sec.querySelector(".lm-stage .lm-prop") && (sec.querySelector(".lm-stage g.lm-prop") || (ev.detail && ev.detail.library))) A.rerender(sec.dataset.loc); });
   });
-  // a place's floor in 3D, from its maps
-  document.addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-m3d]"); if (!b) return; const id = b.dataset.m3d, M0 = A.get(id); let fi = A.state.f[A.keyOf(id)]; if (fi == null || fi >= M0.floors.length) fi = A.maps[id].start || 0; page3D(id, fi, false); });
-  M.page3D = page3D;
 })(ATLAS);

@@ -421,7 +421,13 @@
     const markerHit = (x, y) => { const M0 = F().M || []; for (let i = M0.length - 1; i >= 0; i--) { const m = M0[i]; if (A.dirOf(m[0]) === "clues" && Math.hypot(m[1] - x, m[2] - y) < .5) return i; } return -1; };
     const roomAt = (x, y) => { const R = F().R || []; for (let i = R.length - 1; i >= 0; i--) { const r = R[i]; if (/^R\d/.test(r[0]) && x >= r[1] && x < r[1] + r[3] && y >= r[2] && y < r[2] + r[4]) return r[0]; } return ""; };
     // a furnishing under the pointer (the model library, atlas-models.js): a clue can be on it
-    const propAt = (x, y) => { const M = A.models, sq = M ? M.sq() : 1.524; let best = null; for (const p of F().P || []) { const e = M && M.entry(p.a); if (!e) continue; const [w, d] = M.dims(e, p), s = p.s || 1, a = -(p.r || 0) * Math.PI / 180, dx = x - p.x, dy = y - p.y, lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a); if (Math.abs(lx) <= w * s / sq / 2 && Math.abs(ly) <= d * s / sq / 2) best = { p, e }; } return best; };
+    const propAt = (x, y) => {
+      const M = A.models, sq = M ? M.sq() : 1.524; let best = null;
+      for (const p of F().P || []) { const e = M && M.entry(p.a); if (!e) continue; const [w, d] = M.dims(e, p), s = p.s || 1, a = -(p.r || 0) * Math.PI / 180, dx = x - p.x, dy = y - p.y, lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a); if (Math.abs(lx) <= w * s / sq / 2 && Math.abs(ly) <= d * s / sq / 2) best = { p, e }; }
+      // or the furniture drawn with the map, which the 3D view raises as the same models (atlas-room3d.js)
+      if (!best && M && A.room3d) { const f = ed.finished(F()); for (const it of f.I || []) { const [, ix, iy, w = 1, h = 1] = it; if (x > ix && x < ix + w && y > iy && y < iy + h) { const r = A.room3d.raise(it, f), e = r && M.entry(r[0].a); if (e) best = { p: { a: r[0].a, x: ix + w / 2, y: iy + h / 2 }, e }; } } }
+      return best;
+    };
     const recOf = id => cl().recs[id] || St.clue(E().id, id) || { t: id };
     const ids = () => { const out = []; for (const G of E().draft.floors) for (const m of G.M || []) out.push(m[0]); return out.concat(Object.keys(cl().recs)); };
     function place(x, y, id0) {

@@ -264,6 +264,7 @@
     if (!own && !S.connectors[p].connected) { err.textContent = "Connect " + PROV[p] + " first: paste your key above."; $(".ckey") && $(".ckey").focus(); return; }
     const o = { provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value, story: form.story.value, size: sizeNow(), places: sizeNow() === "unlimited" ? form.places.value : undefined, freedom: +form.freedom.value, length: +form.storylen.value, buildings: (form.querySelector("input[name=buildings]:checked") || {}).value || "auto", bset: form.bset.value, bregion: form.bregion.value, system: form.system.value, core: form.core.value, pcs: form.pcs.value, placewish: form.placewish.value, plans: PLANS, notes: form.notes.value, model: form.model.value, budget: +form.budget.value };
     o.world = (form.querySelector("input[name=world]:checked") || {}).value || "auto";
+    o.maps = (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d";
     if (o.world === "drawing") { if (!DRAWING) { err.textContent = "Choose the picture of your map (World map, From my own map)."; return; } o.drawing = DRAWING; }
     if (o.world === "real") { o.worldplace = form.worldplace.value.trim(); if (!o.worldplace) { err.textContent = "Say which part of the real world the map should show."; form.worldplace.focus(); return; } }
     const btn = $("#gobtn"); btn.disabled = true;

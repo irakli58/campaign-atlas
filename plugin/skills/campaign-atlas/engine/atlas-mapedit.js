@@ -48,7 +48,7 @@
   function draftOf(id) {
     const M = A.get(id);
     return { t: M.t, rooms: copy((A.mapEdits[id] || {}).rooms || {}), order: M.order ? M.order.slice() : null,
-      floors: M.floors.map(F => { const o = { n: F.n, w: F.w, h: F.h, R: copy(F.R || []), D: copy(F.D || []), ST: copy(F.ST || []), M: copy(F.M || []), I: copy(loose(F)), P: copy(F.P || []) }; if (F.gm || F.k) o.gm = 1; if (F.note) o.note = F.note; return o; }) };
+      floors: M.floors.map(F => { const o = { n: F.n, w: F.w, h: F.h, R: copy(F.R || []), D: copy(F.D || []), ST: copy(F.ST || []), M: copy(F.M || []), I: copy(loose(F)), P: copy(F.P || []) }; if (F.gm || F.k) o.gm = 1; if (F.note) o.note = F.note; if (F.light) o.light = F.light; if (F.wh) o.wh = F.wh; return o; }) };
   }
   const finished = F0 => { const F = copy(F0); F.D = F.D || []; F.ST = F.ST || []; F.M = F.M || []; F.I = (F.I || []).slice(); return A.finishFloor(F, F.R); };
   const cur = () => E.draft.floors[E.fi];
@@ -92,6 +92,8 @@
   }
   function paintCanvas() {
     const box = $("#meCanvas"); if (!box) return;
+    // another view of the same map may take the canvas (atlas-room3d.js: the room in 3D)
+    if (ask("paintCanvas", api)) return;
     const F = cur(), sx = box.scrollLeft, sy = box.scrollTop;
     let s = draftSVG(E.fi);
     s = s.replace(` class="lmap2"`, ` class="me-svg"`).replace(/ style="min-width:[^"]*"/, "").replace(/<\/svg>$/, overlay() + "</svg>");
@@ -302,7 +304,9 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
   }
 
   /* ---- the pointer on the map */
-  function pt(e) { const svg = $("#meCanvas svg"); if (!svg) return { x: 0, y: 0 }; const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return { x: q.x / C, y: q.y / C }; }
+  function pt(e) {
+    for (const p of PLUGS) if (p.pt) { const q = p.pt(e, api); if (q) return q; }
+    const svg = $("#meCanvas svg.me-svg"); if (!svg) return { x: 0, y: 0 }; const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return { x: q.x / C, y: q.y / C }; }
   function ghost(x, y, w, h) { const g = $("#meCanvas .me-ghost"); if (!g) return; g.setAttribute("x", x * C); g.setAttribute("y", y * C); g.setAttribute("width", Math.max(0, w * C)); g.setAttribute("height", Math.max(0, h * C)); g.setAttribute("visibility", "visible"); }
   function down(e) {
     if (ask("down", e, pt(e), api)) return;
@@ -361,7 +365,7 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
   /* ---- the panel and the buttons */
   function bind(dlg) {
     const cv = dlg.querySelector("#meCanvas");
-    cv.addEventListener("pointerdown", e => { if (!e.target.closest("svg")) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} down(e); });
+    cv.addEventListener("pointerdown", e => { if (!e.target.closest(".me-svg, .me-3dc")) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} down(e); });
     cv.addEventListener("pointermove", move);
     cv.addEventListener("pointerup", up);
     cv.addEventListener("pointercancel", () => { E.drag = null; paintCanvas(); });
@@ -369,7 +373,7 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
     dlg.addEventListener("click", e => {
       if (ask("click", e, api)) return;
       const t = e.target;
-      const tb = t.closest("[data-tool]"); if (tb) { E.tool = tb.dataset.tool; E.sel = E.tool === "select" ? E.sel : null; paint(); return; }
+      const tb = t.closest("button[data-tool]"); if (tb) { E.tool = tb.dataset.tool; E.sel = E.tool === "select" ? E.sel : null; paint(); return; }
       const fb = t.closest("[data-mf]"); if (fb) { E.fi = +fb.dataset.mf; E.sel = null; paint(); return; }
       const dt = t.closest("[data-dt]"); if (dt) { E.doorType = dt.dataset.dt; paintSide(); return; }
       const gr = t.closest("[data-grow]"); if (gr) { const n = Math.max(1, Math.min(40, +(dlg.querySelector("[data-me-grow]") || {}).value || 4)); E.grow = n; change(() => grow(gr.dataset.grow, n)); return; }
@@ -448,10 +452,11 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
   const tip = t => { const n = $("#meDlg .me-tip"); if (n) n.textContent = t; };
   Object.assign(api, { E, cur, change, paint, paintCanvas, paintSide, paintTop, pt, toast, tip, draftSVG, icon, finished, close: () => close(), save: () => save(), store: () => S, ctx: () => X });
   A.mapEditor = {
-    open,
+    open, api,
     // another file's part of the editor: { tools: [[key, label, tip]], icons: {key: svg paths}, topHTML, bodyHTML, open,
-    // top, side, overlay, down, move, up, click, change, input, key, cancel, save } (each handler returns true when it
-    // dealt with it; save(api, edit) runs when the map is saved)
+    // top, side, overlay, down, move, up, click, change, input, key, cancel, save, paintCanvas, pt } (each handler
+    // returns true when it dealt with it; save(api, edit) runs when the map is saved; paintCanvas draws the canvas
+    // itself, and pt(e) gives the point on the map under the pointer, for a view of the map that is not the flat one)
     plug(p) { PLUGS.push(p); for (const t of p.tools || []) TOOLS.push(t); Object.assign(IC, p.icons || {}); },
     init(store, ctx) {
       S = store; X = ctx;

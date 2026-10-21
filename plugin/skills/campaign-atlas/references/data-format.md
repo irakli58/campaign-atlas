@@ -183,6 +183,8 @@ expand: [{
 
 `standards: { 1: { rooms: 24, floors: 2 }, 2: { rooms: 10 } }` changes what a tier requires for this campaign (rooms, floors, secrets, clues, people, encounters, inbound); say why in a comment. The city map is not configured here: see `cities.md`.
 
+**Rooms in 3D.** `maps: "3d"` (written by `atlas.js init --maps 3d`, when the game master chooses 3D rooms) shows every place's floors in 3D on its page, from one fixed angle, with the flat map a click away; the map editor opens in 3D. Without it the maps are flat, and any floor opens in 3D from its "3D" button. A 3D room is the same map raised: nothing else is written for it (`workflow.md`, "Rooms in 3D"). How a room is lit: `light: "normal" | "torch" | "horror" | "lab" | "emergency" | "neon"` on the campaign (`configure`), on a place (`ATLAS.place(id, { light })`), or on one floor (`floors: [{ n, light, ... }]`), the nearest winning. A floor may say how high its walls stand in metres: `wh: 4.5` (a hall; 2.7 when not said).
+
 **Music.** Every place plays its own theme, made in the browser as it plays (no sound files). A theme is a *mood* (what the place is: `crypt`, `market`, `docks`, `library`, `chase`...; `atlas.js catalogue` lists all of them) in a *flavour* (the style). The default flavour is `arkham`: the dark-mystery, orchestral horror score the user asked for (slow piano and harp figures over low strings, a solo cello answering the piano, voices, a celesta, high strings shivering into a deep drum). Every other style has a band of its own time and place (the user asked that each style "should have the instruments which they had" in its era):
 
 | Style | Its band |

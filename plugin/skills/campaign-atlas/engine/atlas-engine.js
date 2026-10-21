@@ -497,9 +497,10 @@ var ATLAS = (function () {
     s += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#${pre}grid)"/>`;
     // fittings and stairs (nothing inside a hidden room shows on the players' map)
     const inHidden = (x, y) => F.R.some(r => r[7] && r[7].h && x >= r[1] && x < r[1] + r[3] && y >= r[2] && y < r[2] + r[4]);
-    for (const it of (F.I || [])) { if (!gm && (it[6] || inHidden(it[1] + (it[3] || 1) / 2, it[2] + (it[4] || 1) / 2))) continue; s += drawItem(it); }
+    // (a floor drawn for the 3D view leaves off the furniture it raises as models: A.__raise, atlas-room3d.js)
+    for (const it of (F.I || [])) { if (!gm && (it[6] || inHidden(it[1] + (it[3] || 1) / 2, it[2] + (it[4] || 1) / 2))) continue; if (A.__raise && A.__raise(it)) continue; s += drawItem(it); }
     const gst = new Set(); M.floors.forEach(G => { if (isGmFloor(G)) (G.ST || []).forEach(x => gst.add(x[0])); });
-    for (const st of (F.ST || [])) { if (!gm && (gst.has(st[0]) || inHidden(st[1] + st[3] / 2, st[2] + st[4] / 2))) continue; s += stair(st, gm); }
+    for (const st of (F.ST || [])) { if (!gm && (gst.has(st[0]) || inHidden(st[1] + st[3] / 2, st[2] + st[4] / 2))) continue; s += stair(st, gm && !A.__noMarkers); }
     // the game master's own furnishings (models from the library, atlas-models.js): those on the floor under the walls
     const props = F.P && F.P.length && A.propsSVG && !A.__noProps;
     if (props) s += A.propsSVG(F, gm, pre, "floor", inHidden);
@@ -533,7 +534,7 @@ var ATLAS = (function () {
       if (isRoom(rid)) s += `<text x="${vert ? lx - fs - 1 : lx}" y="${vert ? ly : ly - fs - 1}" text-anchor="middle" font-family="${mono}" font-size="7.5" font-weight="600" fill="${gm ? P.accent : P.room}" paint-order="stroke" stroke="${P.halo}" stroke-width="2.5">${rid}</text>`;
       s += `<text x="${lx}" y="${ly}"${rot} text-anchor="middle" font-family="${lab}" font-size="${fs}" ${out ? 'font-style="italic" letter-spacing="1.5"' : 'letter-spacing=".4"'} fill="${P.ink}" paint-order="stroke" stroke="${P.halo}" stroke-width="${dark ? 3.6 : 3}">${esc(name)}</text></g>`;
     }
-    if (gm) {
+    if (gm && !A.__noMarkers) {
       // a clue's marker wears the sign of its kind (atlas-story.js); a clue archived or taken away is not drawn, and the
       // referee may hide every clue's marker (A.state.noClues) without touching the clues
       const MK = markers(), cl = M.clues || {}, pk = keyOf(id);
@@ -697,8 +698,8 @@ var ATLAS = (function () {
     return `<section class="sec lmap-sec" data-loc="${id}"><h3>Maps of the location</h3>
       <div class="lm-bar"><div class="lm-floors" role="group" aria-label="Floor">${floorBtns(id)}</div>
         <div class="lm-views gm-only" role="group" aria-label="Map view"><button type="button" data-lmv="player" aria-pressed="${v === "player"}">Player view</button><button type="button" data-lmv="gm" aria-pressed="${v !== "player"}">${esc(gmName)} view</button></div>
-        <button type="button" class="lm-full" data-lmfull="${id}">Full size</button>${A.models && A.models.page3D ? `<button type="button" class="lm-3d" data-m3d="${id}" title="See this floor in 3D, with its furnishings">3D</button>` : ""}${Object.keys((get(id) || {}).clues || {}).length ? `<button type="button" class="lm-ctog gm-only" data-lmclues="1" aria-pressed="${!A.state.noClues}" title="Show or hide the clue markers on the maps; the clues stay">Clue markers</button>` : ""}${A.mapEditor && !String(id).startsWith("fly-") ? `<button type="button" class="lm-edit gm-only" data-medit="${id}" title="Change this map yourself: rooms, doors, stairs, floors, size">Edit this map</button>` : ""}${n ? `<div class="lm-sizes" role="group" aria-label="Map size">${Array.from({ length: n + 1 }, (_, i) => `<button type="button" data-lmsize="${i}" aria-pressed="${levelFor(id) === i}">${esc(i ? (A.exp[keyOf(id)][i - 1].label || sizeName(i)) : sizeName(0))}</button>`).join("")}</div>` : ""}</div>
-      <div class="lm-stage">${svg(id, fi, v, "m" + (A.state.n++))}</div>
+        <button type="button" class="lm-full" data-lmfull="${id}">Full size</button>${A.room3d && A.config.maps === "3d" ? `<button type="button" class="lm-3d" data-lm3d="${id}" aria-pressed="${A.room3d.on3d()}" title="This campaign's rooms are in 3D: see the flat map instead, or back">${A.room3d.on3d() ? "Flat map" : "3D rooms"}</button>` : A.models && A.models.page3D ? `<button type="button" class="lm-3d" data-m3d="${id}" title="See this floor in 3D, with its furnishings">3D</button>` : ""}${Object.keys((get(id) || {}).clues || {}).length ? `<button type="button" class="lm-ctog gm-only" data-lmclues="1" aria-pressed="${!A.state.noClues}" title="Show or hide the clue markers on the maps; the clues stay">Clue markers</button>` : ""}${A.mapEditor && !String(id).startsWith("fly-") ? `<button type="button" class="lm-edit gm-only" data-medit="${id}" title="Change this map yourself: rooms, doors, stairs, floors, size">Edit this map</button>` : ""}${n ? `<div class="lm-sizes" role="group" aria-label="Map size">${Array.from({ length: n + 1 }, (_, i) => `<button type="button" data-lmsize="${i}" aria-pressed="${levelFor(id) === i}">${esc(i ? (A.exp[keyOf(id)][i - 1].label || sizeName(i)) : sizeName(0))}</button>`).join("")}</div>` : ""}</div>
+      <div class="lm-stage">${(A.stageHTML && A.stageHTML(id, fi, v)) || svg(id, fi, v, "m" + (A.state.n++))}</div>
       ${legend()}
       <div class="lm-ref">${ref(id)}</div>
     </section>`;
@@ -715,7 +716,7 @@ var ATLAS = (function () {
   function rerender(id) {
     const sec = document.querySelector(`.lmap-sec[data-loc="${id}"]`); if (!sec) return;
     const fi = cur(id), v = viewFor();
-    sec.querySelector(".lm-stage").innerHTML = svg(id, fi, v, "m" + (A.state.n++));
+    sec.querySelector(".lm-stage").innerHTML = (A.stageHTML && A.stageHTML(id, fi, v)) || svg(id, fi, v, "m" + (A.state.n++));
     sec.querySelector(".lm-floors").innerHTML = floorBtns(id);
     sec.querySelectorAll("[data-lmv]").forEach(b => b.setAttribute("aria-pressed", (b.dataset.lmv === "player") === (v === "player")));
     const dlg = document.getElementById("lmDlg");

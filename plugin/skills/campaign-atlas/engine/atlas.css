@@ -1568,12 +1568,39 @@ button.ho-b:hover { color: var(--ink); }
 .bd-card.item { background: #e8e2f4; }
 .ps-pd { display: block; font-size: .92em; opacity: .85; margin-top: 2px; }
 
-/* a floor in 3D: in the editor, and from a place's maps */
+/* a floor in 3D, from one fixed angle (atlas-room3d.js): in the editor, from a place's maps, and on the page of a
+   campaign whose rooms are 3D */
 .m3, .m3-dlg { background: #1d1f22; color: #e8e3d6; }
-.me-three { position: absolute; inset: 0; z-index: 7; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
-.me-three[hidden] { display: none; }
 .m3-dlg { width: 96vw; height: 92vh; max-width: none; max-height: none; padding: 0; border: 0; border-radius: 10px; }
-.m3-dlg[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.m3-dlg[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.r3 { position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; background: #1d1f22; color: #e8e3d6; touch-action: none; user-select: none; -webkit-user-select: none; }
+.r3-cv { display: block; position: absolute; inset: 0; outline: none; cursor: default; }
+.r3.r3-space .r3-cv, .r3[data-pan] .r3-cv { cursor: grab; }
+.r3.r3-panning .r3-cv { cursor: grabbing; }
+.r3-hud { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none; z-index: 2; }
+.r3-hud > * { pointer-events: auto; }
+.r3-hud button, .r3-hud select { font: inherit; font-size: 13.5px; min-height: 32px; border: 1px solid #4a4e55; background: rgba(32, 34, 38, .88); color: #e8e3d6; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.r3-hud button[data-r3="zin"], .r3-hud button[data-r3="zout"] { width: 34px; padding: 0; font-size: 18px; line-height: 1; }
+.r3-hud button[aria-pressed="true"] { background: #e8e3d6; color: #1d1f22; }
+.r3-hud button:focus-visible, .r3-hud select:focus-visible { outline: 2px solid #f0a83a; outline-offset: 1px; }
+.r3-lock { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; letter-spacing: .02em; padding: 5px 10px 5px 8px; border-radius: 999px; background: rgba(240, 168, 58, .16); border: 1px solid rgba(240, 168, 58, .55); color: #f6d6a0; cursor: help; }
+.r3-lock .ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.r3-tip { position: absolute; z-index: 3; pointer-events: none; padding: 4px 9px; border-radius: 5px; background: rgba(16, 14, 12, .9); color: #f2ece0; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
+.r3-help { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 5px 12px; font-size: 12.5px; color: #b5b0a5; background: linear-gradient(transparent, rgba(16, 14, 12, .75)); pointer-events: none; z-index: 2; }
+/* the darker lights close in at the edges, the room's middle stays clear */
+.r3[data-light="horror"]::after, .r3[data-light="emergency"]::after, .r3[data-light="torch"]::after, .r3[data-light="neon"]::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, .55) 100%); }
+.r3[data-light="emergency"]::after { background: radial-gradient(ellipse at center, transparent 50%, rgba(60, 0, 0, .55) 100%); }
+.r3-host { position: relative; min-height: 0; }
+.r3-inline { position: relative; height: min(68vh, 620px); min-height: 320px; border-radius: 6px; overflow: hidden; background: #1d1f22; }
+/* the editor: 2D or 3D, and its canvas when it is the room in 3D */
+.me-dim { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.me-dim button { font: inherit; font-size: 14px; font-weight: 600; border: 0; background: var(--bg); color: var(--ink); padding: 5px 14px; cursor: pointer; }
+.me-dim button + button { border-left: 1px solid var(--rule); }
+.me-dim button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.me-in3d .me-canvas { padding: 0; overflow: hidden; position: relative; }
+.me-in3d .me-canvas > .m3-wait { color: var(--sub); }
+.r3-side .ic { width: 18px; height: 18px; vertical-align: -3px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+@media (max-width: 640px) { .r3-hud select { max-width: 46%; } .r3-help { display: none; } .r3-inline { height: 58vh; } }
 .m3-dlg::backdrop { background: rgba(0, 0, 0, .7); }
 .m3-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 14px; border-bottom: 1px solid #3a3d42; }
 .m3-bar b { font-family: var(--f-display); font-weight: 400; font-size: 20px; margin-right: 8px; }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Campaign Atlas command line. No dependencies; needs Node 18 or newer.
 
-   node atlas.js init <dir> [--title "Name"]     start a campaign folder from the template
+   node atlas.js init <dir> [--title "Name"] [--maps 3d]   start a campaign folder from the template (--maps 3d: rooms in 3D)
    node atlas.js check <dir> [place ...]         check maps, guides, player safety and the clue trail
    node atlas.js ascii <dir> <place> [floor] [--level N]   draw a floor as text
    node atlas.js dump <dir> <place ...>          print a place's rooms, clues, people (for writing guides)
@@ -44,7 +44,7 @@ const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -486,6 +486,24 @@ function checkTable(A) {
     if (gone.length) P(`${id}, ${F.n}: model${gone.length > 1 ? "s" : ""} the library does not have: ${gone.join(", ")} (a model brought in needs its models/<id>.js and file)`);
     if (off) N(`${id}, ${F.n}: ${off} model${off > 1 ? "s stand" : " stands"} off the floor's edge`);
   });
+  // rooms in 3D (atlas-room3d.js): the lights it has; in a campaign whose rooms are 3D, the rooms the story turns on furnished
+  const LIGHTS = ["normal", "torch", "horror", "lab", "emergency", "neon"];
+  if (A.config.maps != null && !["2d", "3d"].includes(A.config.maps)) P(`maps is "${A.config.maps}": it is "2d" or "3d"`);
+  if (A.config.light && !LIGHTS.includes(A.config.light)) P(`light is "${A.config.light}": it is one of ${LIGHTS.join(", ")}`);
+  for (const id of mapped(A)) {
+    if (A.meta[id].light && !LIGHTS.includes(A.meta[id].light)) P(`${id}: light is "${A.meta[id].light}": it is one of ${LIGHTS.join(", ")}`);
+    (A.maps[id].floors || []).forEach(F => { if (F.light && !LIGHTS.includes(F.light)) P(`${id}, ${F.n}: light is "${F.light}": it is one of ${LIGHTS.join(", ")}`); });
+  }
+  if (A.config.maps === "3d") for (const id of big) {
+    if (!A.maps[id] || A.maps[id].alias) continue;
+    let rooms = 0, bare = 0;
+    for (const F of A.get(id, 99).floors) {
+      const byRoom = {}; for (const r of F.R || []) if (/^R\d/.test(r[0])) (byRoom[r[0]] = byRoom[r[0]] || []).push(r);
+      const inside = (rs, x, y) => rs.some(r => x >= r[1] && x < r[1] + r[3] && y >= r[2] && y < r[2] + r[4]);
+      for (const rs of Object.values(byRoom)) { rooms++; if (!(F.I || []).some(it => inside(rs, it[1] + (it[3] || 1) / 2, it[2] + (it[4] || 1) / 2)) && !(F.P || []).some(p => inside(rs, p.x, p.y))) bare++; }
+    }
+    if (rooms && bare * 2 > rooms) N(`${id}: ${bare} of ${rooms} rooms have nothing in them, and this campaign's rooms are shown in 3D: furnish the rooms the story turns on (a room's fx preset, I items, or library models in P)`);
+  }
   if (!clocks.length) N(`no villains' clocks: give each enemy working in the background a clock (ATLAS.clocks in table.js)`);
   // the sessions
   const ses = A.sessionsData || [], inSession = new Set();
@@ -675,7 +693,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => fs.readFileSync(f, "utf8")).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw };
@@ -746,6 +764,8 @@ function cmdInit(dir) {
   const copy = (src, dst) => { fs.mkdirSync(dst, { recursive: true }); for (const f of fs.readdirSync(src)) { const s = path.join(src, f), d = path.join(dst, f); if (fs.statSync(s).isDirectory()) copy(s, d); else fs.copyFileSync(s, d); } };
   copy(path.join(ROOT, "template"), dir);
   if (flags.title && flags.title !== true) { const c = path.join(dir, "campaign.js"); fs.writeFileSync(c, fs.readFileSync(c, "utf8").replace("Untitled campaign", String(flags.title).replace(/"/g, '\\"')).replace('storageKey: "atlas"', `storageKey: "atlas-${slug(flags.title)}"`)); }
+  // the game master chose rooms in 3D (references/data-format.md, "Campaign settings")
+  if (flags.maps === "3d") { const c = path.join(dir, "campaign.js"), s = fs.readFileSync(c, "utf8"), out = s.replace(/(storageKey: "[^"]*"),?/, `$1,\n  maps: "3d"                          // the rooms are shown and edited in 3D, from one fixed angle`); if (out === s) die("could not set maps: \"3d\" in campaign.js"); fs.writeFileSync(c, out); }
   console.log(`started ${dir}
   1. save the story, untouched, as story/source.md
   2. convene the council (references/council.md): story/council.md, then story/bible/
