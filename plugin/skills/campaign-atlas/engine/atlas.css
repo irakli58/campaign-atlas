@@ -1445,6 +1445,13 @@ button.ho-b:hover { color: var(--ink); }
 .ml-where { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
 .ml-prev { position: relative; height: 240px; border-radius: 8px; background: radial-gradient(circle at 50% 65%, color-mix(in srgb, var(--ink) 12%, var(--bg)), color-mix(in srgb, var(--ink) 3%, var(--bg)) 75%); overflow: hidden; cursor: grab; }
 .ml-prev canvas { display: block; }
+/* a 2D drawing (atlas-sprites.js): shown on map paper, as it will look on the map */
+.ml-prev.ml-prev2d { cursor: default; display: grid; place-items: center; background: #ece4d2; }
+.ml-prev2d img { max-width: 92%; max-height: 92%; }
+.ml-kind { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; flex: none; }
+.ml-kind button { font: inherit; font-size: 13.5px; border: 0; background: var(--bg); color: var(--ink); padding: 5px 11px; cursor: pointer; }
+.ml-kind button + button { border-left: 1px solid var(--rule); }
+.ml-kind button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 .ml-pl { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13.5px; padding: 12px; text-align: center; }
 .ml-bad { color: var(--accent); }
 .ml-facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13px; margin: 0 0 10px; }

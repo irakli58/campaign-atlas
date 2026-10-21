@@ -12,10 +12,10 @@
   const store = (k, d) => { try { const v = localStorage.getItem(A.config.storageKey + "-ml-" + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
   const keep = (k, v) => { try { localStorage.setItem(A.config.storageKey + "-ml-" + k, JSON.stringify(v)); } catch (e) {} };
   // the library's state, remembered in this browser: what is searched and filtered, which model is open
-  const L = Object.assign({ q: "", cat: "", sub: "", genre: [], fam: [], cond: "", env: "", sort: "best", view: "all", shown: 60 }, store("ui", {}));
+  const L = Object.assign({ q: "", cat: "", sub: "", genre: [], fam: [], cond: "", env: "", sort: "best", view: "all", shown: 60, kind: "3d" }, store("ui", {}));
   L.pick = null; L.imp = null;
   let favs = store("fav", []), recent = store("recent", []), api = null, preview = null, previewFor = "", observer = null;
-  const saveUI = () => keep("ui", { q: L.q, cat: L.cat, sub: L.sub, genre: L.genre, fam: L.fam, cond: L.cond, env: L.env, sort: L.sort, view: L.view });
+  const saveUI = () => keep("ui", { q: L.q, cat: L.cat, sub: L.sub, genre: L.genre, fam: L.fam, cond: L.cond, env: L.env, sort: L.sort, view: L.view, kind: L.kind });
   const IC = {
     furnish: `<path d="M6 11V6.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2V11"/><path d="M4 11.5h16v4H4zM6 15.5V20M18 15.5V20"/>`,
     lib: `<path d="M4 4.5h4v15H4zM10 4.5h4v15h-4z"/><path d="m16 5.2 3.8-1 3.2 14.8-3.8.9z"/>`,
@@ -92,6 +92,8 @@
   function ghostInner(spec, r) {
     const one = (sp, dx, dy, rr) => {
       const e = M.entry(sp.a); if (!e) return "";
+      // a 2D drawing is its own picture
+      if (e.d2 && A.sprites) { const [dw, dd] = M.dims(e, sp), u = dw / sqm() * C, v = dd / sqm() * C; return `<g transform="translate(${dx * C} ${dy * C}) rotate(${rr || 0}) scale(${sp.s || 1})"><g transform="translate(${-u / 2} ${-v / 2})" opacity=".8">${A.sprites.draw(e, sp, u, v)}</g></g>`; }
       const [w, d] = foot(sp), ic = M.icon(sp); if (!ic) M.want(sp);
       const t = `translate(${dx * C} ${dy * C}) rotate(${rr || 0}) scale(${sp.s || 1})`, k = sqm();
       return ic && !ic.missing ? `<image href="${ic.url}" x="${(-ic.w / 2 + (ic.cx || 0)) / k * C}" y="${(-ic.d / 2 + (ic.cz || 0)) / k * C}" width="${ic.w / k * C}" height="${ic.d / k * C}" transform="${t}" preserveAspectRatio="none"/>`
@@ -154,7 +156,11 @@
   // the room looks the same. Undo puts the drawing back.
   function adopt(x, y) {
     const hit = itemAt(x, y); if (!hit) return -1;
-    const it = hit.it, specs = A.room3d.raise(it, hit.f), name = ((M.entry(specs[0].a) || {}).n || "piece").toLowerCase();
+    const it = hit.it, sq = sqm(), ds = M.entry("d-" + it[0]);
+    // as the library's drawing of the same thing (atlas-sprites.js): it looks as it did on the flat map, and the 3D view
+    // stands it as the same models; without one, as the models themselves
+    const specs = ds ? [(() => { const [, ix, iy, w = 1, h = 1, rot = 0, , col] = it, sw = rot % 180 !== 0; const sp = { a: ds.id, x: ix + w / 2, y: iy + h / 2, r: rot, p: { w: Math.round((sw ? h : w) * sq * 1000) / 1000, d: Math.round((sw ? w : h) * sq * 1000) / 1000 } }; if (col) sp.col = col; return sp; })()] : A.room3d.raise(it, hit.f);
+    const name = ((M.entry(specs[0].a) || {}).n || "piece").toLowerCase();
     let n0 = -1;
     api.change(() => {
       const f = F(); f.I = f.I || [];
@@ -171,7 +177,7 @@
       for (const sp of specs) { const p = { a: sp.a, x: sp.x, y: sp.y, r: sp.r, s: sp.s }; if (sp.p) p.p = sp.p; if (sp.col) p.col = sp.col; if (it[6]) p.h = 1; P().push(clean(p)); }
       setSel(specs.map((_, j) => n0 + j)); E().sel = null;
     });
-    api.tip(`The ${name} is now a model: drag it to move it, R or its round handle turns it, Del takes it away. Undo puts the drawing back.`);
+    api.tip(`The ${name} can be moved now: drag it to move it, R or its round handle turns it, Del takes it away. Undo puts it back as it was.`);
     return n0;
   }
   const markerNear = p => (F().M || []).some(m => Math.hypot(m[1] - p.x, m[2] - p.y) < .45);
@@ -223,6 +229,7 @@
   function propPanel(p) {
     const e = M.entry(p.a);
     if (!e) return `<section class="me-fur"><h4>Missing model</h4><p class="me-help">This map has a model called "${esc(p.a)}" that this page's library does not have. It is kept, and drawn as an outline.</p><button type="button" class="me-del" data-pf="del">Take it away</button></section>`;
+    if (e.d2) return drawingPanel(p, e);
     const pp = Object.assign({}, e.p, p.p || {}), main = Object.keys(e.p.m || {})[0], mat = p.m || (main ? e.p.m[main] : ""), alts = main ? M.alts(e.p.m[main]) : [];
     const ctl = M.ctl(e), [w, d, h] = M.dims(e, p), s = p.s || 1;
     const field = (k, label, v, step, min) => `<label class="me-num"><span>${label}</span><input type="number" data-pp="${k}" value="${Math.round(v * 100) / 100}" step="${step || .05}" min="${min == null ? .01 : min}"></label>`;
@@ -266,7 +273,9 @@
   }
 
   /* ---- the library */
-  const filters = () => ({ cat: L.view === "all" ? L.cat : "", sub: L.view === "all" ? L.sub : "", genre: L.genre, fam: L.fam, cond: L.cond, env: L.env, sort: L.sort });
+  // 3D models or 2D drawings (atlas-sprites.js): one or the other at a time
+  const filters = () => ({ cat: L.view === "all" ? L.cat : "", sub: L.view === "all" ? L.sub : "", genre: L.genre, fam: L.fam, cond: L.cond, env: L.env, sort: L.sort, kind: L.kind === "2d" ? "2d" : "3d" });
+  const kitsNow = () => M.kits().filter(k => (k.kind || "3d") === (L.kind === "2d" ? "2d" : "3d"));
   function results() {
     const f = filters();
     if (L.view === "fav") f.ids = favs.slice(); else if (L.view === "recent") f.ids = recent.slice(); else if (L.view === "mine") f.ids = M.custom.filter(x => !x.hidden).map(x => x.id); else if (L.view.startsWith("kit:")) { const k = M.kits().find(x => "kit:" + x.id === L.view); f.ids = k ? k.ids : []; }
@@ -279,11 +288,12 @@
     for (const r of base) { by[r.e.c] = (by[r.e.c] || 0) + 1; const k = r.e.c + "|" + r.e.s; subs[k] = (subs[k] || 0) + 1; }
     const item = (view, cat, sub, label, n, cls) => `<button type="button" class="ml-nv ${cls || ""}" data-nv="${esc(view)}" data-cat="${esc(cat || "")}" data-sub="${esc(sub || "")}" aria-pressed="${L.view === view && (L.cat || "") === (cat || "") && (L.sub || "") === (sub || "")}">${label}<i>${n}</i></button>`;
     const mine = M.custom.filter(x => !x.hidden).length;
-    let h = item("all", "", "", "Everything", base.length) + item("fav", "", "", `${icon("star")} Favourites`, favs.filter(id => M.entry(id)).length) + item("recent", "", "", "Used lately", recent.filter(id => M.entry(id)).length) + item("kits", "", "", `${icon("cube")} Kits`, M.kits().length) + (mine ? item("mine", "", "", "Your own models", mine) : "");
+    let h = item("all", "", "", "Everything", base.length) + item("fav", "", "", `${icon("star")} Favourites`, favs.filter(id => M.entry(id)).length) + item("recent", "", "", "Used lately", recent.filter(id => M.entry(id)).length) + item("kits", "", "", `${icon("cube")} ${L.kind === "2d" ? "Sets" : "Kits"}`, kitsNow().length) + (mine ? item("mine", "", "", "Your own models", mine) : "");
     h += `<div class="ml-nvh">Categories</div>`;
     for (const [c, ss] of M.cats()) {
+      if (!by[c] && L.cat !== c) continue;
       h += item("all", c, "", esc(c), by[c] || 0, "ml-cat");
-      if (L.view === "all" && L.cat === c) for (const s of ss) h += item("all", c, s, esc(s), subs[c + "|" + s] || 0, "ml-sub");
+      if (L.view === "all" && L.cat === c) for (const s of ss) if (subs[c + "|" + s]) h += item("all", c, s, esc(s), subs[c + "|" + s] || 0, "ml-sub");
     }
     return h;
   }
@@ -300,14 +310,14 @@
   }
   function paintList(more) {
     const box = $("#mlLib .ml-grid"), mbox = $("#mlLib .ml-more"); if (!box) return;
-    if (L.view === "kits") { box.innerHTML = `<div class="ml-kits">${M.kits().map(kitCard).join("")}</div>`; mbox.innerHTML = ""; $("#mlLib .ml-count").textContent = `${M.kits().length} kits`; thumbs(box); return; }
+    if (L.view === "kits") { const ks = kitsNow(); box.innerHTML = `<div class="ml-kits">${ks.map(kitCard).join("") || `<p class="ml-none">No sets here yet.</p>`}</div>`; mbox.innerHTML = ""; $("#mlLib .ml-count").textContent = `${ks.length} ${L.kind === "2d" ? "set" : "kit"}${ks.length === 1 ? "" : "s"}`; thumbs(box); return; }
     const list = results(), shown = Math.min(list.length, L.shown);
     if (!more) box.scrollTop = 0;
     const narrowed = L.q || L.genre.length || L.fam.length || L.cond || L.env;
     box.innerHTML = list.length ? list.slice(0, shown).map(card).join("") : `<p class="ml-none">${narrowed ? "Nothing matches. Try fewer words, or clear the filters." : L.view === "fav" ? "No favourites yet: the star on a model keeps it here." : L.view === "recent" ? "Nothing used yet." : L.view === "mine" ? "Nothing brought in yet: Bring in a model takes a .glb file." : "Nothing here."}</p>`;
     const kit = L.view.startsWith("kit:") ? M.kits().find(x => "kit:" + x.id === L.view) : null;
     mbox.innerHTML = (shown < list.length ? `<button type="button" data-ml="more">Show more (${list.length - shown} left)</button>` : "") + (kit ? `<button type="button" class="prim" data-kitset="${kit.id}">Put the whole ${esc(kit.n.toLowerCase())} set down</button>` : "");
-    $("#mlLib .ml-count").textContent = `${list.length} model${list.length === 1 ? "" : "s"}${kit ? " in the " + kit.n.toLowerCase() + " kit" : ""}`;
+    $("#mlLib .ml-count").textContent = `${list.length} ${L.kind === "2d" ? "drawing" : "model"}${list.length === 1 ? "" : "s"}${kit ? " in the " + kit.n.toLowerCase() + " kit" : ""}`;
     thumbs(box);
   }
   function paintNav() { const n = $("#mlLib .ml-nav"); if (n) n.innerHTML = nav(); }
@@ -320,12 +330,40 @@
         <label><span>Order</span><select data-lf="sort"><option value="best"${L.sort === "best" ? " selected" : ""}>Best match</option><option value="name"${L.sort === "name" ? " selected" : ""}>By name</option><option value="size"${L.sort === "size" ? " selected" : ""}>Biggest first</option></select></label>
         <button type="button" data-ml="clear"${L.genre.length || L.fam.length || L.cond || L.env || L.q ? "" : " disabled"}>Clear all</button><span class="ml-count" aria-live="polite"></span></div>`;
   }
+  /* ---- a 2D drawing (atlas-sprites.js): in the library, the drawing large and what the 3D view stands for it; on the
+          map, its turn, size and colour */
+  const inThree = (e, sp) => { const tw = A.sprites.twins(e, sp), names = [...new Set(tw.map(t => (M.entry(t.a) || {}).n).filter(Boolean))]; return !e.flat && names.length ? "Stands as the library's " + names.map(n => n.toLowerCase()).join(", ") + (tw.length > 1 ? ` (${tw.length})` : "") : "Lies flat on the floor, as drawn"; };
+  function drawingDetail(sp, e) {
+    const [w, d] = M.dims(e, sp), sqs = A.config.grid || { unit: 5, name: "ft" };
+    return `<div class="ml-prev ml-prev2d"><img alt="${esc(e.n)}" src="${A.sprites.url(e, sp, { px: 300 })}"></div>
+      <h3>${esc(e.n)}</h3><p class="ml-where">${esc(e.c)} · ${esc(e.s)} · a 2D drawing</p>
+      <dl class="ml-facts"><dt>Genres</dt><dd>${e.g.map(g => esc(GN[g] || g)).join(", ") || "Any"}</dd>
+        <dt>Size</dt><dd>${esc(metres(w))} wide, ${esc(metres(d))} deep (${(w / M.sq()).toFixed(1)} × ${(d / M.sq()).toFixed(1)} squares of ${esc(String(sqs.unit))} ${esc(sqs.name)})</dd>
+        <dt>In 3D</dt><dd>${esc(inThree(e, sp))}</dd><dt>Made by</dt><dd>${esc(e.src)}</dd><dt>Licence</dt><dd>${esc(e.lic)}</dd></dl>
+      ${e.colour ? `<label class="me-f me-colour"><span>Colour</span><input type="color" data-pk="col" value="${esc(sp.col || e.colour)}"></label>` : ""}
+      <details class="me-more"><summary>Its size</summary><div class="me-nums">${["w", "d"].map(k => `<label class="me-num"><span>${k === "w" ? "Wide" : "Deep"} (m)</span><input type="number" data-pk="${k}" value="${Math.round(Object.assign({}, e.p, sp.p || {})[k] * 100) / 100}" step=".05" min=".05"></label>`).join("")}</div></details>
+      <div class="me-row ml-go"><button type="button" class="prim" data-ml="place">Put it on the map</button><button type="button" data-fav="${esc(e.id)}" aria-pressed="${favs.includes(e.id)}" title="Favourite">${icon("star")}</button></div>`;
+  }
+  function drawingPanel(p, e) {
+    const [w, d] = M.dims(e, p), s = p.s || 1;
+    const field = (k, label, v, stp, min) => `<label class="me-num"><span>${label}</span><input type="number" data-pp="${k}" value="${Math.round(v * 100) / 100}" step="${stp || .05}" min="${min == null ? .01 : min}"></label>`;
+    return `<section class="me-fur"><h4>${icon("furnish")} ${esc(e.n)}</h4>
+      <div class="me-pthumb"><img alt="" data-th='${esc(JSON.stringify(p))}'><div><span>${esc(e.c)} · ${esc(e.s)}</span><span>A 2D drawing, ${esc(metres(w * s))} × ${esc(metres(d * s))}</span><span>${esc(inThree(e, p))} in 3D</span></div></div>
+      <div class="me-row"><button type="button" data-pf="turn-15" title="Turn left">⟲ 15°</button><button type="button" data-pf="turn15" title="Turn right">⟳ 15°</button><button type="button" data-pf="turn90">⟳ 90°</button></div>
+      <div class="me-nums">${field("r", "Turned (°)", p.r || 0, 1, -360)}${field("s", "Size (×)", s, .05, .1)}</div>
+      ${e.colour ? `<label class="me-f me-colour"><span>Colour</span><input type="color" data-pv="col" value="${esc(p.col || e.colour)}"></label>` : ""}
+      <details class="me-more"><summary>Its size</summary><div class="me-nums">${field("w", "Wide (m)", w)}${field("d", "Deep (m)", d)}</div>${p.p ? `<button type="button" data-pf="reshape">As the library has it</button>` : ""}</details>
+      <label class="me-ck"><input type="checkbox" data-pv="h"${p.h ? " checked" : ""}> Hidden from the players</label>
+      <div class="me-row"><button type="button" data-pf="dup">Duplicate</button><button type="button" data-pf="copy">Copy</button><button type="button" data-pf="fav" aria-pressed="${favs.includes(p.a)}">${icon("star")}</button><button type="button" class="me-del" data-pf="del">Take it away</button></div></section>`;
+  }
+
   // the model open on the right: a rotating preview, what it is, and its variants
   function paintDetail() {
     const box = $("#mlLib .ml-detail"); if (!box) return;
     if (L.imp) return paintImport(box);
     const sp = L.pick, e = sp && M.entry(sp.a);
-    if (!e) { stopPreview(); box.innerHTML = `<div class="ml-empty">${icon("cube")}<p>Choose a model to see it turning, change how it is made, and put it on the map.</p><p class="me-help">Search with plain words: <i>rusty barrel</i>, <i>wooden chair</i>, <i>sci-fi crate</i>, <i>glowing</i>. The filters narrow it by genre, what it is made of, its condition, indoors or out.</p></div>`; return; }
+    if (!e) { stopPreview(); box.innerHTML = L.kind === "2d" ? `<div class="ml-empty">${icon("lib")}<p>Choose a drawing to see it large and put it on the map.</p><p class="me-help">These are drawn in the map's own hand, from above. In the 3D view each stands as the library's model of the same thing, or lies flat on the floor where it is flat by nature (blood, chalk, papers).</p></div>` : `<div class="ml-empty">${icon("cube")}<p>Choose a model to see it turning, change how it is made, and put it on the map.</p><p class="me-help">Search with plain words: <i>rusty barrel</i>, <i>wooden chair</i>, <i>sci-fi crate</i>, <i>glowing</i>. The filters narrow it by genre, what it is made of, its condition, indoors or out.</p></div>`; return; }
+    if (e.d2) { stopPreview(); box.innerHTML = drawingDetail(sp, e); return; }
     const main = Object.keys(e.p.m || {})[0], mat = sp.m || (main ? e.p.m[main] : ""), alts = main ? M.alts(e.p.m[main]) : [], [w, d, h] = M.dims(e, sp), sqs = A.config.grid || { unit: 5, name: "ft" };
     box.innerHTML = `<div class="ml-prev" aria-label="A turning preview of ${esc(e.n)}: drag to turn it, the wheel to come closer"><span class="ml-pl">Loading the model…</span></div>
       <h3>${esc(e.n)}</h3><p class="ml-where">${esc(e.c)} · ${esc(e.s)}</p>
@@ -356,9 +394,12 @@
   function openLib(focus) {
     const lib = $("#mlLib"); if (!lib) return;
     lib.hidden = false; E().place = null;
-    paintFilters(); paintNav(); paintList(); paintDetail();
+    // drawings for a flat map, models for a room in 3D, unless the game master chose otherwise this time
+    if (!L.kindSet) L.kind = E().view3d ? "3d" : (L.kind || "3d");
+    paintKind(); paintFilters(); paintNav(); paintList(); paintDetail();
     const q = lib.querySelector(".ml-q"); q.value = L.q; if (focus !== false) setTimeout(() => q.focus(), 30);
   }
+  function paintKind() { document.querySelectorAll("#mlLib [data-mlk]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mlk === (L.kind === "2d" ? "2d" : "3d"))); const q = $("#mlLib .ml-q"); if (q) q.placeholder = L.kind === "2d" ? "Search: bed, barrel, blood, campfire…" : "Search: rusty barrel, wooden chair, sci-fi crate…"; }
   function closeLib() { const lib = $("#mlLib"); if (!lib || lib.hidden) return; lib.hidden = true; stopPreview(); }
   const pick = (id, c) => { L.pick = { a: id }; if (c) L.pick.c = c; L.imp = null; $("#mlLib .ml-grid").querySelectorAll(".ml-card").forEach(el => el.setAttribute("aria-pressed", el.dataset.a === id)); paintDetail(); };
 
@@ -474,7 +515,7 @@
     icons: { furnish: IC.furnish },
     topHTML: () => `<button type="button" data-pf="lib" title="The model library (L)">${icon("lib")}<span>Library</span></button><button type="button" data-pf="snap" class="me-snap" title="Snap models to the grid and to 15° turns">${icon("snap")}<span>Snap</span></button>`,
     bodyHTML: () => `<div class="ml" id="mlLib" hidden role="dialog" aria-label="The model library">
-        <div class="ml-head">${icon("lib")}<b>The model library</b><input type="search" class="ml-q" placeholder="Search: rusty barrel, wooden chair, sci-fi crate…" aria-label="Search the library">
+        <div class="ml-head">${icon("lib")}<b>The library</b><div class="ml-kind" role="group" aria-label="3D models or 2D drawings"><button type="button" data-mlk="3d" title="Models built in 3D: on the flat map seen from above, in the 3D view as they are">3D models</button><button type="button" data-mlk="2d" title="Drawings for the flat map, in the map's own hand; in the 3D view they stand as the matching model, or lie flat">2D drawings</button></div><input type="search" class="ml-q" placeholder="Search: rusty barrel, wooden chair, sci-fi crate…" aria-label="Search the library">
           <label class="ml-imp" title="A .glb file (or a .gltf with everything inside it)">Bring in a model<input type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" data-ml-import></label><button type="button" data-ml="close">Close</button></div>
         <div class="ml-filters"></div>
         <div class="ml-main"><nav class="ml-nav" aria-label="Categories"></nav><div class="ml-list"><div class="ml-grid"></div><div class="ml-more"></div></div><aside class="ml-detail"></aside></div></div>`,
@@ -550,6 +591,7 @@
       const fav = t.closest("[data-fav]"); if (fav) { const id = fav.dataset.fav; favs = favs.includes(id) ? favs.filter(x => x !== id) : [id].concat(favs); keep("fav", favs); document.querySelectorAll(`#meDlg [data-fav="${CSS.escape(id)}"]`).forEach(b => b.setAttribute("aria-pressed", favs.includes(id))); if (L.view === "fav") paintList(); paintNav(); return true; }
       const qa = t.closest("[data-qadd]"); if (qa) { const sp = { a: qa.dataset.qadd }; if (qa.dataset.c) sp.c = qa.dataset.c; startPlacing(sp); return true; }
       const ks = t.closest("[data-kitset]"); if (ks) { const k = M.kits().find(x => x.id === ks.dataset.kitset); if (k) startPlacing({ set: k.set }, k.n + " set"); return true; }
+      const mk = t.closest("[data-mlk]"); if (mk) { L.kind = mk.dataset.mlk; L.kindSet = true; L.view = "all"; L.cat = L.sub = ""; L.shown = 60; L.pick = null; saveUI(); paintKind(); paintNav(); paintList(); paintDetail(); return true; }
       const kv = t.closest("[data-kitshow]"); if (kv) { L.view = "kit:" + kv.dataset.kitshow; L.cat = L.sub = ""; L.shown = 60; saveUI(); paintNav(); paintList(); return true; }
       const nv = t.closest("[data-nv]"); if (nv) { L.view = nv.dataset.nv; L.cat = nv.dataset.cat; L.sub = nv.dataset.sub; L.shown = 60; saveUI(); paintNav(); paintList(); return true; }
       const ch = t.closest("[data-chip]"); if (ch) { const arr = L[ch.dataset.chip], v = ch.dataset.v; L[ch.dataset.chip] = arr.includes(v) ? arr.filter(x => x !== v) : arr.concat(v); L.shown = 60; saveUI(); paintFilters(); paintNav(); paintList(); return true; }

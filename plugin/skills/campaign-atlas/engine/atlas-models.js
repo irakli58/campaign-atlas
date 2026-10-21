@@ -72,6 +72,8 @@
     const out = [];
     for (const e of ENTRIES.concat(M.custom || [])) {
       if (e.hidden) continue;
+      // 3D models or 2D drawings (atlas-sprites.js): the library shows one or the other
+      if (f.kind && (f.kind === "2d") !== !!e.d2) continue;
       if (f.cat && e.c !== f.cat) continue;
       if (f.sub && e.s !== f.sub) continue;
       if (f.genre && f.genre.length && !f.genre.some(g => e.g.includes(g))) continue;
@@ -421,6 +423,8 @@
     list.sort((a, b) => ((a[0].z || 0) - (b[0].z || 0)) || a[1] - b[1]);
     for (const [p, i] of list) {
       const e = BYID[p.a] || (M.custom || []).find(x => x.id === p.a), s = p.s || 1, [w, d] = e ? M.dims(e, p) : [1, 1];
+      // a 2D drawing is drawn as it is, in its box, turned and sized as placed
+      if (e && e.d2 && A.sprites) { const u = w / sq * C, v = d / sq * C; items.push(`<g transform="translate(${(p.x * C).toFixed(1)} ${(p.y * C).toFixed(1)}) rotate(${p.r || 0}) scale(${s})" class="lm-prop" data-prop="${i}"><g transform="translate(${(-u / 2).toFixed(1)} ${(-v / 2).toFixed(1)})">${A.sprites.draw(e, p, u, v)}</g></g>`); continue; }
       const ic = typeof document !== "undefined" && e ? M.icon(p) : null;
       if (!ic && typeof document !== "undefined" && e) M.want(p);
       const tr = `translate(${(p.x * C).toFixed(1)} ${(p.y * C).toFixed(1)}) rotate(${p.r || 0}) scale(${s})`, op = e && e.mount === "ceiling" ? ` opacity=".55"` : "";

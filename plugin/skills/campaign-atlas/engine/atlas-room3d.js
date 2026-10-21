@@ -58,9 +58,11 @@
   function roomOf(F, x, y) { const R = F.R || []; for (let i = R.length - 1; i >= 0; i--) { const r = R[i]; if (x >= r[1] && x < r[1] + r[3] && y >= r[2] && y < r[2] + r[4]) return r; } return null; }
   // one piece of 2D furniture as models: a list of { a, p, x, y, r, s } (a row of shelves is several), or null when the
   // library has nothing like it
-  R3.raise = (it, F) => {
-    const [code, x, y, w = 1, h = 1, rot0 = 0, , col] = it, rr = R3.raiseOf(code); if (!rr) return null;
-    const e = M.entry(rr.id), sq = M.sq(), mode = rr.mode; let rot = rot0 || 0, sw = rot % 180 !== 0;
+  R3.raise = (it, F) => { const rr = R3.raiseOf(it[0]); return rr ? R3.raiseAs(rr, it, F) : null; };
+  // the same, as a given model (rr: { id, mode }): a 2D drawing of the library (atlas-sprites.js) names its own
+  R3.raiseAs = (rr, it, F) => {
+    const [code, x, y, w = 1, h = 1, rot0 = 0, , col] = it;
+    const e = M.entry(rr.id), sq = M.sq(), mode = rr.mode; if (!e) return null; let rot = rot0 || 0, sw = rot % 180 !== 0;
     let u = (sw ? h : w) * sq, v = (sw ? w : h) * sq;                 // the drawing along the model's own width and depth
     const [nw, nd] = M.dims(e), par = e.p && e.p.w != null && e.p.d != null;
     // drawn the other way round from the model: a row of shelves drawn down a wall, a bed drawn across the room. It is
@@ -181,6 +183,8 @@
     /* -- drawing it, when something changed */
     let raf = 0, need = true, gone = false, anim = false, t0 = 0;
     function dirty() { need = true; if (!raf && !gone) raf = requestAnimationFrame(frame); }
+    // a 2D drawing laid on the floor is drawn when its picture is ready
+    const onDrawn = () => dirty(); document.addEventListener("atlas-sprite-drawn", onDrawn);
     function frame(t) {
       raf = 0; if (gone) return;
       if (anim) { animate(t); need = true; }
@@ -318,7 +322,8 @@
     // the top of whatever a marker stands on: a table, a counter, a chest
     function surfaceAt(x, y) {
       let top = 0;
-      const on = (p, e) => { if (!e || (e.mount && e.mount !== "floor")) return; const [w, d, h] = M.dims(e, p), s = p.s || 1; if (h * s > 1.3) return; const a = -rad(p.r || 0), dx = x - p.x, dy = y - p.y, lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a); if (Math.abs(lx) <= w * s / sq / 2 && Math.abs(ly) <= d * s / sq / 2) top = Math.max(top, (p.z || 0) + h * s); };
+      // (a 2D drawing stands as tall as the models the 3D view raises it as)
+      const on = (p, e) => { if (!e || (e.mount && e.mount !== "floor")) return; const [w, d, h0] = M.dims(e, p), s = e.d2 && A.sprites ? 1 : p.s || 1, h = e.d2 && A.sprites ? A.sprites.height(e, p) * (p.s || 1) : h0; if (h * s > 1.3) return; const a = -rad(p.r || 0), dx = x - p.x, dy = y - p.y, lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a); if (Math.abs(lx) <= w * s / sq / 2 && Math.abs(ly) <= d * s / sq / 2) top = Math.max(top, (p.z || 0) + h * s); };
       for (const p of (S.F && S.F.P) || []) on(p, M.entry(p.a));
       for (const it of S.items) on(it.p, it.e);
       return top;
@@ -393,7 +398,7 @@
       // lamps: where the room has something that gives light, or else in its biggest rooms; never more than eight
       const at = [];
       for (const it of S.items) if (it.p.glow || GLOW_RX.test(it.p.a)) at.push([it.p.x, it.p.y]);
-      for (const p of F.P || []) if (GLOW_RX.test(p.a) && (S.gm || !p.h)) at.push([p.x, p.y]);
+      for (const p of F.P || []) if ((GLOW_RX.test(p.a) || (M.entry(p.a) || {}).glow) && (S.gm || !p.h)) at.push([p.x, p.y]);
       if (at.length < 3 && k !== "normal" && k !== "lab") for (const q of (F.R || []).filter(q => A.isIndoorKind(q[6]) && (S.gm || !(q[7] && q[7].h))).sort((a, b) => b[3] * b[4] - a[3] * a[4]).slice(0, 6)) at.push([q[1] + q[3] / 2, q[2] + q[4] / 2]);
       const pick = []; for (const p of at) if (pick.length < 8 && !pick.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 3)) pick.push(p);
       pick.forEach(([x, y], i) => { const pl = new T.PointLight(L.lamp[i % L.lamp.length], L.li, sq * 9, 1.6); pl.position.set(x * sq, 1.9, y * sq); G.lights.add(pl); S.lamps.push({ l: pl, base: L.li, ph: i * 1.7 }); });
@@ -586,7 +591,7 @@
       dispose() {
         gone = true; cancelAnimationFrame(raf); if (ro) ro.disconnect();
         ev.removeEventListener("pointerdown", downCap, true); ev.removeEventListener("pointerdown", downLate); ev.removeEventListener("pointermove", moveCap, true); ev.removeEventListener("pointerup", upCap, true); ev.removeEventListener("pointercancel", upCap, true);
-        window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku);
+        window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); document.removeEventListener("atlas-sprite-drawn", onDrawn);
         if (floorMat.map) floorMat.map.dispose();
         for (const x of S.disp) { try { x.dispose(); } catch (e) {} }
         for (const m of ghostMats.values()) m.dispose();

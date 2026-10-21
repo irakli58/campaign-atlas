@@ -753,7 +753,7 @@ var ATLAS = (function () {
   }
   A.loadPrefs = () => { try { const v = localStorage.getItem(A.config.storageKey + "-size"); if (v !== null && v !== "") A.state.level = +v; A.state.noClues = localStorage.getItem(A.config.storageKey + "-noclues") === "1"; } catch (e) {} };
 
-  Object.assign(A, { C, esc, isRoom, kindOf, isOut, isSolid, isIndoorKind, KINDS, PATS, GEN, ITEMS: LMI, FX: LMX_FX, itemFn, markers, dirOf, levels, levelFor, expanded, get, keyOf, isGmFloor, svg, ref, section, rerender, connections, roomEntry, nameOf, leads, sizeName, label, paper, furnishRoom: furnish, finishFloor: finish });
+  Object.assign(A, { C, esc, isRoom, kindOf, isOut, isSolid, isIndoorKind, KINDS, PATS, GEN, ITEMS: LMI, FX: LMX_FX, itemFn, tidy, markers, dirOf, levels, levelFor, expanded, get, keyOf, isGmFloor, svg, ref, section, rerender, connections, roomEntry, nameOf, leads, sizeName, label, paper, furnishRoom: furnish, finishFloor: finish });
   return A;
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = ATLAS;
