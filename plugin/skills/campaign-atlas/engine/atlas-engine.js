@@ -55,7 +55,11 @@ var ATLAS = (function () {
     street: { out: 1, stretch: 1 }, yard: { out: 1, pat: "cobble" }, alley: { out: 1, stretch: 1, pat: "cobble" }, grass: { out: 1, stretch: 1 },
     quay: { out: 1, stretch: 1, pat: "stone" }, river: { out: 1, stretch: 1 }, deck: { out: 1, pat: "boards" },
     sand: { out: 1, stretch: 1 }, snow: { out: 1, stretch: 1 }, mud: { out: 1, stretch: 1 }, tarmac: { out: 1, stretch: 1 }, forest: { out: 1, stretch: 1 }, space: { out: 1, stretch: 1 },
-    rock: { solid: 1, stretch: 1 }, roof: { solid: 1 }, void: { solid: 1 }
+    rock: { solid: 1, stretch: 1 }, roof: { solid: 1 }, void: { solid: 1 },
+    // the floors of caves (atlas-cave.js): walked on, waded (shallows), swum (water), or barred (lava, and a chasm
+    // unless a bridge crosses it)
+    cave: { nowin: 1 }, basalt: { nowin: 1 }, gravel: { nowin: 1 }, moss: { nowin: 1 }, fungus: { nowin: 1 }, ice: { nowin: 1 }, crystal: { nowin: 1 }, blight: { nowin: 1 },
+    shallows: { nowin: 1 }, lava: { nowin: 1, block: 1 }, chasm: { nowin: 1, block: 1 }, bridge: { nowin: 1 }
   };
   function kindOf(k) { return A.config.kinds[k] || KINDS[k] || null; }
   const isOut = k => { const d = kindOf(k); return !!(d && d.out); };
@@ -103,8 +107,23 @@ var ATLAS = (function () {
     glass: GEN.diamonds("#cfe0e6", "#9fb8c2"), marble: GEN.checks("#e9e6df", "#c9c4b8"),
     sand: GEN.dots("#dccd9c", "#b9a871"), snow: GEN.dots("#eef1f2", "#c6ced2"), mud: GEN.dots("#8c7758", "#6a5840"),
     tarmac: GEN.dots("#77787a", "#5c5d5f"),
-    space: [40, 40, `<rect width="40" height="40" fill="#141a22"/><circle cx="6" cy="9" r=".8" fill="#d8dfe8"/><circle cx="27" cy="5" r=".5" fill="#aab6c4"/><circle cx="33" cy="26" r=".9" fill="#d8dfe8"/><circle cx="14" cy="31" r=".5" fill="#aab6c4"/>`]
+    space: [40, 40, `<rect width="40" height="40" fill="#141a22"/><circle cx="6" cy="9" r=".8" fill="#d8dfe8"/><circle cx="27" cy="5" r=".5" fill="#aab6c4"/><circle cx="33" cy="26" r=".9" fill="#d8dfe8"/><circle cx="14" cy="31" r=".5" fill="#aab6c4"/>`],
+    cave: [40, 40, `<rect width="40" height="40" fill="#b6ab94"/><circle cx="6" cy="7" r="1.1" fill="#958a74"/><circle cx="27" cy="12" r=".8" fill="#8d826c"/><circle cx="15" cy="30" r="1.3" fill="#9a8f78"/><circle cx="34" cy="33" r=".7" fill="#cfc5ae"/><circle cx="21" cy="20" r=".6" fill="#cfc5ae"/><path d="M3 22 l4 2 l3 -1 M29 25 l3 3 l4 0 M18 4 l2 3" stroke="#8a7f69" stroke-width=".7" fill="none"/>`],
+    basalt: [36, 36, `<rect width="36" height="36" fill="#77706a"/><circle cx="7" cy="8" r="1.2" fill="#5a544f"/><circle cx="24" cy="14" r=".9" fill="#5a544f"/><circle cx="14" cy="27" r="1.4" fill="#625b55"/><circle cx="30" cy="30" r=".6" fill="#958d86"/><path d="M2 18 l5 1 l3 3 M22 3 l3 4 M26 22 l5 -2" stroke="#56504b" stroke-width=".8" fill="none"/>`],
+    gravel: [18, 18, `<rect width="18" height="18" fill="#ada591"/><circle cx="3" cy="3" r="1.6" fill="#958d78" stroke="#7c7462" stroke-width=".4"/><circle cx="11" cy="5" r="1.2" fill="#c0b8a3" stroke="#7c7462" stroke-width=".4"/><circle cx="7" cy="12" r="1.9" fill="#a39b86" stroke="#7c7462" stroke-width=".4"/><circle cx="15" cy="14" r="1.3" fill="#8f8773" stroke="#7c7462" stroke-width=".4"/><circle cx="15" cy="8" r=".7" fill="#7c7462"/>`],
+    moss: [24, 24, `<rect width="24" height="24" fill="#93a274"/><circle cx="5" cy="6" r="3" fill="#7f8f60"/><circle cx="17" cy="15" r="4" fill="#7a8a5b"/><circle cx="9" cy="19" r="1.6" fill="#a9b78a"/><circle cx="19" cy="4" r="1.2" fill="#a9b78a"/>`],
+    fungus: [26, 26, `<rect width="26" height="26" fill="#958fa2"/><circle cx="6" cy="7" r="2.2" fill="#cfe9e2" stroke="#5f8f88" stroke-width=".6"/><circle cx="9" cy="9" r="1.3" fill="#cfe9e2" stroke="#5f8f88" stroke-width=".5"/><circle cx="19" cy="18" r="2.6" fill="#d9cdee" stroke="#7b6a9b" stroke-width=".6"/><circle cx="16" cy="21" r="1.2" fill="#d9cdee" stroke="#7b6a9b" stroke-width=".5"/><circle cx="20" cy="5" r=".8" fill="#7de0cf"/>`],
+    ice: [32, 32, `<rect width="32" height="32" fill="#d3e4ea"/><path d="M2 9 L13 4 M18 26 L30 19 M6 22 l6 1 l3 4" stroke="#f6fbfd" stroke-width="1.4" fill="none"/><path d="M4 14 l7 3 l2 6 M20 6 l4 5 l6 -1" stroke="#9fbfcb" stroke-width=".6" fill="none"/>`],
+    crystal: [24, 24, `<rect width="24" height="24" fill="#b6a7c9"/><path d="M5 3 L9 9 L5 13 L1 9 Z M17 12 L22 18 L17 23 L13 18 Z" fill="#d8cdea" stroke="#8a74a8" stroke-width=".6"/><path d="M15 2 l2 4 l-2 2" stroke="#8a74a8" stroke-width=".6" fill="none"/>`],
+    blight: [30, 30, `<rect width="30" height="30" fill="#5e5265"/><path d="M0 12 C6 10 9 15 15 13 S24 6 30 9 M8 30 C9 24 14 22 13 17 M22 0 C21 6 26 9 24 14" stroke="#2b2131" stroke-width="1.4" fill="none"/><circle cx="15" cy="13" r="1.1" fill="#9a6fa8"/>`],
+    shallows: [24, 12, `<rect width="24" height="12" fill="#a3c0bb"/><path d="M0 6 q6 -3 12 0 t12 0" fill="none" stroke="#d6e6e2" stroke-width=".9"/>`],
+    lava: [32, 32, `<rect width="32" height="32" fill="#8a2a10"/><path d="M0 9 C7 6 10 14 17 11 S27 3 32 7 M4 32 C6 25 13 24 12 18 M21 32 C22 26 29 25 32 21" stroke="#f39a2c" stroke-width="2.2" fill="none"/><path d="M0 9 C7 6 10 14 17 11 S27 3 32 7" stroke="#ffe08a" stroke-width=".8" fill="none"/><circle cx="25" cy="16" r="1.4" fill="#ffc04d"/>`],
+    chasm: [20, 20, `<rect width="20" height="20" fill="#17130f"/><path d="M0 20 L20 0" stroke="#2a241e" stroke-width="1.2"/>`],
+    bridge: GEN.planks("#a07a52", "#6d5034")
   };
+  // the rock around a cave, by the stone it is cut in (a floor's geo; atlas-cave.js)
+  const ROCKS = { limestone: ["#8b8170", "#6c6355", "#a59b88"], volcanic: ["#423b38", "#27221f", "#5c534e"], ice: ["#8d9fa9", "#6b7f8b", "#b7c8d0"], crystal: ["#7e7489", "#5c536b", "#a596b5"], sandstone: ["#a5825c", "#80603f", "#c19c71"], ancient: ["#4c4f49", "#2f322e", "#666a62"] };
+  const caveRock = geo => { const [b, d, l] = ROCKS[geo] || ROCKS.limestone; return [36, 36, `<rect width="36" height="36" fill="${b}"/><path d="M3 5 l5 -2 M14 9 l2 5 M24 3 l6 3 M7 17 l-3 5 M19 21 l6 -1 M31 15 l2 6 M4 31 l6 1 M16 30 l3 -4 M27 28 l5 3" stroke="${d}" stroke-width="1.1" stroke-linecap="round"/><circle cx="11" cy="25" r="1" fill="${l}"/><circle cx="29" cy="9" r=".8" fill="${l}"/><circle cx="22" cy="14" r=".6" fill="${d}"/><circle cx="33" cy="34" r=".7" fill="${l}"/>`]; };
   function patFor(kind) {
     const d = kindOf(kind); if (!d) return null;
     if (d.pat && PATS[d.pat] && !d.fill) return { id: d.pat, def: PATS[d.pat] };
@@ -117,6 +136,7 @@ var ATLAS = (function () {
     const pat = (id, [w, h, body, tr]) => `<pattern id="${p}${id}" width="${w}" height="${h}" patternUnits="userSpaceOnUse"${tr || ""}>${body}</pattern>`;
     out.push(pat("hx", [7, 7, `<rect width="7" height="7" fill="${P.hatch}"/><line x1="0" y1="0" x2="0" y2="7" stroke="${P.hatchLine}" stroke-width="1.3" opacity=".55"/>`, ` patternTransform="rotate(45)"`]));
     out.push(pat("grid", [C, C, `<path d="M ${C} 0 L 0 0 0 ${C}" fill="none" stroke="${P.ink}" stroke-width=".5" opacity=".2"/>`]));
+    out.push(pat("tha", [8, 8, `<rect width="8" height="8" fill="#b4541a" opacity=".1"/><line x1="0" y1="0" x2="0" y2="8" stroke="#b4541a" stroke-width="2" opacity=".45"/>`, ` patternTransform="rotate(45)"`]));
     const seen = new Set(["rock"]); out.push(pat("rock", PATS.rock));
     for (const k of used) { const x = patFor(k); if (!x || seen.has(x.id)) continue; seen.add(x.id); out.push(pat(x.id, x.def)); }
     return `<defs>${out.join("")}</defs>`;
@@ -338,10 +358,11 @@ var ATLAS = (function () {
     return `<g transform="translate(${X + W / 2} ${Y + H / 2}) rotate(${rot}) translate(${-u / 2} ${-v / 2})">${tidy(body)}</g>`;
   }
 
-  const MK0 = { C: ["#b7791f", "Clue"], N: ["#2c5a85", "Person"], S: ["#6a3f9e", "Secret"], E: ["#a12a2a", "Encounter or danger"], K: ["#2f6b3a", "Key item"] };
+  const MK0 = { C: ["#b7791f", "Clue"], N: ["#2c5a85", "Person"], S: ["#6a3f9e", "Secret"], E: ["#a12a2a", "Encounter or danger"], K: ["#2f6b3a", "Key item"], T: ["#b4541a", "Trap"], P: ["#16756e", "Riddle or puzzle"] };
   function markers() { return Object.assign({}, MK0, A.config.markers || {}); }
-  // which directory a marker letter belongs to
-  function dirOf(mid) { const l = mid[0]; return l === "N" ? "npcs" : l === "S" ? "secrets" : l === "E" ? "enc" : "clues"; }
+  // which directory a marker letter belongs to (T a trap and P a riddle, atlas-traps.js and atlas-puzzles.js, unless a
+  // campaign gave those letters to markers of its own)
+  function dirOf(mid) { const l = mid[0], own = A.config.markers || {}; return l === "N" ? "npcs" : l === "S" ? "secrets" : l === "E" ? "enc" : l === "T" && !own.T ? "traps" : l === "P" && !own.P ? "riddles" : "clues"; }
 
   /* ---- bigger versions of a map. The original is never changed. Each entry of `expand` describes how to enlarge
           the level before it: extra grid on each side, new rooms, wings, neighbours and floors. */
@@ -407,7 +428,7 @@ var ATLAS = (function () {
       if (at >= 0) order.splice(at + 1, 0, i); else order.push(i);
     }
     M.order = X.order || order;
-    for (const key of ["rooms", "clues", "npcs", "secrets", "enc"]) if (X[key] || B[key]) M[key] = Object.assign({}, B[key] || {}, X[key] || {});
+    for (const key of ["rooms", "clues", "npcs", "secrets", "enc", "traps", "riddles"]) if (X[key] || B[key]) M[key] = Object.assign({}, B[key] || {}, X[key] || {});
     if (X.ov) M.ov = (B.ov ? B.ov + " " : "") + tag + " map: " + X.ov;
     if (X.run) M.run = (B.run ? B.run + " " : "") + X.run;
     if (X.ext) M.ext = X.ext;
@@ -464,11 +485,13 @@ var ATLAS = (function () {
     const M = get(id, level), F = M.floors[fi], gm = view !== "player", P = paper(), cfg = A.config, mono = cfg.fonts.mono, lab = cfg.fonts.label;
     pre = pre || "p";
     const top = 40, bot = 30, side = 10, W = F.w * C, H = F.h * C;
-    // who owns each square
+    // who owns each square. A hidden room is not on the players' map, unless the game master has shown it to them
+    // (A.__showHidden: the fog of war, atlas-table.js)
+    const veiled = r => !gm && !!(r[7] && r[7].h) && !(A.__showHidden && A.__showHidden.has(r[0]));
     const own = Array.from({ length: F.h }, () => Array(F.w).fill(null)), first = {}, used = new Set();
     for (const r of F.R) {
       const [rid, x, y, w, h, , kind, o = {}] = r;
-      if (o.h && !gm) continue;
+      if (veiled(r)) continue;
       used.add(kind);
       if (!first[rid]) first[rid] = r;
       for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (j >= 0 && j < F.h && i >= 0 && i < F.w) own[j][i] = { rid, kind, o };
@@ -484,19 +507,50 @@ var ATLAS = (function () {
       for (let k = 0; k < len; k++) gap.add(o + (o === "h" ? (x + k) + ":" + y : x + ":" + (y + k)));
       doorSVG.push(type === "w" ? win(x, y, o, len) : door(x, y, o, type, len, side2));
     }
+    // a cave (atlas-cave.js) is drawn as rock with the floor carved out of it along a line that follows the stone; its
+    // chambers and passages open into each other with no walls; a built place in it keeps its walls and doors
+    const cave = F.cave && A.cave && A.cave.outline ? A.cave.outline(F, gm, !gm && A.__showHidden) : null;
+    if (cave) used.add(cave.base);
     let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-side} ${-top} ${W + side * 2} ${H + top + bot}" class="lmap2"${M.big ? ` style="min-width:${Math.round((W + side * 2) * .95)}px"` : ""} role="img" aria-label="${esc(M.t)}, ${esc(F.n)}" data-loc="${id}">${defs(pre, used)}`;
-    s += `<rect x="${-side}" y="${-top}" width="${W + side * 2}" height="${H + top + bot}" fill="${P.paper}"/>`;
-    s += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#${pre}hx)"/>`;
-    for (const r of F.R) {
-      const [, x, y, w, h, , kind, o = {}] = r;
-      if (o.h && !gm) continue;                      // a hidden room is simply not on the players' map
-      const pt = patFor(kind);
-      s += `<rect x="${x * C}" y="${y * C}" width="${w * C}" height="${h * C}" fill="${pt ? `url(#${pre}${pt.id})` : "#d9534f"}"/>`;
-      if (o.h) s += `<rect x="${x * C}" y="${y * C}" width="${w * C}" height="${h * C}" fill="#6a3f9e" opacity=".12"/>`;
+    // (for a cave raised in 3D, chasms are left as holes: A.__holes, atlas-room3d.js, looks down into them)
+    const holes = cave && A.__holes ? A.cave.path((cave.kinds.find(k => k[0] === "chasm") || [0, []])[1], C) : "";
+    if (!(cave && A.__holes)) s += `<rect x="${-side}" y="${-top}" width="${W + side * 2}" height="${H + top + bot}" fill="${P.paper}"/>`;
+    let floorPath = "";
+    if (cave) {
+      floorPath = A.cave.path(cave.floor, C);
+      const fill = k => { const pt = patFor(k); return pt ? `url(#${pre}${pt.id})` : "#b6ab94"; };
+      const [cw, ch, body] = caveRock(F.geo);
+      s += `<defs><pattern id="${pre}crk" width="${cw}" height="${ch}" patternUnits="userSpaceOnUse">${body}</pattern><clipPath id="${pre}cf"><path d="${floorPath}" clip-rule="evenodd"/></clipPath></defs>`;
+      s += holes ? `<path d="M0 0H${W}V${H}H0Z${holes}" fill="url(#${pre}crk)" fill-rule="evenodd"/>` : `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#${pre}crk)"/>`;
+      s += `<path d="${floorPath}${holes}" fill="${fill(cave.base)}" fill-rule="evenodd"/>`;
+      const EDGE = { water: `stroke="#557572" stroke-width="1.1"`, river: `stroke="#557572" stroke-width="1.1"`, shallows: `stroke="#7d9d98" stroke-width=".8"`, lava: `stroke="#ffc15a" stroke-width="1.8" stroke-opacity=".9"`, chasm: `stroke="${P.ink}" stroke-width="2"`, ice: `stroke="#9fbfcb" stroke-width=".8"`, crystal: `stroke="#8a74a8" stroke-width=".6"` };
+      for (const [k, loops] of cave.kinds) { if (holes && k === "chasm") continue; const d = A.cave.path(loops, C); s += `<path d="${d}" fill="${fill(k)}" fill-rule="evenodd"${EDGE[k] ? " " + EDGE[k] : ""}/>`; if (k === "chasm") s += `<path d="${d}" fill="none" stroke="${P.ink}" stroke-width="6" stroke-dasharray="1.2 3.4" stroke-opacity=".7" clip-path="url(#${pre}cf)"/>`; }
+      // built rooms, and bridges, are laid square; heights are lighter, the higher the lighter
+      for (const r of F.R) {
+        const [, x, y, w, h, , kind, o = {}] = r;
+        if (veiled(r)) continue;
+        if (o.b || kind === "bridge") s += `<rect x="${x * C}" y="${y * C}" width="${w * C}" height="${h * C}" fill="${fill(kind)}"/>`;
+        if (o.el) s += `<rect x="${x * C}" y="${y * C}" width="${w * C}" height="${h * C}" fill="${o.el > 0 ? "#fff" : "#000"}" opacity="${Math.min(.32, Math.abs(o.el) * .07).toFixed(2)}" clip-path="url(#${pre}cf)"/>`;
+        if (o.h && gm) s += `<rect x="${x * C}" y="${y * C}" width="${w * C}" height="${h * C}" fill="#6a3f9e" opacity=".14"/>`;
+      }
+      s += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#${pre}grid)" clip-path="url(#${pre}cf)"/>`;
+      s += `<path d="${floorPath}" fill="none" stroke="#1e1a14" stroke-opacity=".2" stroke-width="10" clip-path="url(#${pre}cf)"/>`;
+    } else {
+      s += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#${pre}hx)"/>`;
+      for (const r of F.R) {
+        const [, x, y, w, h, , kind, o = {}] = r;
+        if (veiled(r)) continue;                       // a hidden room is simply not on the players' map
+        const pt = patFor(kind);
+        s += `<rect x="${x * C}" y="${y * C}" width="${w * C}" height="${h * C}" fill="${pt ? `url(#${pre}${pt.id})` : "#d9534f"}"/>`;
+        if (o.h && gm) s += `<rect x="${x * C}" y="${y * C}" width="${w * C}" height="${h * C}" fill="#6a3f9e" opacity=".12"/>`;
+      }
+      s += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#${pre}grid)"/>`;
     }
-    s += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#${pre}grid)"/>`;
+    // where a trap reaches: for the referee always, for the players once it is found or has gone off
+    const traps = M.traps || {}, pk0 = keyOf(id);
+    for (const [mid] of (F.M || [])) { const t = dirOf(mid) === "traps" ? traps[mid] : null; if (!t || !t.area || !(gm || (A.devShown && A.devShown(pk0, mid)))) continue; const [ax, ay, aw, ah] = t.area; s += `<rect class="lm-tarea" x="${ax * C}" y="${ay * C}" width="${aw * C}" height="${ah * C}" fill="url(#${pre}tha)" stroke="#b4541a" stroke-width="1.2" stroke-dasharray="4 3"/>`; }
     // fittings and stairs (nothing inside a hidden room shows on the players' map)
-    const inHidden = (x, y) => F.R.some(r => r[7] && r[7].h && x >= r[1] && x < r[1] + r[3] && y >= r[2] && y < r[2] + r[4]);
+    const inHidden = (x, y) => F.R.some(r => r[7] && r[7].h && !(A.__showHidden && A.__showHidden.has(r[0])) && x >= r[1] && x < r[1] + r[3] && y >= r[2] && y < r[2] + r[4]);
     // (a floor drawn for the 3D view leaves off the furniture it raises as models: A.__raise, atlas-room3d.js)
     for (const it of (F.I || [])) { if (!gm && (it[6] || inHidden(it[1] + (it[3] || 1) / 2, it[2] + (it[4] || 1) / 2))) continue; if (A.__raise && A.__raise(it)) continue; s += drawItem(it); }
     const gst = new Set(); M.floors.forEach(G => { if (isGmFloor(G)) (G.ST || []).forEach(x => gst.add(x[0])); });
@@ -506,17 +560,31 @@ var ATLAS = (function () {
     if (props) s += A.propsSVG(F, gm, pre, "floor", inHidden);
     // walls: thick between a room and anything that is not a room (or another building), thin between rooms
     let walls = "", inner = "", wins = "";
+    // (in a cave only a built place has walls: the rock's own edge is the outline drawn below)
+    const builtEdge = (a, b) => !cave || (a && a.o.b) || (b && b.o.b);
     for (let j = 0; j <= F.h; j++) for (let i = 0; i < F.w; i++) {
-      const a = at(i, j - 1), b = at(i, j); if ((a && b && a.rid === b.rid) || (!indoor(a) && !indoor(b))) continue;
+      const a = at(i, j - 1), b = at(i, j); if ((a && b && a.rid === b.rid) || (!indoor(a) && !indoor(b)) || !builtEdge(a, b)) continue;
       if (gap.has("h" + i + ":" + j)) continue;
       const ext = !(indoor(a) && indoor(b)) || (a.o.b || "") !== (b.o.b || ""), seg = `M${i * C} ${j * C}H${(i + 1) * C}`;
       if (ext) { walls += seg; if (((a && isOut(a.kind)) || (b && isOut(b.kind))) && i % 2 === 1) { const room = indoor(a) ? a : b; if (winOK(room)) wins += win(i, j, "h", 1); } } else inner += seg;
     }
     for (let i = 0; i <= F.w; i++) for (let j = 0; j < F.h; j++) {
-      const a = at(i - 1, j), b = at(i, j); if ((a && b && a.rid === b.rid) || (!indoor(a) && !indoor(b))) continue;
+      const a = at(i - 1, j), b = at(i, j); if ((a && b && a.rid === b.rid) || (!indoor(a) && !indoor(b)) || !builtEdge(a, b)) continue;
       if (gap.has("v" + i + ":" + j)) continue;
       const ext = !(indoor(a) && indoor(b)) || (a.o.b || "") !== (b.o.b || ""), seg = `M${i * C} ${j * C}V${(j + 1) * C}`;
       if (ext) { walls += seg; if (((a && isOut(a.kind)) || (b && isOut(b.kind))) && j % 2 === 1) { const room = indoor(a) ? a : b; if (winOK(room)) wins += win(i, j, "v", 1); } } else inner += seg;
+    }
+    if (cave) {
+      // the rock's edge; then the cliffs, their hachures falling toward the lower ground (dashed where it can be climbed)
+      s += `<path d="${floorPath}" fill="none" stroke="${P.ink}" stroke-width="2.6" stroke-linejoin="round"/>`;
+      let cl = "", ticks = "", climb = "";
+      for (const k of cave.cliffs) {
+        const seg = k.o === "h" ? `M${k.x * C} ${k.y * C}H${(k.x + 1) * C}` : `M${k.x * C} ${k.y * C}V${(k.y + 1) * C}`;
+        if (k.cl) climb += seg; else cl += seg;
+        const n = 4, len = Math.min(7, 2.5 + k.d * 1.2);
+        for (let t = 0; t < n; t++) { const f = (t + .5) / n; if (k.o === "h") ticks += `M${((k.x + f) * C).toFixed(1)} ${k.y * C}v${k.low * len}`; else ticks += `M${k.x * C} ${((k.y + f) * C).toFixed(1)}h${k.low * len}`; }
+      }
+      if (cl || climb) s += `<path d="${ticks}" stroke="${P.ink}" stroke-width=".9" fill="none" opacity=".75"/><path d="${cl}" stroke="${P.ink}" stroke-width="2" fill="none"/>` + (climb ? `<path d="${climb}" stroke="${P.accent}" stroke-width="2" stroke-dasharray="3 2" fill="none"/>` : "");
     }
     s += `<path d="${inner}" stroke="${P.ink}" stroke-width="4" stroke-linecap="square" fill="none"/>`;
     s += `<path d="${walls}" stroke="${P.ink}" stroke-width="7" stroke-linecap="square" fill="none"/>`;
@@ -544,6 +612,9 @@ var ATLAS = (function () {
         const g = c && c.k && A.clueGlyph ? A.clueGlyph(c.k) : "";
         s += `<g class="lm-mk${isClue ? " lm-mk-c" : ""}" data-ref="${mid}"><circle cx="${x * C}" cy="${y * C}" r="9.5" fill="${k[0]}" stroke="${P.halo}" stroke-width="2"/><text x="${x * C}" y="${y * C + 3.2}" text-anchor="middle" font-family="${mono}" font-size="8.5" font-weight="700" fill="#fff">${mid}</text>${g ? `<g transform="translate(${(x * C + 9).toFixed(1)} ${(y * C - 9).toFixed(1)})"><circle r="6.6" fill="#fff" stroke="${k[0]}" stroke-width="1.5"/><path d="${g}" fill="none" stroke="${k[0]}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></g>` : ""}</g>`;
       }
+    } else if (!gm && A.devShown) {
+      // the players see a trap once it is found or has gone off: a warning sign where it is, and nothing more
+      for (const [mid, x, y] of (F.M || [])) if (dirOf(mid) === "traps" && traps[mid] && A.devShown(pk0, mid)) s += `<g class="lm-hz"><path d="M${x * C} ${y * C - 10}L${x * C + 10} ${y * C + 7}H${x * C - 10}Z" fill="#f0c419" stroke="${P.ink}" stroke-width="1.6" stroke-linejoin="round"/><text x="${x * C}" y="${y * C + 5}" text-anchor="middle" font-family="${mono}" font-size="11" font-weight="700" fill="${P.ink}">!</text></g>`;
     }
     // frame, title, scale, north
     const g = cfg.grid || { unit: 5, name: "ft" };
@@ -579,6 +650,15 @@ var ATLAS = (function () {
         const k = type === "s" || isGmFloor(F) ? "s" : "", t = DT[type] || "door";
         if (isRoom(a)) add(a, k, `${lab(b)} (${t})`);
         if (isRoom(b)) add(b, k, `${lab(a)} (${t})`);
+      }
+      // in a cave, chambers and passages open into each other where they meet, with no door (unless one is built or hidden)
+      if (F.cave) {
+        const flag = {}; for (const r of F.R) { const o = r[7] || {}; if (o.b || o.h) flag[r[0]] = (o.b ? "b" : "") + (o.h ? "h" : ""); }
+        const seen = new Set();
+        for (let j = 0; j < F.h; j++) for (let i = 0; i < F.w; i++) for (const [a, b] of [[at(i, j), at(i + 1, j)], [at(i, j), at(i, j + 1)]]) {
+          if (!a || !b || a === b || flag[a] || flag[b]) continue; const k = a < b ? a + "|" + b : b + "|" + a; if (seen.has(k)) continue; seen.add(k);
+          if (isRoom(a)) add(a, "", `${lab(b)} (open way)`); if (isRoom(b)) add(b, "", `${lab(a)} (open way)`);
+        }
       }
       for (const st of (F.ST || [])) {
         const c = at(Math.floor(st[1] + st[3] / 2), Math.floor(st[2] + st[4] / 2)); if (!c || !isRoom(c)) continue;
@@ -649,6 +729,12 @@ var ATLAS = (function () {
     dir("People", M.npcs, n => { const w = (n.who && A.castData && A.castData[n.who]) || {}, g = k => n[k] || w[k]; return `${esc(n.n || w.n || "")}</div>${f("Where", where(M, n.at))}${f("Looks like", g("look"))}${f("How they act", g("manner"))}${f("How they speak", g("voice"))}${f("Their story", g("bg"))}${f("Who they know", tieText(g("ties")))}${f("What they are doing", n.doing)}${f("What they want", g("want"))}${f("What they know", n.knows)}${f("What they hide", g("secret"))}${f("The lie they tell", g("lie"))}${f("What makes them talk", g("press"))}${f("What they will reveal", n.rev)}${fh("Points to", goLinks(n.to))}<div>`; });
     dir("Secret doors, passages and hiding places", M.secrets, x => `${esc(x.t || "")}</div>${f("Where", where(M, x.at))}${f("Access", x.acc)}${f("Leads to", x.dest)}${f("Purpose", x.why)}<div>`);
     dir("Encounters and dangers", M.enc, x => `${esc(x.t || "")}</div>${f("Where", where(M, x.at))}${f("What happens", x.d)}<div>`);
+    // traps and riddles (atlas-traps.js, atlas-puzzles.js): the whole of each, for the referee; what is shown to the
+    // players is shown only by the referee's hand (A.devPanel, atlas-trapui.js, adds those buttons)
+    const br = v => v ? esc(v).replace(/\n/g, "<br>") : "";
+    const linkTo = l => { const t = String(l.to || ""), D2 = A.devices, verb = D2 && D2.LINK_DO ? (D2.LINK_DO.find(d => d[0] === l.do) || [0, l.do])[1] : l.do, on = D2 && D2.LINK_ON ? (D2.LINK_ON.find(d => d[0] === (l.on || "trigger")) || [0, l.on])[1] : l.on, tgt = /^door:/.test(t) ? "the door it guards" : ((M.traps || {})[t] || (M.riddles || {})[t] || (M.enc || {})[t] || (M.secrets || {})[t] || {}).t ? `${t} ${((M.traps || {})[t] || (M.riddles || {})[t] || (M.enc || {})[t] || (M.secrets || {})[t]).t}` : t; return `${on}, it ${verb} ${tgt}${l.why ? " (" + l.why + ")" : ""}`; };
+    dir("Traps", M.traps, (t, x) => { const cat = A.devices && A.devices.TRAP_CATS ? (A.devices.TRAP_CATS.find(c => c[0] === t.cat) || [0, t.cat])[1] : t.cat; return `${esc(t.t || "")}</div>${A.devPanel ? A.devPanel(id, x, "trap") : ""}${f("Kind", [cat, t.mech, t.sev ? "severity " + t.sev + " of 5" : "", t.vis, t.lethal ? "can kill" : ""].filter(Boolean).join(" · "))}${f("Where", where(M, t.at))}${f("What sets it off", t.trig)}${f("How it works", t.d)}${f("What happens", t.eff)}${f("Warning signs", (t.signs || []).join(" "))}${f("Finding it", t.detect ? [t.detect.roll, t.detect.how].filter(Boolean).join(". ") : "")}${f("Ways past", (t.bypass || []).map(b => b.how + (b.roll ? " (" + b.roll + ")" : "")).join(" · "))}${f("If disarming fails", t.fail)}${f("Afterwards", t.ok)}${f("Does it reset", t.reset)}${f("Who hears it", t.alert)}${t.timer ? f("Time", t.timer) : ""}${f("Joined to", (t.links || []).map(linkTo).join(" · "))}${f("What the players see when it is found or goes off", t.pd)}${f("A clever idea", t.creative)}${f("Only you know", t.kp)}<div>`; });
+    dir("Riddles and puzzles", M.riddles, (r, x) => { const kn = A.devices && A.devices.RIDDLE_KINDS ? (A.devices.RIDDLE_KINDS.find(k => k[0] === r.type) || [0, r.type])[1] : r.type; return `${esc(r.t || "")}</div>${A.devPanel ? A.devPanel(id, x, "riddle") : ""}${f("Kind", [kn, r.diff ? "difficulty " + r.diff + " of 5" : ""].filter(Boolean).join(" · "))}${f("Where", where(M, r.at))}${fh("What the players see", br(r.pd))}${f("What it is", r.d)}${fh("The answer", `<details class="lm-ans"><summary>Show the answer</summary>${br(r.sol)}${(r.ans || []).length ? `<br><i>Also accepted: ${esc(r.ans.join(", "))}</i>` : ""}</details>`)}${f("Why it works", r.why)}${fh("Hints, in order", (r.hints || []).length ? `<ol class="lm-hints">${r.hints.map(h => `<li>${esc(h)}</li>`).join("")}</ol>` : "")}${f("When solved", r.ok)}${f("When failed", r.fail)}${f("Time", r.time)}${f("It needs", [].concat(r.needs || []).filter(n => typeof n === "string").map(n => (M.clues || {})[n] ? `${n} ${M.clues[n].t || ""} (${where(M, M.clues[n].at)})` : where(M, n)).join("; "))}${r.layout ? fh("Layout", `<pre class="lm-pre">${esc(r.layout)}</pre>`) : ""}${f("Joined to", (r.links || []).map(linkTo).join(" · "))}${f("Checked", r.check && r.check.notes)}<div>`; });
     return out.join("");
   }
 

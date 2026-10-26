@@ -278,9 +278,9 @@
   }
 
   /* ---- the history: every change, by whom (you, or an approved suggestion), each undoable */
-  const COLLWORD = { cluebook: "Clue", links: "Connection", items: "Story element", questions: "Question", knowledge: "Knowledge" };
+  const COLLWORD = { cluebook: "Clue", links: "Connection", items: "Story element", questions: "Question", knowledge: "Knowledge", trapbook: "Trap", riddlebook: "Riddle" };
   function histRow(h) {
-    const r = h.after || h.before || {}, what = h.coll === "links" ? `${St.name(r.a)} ${r.rel} ${St.name(r.b)}` : h.coll === "knowledge" ? `${St.name(r.who)}: ${r.text || St.name(r.about)}` : h.coll === "cluebook" ? (r.t || h.key) : h.coll === "questions" ? r.text : r.n || h.key;
+    const r = h.after || h.before || {}, what = h.coll === "links" ? `${St.name(r.a)} ${r.rel} ${St.name(r.b)}` : h.coll === "knowledge" ? `${St.name(r.who)}: ${r.text || St.name(r.about)}` : h.coll === "cluebook" || h.coll === "trapbook" || h.coll === "riddlebook" ? (r.t || h.key) : h.coll === "questions" ? r.text : r.n || h.key;
     const act = !h.before ? "added" : !h.after ? "removed" : "changed";
     return `<li class="${h.undone ? "undone" : ""}"><span class="kn">${esc(when(h.t))}</span> <b>${esc(COLLWORD[h.coll] || h.coll)} ${act}</b>: ${esc(what || "")} ${srcChip(h.src)}${h.note && h.note !== "undo" ? ` <span class="kn">${esc(h.note)}</span>` : h.note === "undo" ? ` <span class="kn">(an undo)</span>` : ""}${h.undone ? ` <span class="kn">undone</span>` : ` <button type="button" class="t-mini" data-ica="undo" data-g="${esc(h.id)}">Undo</button>`}</li>`;
   }

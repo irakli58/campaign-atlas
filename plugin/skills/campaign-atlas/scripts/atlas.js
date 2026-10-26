@@ -10,6 +10,8 @@
    node atlas.js export <dir> [place ...]        write every floor as SVG files to dist/maps/
    node atlas.js catalogue [<dir>]               list floor kinds, items and furnishing presets (and dist/catalogue.html)
    node atlas.js models [words] [--genre scifi] [--kits]   search the 3D model library, for furnishing maps (floor P:)
+   node atlas.js cave <dir> <place-id> [--name ...] [--random] [--seed S] [--size ...] [--env ...] ...   a generated CAVE as places/<id>.js:
+                      chambers, passages, levels, water, heights, secrets, riddles and traps, all checked (--help-settings: the choices)
 
    The city map (writes <dir>/city.js):
    node atlas.js city <dir> "Florence, Italy" [--year 1478 | --era medieval|industrial|modern|fantasy|future] [--km 2]
@@ -44,7 +46,7 @@ const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -68,8 +70,11 @@ function sources(dir) {
 // files, which may add to them (ATLAS.models.addCustom, ATLAS.storyEdit)
 // (more models come in atlas-models-x<NN>-*.js, the 2D drawings in atlas-sprites.js and atlas-sprites-*.js: each is
 // taken in as it is added, in name order)
+// (then the caves, their riddles and traps: atlas-puzzles.js, atlas-traps.js, atlas-cave-words.js, atlas-cave.js; they
+// furnish what they make from the library, so they come after it)
 const MODEL_FILES = ["atlas-story.js", "atlas-models.js", "atlas-models-lib.js", "atlas-models-lib2.js", "atlas-models-cat.js"]
-  .concat(fs.readdirSync(ENGINE).filter(f => /^atlas-models-x\d\d[\w-]*\.js$/.test(f)).sort(), ["atlas-sprites.js"], fs.readdirSync(ENGINE).filter(f => /^atlas-sprites-[\w-]+\.js$/.test(f)).sort());
+  .concat(fs.readdirSync(ENGINE).filter(f => /^atlas-models-x\d\d[\w-]*\.js$/.test(f)).sort(), ["atlas-sprites.js"], fs.readdirSync(ENGINE).filter(f => /^atlas-sprites-[\w-]+\.js$/.test(f)).sort(),
+    ["atlas-puzzles.js", "atlas-traps.js", "atlas-cave-words.js", "atlas-cave.js"]);
 // the files of models brought in ride in the page itself
 function modelsJS(dir) {
   const md = path.join(dir, "models"); if (!fs.existsSync(md)) return "";
@@ -116,7 +121,8 @@ function reach(A, M, publicOnly) {
     for (let j = 0; j < F.h; j++) for (let i = 0; i < F.w; i++) {
       const c = own[j][i]; if (!c) continue; const k = key(c); if (!nodes.has(k)) nodes.set(k, new Set());
       if (A.isOut(c.kind) || entry.has(c.rid)) starts.push(k);
-      for (const [di, dj] of [[1, 0], [0, 1]]) { const d = own[j + dj] && own[j + dj][i + di]; if (d && d.rid !== c.rid && A.isOut(c.kind) && A.isOut(d.kind)) link(k, key(d)); }
+      // (in a cave, chambers and passages open into each other where they meet, unless one is built or hidden: atlas-cave.js)
+      for (const [di, dj] of [[1, 0], [0, 1]]) { const d = own[j + dj] && own[j + dj][i + di]; if (d && d.rid !== c.rid && ((A.isOut(c.kind) && A.isOut(d.kind)) || (F.cave && !A.isSolid(c.kind) && !A.isSolid(d.kind) && !c.o.b && !d.o.b && !c.o.h === !d.o.h))) link(k, key(d)); }
     }
     for (const [x, y, o, type = "d", len = 1] of (F.D || [])) {
       if (type === "w" || (publicOnly && type === "s")) continue;
@@ -128,6 +134,18 @@ function reach(A, M, publicOnly) {
   const seen = new Set(starts), q = [...starts];
   while (q.length) { const k = q.pop(); for (const n of nodes.get(k) || []) if (!seen.has(n)) { seen.add(n); q.push(n); } }
   return { all: [...nodes.keys()], seen, starts };
+}
+// a cave, and any map with traps or riddles: every room reachable, every stair on ground, the riddles fair with their
+// clues reachable before them, the traps with warning signs and ways past, and no chain that loops (engine/atlas-cave.js,
+// atlas-puzzles.js, atlas-traps.js)
+function checkCave(A, id, P, N) {
+  const M = A.get(id, 99);
+  if (A.cave && M.floors.some(F => F.cave)) { const r = A.cave.check(M); r.errors.forEach(x => P("cave: " + x.text)); r.warnings.forEach(x => N("cave: " + x.text)); }
+  if (A.devices && (Object.keys(M.traps || {}).length || Object.keys(M.riddles || {}).length)) {
+    for (const x of A.devices.validateMap(M)) P(x.text);
+    const marks = new Set(); M.floors.forEach(F => (F.M || []).forEach(m => marks.add(m[0])));
+    for (const k of Object.keys(Object.assign({}, M.traps || {}, M.riddles || {}))) if (!marks.has(k)) N(`${k} has no marker on the map`);
+  }
 }
 function checkMap(A, id, level, P, N) {
   const M = A.get(id, level), DOORS = new Set(["d", "dd", "a", "g", "s", "w"]), MK = A.markers();
@@ -490,7 +508,7 @@ function checkTable(A) {
     if (off) N(`${id}, ${F.n}: ${off} model${off > 1 ? "s stand" : " stands"} off the floor's edge`);
   });
   // rooms in 3D (atlas-room3d.js): the lights it has; in a campaign whose rooms are 3D, the rooms the story turns on furnished
-  const LIGHTS = ["normal", "torch", "horror", "lab", "emergency", "neon"];
+  const LIGHTS = ["normal", "torch", "horror", "lab", "emergency", "neon", "dark", "dim", "biolum", "arcane", "lava"];
   if (A.config.maps != null && !["2d", "3d"].includes(A.config.maps)) P(`maps is "${A.config.maps}": it is "2d" or "3d"`);
   if (A.config.light && !LIGHTS.includes(A.config.light)) P(`light is "${A.config.light}": it is one of ${LIGHTS.join(", ")}`);
   for (const id of mapped(A)) {
@@ -570,6 +588,7 @@ function cmdCheck(dir, want) {
     for (let lv = 0; lv <= n; lv++) checkMap(A, id, lv, m => prob.has(m) || prob.set(m, lv), m => note.has(m) || note.set(m, lv));
     const g = checkGuide(A, id, m => prob.set(m, n), m => note.set(m, n));
     checkStandard(A, id, m => prob.set(m, n));
+    checkCave(A, id, m => prob.set(m, n), m => note.set(m, n));
     const M = A.get(id, 99), tag = lv => n ? ` [${A.sizeName(lv)}]` : "";
     console.log(`${id}: tier ${A.meta[id].tier || "?"} · ${g.rooms} rooms · ${M.floors.length} floor${M.floors.length > 1 ? "s" : ""}${n ? ` · ${n + 1} sizes` : ""} · guide ${g.done}/${g.rooms}${prob.size ? "" : "  OK"}`);
     for (const [m, lv] of prob) console.log(`   ! ${m}${tag(lv)}`);
@@ -696,7 +715,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw };
@@ -840,6 +859,33 @@ function cmdKit(sub, dir, name) {
   die("node atlas.js kit list [<dir>] · kit use <dir> <kit> · kit save <dir> [name]");
 }
 
+// A cave for a place (engine/atlas-cave.js): generated from settings or a seed, checked, its riddles and traps made and
+// proved (atlas-puzzles.js, atlas-traps.js), and written as places/<id>.js, a place like any other, every word a draft
+function cmdCave(dir, id) {
+  if (!dir || !id) die(`node atlas.js cave <dir> <place-id> [--name "The Drowned Caves"] [--random] [--seed S] [--tier 1|2|3]
+      [--size tiny|small|medium|large|enormous|custom --w 60 --h 40] [--levels N] [--complexity ...] [--chambers ...] [--tunnels ...]
+      [--vertical ...] [--water ...] [--geology ...] [--env ...] [--danger ...] [--explore ...] [--light ...] [--encounters ...]
+      [--traps ...] [--riddles ...] [--secrets ...] [--ways ...] [--force]     (node atlas.js cave --help-settings lists the choices)`);
+  const A = load(dir), CV = A.cave;
+  const s = flags.random ? CV.randomSettings(flags.seed || CV.newSeed()) : Object.assign({}, CV.DEFAULTS, { seed: flags.seed || CV.newSeed() });
+  for (const [k, , list] of CV.SETTINGS) if (typeof flags[k] === "string") { if (!list.some(x => x[0] === flags[k])) die(`--${k} must be one of: ${list.map(x => x[0]).join(", ")}`); s[k] = flags[k]; }
+  for (const k of ["levels", "w", "h", "nTraps", "nRiddles"]) if (flags[k] != null) s[k] = +flags[k];
+  if (typeof flags.seed === "string") s.seed = flags.seed;
+  const file = path.join(dir, "places", id + ".js");
+  if (A.meta[id] && !flags.force) die(`${id} is already a place of this campaign. Choose another id, or add --force to make places/${id}.js again (the old file is replaced).`);
+  if (fs.existsSync(file) && !flags.force) die(`${file} is already there. Add --force to replace it.`);
+  const { map, report } = CV.generate(s), c = report.check;
+  const def = { name: flags.name || "The Caves", tier: +flags.tier || 3, tagline: map.ov.split(". ")[0] + ".", music: { mood: "cave", also: {} }, map };
+  if (typeof flags.region === "string") def.region = flags.region;
+  for (const r of Object.values(map.riddles)) if (r.campaign) delete r.campaign;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `// ${def.name}: a cave made by "atlas.js cave" (seed "${s.seed}"; ${CV.SETTINGS.map(([k]) => k + " " + s[k]).join(", ")}).\n// Every word is a draft: change names, rooms, riddles and traps as the story needs. Remake it with the same seed\n// and settings and it comes back the same.\nATLAS.place(${JSON.stringify(id)}, ${JSON.stringify(def)});\n`);
+  console.log(`${file}: ${def.name}, ${report.levels === 1 ? "one level" : report.levels + " levels"} of ${report.size.join("x")} squares: ${report.chambers} chambers, ${report.passages} passages${report.built ? ", " + report.built + " built rooms" : ""}, ${report.traps} traps, ${report.riddles} riddles, ${report.secrets} secret doors, ${report.encounters} encounters.`);
+  console.log(`way through: ${c.summary}${c.repaired ? ` (mended on ${c.repaired} level${c.repaired > 1 ? "s" : ""})` : ""}`);
+  for (const x of c.errors) console.log("   ! " + x.text); for (const x of c.warnings) console.log("   - " + x.text);
+  console.log(`Then: give it its place in the story (a lead to it, its people, its tier), and run: node atlas.js check ${dir} ${id}`);
+}
+
 // The model library (engine/atlas-models*.js): what can be put on a floor's P, by words, genre and kind; or its kits
 function cmdModels(words) {
   const A = require(path.join(ENGINE, "atlas-engine.js"));
@@ -853,6 +899,7 @@ function cmdModels(words) {
 
 switch (cmd) {
   case "models": cmdModels(pos); break;
+  case "cave": if (flags["help-settings"]) { const A = require(path.join(ENGINE, "atlas-engine.js")); for (const f of MODEL_FILES) new Function("ATLAS", fs.readFileSync(path.join(ENGINE, f), "utf8"))(A); for (const [k, l, list] of A.cave.SETTINGS) console.log(`--${k.padEnd(11)} ${l}: ${list.map(x => x[0]).join(", ")}`); break; } cmdCave(pos[0], pos[1]); break;
   case "city": cmdCity(pos[0], pos[1]); break;
   case "locate": cmdLocate(pos[0], pos.slice(1).join(" ")); break;
   case "init": cmdInit(pos[0]); break;

@@ -27,7 +27,13 @@
     ["horror", "Dark horror", { bg: 0x06080b, sky: 0x8796b6, ground: 0x0b0b12, hemi: .26, sun: 0xa9bcff, si: .34, lamp: [0xa8ffcf], li: .9, fx: "flicker", dark: true }],
     ["lab", "Laboratory", { bg: 0x161c22, sky: 0xf4fbff, ground: 0x8c99a6, hemi: .82, sun: 0xffffff, si: .72, lamp: [0xdff4ff], li: .3 }],
     ["emergency", "Emergency red", { bg: 0x0d0303, sky: 0xff7a6a, ground: 0x1d0606, hemi: .3, sun: 0xff4a36, si: .26, lamp: [0xff2a1a], li: 1.6, fx: "pulse", dark: true }],
-    ["neon", "Cyberpunk neon", { bg: 0x08040f, sky: 0x9a80ff, ground: 0x140828, hemi: .32, sun: 0x9a88ff, si: .3, lamp: [0xff2bd6, 0x22e6ff], li: 1.6, fx: "hum" }]
+    ["neon", "Cyberpunk neon", { bg: 0x08040f, sky: 0x9a80ff, ground: 0x140828, hemi: .32, sun: 0x9a88ff, si: .3, lamp: [0xff2bd6, 0x22e6ff], li: 1.6, fx: "hum" }],
+    // the lights of caves (atlas-cave.js): black but for a lantern's reach, a grey seep from above, living glow, magic, lava
+    ["dark", "Pitch black", { bg: 0x030304, sky: 0x4a5266, ground: 0x050506, hemi: .1, sun: 0x8a96b4, si: .08, lamp: [0xffb46a], li: 2, fx: "flicker", dark: true }],
+    ["dim", "Dim light", { bg: 0x101114, sky: 0x9aa3b5, ground: 0x15161a, hemi: .32, sun: 0xb8c4dc, si: .24, lamp: [0xd8c8a0], li: .6 }],
+    ["biolum", "Glowing life", { bg: 0x02090b, sky: 0x3fd6c4, ground: 0x041514, hemi: .3, sun: 0x5ff0d8, si: .14, lamp: [0x46f0c8, 0x8a7dff], li: 1.5, fx: "hum", dark: true }],
+    ["arcane", "Magical light", { bg: 0x0a0614, sky: 0xb79bff, ground: 0x120a22, hemi: .38, sun: 0xd0b8ff, si: .26, lamp: [0xa77bff, 0x7fd0ff], li: 1.3, fx: "hum" }],
+    ["lava", "Lava-lit", { bg: 0x120402, sky: 0xff8a4a, ground: 0x3a0a02, hemi: .3, sun: 0xff6a2a, si: .24, lamp: [0xff5a14], li: 1.9, fx: "flicker", dark: true }]
   ];
   const LIGHT = Object.fromEntries(R3.LIGHTS.map(l => [l[0], l[2]]));
   R3.WALLS = [["cut", "Walls cut away"], ["low", "Low walls"], ["full", "Full walls"]];
@@ -93,6 +99,8 @@
     const edge = (i, j, or) => {
       const a = or === "h" ? at(i, j - 1) : at(i - 1, j), b = at(i, j);
       if ((a && b && a.rid === b.rid) || (!indoor(a) && !indoor(b))) return null;
+      // in a cave only a built place has walls; the rock is raised as rock (the stage's buildCave)
+      if (F.cave && !((a && a.o.b) || (b && b.o.b))) return null;
       const ext = !(indoor(a) && indoor(b)) || (a.o.b || "") !== (b.o.b || "");
       // behind the room on the camera's side, with nothing indoors beyond it
       const back = or === "h" ? indoor(b) && !indoor(a) : indoor(a) && !indoor(b);
@@ -235,8 +243,99 @@
       const geo = own(new T.BoxGeometry(Math.max(.001, w), Math.max(.001, h), Math.max(.001, d)));
       const me = new T.Mesh(geo, mat); me.position.set(x, y + h / 2, z); if (ry) me.rotation.y = ry; me.castShadow = me.receiveShadow = true; if (data) me.userData = data; (group || G.walls).add(me); return me;
     }
+    /* -- a cave (atlas-cave.js): the rock raised around the floor along the line the 2D map draws, tall behind the floor
+          and low in front of it (as walls are cut away), its faces bulging a little; chasms as holes going down; water
+          and lava as surfaces; high ground as raised floor wearing the same drawing */
+    const rockM = {}, rockOf = geo => rockM[geo] || (rockM[geo] = own(new T.MeshStandardMaterial({ color: { limestone: 0x8b8170, volcanic: 0x3e3734, ice: 0x9fb3bd, crystal: 0x7e7489, sandstone: 0xa5825c, ancient: 0x4c4f49 }[geo] || 0x8b8170, roughness: 1, flatShading: true })));
+    const pitM = own(new T.MeshStandardMaterial({ color: 0x14100d, roughness: 1, side: T.DoubleSide })), voidM = own(new T.MeshBasicMaterial({ color: 0x000000 }));
+    const waterM = own(new T.MeshStandardMaterial({ color: 0x1d4b55, transparent: true, opacity: .55, roughness: .08, metalness: .25, depthWrite: false }));
+    const lavaM = own(new T.MeshStandardMaterial({ color: 0xff5a14, emissive: 0xff4a10, emissiveIntensity: .9, roughness: .6 }));
+    function buildCave(F, gm) {
+      const O = A.cave.outline(F, gm), m = O.m, W = F.w, D = F.h, mode = S.walls, tall = mode === "low" ? 1 : (+F.wh || 2.7) * .95, low = mode === "full" ? tall : mode === "low" ? 1 : .55;
+      const floorAt = (x, y) => { const i = Math.floor(x), j = Math.floor(y); if (i < 0 || j < 0 || i >= W || j >= D) return false; const c = j * W + i; return m.own[c] >= 0 && (gm || !m.hid[c]); };
+      const n2 = (x, y) => Math.sin(x * 1.7 + y * .9) * .5 + Math.sin(x * .6 - y * 1.3) * .5;
+      // which side of a loop the rock is on, and how high it stands there
+      const height = (x, y, nx, ny) => { const face = (-nx + ny) / Math.SQRT2, f = Math.max(0, Math.min(1, .5 - face * 1.1)); return Math.max(.35, low + (tall - low) * f + n2(x, y) * .22); };
+      const loops = O.floor.map(L => L.length > 2 ? L : null).filter(Boolean);
+      const inside = (p, L) => { let c = false; for (let i = 0, j = L.length - 1; i < L.length; j = i++) { const [xi, yi] = L[i], [xj, yj] = L[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) c = !c; } return c; };
+      const depth = loops.map((L, i) => loops.reduce((n, K, j) => n + (j !== i && inside(L[0], K) ? 1 : 0), 0));
+      const pos = [], idx = []; let base = 0;
+      const vtx = (x, y, h) => { pos.push(x * sq, h, y * sq); return base++; };
+      const hAt = new Map(), key = p => p[0].toFixed(3) + "," + p[1].toFixed(3);
+      // the faces of the rock: for each loop, from the floor up, the middle bulging toward the floor
+      loops.forEach(L => {
+        const n = L.length, ring0 = [], ring1 = [], ring2 = [];
+        for (let i = 0; i < n; i++) {
+          const a = L[(i - 1 + n) % n], b = L[(i + 1) % n], tx = b[0] - a[0], ty = b[1] - a[1], tl = Math.hypot(tx, ty) || 1;
+          let nx = ty / tl, ny = -tx / tl; if (floorAt(L[i][0] + nx * .3, L[i][1] + ny * .3)) { nx = -nx; ny = -ny; }   // (nx, ny) points into the rock
+          const h = height(L[i][0], L[i][1], nx, ny), bul = .12 + .1 * n2(L[i][1], L[i][0]);
+          hAt.set(key(L[i]), h);
+          ring0.push(vtx(L[i][0], L[i][1], 0)); ring1.push(vtx(L[i][0] - nx * bul, L[i][1] - ny * bul, h * .5)); ring2.push(vtx(L[i][0], L[i][1], h));
+        }
+        for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(ring0[i], ring0[j], ring1[j], ring0[i], ring1[j], ring1[i], ring1[i], ring1[j], ring2[j], ring1[i], ring2[j], ring2[i]); }
+      });
+      const faces = new T.BufferGeometry(); faces.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); faces.setIndex(idx); faces.computeVertexNormals();
+      const fm = new T.Mesh(own(faces), rockOf(F.geo)); fm.material.side = T.DoubleSide; fm.castShadow = fm.receiveShadow = true; G.walls.add(fm);
+      // the top of the rock: the map's frame with the floor cut out of it, pillars as islands; each point at its height
+      const toV = L => L.map(p => new T.Vector2(p[0], p[1]));
+      // (the frame has a point every two squares, so the rock's top slopes evenly to the map's edge)
+      const ring = []; for (let x = 0; x < W; x += 2) ring.push([x, 0]); for (let y = 0; y < D; y += 2) ring.push([W, y]); for (let x = W; x > 0; x -= 2) ring.push([x, D]); for (let y = D; y > 0; y -= 2) ring.push([0, y]);
+      const frame = new T.Shape(toV(ring));
+      const shapes = [frame];
+      loops.forEach((L, i) => { if (depth[i] % 2 === 0) frame.holes.push(new T.Path(toV(L))); else if (depth[i] === 1) { const sh = new T.Shape(toV(L)); loops.forEach((K, k) => { if (depth[k] === 2 && inside(K[0], L)) sh.holes.push(new T.Path(toV(K))); }); shapes.push(sh); } });
+      // the top's height everywhere: each point takes the height of the wall nearest it (spread over the squares'
+      // corners, then smoothed), rising a little further from the edge behind the floor
+      const GW = W + 1, GD = D + 1, hg = new Float32Array(GW * GD).fill(NaN), dg = new Int32Array(GW * GD).fill(-1), qu = [];
+      loops.forEach(L => L.forEach(p => { const h = hAt.get(key(p)); if (h == null) return; const c = Math.round(p[1]) * GW + Math.round(p[0]); if (dg[c] < 0) { dg[c] = 0; hg[c] = h; qu.push(c); } }));
+      for (let i = 0; i < qu.length; i++) { const c = qu[i], x = c % GW; for (const e of [x > 0 ? c - 1 : -1, x < GW - 1 ? c + 1 : -1, c - GW, c + GW]) if (e >= 0 && e < GW * GD && dg[e] < 0) { dg[e] = dg[c] + 1; hg[e] = hg[c]; qu.push(e); } }
+      for (let c = 0; c < GW * GD; c++) { if (isNaN(hg[c])) hg[c] = low; if (hg[c] > (low + tall) / 2) hg[c] += Math.min(.6, dg[c] * .08); }
+      for (let pass = 0; pass < 3; pass++) { const t = hg.slice(); for (let y = 0; y < GD; y++) for (let x = 0; x < GW; x++) { let s = 0, n = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < GW && Y < GD) { s += t[Y * GW + X]; n++; } } hg[y * GW + x] = s / n; } }
+      const hField = (x, y) => { const X = Math.max(0, Math.min(W - .001, x)), Y = Math.max(0, Math.min(D - .001, y)), i = Math.floor(X), j = Math.floor(Y), fx = X - i, fy = Y - j, g = (a, b) => hg[b * GW + a]; return (g(i, j) * (1 - fx) + g(i + 1, j) * fx) * (1 - fy) + (g(i, j + 1) * (1 - fx) + g(i + 1, j + 1) * fx) * fy; };
+      // the top, its long triangles cut until none is longer than a square and a half (each edge cut the same way on both
+      // of its sides, so the surface never cracks)
+      const cap0 = new T.ShapeGeometry(shapes), p0 = cap0.attributes.position, ix0 = cap0.index ? Array.from(cap0.index.array) : [...Array(p0.count).keys()];
+      const P = []; for (let i = 0; i < p0.count; i++) P.push([p0.getX(i), p0.getY(i)]);
+      let tris = []; for (let i = 0; i < ix0.length; i += 3) tris.push([ix0[i], ix0[i + 1], ix0[i + 2]]);
+      for (let pass = 0; pass < 7; pass++) {
+        const mid = new Map(), long = (a, b) => Math.hypot(P[a][0] - P[b][0], P[a][1] - P[b][1]) > 1.5, M2 = (a, b) => { const k = a < b ? a + "_" + b : b + "_" + a; let m = mid.get(k); if (m == null) { m = P.length; P.push([(P[a][0] + P[b][0]) / 2, (P[a][1] + P[b][1]) / 2]); mid.set(k, m); } return m; };
+        let any = false; const out = [];
+        for (const [a, b, c] of tris) {
+          const sab = long(a, b), sbc = long(b, c), sca = long(c, a), n = sab + sbc + sca;
+          if (!n) { out.push([a, b, c]); continue; } any = true;
+          if (n === 3) { const x = M2(a, b), y = M2(b, c), z = M2(c, a); out.push([a, x, z], [x, b, y], [z, y, c], [x, y, z]); }
+          else if (n === 1) { if (sab) { const m = M2(a, b); out.push([a, m, c], [m, b, c]); } else if (sbc) { const m = M2(b, c); out.push([a, b, m], [a, m, c]); } else { const m = M2(c, a); out.push([a, b, m], [m, b, c]); } }
+          else { if (!sca) { const m = M2(a, b), k = M2(b, c); out.push([m, b, k], [a, m, k], [a, k, c]); } else if (!sab) { const m = M2(b, c), k = M2(c, a); out.push([k, m, c], [a, b, m], [a, m, k]); } else { const m = M2(c, a), k = M2(a, b); out.push([a, k, m], [k, b, c], [k, c, m]); } }
+        }
+        tris = out; if (!any || tris.length > 400000) break;
+      }
+      const cpos = new Float32Array(P.length * 3); P.forEach(([x, y], i) => { const h = hAt.get(x.toFixed(3) + "," + y.toFixed(3)); cpos[i * 3] = x * sq; cpos[i * 3 + 1] = h != null ? h : hField(x, y); cpos[i * 3 + 2] = y * sq; });
+      const cap = new T.BufferGeometry(); cap.setAttribute("position", new T.BufferAttribute(cpos, 3)); cap.setIndex(tris.flat()); cap.computeVertexNormals(); cap0.dispose();
+      const cm = new T.Mesh(own(cap), rockOf(F.geo)); cm.material.side = T.DoubleSide; cm.receiveShadow = true; G.walls.add(cm);
+      // chasms: holes in the floor, walls going down into the dark, and a floor far below
+      const ch = (O.kinds.find(k => k[0] === "chasm") || [0, []])[1], deep = 6;
+      for (const L of ch) {
+        const n = L.length, p = [], ix = []; L.forEach(q => { p.push(q[0] * sq, 0, q[1] * sq, q[0] * sq, -deep, q[1] * sq); });
+        for (let i = 0; i < n; i++) { const j = (i + 1) % n; ix.push(i * 2, j * 2, j * 2 + 1, i * 2, j * 2 + 1, i * 2 + 1); }
+        const gg = new T.BufferGeometry(); gg.setAttribute("position", new T.Float32BufferAttribute(p, 3)); gg.setIndex(ix); gg.computeVertexNormals(); G.walls.add(new T.Mesh(own(gg), pitM));
+        const bot = new T.ShapeGeometry(new T.Shape(toV(L))); bot.rotateX(Math.PI / 2); bot.scale(sq, 1, sq); bot.translate(0, -deep, 0); G.walls.add(new T.Mesh(own(bot), voidM));
+      }
+      // water and lava: their surfaces; lava glows
+      for (const [k, Ls] of O.kinds) {
+        const mat = k === "lava" ? lavaM : (k === "water" || k === "river" || k === "shallows") ? waterM : null; if (!mat) continue;
+        for (const L of Ls) { const sg = new T.ShapeGeometry(new T.Shape(toV(L))); sg.rotateX(Math.PI / 2); sg.scale(sq, 1, sq); sg.translate(0, k === "lava" ? .03 : .05, 0); const me = new T.Mesh(own(sg), mat); me.renderOrder = 2; G.walls.add(me); }
+      }
+      // high ground: the floor raised, wearing the same drawing, its sides of rock
+      for (const r of F.R || []) {
+        const [, x, y, w, h, , kind, o = {}] = r; if (!(o.el > 0) || (o.h && !gm) || A.isSolid(kind)) continue;
+        const e = +o.el, sideM = rockOf(F.geo), top = new T.PlaneGeometry(w * sq, h * sq), uv = top.attributes.uv;
+        for (let i = 0; i < uv.count; i++) { const u = uv.getX(i), v = uv.getY(i); uv.setXY(i, (x + u * w) / W, 1 - (y + (1 - v) * h) / D); }
+        const tm = new T.Mesh(own(top), floorMat); tm.rotation.x = -Math.PI / 2; tm.position.set((x + w / 2) * sq, e + .002, (y + h / 2) * sq); tm.receiveShadow = true; G.walls.add(tm);
+        box(w * sq, e, h * sq, [sideM, sideM, floorMat, sideM, sideM, sideM], (x + w / 2) * sq, 0, (y + h / 2) * sq, 0, G.walls, { cave: 1 });
+      }
+    }
     function buildWalls(F, gm) {
       G.walls.clear(); G.stairs.clear();
+      if (F.cave && A.cave && A.cave.outline) buildCave(F, gm);
       const th0 = Math.max(1, sq / 1.524), H = wallH();
       for (const s of R3.walls(F, gm, S.walls)) {
         const th = (s.ext ? .22 : .12) * th0, top = s.tall ? H : Math.min(LOW, H), side = s.ext ? extM : wallM, mats = [side, side, capM, side, side, side];
@@ -399,6 +498,8 @@
       const at = [];
       for (const it of S.items) if (it.p.glow || GLOW_RX.test(it.p.a)) at.push([it.p.x, it.p.y]);
       for (const p of F.P || []) if ((GLOW_RX.test(p.a) || (M.entry(p.a) || {}).glow) && (S.gm || !p.h)) at.push([p.x, p.y]);
+      // a cave's lava glows: a lamp over each pool of it
+      if (F.cave) for (const r of F.R || []) if (r[6] === "lava" && r[3] * r[4] >= 2) at.unshift([r[1] + r[3] / 2, r[2] + r[4] / 2]);
       if (at.length < 3 && k !== "normal" && k !== "lab") for (const q of (F.R || []).filter(q => A.isIndoorKind(q[6]) && (S.gm || !(q[7] && q[7].h))).sort((a, b) => b[3] * b[4] - a[3] * a[4]).slice(0, 6)) at.push([q[1] + q[3] / 2, q[2] + q[4] / 2]);
       const pick = []; for (const p of at) if (pick.length < 8 && !pick.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 3)) pick.push(p);
       pick.forEach(([x, y], i) => { const pl = new T.PointLight(L.lamp[i % L.lamp.length], L.li, sq * 9, 1.6); pl.position.set(x * sq, 1.9, y * sq); G.lights.add(pl); S.lamps.push({ l: pl, base: L.li, ph: i * 1.7 }); });
@@ -568,8 +669,10 @@
         if (S.keys.geo !== geoK + S.walls) { S.keys.geo = geoK + S.walls; buildWalls(F, S.gm); drawGrid(F); }
         // the drawing on the floor: the furniture raised in 3D, the markers and the models are left off it
         let svg = "";
-        A.__noProps = true; A.__noMarkers = true; A.__raise = it => !!R3.raise(it, F);
-        try { svg = s.svg ? s.svg() : ""; } finally { A.__noProps = false; A.__noMarkers = false; A.__raise = null; }
+        A.__noProps = true; A.__noMarkers = true; A.__raise = it => !!R3.raise(it, F); A.__holes = !!F.cave;
+        try { svg = s.svg ? s.svg() : ""; } finally { A.__noProps = false; A.__noMarkers = false; A.__raise = null; A.__holes = false; }
+        // a cave's chasms are holes in the drawing: the floor lets them through, so the eye falls into them
+        const at = F.cave ? .5 : 0; if (floorMat.alphaTest !== at) { floorMat.alphaTest = at; floorMat.needsUpdate = true; }
         if (svg && svg !== S.keys.svg) { S.keys.svg = svg; drawFloor(svg, F); }
         drawUnder(s.under || null);
         if (S.keys.items !== itemK) { S.keys.items = itemK; await buildItems(F, S.gm, g); if (g !== S.gen) return; }

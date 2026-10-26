@@ -579,7 +579,7 @@
   function previewHTML(d) {
     const k = d.kind;
     if (k === "map" && d.fly && !A.maps[d.place]) flyPlace(d.fly);
-    if (k === "map" && A.maps[d.place]) { const fi = +d.floor || 0, fog = (S.get("fog", d.place) || {}).f || {}; return `<div class="tp-map">${T.fogSVG(d.place, fi, fog[fi] || [], true)}</div>`; }
+    if (k === "map" && A.maps[d.place]) { const fi = +d.floor || 0, doc = S.get("fog", d.place) || {}, fog = doc.f || {}; return `<div class="tp-map">${T.fogSVG(d.place, fi, fog[fi] || [], true, doc)}</div>`; }
     const word = (ic, w) => `<div class="tp-word">${T.icon(ic, "big")}<p>${esc(w)}</p></div>`;
     let inner = "";
     if (k === "handout") { const h = T.allHandouts().find(x => x.id === d.id) || d.h; inner = h ? T.handoutHTML(h) : ""; }
@@ -611,13 +611,16 @@
     const id = UI.fogPlace; if (id && !A.maps[id]) { const f = flies.find(x => x.id === id); if (f) flyPlace(f); }
     const M = id && A.maps[id] ? A.get(id) : null, floors = M ? M.floors.map((F, i) => [F, i]).filter(([F]) => !A.isGmFloor(F)) : [];
     if (M && !floors.some(([, i]) => i === UI.fogFloor)) UI.fogFloor = floors.length ? floors[0][1] : 0;
-    const fog = id ? ((S.get("fog", id) || {}).f || {})[UI.fogFloor] || [] : [], onScreen = d.kind === "map" && d.place === id && (+d.floor || 0) === UI.fogFloor;
+    const doc = id ? S.get("fog", id) || {} : {}, fog = (doc.f || {})[UI.fogFloor] || [], onScreen = d.kind === "map" && d.place === id && (+d.floor || 0) === UI.fogFloor;
+    // on a cave the fog is also brushed away, or painted back, square by square (the user asked, 26 Oct 2026)
+    const Fl = M ? M.floors[UI.fogFloor] : null, brush = !!(Fl && Fl.cave), mode = brush ? UI.fogMode || "rooms" : "rooms", cs = Fl && T.fogCells ? T.fogCells(doc, UI.fogFloor, Fl) : null, painted = cs ? cs.filter(c => c === "1").length : 0;
     return `<div class="t-row"><select data-t="fogplace" aria-label="Place">${mapped.map(p => `<option value="${esc(p.id)}"${p.id === id ? " selected" : ""}>${esc(p.name)}</option>`).join("")}${flies.length ? `<optgroup label="Made at the table">${flies.map(f => `<option value="${esc(f.id)}"${f.id === id ? " selected" : ""}>${esc(f.name)}</option>`).join("")}</optgroup>` : ""}</select>
         ${floors.length > 1 ? `<select data-t="fogfloor" aria-label="Floor">${floors.map(([F, i]) => `<option value="${i}"${i === UI.fogFloor ? " selected" : ""}>${esc(F.n)}</option>`).join("")}</select>` : ""}
         ${onScreen ? `<span class="t-onscr">${T.icon("screen")}On their screen</span>` : `<button type="button" class="t-btn prim" data-t="showmap" data-id="${esc(id)}">${T.icon("screen")}Put it on their screen</button>`}</div>
-      <p class="t-legend"><span><i class="lg-h"></i>hidden from the players</span><span><i class="lg-s"></i>they can see it</span><span>Click a room to show it or hide it again · ${plural(fog.length, "room")} shown on this floor</span></p>
-      <div class="t-row"><button type="button" class="t-mini" data-t="fogall">Show every room</button><button type="button" class="t-mini" data-t="fognone">Hide them all</button></div>
-      <div class="t-fog">${M ? T.fogSVG(id, UI.fogFloor, fog, false) : `<p class="kn">No mapped places yet.</p>`}</div>`;
+      ${doc.off ? `<p class="t-legend">The fog is off on this map: the players see all of it (but never what is hidden).</p>` : `<p class="t-legend"><span><i class="lg-h"></i>hidden from the players</span><span><i class="lg-s"></i>they can see it</span><span>${mode === "rooms" ? "Click a room to show it or hide it again" : mode === "reveal" ? "Drag over the map to clear the fog" : "Drag over the map to bring the fog back"} · ${plural(fog.length, "room")}${painted ? " and " + plural(painted, "square") : ""} shown on this floor</span></p>`}
+      ${M && !doc.off && brush ? `<div class="t-row t-fogtools" role="group" aria-label="How to clear the fog"><button type="button" class="t-mini" data-t="fogmode" data-m="rooms" aria-pressed="${mode === "rooms"}">Room by room</button><button type="button" class="t-mini" data-t="fogmode" data-m="reveal" aria-pressed="${mode === "reveal"}">Brush the fog away</button><button type="button" class="t-mini" data-t="fogmode" data-m="cover" aria-pressed="${mode === "cover"}">Paint the fog back</button><label class="t-fogsz">Brush <select data-t="fogbrush">${[[1, "1 square"], [2, "2 squares"], [3, "3 squares"], [5, "5 squares"], [8, "8 squares"]].map(([v, l]) => `<option value="${v}"${(UI.fogBrush || 3) === v ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>` : ""}
+      <div class="t-row">${doc.off ? "" : `<button type="button" class="t-mini" data-t="fogall">Show every room</button><button type="button" class="t-mini" data-t="fognone">Hide them all</button>`}<button type="button" class="t-mini" data-t="fogreset" title="Every floor of this map back under fog, as before the party came">Start exploring again</button><label class="t-fogck"><input type="checkbox" data-t="fogoff"${doc.off ? "" : " checked"}> Fog on this map</label><label class="t-fogck"><input type="checkbox" data-t="fogprev"${UI.fogPrev ? " checked" : ""}> What the players see</label></div>
+      <div class="t-fog${mode !== "rooms" ? " t-fogpaint" : ""}" data-fogpaint="${mode !== "rooms" ? mode : ""}">${M ? T.fogSVG(id, UI.fogFloor, fog, !!UI.fogPrev, doc, { hits: mode === "rooms" }) : `<p class="kn">No mapped places yet.</p>`}</div>`;
   }
   function openFog(id) {
     if (!id || !A.maps[id]) return;
@@ -659,11 +662,17 @@
   }
   function toggleRoom(rid) {
     const id = UI.fogPlace, fi = UI.fogFloor, cur = S.get("fog", id) || {}, f = Object.assign({}, cur.f || {}), set = new Set(f[fi] || []);
-    set.has(rid) ? set.delete(rid) : set.add(rid); f[fi] = [...set]; S.set("fog", id, { f });
+    set.has(rid) ? set.delete(rid) : set.add(rid); f[fi] = [...set]; S.set("fog", id, Object.assign({}, cur, { f }));
   }
   function setRooms(all) {
     const id = UI.fogPlace, fi = UI.fogFloor, F = A.get(id).floors[fi], cur = S.get("fog", id) || {}, f = Object.assign({}, cur.f || {});
-    f[fi] = all ? [...new Set(F.R.filter(r => !(r[7] && r[7].h) && !A.isSolid(r[6])).map(r => r[0]))] : []; S.set("fog", id, { f });
+    f[fi] = all ? [...new Set(F.R.filter(r => !(r[7] && r[7].h) && !A.isSolid(r[6])).map(r => r[0]))] : []; const c = Object.assign({}, cur.c || {}); delete c[fi]; S.set("fog", id, Object.assign({}, cur, { f, c }));
+  }
+  // the fog brushed away (v "1") or painted back ("0") over squares of the floor, kept square by square
+  function paintFog(cells, v) {
+    const id = UI.fogPlace, fi = UI.fogFloor, F = A.get(id).floors[fi], cur = S.get("fog", id) || {}, cs = T.fogCells(cur, fi, F) || Array(F.w * F.h).fill(".");
+    for (const [x, y] of cells) if (x >= 0 && y >= 0 && x < F.w && y < F.h) cs[y * F.w + x] = v;
+    S.set("fog", id, Object.assign({}, cur, { c: Object.assign({}, cur.c || {}, { [fi]: cs.join("") }), cw: Object.assign({}, cur.cw || {}, { [fi]: F.w }) }));
   }
 
   /* ---- Clocks, and "They're stuck" */
@@ -892,6 +901,8 @@
       case "hplace": { const hs = T.allHandouts().filter(h => h.place === d.id); if (hs.length) openHandout(hs[0].id, d.id); break; }
       case "rtables": { const el = document.querySelector("#dossier .t-rt"); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.remove("lm-hl"); void el.offsetWidth; el.classList.add("lm-hl"); } break; }
       case "fogall": setRooms(true); break;
+      case "fogmode": UI.fogMode = b.dataset.m; renderTab(); fogDlgPaint(); break;
+      case "fogreset": if (b.dataset.sure) { const cur = S.get("fog", UI.fogPlace) || {}; S.set("fog", UI.fogPlace, { off: cur.off || false, f: {}, c: {} }); } else { b.dataset.sure = 1; b.textContent = "Really hide every floor again?"; } break;
       case "fognone": setRooms(false); break;
       case "showscene": { const bx = boxOf(b), tt = (bx.querySelector('[data-t="scenetitle"]') || {}).value || "", tx = (bx.querySelector('[data-t="scenetext"]') || {}).value || ""; if (!tx.trim() && !tt.trim()) return; show({ kind: "scene", title: tt.trim().slice(0, 120), text: tx.trim().slice(0, 4000) }); break; }
       case "showface": { const cid = (boxOf(b).querySelector('[data-t="facepick"]') || {}).value, c = (A.castData || {})[cid]; if (c) show({ kind: "person", name: c.n, role: T.plainRole(c.role), look: c.look || "" }); break; }   // the plain part of a role only: what follows a semicolon or a dash is often the secret
@@ -1020,7 +1031,7 @@
   A.tableUI = {
     stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab,
     // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
-    api: { store: () => S, ctx: () => X, note: t => note(t), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s) => askRaw(p, f || (() => {}), s), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); } },
+    api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s) => askRaw(p, f || (() => {}), s), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); } },
     init(ctx) {
       X = ctx; S = T.makeStore(ctx.db, cfg().storageKey); found = T.foundIn(S);
       if (A.story && A.story.connect) A.story.connect(S);
@@ -1037,6 +1048,34 @@
         refresh(MAP[f]);
         if (f === "screen" || f === "fog") { if (UI.dock === "screen") renderPop(); fogDlgPaint(); }
       });
+      // the fog brush: a drag over a cave's map in the fog panel clears the fog, or brings it back, square by square. It is
+      // kept as the drag goes (every third of a second), so the players' screen follows the brush; the panel is drawn
+      // again as it is kept, so the map under the pointer is looked up afresh each time
+      let fogStroke = null;
+      const fogSvg = () => document.querySelector((fogStroke && fogStroke.dlg ? "#tFogDlg " : "") + ".t-fogpaint svg");
+      const fogBrushAt = e => {
+        const svg = fogSvg(); if (!svg || !svg.getScreenCTM()) return;
+        const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()), C = A.C, n = UI.fogBrush || 3, r = (n - 1) / 2;
+        // the brush runs the whole way from where it was to where it is, however fast the hand moves
+        const to = [q.x / C, q.y / C], from = fogStroke.last || to, steps = Math.max(1, Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1]) / .5)); fogStroke.last = to;
+        let g = svg.querySelector(".fog-br"); if (!g) { g = document.createElementNS("http://www.w3.org/2000/svg", "g"); g.setAttribute("class", "fog-br" + (fogStroke.v === "0" ? " cover" : "")); svg.appendChild(g); }
+        for (let k = 1; k <= steps; k++) { const x0 = from[0] + (to[0] - from[0]) * k / steps, y0 = from[1] + (to[1] - from[1]) * k / steps;
+        for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++) for (let dx = -Math.ceil(r); dx <= Math.ceil(r); dx++) {
+          if (n > 1 && Math.hypot(dx, dy) > r + .5) continue;
+          const cx = Math.floor(x0) + dx, cy = Math.floor(y0) + dy, k = cx + "," + cy; if (fogStroke.cells.has(k)) continue;
+          fogStroke.cells.set(k, [cx, cy]); fogStroke.todo.push([cx, cy]);
+          const re = document.createElementNS("http://www.w3.org/2000/svg", "rect"); re.setAttribute("x", cx * C); re.setAttribute("y", cy * C); re.setAttribute("width", C); re.setAttribute("height", C); g.appendChild(re);
+        } }
+        if (Date.now() - fogStroke.t > 330 && fogStroke.todo.length) { fogStroke.t = Date.now(); paintFog(fogStroke.todo.splice(0), fogStroke.v); }
+      };
+      document.addEventListener("pointerdown", e => {
+        const box = e.target.closest && e.target.closest(".t-fogpaint"); if (!box || e.button) return;
+        e.preventDefault(); fogStroke = { v: box.dataset.fogpaint === "reveal" ? "1" : "0", cells: new Map(), todo: [], t: Date.now(), dlg: !!box.closest("#tFogDlg") };
+        fogBrushAt(e);
+      });
+      document.addEventListener("pointermove", e => { if (fogStroke) { e.preventDefault(); fogBrushAt(e); } });
+      const fogEnd = () => { if (!fogStroke) return; const st = fogStroke; fogStroke = null; if (st.todo.length) paintFog(st.todo, st.v); };
+      document.addEventListener("pointerup", fogEnd); document.addEventListener("pointercancel", fogEnd);
       S.watch("presence", screenStatusPaint); setInterval(screenStatusPaint, 15000);
       S.watch("xcard", xcard);
       document.addEventListener("click", async e => {
@@ -1047,6 +1086,7 @@
         const dk = t.closest("[data-dock]"); if (dk) { if (dk.dataset.dock === "close") dockClose(); else dockOpen(dk.dataset.dock); return; }
         if (UI.dock && !t.closest("#tPop, #tDock, dialog")) dockClose();
         const fh = t.closest(".t-fog .fog-hit"); if (fh) { toggleRoom(fh.dataset.fogroom); return; }
+        if (t.closest(".t-fogpaint")) return;
         const b = t.closest("[data-t]"); if (!b || b.tagName === "SELECT" || b.tagName === "TEXTAREA" || (b.tagName === "INPUT") || b.tagName === "FORM") return;
         await act(t, b, e);
       });
@@ -1056,6 +1096,9 @@
         if (d.t === "session") { S.set("log", "now", { n: +t.value }); }
         else if (d.t === "fogplace") { UI.fogPlace = t.value; UI.fogFloor = 0; renderTab(); fogDlgPaint(); }
         else if (d.t === "fogfloor") { UI.fogFloor = +t.value; renderTab(); fogDlgPaint(); }
+        else if (d.t === "fogbrush") UI.fogBrush = +t.value;
+        else if (d.t === "fogprev") { UI.fogPrev = t.checked; t.blur(); renderTab(); fogDlgPaint(); }
+        else if (d.t === "fogoff") { t.blur(); const cur = S.get("fog", UI.fogPlace) || {}; S.set("fog", UI.fogPlace, Object.assign({}, cur, { off: !t.checked })); }
         else if (d.t === "notes") saveNotes(+d.n, t.value);
         else if (d.t === "lines" || d.t === "veils") { const z = Object.assign({}, S.get("safety", "zero") || {}); z[d.t] = t.value.split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 60); S.set("safety", "zero", z); }
         else if (d.t === "cbset") { const c = cnow(), r = c.list.find(x => x.id === d.id); if (!r) return; r[d.f] = ["name", "note", "ac"].includes(d.f) ? t.value.slice(0, 120) : (t.value === "" ? null : +t.value); cset(c); }

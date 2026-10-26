@@ -44,6 +44,8 @@
     ["hotel", "Hotel", { g: [["Lobby", "carpet-r", "waiting"], ["Dining room", "boards", "dining"], ["Kitchen", "flag", "kitchen"], ["Office", "boards", "office"]], u: [["Room", "carpet-b", "bedroom"], ["Room", "carpet-g", "bedroom"], ["Room", "carpet-b", "bedroom"], ["Room", "carpet-r", "bedroom"]], ext: { size: "large", floors: 4, roof: "pitched", sign: true } }],
     ["prison", "Prison", { g: [["Gatehouse", "flag", "office"], ["Cells", "stone", "cell"], ["Cells", "stone", "cell"], ["Guardroom", "flag", "dorm"]], u: [["Cells", "stone", "cell"], ["Cells", "stone", "cell"], ["Governor's office", "boards", "office"]], ext: { size: "large", floors: 2, roof: "flat" } }],
     ["station", "Station or base module", { g: [["Airlock", "metal", ""], ["Control room", "metal", "office"], ["Mess", "metal", "dining"], ["Laboratory", "metal", "lab"]], u: [["Quarters", "metal", "dorm"], ["Quarters", "metal", "dorm"]], c: [["Engineering", "grating", "boiler"]], ext: { size: "medium", floors: 1, roof: "dome" } }],
+    // a cave (atlas-cave.js): its inside is a generated cave, or solid rock to carve; outside, a mound of rock
+    ["cave", "Cave or mine", { g: [], u: [], c: [], ext: { size: "medium", floors: 1, roof: "dome", cond: "ruined", wall: "#6b6258", roofc: "#5a5248" } }],
     ["other", "Something else", { g: [["Room", "boards", ""], ["Room", "boards", ""], ["Room", "boards", ""]], u: [["Room", "boards", ""], ["Room", "boards", ""]], c: [["Cellar", "flag", "cellar"]], ext: { size: "medium", floors: 1, roof: "pitched" } }]
   ];
   const KIND = Object.fromEntries(KINDS.map(k => [k[0], k]));
@@ -51,6 +53,14 @@
   const GRID = { small: [12, 10], medium: [16, 12], large: [22, 16], huge: [30, 22] };
   const ROOFS = [["pitched", "Pitched"], ["hip", "Hipped"], ["flat", "Flat"], ["dome", "Dome"], ["spire", "With a spire"], ["tower", "With a tower"]];
   const CONDS = [["", "Kept"], ["worn", "Weathered"], ["abandoned", "Abandoned, boarded"], ["ruined", "Ruined"]];
+
+  // a cave's inside: generated to suit its size (the seed its own), or rock all through, for the Carve tool
+  function caveInside(def, blank) {
+    const size = { small: "small", medium: "medium", large: "large", huge: "enormous" }[def.ext.size] || "medium";
+    if (!A.cave) return interior("other", def.ext, { blank });
+    if (blank) { const [W, H] = A.cave.SIZES[size]; return { floors: [{ n: "THE CAVE", w: W, h: H, cave: 1, geo: "limestone", R: [], D: [], ST: [], M: [], I: [], P: [] }] }; }
+    try { return A.cave.generate(Object.assign(A.cave.randomSettings(A.cave.newSeed()), { size, levels: 0, vertical: "elevations" })).map; } catch (e) { console.warn(e); return interior("other", def.ext, {}); }
+  }
 
   /* ---- a starting interior: each floor a hall with its rooms on both sides, each with a door onto the hall, the
           floors joined by stairs at the hall's end, the cellar by stairs at its start. Nothing in it is fixed. */
@@ -183,7 +193,8 @@
       // a new place: its inside is drawn now, from its kind (or an empty shell), and kept with it
       const id = newId(r.def.name), def = Object.assign(r.def, { city: (cityCtl && cityCtl.city) || undefined });
       if (def.ext.sign === "" && (KIND[def.type] || KIND.other)[2].ext.sign) def.ext.sign = def.name;
-      def.map = interior(def.type, def.ext, { blank: r.start === "blank", cellar: r.cellar });
+      def.map = def.type === "cave" ? caveInside(def, r.start === "blank") : interior(def.type, def.ext, { blank: r.start === "blank", cellar: r.cellar });
+      if (def.type === "cave" && def.map.ov && !def.kp) def.kp = def.map.ov;
       dlg.close(); draft = null;
       startPlacing(id, def, true);
     }

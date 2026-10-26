@@ -114,7 +114,24 @@ Put the same id on both floors, on the same squares, one `"up"` and one `"down"`
 
 ### M: markers
 
-`[id, x, y]`, the centre of the disc in squares. The letter decides the list the entry lives in: `C` and `K` (and any letter you add) in `clues`, `N` in `npcs`, `S` in `secrets`, `E` in `enc`. Draw the marker inside the room named by the entry's `at`.
+`[id, x, y]`, the centre of the disc in squares. The letter decides the list the entry lives in: `C` and `K` (and any letter you add) in `clues`, `N` in `npcs`, `S` in `secrets`, `E` in `enc`, `T` in `traps`, `P` in `riddles` (riddles and puzzles). Draw the marker inside the room named by the entry's `at`.
+
+### Caves
+
+A floor with `cave: 1` is drawn as a cave: rock all round, the floor carved out of it along a line that follows the stone, chambers and passages opening into each other with no walls between (`atlas.js cave` writes them: `workflow.md`, "Caves, riddles and traps"). Its rooms are rectangles sharing an id, as an L-shaped room is; the rock is whatever no rectangle covers. `geo` names its stone (`limestone volcanic ice crystal sandstone ancient`). A rectangle may say `el: 2.5` (its floor stands 2.5 metres up: a ledge; more than about a body's height between neighbours is a cliff), `cl: 1` (it can be climbed there), `sw: 1` (a passage meant to be swum), `sl: 1` (sealed on purpose, by a fall of rock), and `b: "ruin"` (a built room: walls and doors as in any building). Floors of caves: `cave basalt gravel moss fungus ice crystal blight shallows` (walked or waded), `water` (swum), `lava` and `chasm` (barred, unless a `bridge` crosses). A map made by the generator says how in `cave: { v, seed, settings, roles }`.
+
+### Traps and riddles
+
+```js
+traps: { T1: { t: "Pressure plate and darts", at: "R12", cat: "pressure", mech: "physical", vis: "hidden", sev: 3, diff: 3, area: [x, y, w, h],
+               trig: "...", d: "how it works", eff: "what happens", signs: ["..."], detect: { roll, how }, bypass: [{ how, roll }], disarm: { how, roll },
+               fail, ok, reset, alert, pd: "what the players see once it is found or goes off", kp, creative, links: [{ on: "trigger", do: "activate", to: "T2", why }] } },
+riddles: { P1: { t: "The sigil door", at: "R21", type: "runes", kind: "magic", diff: 3, pd: "what the players see (never the answer)", d, sol: "the answer",
+                 ans: ["also accepted"], why, hints: ["first", "second", "third"], ok, fail, time, needs: ["C4"], layout, data, check: { ok, notes },
+                 links: [{ on: "solve", do: "open", to: "door:h:12:7@0" }] } }
+```
+
+`links` are chains: `on` is `trigger`, `disarm`, `solve` or `fail`; `do` is `activate`, `disable`, `reset`, `lock`, `unlock`, `open`, `close`, `alert`, `awaken` or `reveal`; `to` is another trap, riddle, encounter, secret or room of the place, or a door (`door:<h|v>:<x>:<y>@<floor>`). A chain may not loop. `needs` names the clues (or the room) whose words a riddle depends on: they must be reachable before it. `data` and `check` are the solver's; keep them when you only change words. `check` validates all of it.
 
 ## 3. Rooms, clues, people, secrets, encounters
 

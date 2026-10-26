@@ -47,8 +47,9 @@
   }
   function draftOf(id) {
     const M = A.get(id);
-    return { t: M.t, rooms: copy((A.mapEdits[id] || {}).rooms || {}), order: M.order ? M.order.slice() : null,
-      floors: M.floors.map(F => { const o = { n: F.n, w: F.w, h: F.h, R: copy(F.R || []), D: copy(F.D || []), ST: copy(F.ST || []), M: copy(F.M || []), I: copy(loose(F)), P: copy(F.P || []) }; if (F.gm || F.k) o.gm = 1; if (F.note) o.note = F.note; if (F.light) o.light = F.light; if (F.wh) o.wh = F.wh; return o; }) };
+    const ed0 = A.mapEdits[id] || {}, more = {}; for (const k of ["ov", "run", "ext", "enc", "secrets", "cave", "start"]) if (ed0[k] != null) more[k] = copy(ed0[k]);
+    return { t: M.t, more, rooms: copy((A.mapEdits[id] || {}).rooms || {}), order: M.order ? M.order.slice() : null,
+      floors: M.floors.map(F => { const o = { n: F.n, w: F.w, h: F.h, R: copy(F.R || []), D: copy(F.D || []), ST: copy(F.ST || []), M: copy(F.M || []), I: copy(loose(F)), P: copy(F.P || []) }; if (F.gm || F.k) o.gm = 1; if (F.note) o.note = F.note; if (F.light) o.light = F.light; if (F.wh) o.wh = F.wh; if (F.cave) o.cave = 1; if (F.geo) o.geo = F.geo; return o; }) };
   }
   const finished = F0 => { const F = copy(F0); F.D = F.D || []; F.ST = F.ST || []; F.M = F.M || []; F.I = (F.I || []).slice(); return A.finishFloor(F, F.R); };
   const cur = () => E.draft.floors[E.fi];
@@ -194,6 +195,8 @@
   async function save() {
     const ed = { t: Date.now(), level: E.level, floors: copy(E.draft.floors), rooms: Object.fromEntries(Object.entries(E.draft.rooms).filter(([, r]) => Object.values(r).some(v => String(v || "").trim()))) };
     if (E.draft.order) ed.order = E.draft.order.filter(i => i < ed.floors.length);
+    // what else the map was given on the page (a generated cave's overview, dangers and secret ways)
+    for (const [k, v] of Object.entries(E.draft.more || {})) if (v != null) ed[k] = copy(v);
     A.mapEdit(E.id, ed); S.set("mapedits", E.id, ed);
     for (const p of PLUGS) if (p.save) { try { await p.save(api, ed); } catch (e) { console.warn(e); } }
     let where = "Saved in this campaign's page.";

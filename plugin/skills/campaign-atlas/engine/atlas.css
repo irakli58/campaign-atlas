@@ -1666,3 +1666,70 @@ button.ho-b:hover { color: var(--ink); }
 }
 @keyframes t-land { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .t-die.rolling { animation: none; } }
+
+/* ---- caves, riddles and traps (atlas-caveui.js) */
+.me-top > button.me-cave { border-color: var(--accent); color: var(--accent); }
+.cv-dlg { width: min(980px, 96vw); max-height: 94vh; padding: 0; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--ink); }
+.cv-dlg::backdrop { background: rgba(0, 0, 0, .55); }
+.cv-form { padding: 14px 18px 18px; display: grid; gap: 10px; }
+.cv-head { display: flex; align-items: center; gap: 8px; }
+.cv-head h3 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 24px; }
+.cv-head button { border: 0; background: none; font-size: 22px; cursor: pointer; color: var(--muted); }
+.cv-help { margin: 0; color: var(--muted); font-size: 14px; }
+.cv-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.cv-form button { border: 1px solid var(--rule); background: var(--bg); color: var(--ink); border-radius: 4px; padding: 6px 14px; cursor: pointer; font-size: 14px; }
+.cv-form button.prim { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+.cv-form button:disabled { opacity: .45; cursor: default; }
+.cv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 12px; }
+.cv-f { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
+.cv-f select, .cv-f input { font: inherit; font-size: 14.5px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 3px; padding: 5px 7px; }
+.cv-seed { min-width: 220px; }
+.cv-more summary { cursor: pointer; color: var(--muted); font-size: 13.5px; margin-bottom: 6px; }
+.cv-where { border: 1px solid var(--rule); border-radius: 6px; padding: 6px 12px 8px; display: grid; gap: 4px; font-size: 14px; }
+.cv-where legend { font-size: 12.5px; color: var(--muted); padding: 0 4px; }
+.cv-prev:empty { display: none; }
+.cv-rep { font-size: 14px; line-height: 1.45; margin-bottom: 6px; }
+.cv-pf { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.cv-pf button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.cv-svg { max-height: 52vh; overflow: auto; border: 1px solid var(--rule); border-radius: 6px; }
+.cv-svg .cv-map { width: 100%; height: auto; display: block; }
+.cv-act { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.cv-ok { color: var(--ok); }
+.cv-err { color: var(--accent); }
+.cv-brush rect { fill: rgba(31, 111, 209, .32); stroke: #1f6fd1; stroke-width: 1; pointer-events: none; }
+.cv-brush.erase rect { fill: rgba(60, 50, 40, .55); stroke: #2b2219; }
+.cv-roomsel { fill: rgba(31, 111, 209, .1); stroke: #1f6fd1; stroke-width: 1.5; stroke-dasharray: 4 3; pointer-events: none; }
+.cv-hl { fill: rgba(200, 40, 40, .2); stroke: #c62828; stroke-width: 2; pointer-events: none; }
+.me-ghost-r { fill: rgba(31, 111, 209, .22); stroke: #1f6fd1; stroke-width: 1.5; pointer-events: none; }
+.cv-check ul { margin: 6px 0; padding-left: 18px; font-size: 13.5px; line-height: 1.45; }
+.cv-check li.err { color: var(--accent); }
+.cv-check li.note { color: var(--muted); }
+.cv-check details summary { cursor: pointer; font-size: 13.5px; color: var(--muted); }
+.cv-kind { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); margin: 0 0 8px; }
+.cv-warn { color: var(--accent); font-size: 13px; padding-left: 18px; }
+.cv-links h5 { margin: 8px 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+.cv-links ul { margin: 0 0 6px; padding-left: 18px; font-size: 13.5px; }
+.cv-addlink { display: flex; flex-wrap: wrap; gap: 4px; }
+.cv-addlink select { font: inherit; font-size: 13px; padding: 3px 5px; border: 1px solid var(--rule); border-radius: 3px; background: var(--bg); color: var(--ink); max-width: 100%; }
+.dv-live { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 4px 0 10px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); font-size: 14px; }
+.dv-live select { font: inherit; font-size: 13.5px; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 3px; background: var(--bg); color: var(--ink); }
+.dv-ck { display: inline-flex; gap: 6px; align-items: center; }
+.dv-out { flex-basis: 100%; font-size: 13.5px; }
+.dv-out:empty { display: none; }
+.dv-chain, .dv-given { margin: 4px 0; padding-left: 20px; font-size: 13.5px; }
+.dv-chain .stop { color: var(--muted); font-style: italic; }
+.dv-given { flex-basis: 100%; }
+.lm-ans summary { cursor: pointer; color: var(--accent); }
+.lm-hints { margin: 2px 0; padding-left: 20px; }
+.lm-pre { font-family: var(--f-mono); font-size: 12.5px; line-height: 1.35; overflow-x: auto; background: var(--panel); padding: 6px 8px; border-radius: 4px; }
+.ho-stone { background: #8f8a80; background-image: radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, .18), transparent 60%), radial-gradient(ellipse at 80% 85%, rgba(0, 0, 0, .25), transparent 55%), repeating-linear-gradient(115deg, rgba(0, 0, 0, .04) 0 3px, transparent 3px 9px); color: #2a2622; padding: 34px 44px 38px; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: 20px; letter-spacing: .04em; text-align: center; border-radius: 6px; text-shadow: 0 1px 0 rgba(255, 255, 255, .28), 0 -1px 0 rgba(0, 0, 0, .35); box-shadow: inset 0 0 40px rgba(0, 0, 0, .35); }
+.ho-stone .ho-title { font-size: 26px; margin: 0 0 14px; }
+.ho-stone .ho-body p { margin: .5em 0; }
+/* the fog brush on a cave (atlas-table-gm.js) */
+.t-fogtools { gap: 4px; align-items: center; }
+.t-fogtools button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.t-fogsz, .t-fogck { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; color: var(--muted); margin-left: 6px; }
+.t-fogsz select { font: inherit; font-size: 13px; padding: 2px 4px; border: 1px solid var(--rule); border-radius: 3px; background: var(--bg); color: var(--ink); }
+.t-fogpaint svg { cursor: crosshair; touch-action: none; }
+.fog-br rect { fill: rgba(240, 200, 90, .45); stroke: #d6a531; stroke-width: .8; pointer-events: none; }
+.fog-br.cover rect { fill: rgba(20, 22, 26, .65); stroke: #000; }

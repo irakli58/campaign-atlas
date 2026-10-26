@@ -36,6 +36,9 @@
     const floors = ed.floors.map(F0 => { const F = Object.assign({ D: [], I: [], ST: [], M: [] }, copy(F0)); F.R = F.R || []; F.I = (F.I || []).slice(); return A.finishFloor ? A.finishFloor(F, F.R) : F; });
     const M = Object.assign({}, src, { floors, edited: ed.t || 1 }); delete M.order; if (ed.order) M.order = ed.order;
     M.rooms = Object.assign({}, src.rooms || {}); for (const [rid, r] of Object.entries(ed.rooms || {})) M.rooms[rid] = Object.assign({}, M.rooms[rid] || {}, r);
+    // a map made again on the page (a generated cave, atlas-caveui.js) brings its own overview, dangers and secret ways
+    for (const k of ["enc", "secrets"]) if (ed[k]) { M[k] = Object.assign({}, src[k] || {}, ed[k]); for (const [x, v] of Object.entries(ed[k])) if (v === null) delete M[k][x]; }   // (null: gone with the map it was on)
+    for (const k of ["ov", "run", "ext", "cave", "start"]) if (ed[k] != null) M[k] = ed[k];
     A.maps[id] = M; delete A.exp[id]; A.mapEdits[id] = ed; A.state.cache = {};
     return A;
   };
@@ -140,6 +143,8 @@
         return `<article class="ho ho-message era-${e}">${head}${String(h.text || "").split(/\n/).filter(l => l.trim()).map(l => { const m = /^([^:]{1,30}):\s*(.*)$/.exec(l); return `<div class="ho-msg${m && h.from && m[1].trim() === h.from ? " me" : ""}">${m ? `<b>${esc(m[1])}</b>${esc(m[2])}` : esc(l)}</div>`; }).join("")}</article>`;
       case "datapad":
         return `<article class="ho ho-datapad era-${e}"><header><span>${esc(h.title || "Record")}</span><span>${esc(h.date || "")}</span></header><div class="ho-body">${body}</div>${h.from ? `<footer>${esc(h.from)}</footer>` : ""}</article>`;
+      case "inscription":   // words cut in stone: a riddle shown to the players (atlas-caveui.js)
+        return `<article class="ho ho-stone era-${e}">${head}<div class="ho-body">${body}</div></article>`;
       case "scroll":
         return `<article class="ho ho-scroll era-${e}"><div class="ho-roll"></div>${head}<div class="ho-body">${body}</div>${h.from ? `<div class="ho-sign">${esc(h.from)}</div>` : ""}<div class="ho-wax"></div><div class="ho-roll"></div></article>`;
       default:
@@ -232,19 +237,42 @@
 
   /* ---- fog of war: a place's players' map with only the rooms the referee has opened. For the players' screen the
           fog is solid; for the referee's own view it is a veil, and each room can be clicked open or shut */
-  function fogSVG(id, fi, open, forPlayers) {
+  // doc (the place's whole fog: collection "fog") may also hold, floor by floor, squares the game master brushed open or
+  // fogged again over the rooms (c: one character a square, "1" seen, "0" fogged, "." as its room is; cw: the floor's
+  // width when it was painted), and off: true for a map with no fog at all. The user asked for the brush, for caves,
+  // on 26 Oct 2026; a hidden room the game master shows (a room, or a brushed square of it) joins the players' map.
+  function fogCells(doc, fi, F) {
+    const s = ((doc && doc.c) || {})[fi]; if (!s) return null;
+    const w0 = ((doc.cw || {})[fi]) || F.w; if (w0 === F.w && s.length === F.w * F.h) return s.split("");
+    const out = Array(F.w * F.h).fill("."), h0 = Math.floor(s.length / w0);
+    for (let y = 0; y < Math.min(h0, F.h); y++) for (let x = 0; x < Math.min(w0, F.w); x++) out[y * F.w + x] = s[y * w0 + x];
+    return out;
+  }
+  function fogShown(doc, fi, F, open) {
+    const set = new Set(open || []), cs = fogCells(doc, fi, F), show = new Set();
+    for (const r of F.R) { const o = r[7] || {}; if (!o.h) continue; if (set.has(r[0])) { show.add(r[0]); continue; } if (cs) for (let j = r[2]; j < r[2] + r[4] && !show.has(r[0]); j++) for (let i = r[1]; i < r[1] + r[3]; i++) if (cs[j * F.w + i] === "1") { show.add(r[0]); break; } }
+    return show;
+  }
+  // has the players' map of this floor anything on it?
+  const fogSeen = (doc, fi, F) => !!(doc && (((doc.f || {})[fi] || []).length || (fogCells(doc, fi, F) || []).includes("1")));
+  function fogSVG(id, fi, open, forPlayers, doc, opt) {
     const M = A.get(id), F = M.floors[fi]; if (!F) return "";
-    let s = A.svg(id, fi, "player", "f" + (A.state.n++));
-    const C = A.C, side = 10, top = 40, bot = 30, W = F.w * C, H = F.h * C, pad = C * .45, set = new Set(open || []), mid = "fog" + (A.state.n++);
+    doc = doc || {}; opt = opt || {};
+    const show = fogShown(doc, fi, F, open);
+    A.__showHidden = show.size ? show : null;
+    let s; try { s = A.svg(id, fi, "player", "f" + (A.state.n++)); } finally { A.__showHidden = null; }
+    if (doc.off) return s;
+    const C = A.C, side = 10, top = 40, bot = 30, W = F.w * C, H = F.h * C, pad = C * (F.cave ? .12 : .45), set = new Set(open || []), mid = "fog" + (A.state.n++);
     let holes = `<rect x="${-side}" y="${-top}" width="${W + side * 2}" height="${top - 2}" fill="#000"/>`, hits = "";
-    const seen = new Set();
     for (const r of F.R) {
       const [rid, x, y, w, h, name, kind, o = {}] = r;
-      if (o.h || A.isSolid(kind)) continue;
+      if ((o.h && !show.has(rid)) || A.isSolid(kind)) continue;
       if (set.has(rid)) holes += `<rect x="${x * C - pad}" y="${y * C - pad}" width="${w * C + pad * 2}" height="${h * C + pad * 2}" fill="#000"/>`;
-      if (!forPlayers) hits += `<rect class="fog-hit${set.has(rid) ? " on" : ""}" data-fogroom="${esc(rid)}" x="${x * C}" y="${y * C}" width="${w * C}" height="${h * C}"><title>${esc((name || rid) + (set.has(rid) ? ": shown to the players (click to hide)" : ": hidden from the players (click to show)"))}</title></rect>`;
-      seen.add(rid);
+      if (!forPlayers && opt.hits !== false) hits += `<rect class="fog-hit${set.has(rid) ? " on" : ""}" data-fogroom="${esc(rid)}" x="${x * C}" y="${y * C}" width="${w * C}" height="${h * C}"><title>${esc((name || rid) + (set.has(rid) ? ": shown to the players (click to hide)" : ": hidden from the players (click to show)"))}</title></rect>`;
     }
+    // the brushed squares, in runs along each row: fog put back, then fog brushed away
+    const cs = fogCells(doc, fi, F);
+    if (cs) for (const [ch, fill, p] of [["0", "#fff", 0], ["1", "#000", C * .06]]) for (let y = 0; y < F.h; y++) { let x = 0; while (x < F.w) { if (cs[y * F.w + x] !== ch) { x++; continue; } let e = x; while (e < F.w && cs[y * F.w + e] === ch) e++; holes += `<rect x="${x * C - p}" y="${y * C - p}" width="${(e - x) * C + p * 2}" height="${C + p * 2}" fill="${fill}"/>`; x = e; } }
     const fog = `<defs><mask id="${mid}"><rect x="${-side}" y="${-top}" width="${W + side * 2}" height="${H + top + bot}" fill="#fff"/>${holes}</mask></defs><rect x="${-side}" y="${-top}" width="${W + side * 2}" height="${H + top + bot}" fill="${forPlayers ? "#0b0c0d" : "#1d1f24"}" opacity="${forPlayers ? 1 : .55}" mask="url(#${mid})" pointer-events="none"/>`;
     return s.replace(/<\/svg>$/, fog + hits + "</svg>");
   }
@@ -453,7 +481,7 @@
       if (k === "map" && now.fly && !A.maps[now.place] && A.table.flyPlace) A.table.flyPlace(now.fly);
       if (k === "map" && A.maps[now.place]) {
         const fog = st.get("fog", now.place) || {}, fi = +now.floor || 0;
-        stage.innerHTML = `<div class="ps-map">${fogSVG(now.place, fi, (fog.f || {})[fi] || [], true)}</div>`;
+        stage.innerHTML = `<div class="ps-map">${fogSVG(now.place, fi, (fog.f || {})[fi] || [], true, fog)}</div>`;
       } else if (k === "handout") {
         const h = allHandouts().find(x => x.id === now.id) || (now.h || null);
         stage.innerHTML = h ? `<div class="ps-fit">${handoutHTML(h)}</div>` : "";
@@ -491,9 +519,9 @@
       const out = [];
       for (const id of A.order) {
         const m = A.meta[id]; if (!m || String(id).startsWith("fly-")) continue;
-        const s = (st.get("status", id) || {}).status || "unknown", fog = (st.get("fog", id) || {}).f || {}, seen = Object.values(fog).some(l => (l || []).length);
+        const s = (st.get("status", id) || {}).status || "unknown", fogD = st.get("fog", id) || {}, fog = fogD.f || {}, Mk = A.maps[id] ? A.get(id, 99) : null, seen = !!Mk && Mk.floors.some((F, fi) => !A.isGmFloor(F) && fogSeen(fogD, fi, F));
         if (s === "unknown" && !seen) continue;
-        out.push({ id, m, s, fog, seen });
+        out.push({ id, m, s, fog, fogD, seen });
       }
       return out;
     }
@@ -509,15 +537,15 @@
         }
         case "places": {
           const l = known();
-          return `<h2>Places</h2><p class="ps-hint">The places you know of, what you found there, and the rooms you have seen.</p>${l.length ? l.map(({ id, m, s, fog, seen }) => {
+          return `<h2>Places</h2><p class="ps-hint">The places you know of, what you found there, and the rooms you have seen.</p>${l.length ? l.map(({ id, m, s, fog, fogD, seen }) => {
             const M = A.maps[id] ? A.get(id, 99) : null, done = (st.get("clues", id) || {}).done || [];
             // what they found: its name, and what the referee wrote for the players to see (never what only the referee knows)
             const found = M ? done.map(k => (M.clues || {})[k]).filter(c => c && !c.arch).map(c => `<li>${esc(String(c.t || "").replace(/\s*\(.*\)\s*$/, ""))}${c.pd ? `<span class="ps-pd">${esc(c.pd)}</span>` : ""}</li>`).join("") : "";
-            const floors = M ? M.floors.map((F, fi) => [F, fi]).filter(([F, fi]) => !A.isGmFloor(F) && (fog[fi] || []).length) : [];
+            const floors = M ? M.floors.map((F, fi) => [F, fi]).filter(([F, fi]) => !A.isGmFloor(F) && (fogD.off || fogSeen(fogD, fi, F))) : [];
             const more = s !== "rumoured" || seen;
             return `<section class="ps-place"><div class="ps-ph"><h3>${esc(m.name || id)}</h3>${m.region ? `<span class="ps-reg">${esc(m.region)}</span>` : ""}${STATUS_WORDS[s] ? `<span class="ps-st st-${s}">${STATUS_WORDS[s]}</span>` : ""}</div>
               ${more && M && M.ext ? `<p class="ps-ext">${esc(M.ext)}</p>` : ""}${found ? `<h4>What we found here</h4><ul class="ps-found">${found}</ul>` : ""}
-              ${floors.map(([F, fi]) => `<figure class="ps-pmap">${fogSVG(id, fi, fog[fi], true)}</figure>`).join("")}</section>`;
+              ${floors.map(([F, fi]) => `<figure class="ps-pmap">${fogSVG(id, fi, fog[fi], true, fogD)}</figure>`).join("")}</section>`;
           }).join("") : `<p class="ps-empty">No places yet. They appear here as you learn of them.</p>`}`;
         }
         case "notes":
@@ -638,5 +666,5 @@
   const icon = (k, cls) => `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${IC[k] || ""}</svg>`;
 
   // for the referee's tools (atlas-table-gm.js), the checker and the build
-  A.table = { applyMapEdits, plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
+  A.table = { fogCells, fogSeen, applyMapEdits, plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
 })(ATLAS);

@@ -51,7 +51,11 @@
     ["involves", "is involved in", "they are part of it"],
     ["witnessed", "was witnessed by", "they saw it happen"],
     ["knows about", "is known to", "they know of it"],
-    ["concerns", "is concerned by", "it is about this"]
+    ["concerns", "is concerned by", "it is about this"],
+    // between traps, riddles and what they keep (atlas-traps.js): asked for with the cave generator, 21 Oct 2026
+    ["guards", "is guarded by", "it protects this"],
+    ["sets off", "is set off by", "it triggers this"],
+    ["makes safe", "is made safe by", "knowing or doing it disarms this"]
   ];
   const REL = Object.fromEntries(St.RELS.map(r => [r[0], r]));
   St.relBack = r => (REL[r] || [r, "(" + r + ")"])[1];
@@ -70,21 +74,26 @@
 
   /* ---- what the campaign's files hold (ATLAS.storyEdit), and what the page's database holds */
   const COLLS = ["cluebook", "links", "items", "questions", "knowledge"];
-  const FILE = { cluebook: {}, links: {}, items: {}, questions: {}, knowledge: {} };
-  const LIVE = { cluebook: {}, links: {}, items: {}, questions: {}, knowledge: {}, log: {}, cluestate: {}, done: {} };
-  const DBN = { cluebook: "cluebook", links: "storylinks", items: "storyitems", questions: "storyq", knowledge: "knowledge", log: "storylog", cluestate: "cluestate" };
+  // (traps and riddles placed or written on the page are kept as clues are, place by place: trapbook, riddlebook; how
+  // each stands at the table, armed or found or solved, in devstate)
+  const FILE = { cluebook: {}, links: {}, items: {}, questions: {}, knowledge: {}, trapbook: {}, riddlebook: {} };
+  const LIVE = { cluebook: {}, links: {}, items: {}, questions: {}, knowledge: {}, log: {}, cluestate: {}, done: {}, trapbook: {}, riddlebook: {}, devstate: {} };
+  const DBN = { cluebook: "cluebook", links: "storylinks", items: "storyitems", questions: "storyq", knowledge: "knowledge", log: "storylog", cluestate: "cluestate", trapbook: "trapbook", riddlebook: "riddlebook", devstate: "devstate" };
   let VER = 1;
   const bump = () => { VER++; if (A.state) A.state.cache = {}; St._ents = null; };
   // the campaign's own story data: { cluebook: { place: { C7: {...} } }, links: [...], items: [...], questions: [...],
-  // knowledge: [...] } (lists or objects by id); later files win
+  // knowledge: [...], trapbook: { place: { T1: {...} } }, riddlebook: { place: { P1: {...} } } } (lists or objects by
+  // id); later files win
   A.storyEdit = doc => {
     if (!doc) return A;
     for (const [pl, rec] of Object.entries(doc.cluebook || {})) FILE.cluebook[pl] = Object.assign({}, FILE.cluebook[pl] || {}, (rec && rec.clues) || rec || {});
+    for (const bk of ["trapbook", "riddlebook"]) for (const [pl, rec] of Object.entries(doc[bk] || {})) FILE[bk][pl] = Object.assign({}, FILE[bk][pl] || {}, (rec && rec.recs) || rec || {});
     for (const k of ["links", "items", "questions", "knowledge"]) { const v = doc[k]; if (!v) continue; const list = Array.isArray(v) ? v : Object.entries(v).map(([id, r]) => Object.assign({ id }, r)); for (const r of list) if (r && r.id) FILE[k][r.id] = Object.assign({ src: "file" }, r); }
     bump(); return A;
   };
   const merged = k => { const o = Object.assign({}, FILE[k]); for (const [id, r] of Object.entries(LIVE[k])) o[id] = r; for (const id of Object.keys(o)) if (!o[id] || o[id].off) delete o[id]; return o; };
   const bookOf = k => { const f = FILE.cluebook[k], l = (LIVE.cluebook[k] || {}).clues; return f || l ? Object.assign({}, f || {}, l || {}) : null; };
+  const devBook = (bk, k) => { const f = FILE[bk][k], l = (LIVE[bk][k] || {}).recs; return f || l ? Object.assign({}, f || {}, l || {}) : null; };
   St.links = () => merged("links"); St.items = () => merged("items"); St.questions = () => merged("questions"); St.knowledge = () => merged("knowledge");
   St.raw = (k, id) => k === "cluebook" ? null : (LIVE[k][id] || FILE[k][id] || null);
   St.ver = () => VER;
@@ -92,12 +101,33 @@
   /* ---- the clues as the referee wrote them, laid over the place (A.get calls this) */
   const OVC = new WeakMap();
   A.overlay = (k, M) => {
-    const book = bookOf(k); if (!book || !M) return M;
+    const book = bookOf(k), tb = devBook("trapbook", k), rb = devBook("riddlebook", k); if ((!book && !tb && !rb) || !M) return M;
     const c = OVC.get(M); if (c && c.v === VER) return c.M;
+    const lay = (base, bk) => { const o = Object.assign({}, base || {}); for (const [id, r] of Object.entries(bk || {})) { if (!r || r.off) { delete o[id]; continue; } const x = Object.assign({}, r); delete x.t0; o[id] = x; } return o; };
     const clues = Object.assign({}, M.clues || {});
-    for (const [id, r] of Object.entries(book)) { if (!r || r.off) { delete clues[id]; continue; } const x = Object.assign({}, clues[id] || {}, r); delete x.t0; clues[id] = x; }
+    for (const [id, r] of Object.entries(book || {})) { if (!r || r.off) { delete clues[id]; continue; } const x = Object.assign({}, clues[id] || {}, r); delete x.t0; clues[id] = x; }
     const out = Object.assign({}, M, { clues });
+    if (tb) out.traps = lay(M.traps, tb); if (rb) out.riddles = lay(M.riddles, rb);
     OVC.set(M, { v: VER, M: out }); return out;
+  };
+  // a trap or a riddle as it stands, and how it stands at the table: { s: "armed" | "found" | "triggered" | "disarmed"
+  // for a trap, "unsolved" | "solved" | "failed" for a riddle; shown: on the players' map or screen; hints: how many given }
+  St.trap = (pl, id) => { const M = A.maps[pl] && A.get(pl, 99); return M && (M.traps || {})[id] || null; };
+  St.riddle = (pl, id) => { const M = A.maps[pl] && A.get(pl, 99); return M && (M.riddles || {})[id] || null; };
+  St.devState = (pl, id) => Object.assign({}, ((LIVE.devstate[pl] || {}).s || {})[id] || {});
+  St.setDevState = (pl, id, patch) => {
+    if (!ST) return;
+    const doc = { s: Object.assign({}, (LIVE.devstate[pl] || {}).s || {}) }; doc.s[id] = Object.assign({}, doc.s[id] || {}, patch, { t: Date.now() });
+    LIVE.devstate[pl] = doc; ST.set(DBN.devstate, pl, doc); bump(); St.changed({ note: "at the table" });
+  };
+  // the players see a trap once the referee shows it, or once it is found or goes off
+  A.devShown = (pl, id) => { const s = ((LIVE.devstate[pl] || {}).s || {})[id]; return !!(s && (s.shown || s.s === "found" || s.s === "triggered")); };
+  // the next free id at a place for a trap (T) or a riddle (P)
+  St.nextDevId = (pl, letter, extra) => {
+    let n = 0; const see = id => { const m = new RegExp("^" + letter + "(\\d+)$").exec(id || ""); if (m) n = Math.max(n, +m[1]); };
+    const M = A.maps[pl] && A.get(pl, 99); if (M) { Object.keys(M.traps || {}).concat(Object.keys(M.riddles || {})).forEach(see); M.floors.forEach(F => (F.M || []).forEach(m => see(m[0]))); }
+    Object.keys(devBook("trapbook", pl) || {}).concat(Object.keys(devBook("riddlebook", pl) || {})).forEach(see); (extra || []).forEach(see);
+    return letter + (n + 1);
   };
   A.clueGone = (k, id) => { const b = bookOf(k); return !!(b && b[id] && b[id].off); };
   // a clue as it stands, and whether the campaign's files wrote it
@@ -143,6 +173,8 @@
       }
       for (const [id, x] of Object.entries(M.secrets || {})) add({ ref: "secret:" + pl + "/" + id, kind: "secret", name: x.t || id, sub: m.name || pl, text: joinT(x.t, x.acc, x.dest, x.why), facts: [x.why && "Why: " + x.why, x.dest && "Leads to: " + x.dest].filter(Boolean), place: pl, room: x.at });
       for (const [id, x] of Object.entries(M.enc || {})) add({ ref: "enc:" + pl + "/" + id, kind: "event", name: x.t || id, sub: m.name || pl, text: joinT(x.t, x.d), facts: [x.d && x.d.slice(0, 200)].filter(Boolean), place: pl, room: x.at });
+      for (const [id, x] of Object.entries(M.traps || {})) if (x) add({ ref: "trap:" + pl + "/" + id, kind: "trap", name: x.t || id, sub: `${m.name || pl}${x.at ? ", " + rname(x.at) : ""}`, text: joinT(x.t, x.d, x.trig, x.eff, (x.signs || []).join(" ")), facts: [x.trig && "Set off by: " + x.trig, x.eff && "Does: " + String(x.eff).slice(0, 160)].filter(Boolean), place: pl, room: x.at, id });
+      for (const [id, x] of Object.entries(M.riddles || {})) if (x) add({ ref: "riddle:" + pl + "/" + id, kind: "riddle", name: x.t || id, sub: `${m.name || pl}${x.at ? ", " + rname(x.at) : ""}`, text: joinT(x.t, x.pd, x.d), facts: [x.d && x.d.slice(0, 160), x.sol && "Answer: " + x.sol].filter(Boolean), place: pl, room: x.at, id });
     }
     (A.clocksData || []).forEach((c, ci) => { const cid = c.id || "clock" + ci; add({ ref: "clock:" + cid, kind: "plan", name: c.name || cid, sub: "A villain's plan" + (c.who ? ": " + c.who : ""), text: joinT(c.name, c.who, ...(c.ticks || []), c.done), facts: [c.done && "If it fills: " + c.done].filter(Boolean) }); (c.ticks || []).forEach((t, i) => add({ ref: "tick:" + cid + "/" + i, kind: "event", name: t.length > 70 ? t.slice(0, 68) + "…" : t, sub: `${c.name || cid}, step ${i + 1}`, text: t, facts: [`Step ${i + 1} of ${c.name || cid}`] })); });
     for (const s of A.sessionsData || []) add({ ref: "session:" + s.n, kind: "quest", name: `Session ${s.n}${s.title ? ": " + s.title : ""}`, sub: "The session plan", text: joinT(s.title, s.start, s.cliff, s.notes, s.goal), facts: [s.start && "Starts: " + s.start, s.goal && "Goal: " + s.goal].filter(Boolean), places: [].concat(s.places || []) });
@@ -155,7 +187,7 @@
   };
   St.ent = ref => St.entities().by[ref] || null;
   St.name = ref => { const e = St.ent(ref); return e ? e.name : ref ? "(gone: " + ref.split(":").slice(1).join(":") + ")" : ""; };
-  St.kindName = { clue: "Clue", person: "Person", place: "Place", room: "Room", secret: "Secret", event: "Event", plan: "Villain's plan", quest: "Quest, session", pc: "Player's character", chapter: "From the story", item: "Story element", question: "Question" };
+  St.kindName = { clue: "Clue", person: "Person", place: "Place", room: "Room", secret: "Secret", event: "Event", plan: "Villain's plan", quest: "Quest, session", pc: "Player's character", chapter: "From the story", item: "Story element", question: "Question", trap: "Trap", riddle: "Riddle or puzzle" };
   // the people: the cast, and each place's people who are not of the cast
   St.people = () => St.entities().list.filter(e => e.kind === "person");
   // a place's person, as the person they are (the cast member, when they are one)
@@ -232,6 +264,15 @@
     LIVE.cluebook[pl] = doc; ST.set(DBN.cluebook, pl, doc); bump();
     logIt("cluebook", pl + "/" + id, before, rec, meta); St.changed(meta);
   };
+  // a trap ("trapbook") or a riddle ("riddlebook"), written over the place's own (or taken away, with null); logged and
+  // undoable like a clue. A record the game master changed by hand says so (edited), so a regeneration asks first.
+  St.putDev = (bk, pl, id, rec, meta) => {
+    if (!ST) throw new Error("The page's store is not ready");
+    const before = bk === "trapbook" ? St.trap(pl, id) : St.riddle(pl, id), doc = { recs: Object.assign({}, (LIVE[bk][pl] || {}).recs || {}), t: Date.now() };
+    doc.recs[id] = rec ? Object.assign({}, rec, { t0: Date.now() }) : { off: true };
+    LIVE[bk][pl] = doc; ST.set(DBN[bk], pl, doc); bump();
+    logIt(bk, pl + "/" + id, before, rec, meta); St.changed(meta);
+  };
   St.setStatus = (pl, id, s) => {
     if (!ST) return;
     const doc = { s: Object.assign({}, (LIVE.cluestate[pl] || {}).s || {}) }; doc.s[id] = s; LIVE.cluestate[pl] = doc; ST.set(DBN.cluestate, pl, doc);
@@ -243,6 +284,7 @@
   St.undo = logId => {
     const e = LIVE.log[logId]; if (!e || e.undone) return false;
     if (e.coll === "cluebook") { const [pl, id] = e.key.split("/"); St.putClue(pl, id, e.before, { note: "undo", src: "dm" }); }
+    else if (e.coll === "trapbook" || e.coll === "riddlebook") { const [pl, id] = e.key.split("/"); St.putDev(e.coll, pl, id, e.before, { note: "undo", src: "dm" }); }
     else St.put(e.coll, e.key, e.before, { note: "undo", src: "dm" });
     const u = Object.assign({}, e, { undone: Date.now() }); LIVE.log[logId] = u; ST.set(DBN.log, logId, u);
     return true;
@@ -448,7 +490,7 @@ Rules: answer only from what they know. Say what they saw as seen, what they hea
     if (meta !== "remote" && typeof window !== "undefined" && window.ATLAS_APP && window.ATLAS_APP.saveStory) { clearTimeout(mirrorT); mirrorT = setTimeout(() => window.ATLAS_APP.saveStory(St.snapshot()).catch(e => console.warn("story not kept in the campaign", e)), 1500); }
   };
   // what the page has written, as the campaign's edits/story.js holds it
-  St.snapshot = () => ({ cluebook: Object.fromEntries(Object.entries(LIVE.cluebook).map(([pl, d]) => [pl, (d && d.clues) || {}])), links: LIVE.links, items: LIVE.items, questions: LIVE.questions, knowledge: LIVE.knowledge });
+  St.snapshot = () => ({ cluebook: Object.fromEntries(Object.entries(LIVE.cluebook).map(([pl, d]) => [pl, (d && d.clues) || {}])), links: LIVE.links, items: LIVE.items, questions: LIVE.questions, knowledge: LIVE.knowledge, trapbook: Object.fromEntries(Object.entries(LIVE.trapbook).map(([pl, d]) => [pl, (d && d.recs) || {}])), riddlebook: Object.fromEntries(Object.entries(LIVE.riddlebook).map(([pl, d]) => [pl, (d && d.recs) || {}])) });
   St.ready = () => !!ST;
   St.connect = (store, opt) => {
     if (ST) return; ST = store;
