@@ -375,7 +375,7 @@
     return icons.get(k);
   };
   // the browser's thumbnail, at three-quarters; kept in this browser between visits (the library's own, by its version)
-  M.VERSION = "2026-10-21c";   // change it when the models change, so browsers draw their thumbnails again
+  M.VERSION = "2026-10-27a";   // change it when the models change, so browsers draw their thumbnails again
   M.thumb = async spec => {
     const k = specKey(spec); if (thumbs.has(k)) return thumbs.get(k);
     const e = M.entry(spec.a), dk = M.VERSION + "|" + k, kept = e && !e.custom ? await M.idb.get("thumbs", dk) : null;
@@ -423,8 +423,9 @@
     list.sort((a, b) => ((a[0].z || 0) - (b[0].z || 0)) || a[1] - b[1]);
     for (const [p, i] of list) {
       const e = BYID[p.a] || (M.custom || []).find(x => x.id === p.a), s = p.s || 1, [w, d] = e ? M.dims(e, p) : [1, 1];
-      // a 2D drawing is drawn as it is, in its box, turned and sized as placed
-      if (e && e.d2 && A.sprites) { const u = w / sq * C, v = d / sq * C; items.push(`<g transform="translate(${(p.x * C).toFixed(1)} ${(p.y * C).toFixed(1)}) rotate(${p.r || 0}) scale(${s})" class="lm-prop" data-prop="${i}"><g transform="translate(${(-u / 2).toFixed(1)} ${(-v / 2).toFixed(1)})">${A.sprites.draw(e, p, u, v)}</g></g>`); continue; }
+      // a 2D drawing (or a model with a drawing of its own) is drawn as it is, in its box, turned and sized as placed
+      const fl = A.sprites && A.sprites.flat ? A.sprites.flat(e) : null;
+      if (fl) { const u = w / sq * C, v = d / sq * C; items.push(`<g transform="translate(${(p.x * C).toFixed(1)} ${(p.y * C).toFixed(1)}) rotate(${p.r || 0}) scale(${s})" class="lm-prop" data-prop="${i}"><g transform="translate(${(-u / 2).toFixed(1)} ${(-v / 2).toFixed(1)})">${A.sprites.draw(fl, p, u, v)}</g></g>`); continue; }
       const ic = typeof document !== "undefined" && e ? M.icon(p) : null;
       if (!ic && typeof document !== "undefined" && e) M.want(p);
       const tr = `translate(${(p.x * C).toFixed(1)} ${(p.y * C).toFixed(1)}) rotate(${p.r || 0}) scale(${s})`, op = e && e.mount === "ceiling" ? ` opacity=".55"` : "";

@@ -999,7 +999,13 @@
       mark: (g, id, c) => { g.marks.push([id, +(c % g.W + .5).toFixed(2), +(Math.floor(c / g.W) + .5).toFixed(2)]); },
       // a thing the puzzle or the trap is made of: a model of the library, in its square (hidden from the players when
       // the trap is); a model this library lacks is left out
-      prop: (g, a, c, o) => { const M = A.models; if (M && M.entry && !M.entry(a)) return; const p = { a, x: +(c % g.W + .5).toFixed(2), y: +(Math.floor(c / g.W) + .5).toFixed(2), g: 1 }; if (g.el[c]) p.z = +g.el[c].toFixed(2); if (o && o.h) p.h = 1; if (o && o.dev) p.dev = o.dev; g.props.push({ a, c, out: p }); },
+      // (two things never in one square: a square already holding one passes it to the nearest free square of its chamber)
+      prop: (g, a, c, o) => {
+        const M = A.models; if (M && M.entry && !M.entry(a)) return;
+        const taken = new Set(g.props.filter(q => q.out).map(q => q.c));
+        if (taken.has(c)) { const seen = new Set([c]), q = [c]; let free = null; for (let i = 0; i < q.length && free == null && i < 60; i++) for (const e of N4(g, q[i])) { if (seen.has(e) || g.own[e] !== g.own[c] || CV.pass(g.kind[e]) !== "walk") continue; seen.add(e); if (!taken.has(e)) { free = e; break; } q.push(e); } if (free == null) return; c = free; }
+        const p = { a, x: +(c % g.W + .5).toFixed(2), y: +(Math.floor(c / g.W) + .5).toFixed(2), g: 1 }; if (g.el[c]) p.z = +g.el[c].toFixed(2); if (o && o.h) p.h = 1; if (o && o.dev) p.dev = o.dev; g.props.push({ a, c, out: p });
+      },
       // a sealed door in a passage: a square of the passage one wide, walled and doored, the door on the side of the room
       gate: (g, tq, toQ) => {
         const W = g.W, cs = cellsOf(g, tq).filter(c => { const x = c % W; if (CV.pass(g.kind[c]) !== "walk" || g.keep[c]) return false; const l = x > 0 && g.own[c - 1] >= 0, r = x < W - 1 && g.own[c + 1] >= 0, u = g.own[c - W] >= 0, d = g.own[c + W] >= 0; return (l && r && !u && !d) || (u && d && !l && !r); });

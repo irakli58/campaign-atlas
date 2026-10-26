@@ -63,6 +63,12 @@
   };
   S.all = () => LIST;
   S.get = id => { const e = M.get(id); return e && e.d2 ? e : null; };
+  // a model's own drawing (atlas-sprites-caves.js): rows of [model id, draw(u, v, colour)]. The flat map draws it in the
+  // model's box, the 3D view stands the model; the model stays one entry of the library.
+  S.plan = rows => { for (const [id, draw] of rows) { const e = M.get(id); if (e && !e.d2) e.plan = draw; } return S; };
+  // what the flat map draws for a library entry, when it is a drawing and not a picture of a model: the drawing itself,
+  // or the model's own drawing
+  S.flat = e => !e ? null : e.d2 ? e : e.plan ? { draw: e.plan, colour: null } : null;
   // a drawing, drawn: its box u by v, in a placed model's colour
   S.draw = (e, sp, u, v) => { try { const s = e.draw(u, v, (sp && sp.col) || e.colour || undefined) || ""; return A.tidy ? A.tidy(s) : s; } catch (x) { return K.rect(1, 1, u - 2, v - 2, "none", 0, `stroke-dasharray="3 2"`); } };
   // the drawing as a picture of its own, for the library's cards and the 3D view's flat drawings

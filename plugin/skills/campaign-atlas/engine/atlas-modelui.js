@@ -92,8 +92,9 @@
   function ghostInner(spec, r) {
     const one = (sp, dx, dy, rr) => {
       const e = M.entry(sp.a); if (!e) return "";
-      // a 2D drawing is its own picture
-      if (e.d2 && A.sprites) { const [dw, dd] = M.dims(e, sp), u = dw / sqm() * C, v = dd / sqm() * C; return `<g transform="translate(${dx * C} ${dy * C}) rotate(${rr || 0}) scale(${sp.s || 1})"><g transform="translate(${-u / 2} ${-v / 2})" opacity=".8">${A.sprites.draw(e, sp, u, v)}</g></g>`; }
+      // a 2D drawing is its own picture (as is a model with a drawing of its own)
+      const fl = A.sprites && A.sprites.flat ? A.sprites.flat(e) : null;
+      if (fl) { const [dw, dd] = M.dims(e, sp), u = dw / sqm() * C, v = dd / sqm() * C; return `<g transform="translate(${dx * C} ${dy * C}) rotate(${rr || 0}) scale(${sp.s || 1})"><g transform="translate(${-u / 2} ${-v / 2})" opacity=".8">${A.sprites.draw(fl, sp, u, v)}</g></g>`; }
       const [w, d] = foot(sp), ic = M.icon(sp); if (!ic) M.want(sp);
       const t = `translate(${dx * C} ${dy * C}) rotate(${rr || 0}) scale(${sp.s || 1})`, k = sqm();
       return ic && !ic.missing ? `<image href="${ic.url}" x="${(-ic.w / 2 + (ic.cx || 0)) / k * C}" y="${(-ic.d / 2 + (ic.cz || 0)) / k * C}" width="${ic.w / k * C}" height="${ic.d / k * C}" transform="${t}" preserveAspectRatio="none"/>`

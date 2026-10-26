@@ -15,13 +15,14 @@
     const { w, d, h } = p, st = p.style || "cart";
     if (st === "cart") {
       for (const s of [-1, 1]) for (const t of [-1, 1]) b.cyl(.14, .14, .05, "wheel" in (p.m || {}) ? "wheel" : "iron", s * (w / 2 - .03), .14, t * d * .3, 14, 0, H);
-      b.ext([[-w / 2 + .05, .2], [w / 2 - .05, .2], [w / 2, h], [-w / 2, h]], d * .9, "body", 0, 0, -d * .45);
+      b.ext([[-w / 2 + .05, .2], [w / 2 - .05, .2], [w / 2, h], [-w / 2, h]], d * .9, "body", 0, 0, 0);
       b.box(w * .92, .04, d * .82, "base", 0, h - .05); for (let i = 0; i < 5; i++) b.sph(.08 + b.r() * .06, "ore", (b.r() - .5) * w * .6, h - .02, (b.r() - .5) * d * .5, .7, 7);
-      b.box(.06, .06, d * .3, "iron", 0, .26, d * .55); return;
+      b.box(.06, .06, .14, "iron", 0, .26, d / 2 - .07); return;
     }
     if (st === "rails") { for (const s of [-1, 1]) b.box(.06, .08, d, "iron", s * w * .3, .04); for (let z = -d / 2 + .15; z < d / 2; z += .45) b.box(w, .06, .16, "base", 0, 0, z); return; }
-    if (st === "props") { for (const s of [-1, 1]) b.box(.2, h, .2, "body", s * (w / 2 - .1), 0, 0, 0, 0, s * .04); b.box(w + .1, .22, .24, "body", 0, h - .22); for (const s of [-1, 1]) b.box(.08, .5, .08, "body", s * (w / 2 - .32), h - .6, 0, 0, 0, s * .7); return; }
-    if (st === "pick") { b.part(() => { b.cyl(.02, .025, h, "handle" in (p.m || {}) ? "handle" : "oak", 0, 0, 0, 8); b.part(() => { b.cone(.025, w * .5, "iron", 0, 0, 0, 6); }, 0, h - .03, 0, 0, 0, -H); b.part(() => { b.cone(.025, w * .5, "iron", 0, 0, 0, 6); }, 0, h - .03, 0, 0, 0, H); }, 0, .03, 0, H * .92, 0, 0); return; }
+    if (st === "props") { for (const s of [-1, 1]) b.box(.2, h, .2, "body", s * (w / 2 - .12), 0, 0, 0, 0, s * .04); b.box(w, .22, .24, "body", 0, h - .22); for (const s of [-1, 1]) b.box(.08, .5, .08, "body", s * (w / 2 - .32), h - .6, 0, 0, 0, s * .7); return; }
+    // (a pick lies on the ground: its handle runs the depth of its box, the head at the front)
+    if (st === "pick") { const L = d - .04; b.part(() => { b.cyl(.02, .025, L, "handle" in (p.m || {}) ? "handle" : "oak", 0, 0, 0, 8); b.part(() => { b.cone(.025, w * .5, "iron", 0, 0, 0, 6); }, 0, L - .03, 0, 0, 0, -H); b.part(() => { b.cone(.025, w * .5, "iron", 0, 0, 0, 6); }, 0, L - .03, 0, 0, 0, H); }, 0, .03, -L / 2, H * .92, 0, 0); return; }
     if (st === "ore") { for (let i = 0; i < 14; i++) { const r = .08 + b.r() * .14; b.sph(r, b.r() < .3 ? "orevein" : "ore", (b.r() - .5) * (w - r) * .8, r * .4 + b.r() * h * .3, (b.r() - .5) * (d - r) * .8, .7, 7); } return; }
   });
   /* ---- water falling, steam rising */
@@ -29,7 +30,7 @@
     const { w, d, h } = p, st = p.style || "falls";
     if (st === "falls") {
       // the rock it falls from, the sheet of water, the churned pool below
-      b.ext([[-w / 2, 0], [w / 2, 0], [w / 2 + .1, h], [-w / 2 - .1, h]], .4, "rock" in (p.m || {}) ? "rock" : "cavestone", 0, 0, -d / 2);
+      b.ext([[-w / 2 + .1, 0], [w / 2 - .1, 0], [w / 2, h], [-w / 2, h]], .4, "rock" in (p.m || {}) ? "rock" : "cavestone", 0, 0, -d / 2 + .2);
       b.ext([[-w * .32, 0], [w * .32, 0], [w * .26, h * .96], [-w * .26, h * .96]], .05, "falls", 0, 0, -d / 2 + .42);
       for (let i = 0; i < 6; i++) b.box(.03, h * (.5 + b.r() * .4), .02, "foam", (b.r() - .5) * w * .45, h * .1, -d / 2 + .48);
       const rim = []; for (let i = 0; i < 16; i++) { const a = i * TAU / 16; rim.push([Math.cos(a) * w * .45, Math.sin(a) * d * .3 + d * .1]); }
@@ -40,15 +41,15 @@
     if (st === "vent") {
       const rim = []; for (let i = 0; i < 12; i++) { const a = i * TAU / 12, k = .8 + b.r() * .2; rim.push([Math.cos(a) * w / 2 * k, Math.sin(a) * d / 2 * k]); }
       b.slab(rim, .1, "cavestone"); b.slab(rim.map(([x, z]) => [x * .4, z * .4]), .11, "coal");
-      for (let i = 0; i < 9; i++) { const y = .15 + i * h / 9; b.sph(.1 + i * .035, "steam", (b.r() - .5) * .12 * i, y, (b.r() - .5) * .12 * i, .8, 8); }
+      for (let i = 0; i < 9; i++) { const y = .12 + i * (h - .5) / 9; b.sph(.08 + i * .03, "steam", (b.r() - .5) * .03 * i, y, (b.r() - .5) * .03 * i, .8, 8); }
       for (let i = 0; i < 6; i++) b.box(.05, .02, .05, "sulphur" in (p.m || {}) ? "sulphur" : "mustard", Math.cos(i) * w * .3, .1, Math.sin(i) * d * .3);
     }
   });
   /* ---- ice */
   G("xice", (b, p) => {
     const { w, d, h } = p, st = p.style || "spikes";
-    if (st === "spikes") { b.box(w, .04, d, "iceblue"); const n = Math.round(w * d * 5) + 4; for (let i = 0; i < n; i++) { const r = .05 + b.r() * .1; b.cone(r, .2 + b.r() * h, "iceblue", (b.r() - .5) * (w - r), .04, (b.r() - .5) * (d - r), 6); } return; }
-    if (st === "block") { b.rbox(w, h, d, .06, "iceblue"); b.rbox(w * .6, h * .5, d * .6, .04, "frosted", 0, h * .2, 0); }
+    if (st === "spikes") { b.box(w, .04, d, "iceblue"); const n = Math.round(w * d * 5) + 4; for (let i = 0; i < n; i++) { const r = .05 + b.r() * .1; b.cone(r, .15 + b.r() * (h - .25), "iceblue", (b.r() - .5) * (w - r), .04, (b.r() - .5) * (d - r), 6); } return; }
+    if (st === "block") { b.rbox(w - .07, h, d - .07, .06, "iceblue"); b.rbox(w * .6, h * .5, d * .6, .04, "frosted", 0, h * .2, 0); }
   });
   /* ---- cobwebs, in a corner or across a passage */
   G("xweb", (b, p) => {
@@ -62,8 +63,8 @@
     const { w, d, h } = p, st = p.style || "plinth";
     if (st === "plinth") { b.box(w, .12, d, "body"); b.box(w * .8, h - .24, d * .8, "body", 0, .12); b.box(w, .12, d, "body", 0, h - .12); b.box(w * .55, .02, d * .55, "hole" in (p.m || {}) ? "hole" : "coal", 0, h - .005); for (let i = 0; i < 3; i++) b.box(w * .5, .02, .01, "rune" in (p.m || {}) ? "rune" : "gold", 0, h * .4 + i * .1, d * .4 + .006); return; }
     if (st === "scale") {
-      b.box(.5, .1, .5, "base"); b.cyl(.05, .07, h, "body", 0, .1, 0, 10); b.box(w, .06, .06, "body", 0, h + .05, 0, 0, 0, .04);
-      for (const s of [-1, 1]) { const x = s * w * .45, y = h + .05 + s * -.02; for (let k = 0; k < 3; k++) { const a = k * TAU / 3; b.tube([[x, y, 0], [x + Math.cos(a) * .2, y - .55, Math.sin(a) * .2]], .006, "chain" in (p.m || {}) ? "chain" : "iron"); } b.lathe([[0, 0], [.24, .02], [.26, .08]], "body", x, y - .6, 0, 16); }
+      b.box(.5, .1, .5, "base"); b.cyl(.05, .07, h, "body", 0, .1, 0, 10); b.box(w - .44, .06, .06, "body", 0, h + .05, 0, 0, 0, .04);
+      for (const s of [-1, 1]) { const x = s * (w / 2 - .27), y = h + .05 + s * -.02; for (let k = 0; k < 3; k++) { const a = k * TAU / 3; b.tube([[x, y, 0], [x + Math.cos(a) * .2, y - .55, Math.sin(a) * .2]], .006, "chain" in (p.m || {}) ? "chain" : "iron"); } b.lathe([[0, 0], [.24, .02], [.26, .08]], "body", x, y - .6, 0, 16); }
       return;
     }
     if (st === "door") {
@@ -71,7 +72,7 @@
       b.tor(w * .22, .018, "rune" in (p.m || {}) ? "rune" : "glowviolet", 0, h * .5, -d / 2 + .39, 0); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; b.box(.06, .06, .02, "rune" in (p.m || {}) ? "rune" : "glowviolet", Math.cos(a) * w * .22, h * .5 + Math.sin(a) * w * .22, -d / 2 + .39); }
       return;
     }
-    if (st === "mirror") { b.cyl(.2, .26, .1, "base", 0, 0, 0, 12); for (const s of [-1, 1]) b.box(.05, h * .8, .05, "body", s * w * .42, .1); b.part(() => { b.cyl(w * .38, w * .38, .03, "body", 0, 0, 0, 20, H); b.cyl(w * .34, w * .34, .032, "glass" in (p.m || {}) ? "glass" : "chrome", 0, 0, .002, 20, H); }, 0, h * .55, 0, 0, PI / 4, 0); return; }
+    if (st === "mirror") { b.cyl(.16, .2, .1, "base", 0, 0, 0, 12); for (const s of [-1, 1]) b.box(.05, h * .8, .05, "body", s * w * .42, .1); b.part(() => { b.cyl(w * .38, w * .38, .03, "body", 0, 0, 0, 20, H); b.cyl(w * .34, w * .34, .032, "glass" in (p.m || {}) ? "glass" : "chrome", 0, 0, .002, 20, H); }, 0, h * .55, 0, 0, PI / 4, 0); return; }
     if (st === "rune") { b.box(w, .06, d, "body"); const pts = []; for (let i = 0; i <= 24; i++) { const a = i * TAU / 24; pts.push([Math.cos(a) * w * .38, .065, Math.sin(a) * d * .38]); } b.tube(pts, .012, "rune" in (p.m || {}) ? "rune" : "glowred"); for (let i = 0; i < 5; i++) { const a = i * TAU / 5, a2 = (i + 2) * TAU / 5; b.tube([[Math.cos(a) * w * .36, .066, Math.sin(a) * d * .36], [Math.cos(a2) * w * .36, .066, Math.sin(a2) * d * .36]], .01, "rune" in (p.m || {}) ? "rune" : "glowred"); } return; }
     if (st === "bowl") { b.lathe([[.15, 0], [.1, .1], [.08, h - .15], [.14, h - .1]], "base", 0, 0, 0, 12); b.lathe([[0, h - .1], [w * .45, h - .08], [w * .5, h + .02], [w * .46, h + .02], [0, h - .05]], "body", 0, 0, 0, 18); }
   });
@@ -88,7 +89,7 @@
     ["mine-cart", "Mine cart with ore", "xmine", { w: .8, d: 1.2, h: .8, style: "cart", m: { body: "rust", base: "oak" } }, { e: "both", tags: ["mine", "cart", "ore", "rails"] }],
     ["mine-rails", "Mine rails", "xmine", { w: .9, d: 3, h: .1, style: "rails", m: { base: "oak" } }, { e: "both", tags: ["mine", "rails", "track"] }],
     ["mine-props", "Timber pit props", "xmine", { w: 2, d: .3, h: 2.3, style: "props", m: { body: "oak" } }, { e: "both", tags: ["mine", "timber", "support", "tunnel"] }],
-    ["pickaxe", "Pickaxe", "xmine", { w: .5, d: .1, h: .9, style: "pick", m: { handle: "oak" } }, { e: "both", tags: ["mine", "tool", "pick"] }],
+    ["pickaxe", "Pickaxe", "xmine", { w: .5, d: .9, h: .16, style: "pick", m: { handle: "oak" } }, { e: "both", tags: ["mine", "tool", "pick"] }],
     ["ore-pile", "Heap of ore", "xmine", { w: 1.4, d: 1.1, h: .6, style: "ore" }, { e: "both", tags: ["mine", "ore", "rocks", "metal"] }]
   ]);
   M.add(DC, "Caves", [F, MD, HI, MO, HO, PA, SF], [
