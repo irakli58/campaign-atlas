@@ -35,7 +35,9 @@ What was asked, what was done, and what is waiting, so the next session can carr
 - Natural touches for drawings are on by default (loose .5), with a slider in Make a new world ("make a slider on
   how close they want it to the drawing"): left exactly as drawn, right loosely.
 - "Map size slider would be good too": How big is a slider over the seven sizes (Small to A whole planet), naming
-  the size, its width and about how long it takes.
+  the size, its width and height in km and about how long it takes. "There is a big jump from 8300 to 40000" → two
+  sizes between: a supercontinent (13,000 km) and half a planet (20,000 km), given in km (SIZE_KM), spanning the
+  latitudes their km do, eroded at full detail (about 2 min each).
 
 ## Known rough spots
 - A painted swamp shows only faintly in the hydro look.

@@ -274,8 +274,9 @@
   A.worldOV = ovFrom;
   // the sizes a world can be made at (scripts/world-invent.js SIZES), how far across each is, and about how long the
   // page takes to make it
-  const GEN_SIZES = { small: [800, 560], medium: [1000, 700], large: [1400, 980], huge: [1800, 1260], vast: [2600, 1820], world: [3600, 2520], planet: [6400, 3200] };
-  const GEN_SECS = { small: 4, medium: 6, large: 12, huge: 18, vast: 30, world: 50, planet: 200 };
+  const GEN_SIZES = { small: [800, 560], medium: [1000, 700], large: [1400, 980], huge: [1800, 1260], vast: [2600, 1820], world: [3600, 2520], supercontinent: [4800, 3300], hemisphere: [5200, 3400], planet: [6400, 3200] };
+  const GEN_KM = { supercontinent: 13000, hemisphere: 20000 };
+  const GEN_SECS = { small: 4, medium: 6, large: 12, huge: 18, vast: 30, world: 50, supercontinent: 150, hemisphere: 130, planet: 200 };
   // a made world kept in this browser (IndexedDB), by its recipe, so it is made only once
   function genCache(key, T) {
     return new Promise(done => {
@@ -1106,8 +1107,8 @@
     }
     // Make a new world: how big, what shape (or the referee's own drawing), what climate, by which rules, the look
     function newWorldDlg() {
-      const g = OV.gen || {}, SK = A.worldSketch, nk = v => Math.round(v / 100) * 100, fmt = v => v.toLocaleString("en"), km = k => k === "planet" ? "40,000 km around, 20,000 km from pole to pole" : `${fmt(nk(GEN_SIZES[k][0] * 2.3))} km by ${fmt(nk(GEN_SIZES[k][1] * 2.3))} km`;
-      const sizes = [["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"], ["vast", "Vast"], ["world", "A great continent"], ["planet", "A whole planet"]].map(([k, l]) => [k, `${l}: ${km(k)}${GEN_SECS[k] >= 60 ? ` (takes about ${Math.round(GEN_SECS[k] / 60)} min)` : ""}`]);
+      const g = OV.gen || {}, SK = A.worldSketch, nk = v => Math.round(v / 100) * 100, fmt = v => v.toLocaleString("en"), km = k => k === "planet" ? "40,000 km around, 20,000 km from pole to pole" : `${fmt(nk(GEN_KM[k] || GEN_SIZES[k][0] * 2.3))} km by ${fmt(nk((GEN_KM[k] || GEN_SIZES[k][0] * 2.3) * GEN_SIZES[k][1] / GEN_SIZES[k][0]))} km`;
+      const sizes = [["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"], ["vast", "Vast"], ["world", "A great continent"], ["supercontinent", "A supercontinent"], ["hemisphere", "Half a planet"], ["planet", "A whole planet"]].map(([k, l]) => [k, `${l}: ${km(k)}${GEN_SECS[k] >= 60 ? ` (takes about ${Math.round(GEN_SECS[k] / 60)} min)` : ""}`]);
       const lands = [["continent", "One continent"], ["continents", "Several continents"], ["islands", "Islands"], ["archipelago", "An archipelago"], ["coast", "A coast (the sea on one side)"], ["inland", "All land"], ["paint", "Paint it myself"], ["sketch", "From a picture of my own"]];
       const looks = (A.worldArt ? A.worldArt.looksFor(WD) : []).map(([v, l]) => [v, l]);
       const clim = Object.entries(A.worldBiomes ? A.worldBiomes.CLIMATES : { varied: [0, 0, 0, "Varied"] }).map(([k, v]) => [k, v[3]]);

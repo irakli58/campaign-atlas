@@ -16,7 +16,10 @@ const BIO = require("../engine/atlas-world-biomes.js");
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "place";
 // (27 Oct 2026, the user: a world map is "really really really big" unless the story says otherwise: a new world is
 // vast by default; a small land, a single coast or an island, is asked for by name)
-const SIZES = { small: [800, 560], medium: [1000, 700], large: [1400, 980], huge: [1800, 1260], vast: [2600, 1820], world: [3600, 2520], planet: [6400, 3200] };
+const SIZES = { small: [800, 560], medium: [1000, 700], large: [1400, 980], huge: [1800, 1260], vast: [2600, 1820], world: [3600, 2520], supercontinent: [4800, 3300], hemisphere: [5200, 3400], planet: [6400, 3200] };
+// (the great sizes are given in km, so they fill the gap between a great continent and a whole planet (the user: "there
+// is a big jump from 8300 to 40000"); the rest are 2.3 km to a unit)
+const SIZE_KM = { supercontinent: 13000, hemisphere: 20000, planet: 40030 };
 // (planet: the whole globe as a world map, pole to pole and 40,000 km around (the user, 27 Oct 2026: "way way way way
 // bigger, like for scale the map of the whole earth"); on trial with --size planet, not yet the default: the user liked
 // the regional maps' detail better)
@@ -493,13 +496,17 @@ function invent(A, flags, log) {
       // (a sketch: the land and the mountains drawn, read onto this grid with a coast ragged as real ones are)
       let sketch = null;
       if (flags.sketch) { const SKM = require("../engine/atlas-world-sketch.js"), sk = typeof flags.sketch.land === "string" ? SKM.decode(flags.sketch) : flags.sketch; sketch = SKM.fit(sk, cols, rows, noiseFn(seed + 41), flags.loose != null && flags.loose !== true ? +flags.loose : .5); }
-      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: 1 - (SEA_SHARE[land] || .5), planet, km: whole ? 40030 : num("km", Math.round(w * 2.3)), tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: climateModel === "earth" ? "earth" : undefined, lat: whole ? [90, -90] : undefined, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: whole ? 1.4e6 : undefined, noiseZoom: whole ? 6 : undefined, edgeMargin: whole ? .025 : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
+      // (how far across, and so which latitudes it spans: a great size reaches over as many degrees as its km do, about
+      // its climate's middle; a whole planet from pole to pole)
+      const kmA = SIZE_KM[sizeWord] || num("km", Math.round(w * 2.3)), LATS = require("./world-ecology.js").LAT[climate] || [52, 38], midL = (LATS[0] + LATS[1]) / 2, spanL = h / w * kmA / 111;
+      const latA = whole ? [90, -90] : SIZE_KM[sizeWord] ? [Math.min(88, midL + spanL / 2), Math.max(-88, midL - spanL / 2)] : undefined;
+      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: 1 - (SEA_SHARE[land] || .5), planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)
       if (G.eco && flags.biomes !== "classic") { T.biome = Buffer.from(G.eco.biome).toString("base64"); T.canopy = Buffer.from(G.eco.canopy).toString("base64"); T.tempC = Buffer.from(Uint8Array.from(G.eco.T, v => Math.max(0, Math.min(255, Math.round(v + 60))))).toString("base64"); if (G.eco.ground.some(v => v)) T.ground = Buffer.from(G.eco.ground).toString("base64"); }
       // (the land was made to a size, so the map knows its scale: miles for fantasy and the past, km otherwise)
-      const kmAcross = whole ? 40030 : num("km", Math.round(w * 2.3)), miles = ["hydro", "relief", "painted", "parchment", "engraved"].includes(look);
+      const kmAcross = kmA, miles = ["hydro", "relief", "painted", "parchment", "engraved"].includes(look);
       T.scale = { unit: miles ? "mile" : "km", per: Math.round((miles ? kmAcross * .6214 : kmAcross) / w * 1000) / 1000 };
       if (realism === "alien") T.planetConditions = planet;
     } else L = makeLand({ cols, rows, seed, land });
