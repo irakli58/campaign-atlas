@@ -1739,3 +1739,30 @@ button.ho-b:hover { color: var(--ink); }
 .t-fogpaint svg { cursor: crosshair; touch-action: none; }
 .fog-br rect { fill: rgba(240, 200, 90, .45); stroke: #d6a531; stroke-width: .8; pointer-events: none; }
 .fog-br.cover rect { fill: rgba(20, 22, 26, .65); stroke: #000; }
+
+/* the copilot (atlas-copilot.js): Talk and Improvise, in its tab and in the toolbar's panel */
+.cp-modes { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.cp-modes button { font: inherit; font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 10px; color: var(--muted); cursor: pointer; }
+.cp-modes button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.cp-talk select[data-cp="who"] { width: 100%; }
+.cp-who { margin: 6px 0 4px; }
+.t-in-s { width: auto; padding: 2px 6px; font-size: 13px; }
+.cp-turns { display: flex; flex-direction: column; gap: 10px; margin: 8px 0; }
+.cp-turn { border-left: 3px solid var(--accent-soft, rgba(0,0,0,.08)); padding-left: 10px; }
+.cp-q { margin: 0 0 4px; font-style: italic; color: var(--muted); }
+.cp-q span { font-style: normal; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; margin-right: 8px; }
+.cp-say b { display: block; font-family: var(--f-display); font-weight: 400; font-size: 18px; margin-bottom: 2px; }
+.cp-a { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; line-height: 1.5; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; resize: vertical; }
+.cp-gm { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.cp-acts { margin-top: 4px; gap: 4px; flex-wrap: wrap; align-items: center; }
+.cp-kept { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.cp-ask textarea, .cp-imp textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.cp-mem { margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--rule); border-radius: 6px; display: flex; flex-direction: column; gap: 6px; }
+.cp-mem h6 { margin: 0; font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.cp-mem label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.cp-mem label.t-fogck { flex-direction: row; margin: 0; }
+.cp-kinds { display: flex; flex-wrap: wrap; gap: 4px; }
+.cp-kinds [aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cp-out { margin-top: 10px; }
+.cp-err { color: var(--accent); }
+.cp-sm .cp-a { font-size: 14px; }

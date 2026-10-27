@@ -1000,6 +1000,9 @@
   /* ---- the toolbar at the bottom right of every page (referee only): what is wanted in the middle of play, without
           leaving the place being read. Each button opens a small panel above it; "More" goes to the full tool. */
   const DOCK = [["dice", "Dice", "dice"], ["person", "A person", "person"], ["stuck", "Stuck?", "stuck"], ["ask", "Ask", "ask"], ["screen", "Players' screen", "screen"]];
+  // a button another file adds (atlas-copilot.js: Talk), before the players' screen; html(head) draws its panel
+  const DPLUGS = {};
+  function addDock(k, label, icon, html) { if (DPLUGS[k]) return; DOCK.splice(DOCK.length - 1, 0, [k, label, icon]); DPLUGS[k] = html; }
   function dockInit() {
     if ($("#tDock") || !app()) return;
     const dock = document.createElement("div"); dock.id = "tDock"; dock.className = "t-dock keeper"; dock.setAttribute("role", "toolbar"); dock.setAttribute("aria-label", "Table tools");
@@ -1035,6 +1038,7 @@
           <div class="t-row">${open ? "" : `<button type="button" class="t-btn prim" data-t="openscreen">${T.icon("open")}Open it</button>`}${here ? `<button type="button" class="t-btn" data-t="fogopen" data-id="${esc(here)}">${T.icon("map")}Show ${esc(placeName(here))}</button>` : ""}<button type="button" class="t-btn" data-t="screen" data-kind="title">The title</button><button type="button" class="t-btn" data-t="screen" data-kind="blank">Dark screen</button></div>`;
         break;
       }
+      default: if (DPLUGS[UI.dock]) html = DPLUGS[UI.dock](head);
     }
     pop.innerHTML = html; pop.dataset.kind = UI.dock;
     fitPreviews(); requestAnimationFrame(fitPreviews);
@@ -1051,9 +1055,9 @@
 
   /* ================================================================ connecting it to the page */
   A.tableUI = {
-    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab,
+    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab, addDock,
     // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
-    api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s) => askRaw(p, f || (() => {}), s), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); } },
+    api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s) => askRaw(p, f || (() => {}), s), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
     init(ctx) {
       X = ctx; S = T.makeStore(ctx.db, cfg().storageKey); found = T.foundIn(S);
       if (A.story && A.story.connect) A.story.connect(S);
@@ -1108,7 +1112,8 @@
         if (x && x.dataset.t2 === "xok") { pref.set("xseen", x.dataset.at); const el = document.getElementById("tXcard"); if (el) el.hidden = true; return; }
         if (x && x.dataset.t2 === "introok") { dismissIntro(); return; }
         const dk = t.closest("[data-dock]"); if (dk) { if (dk.dataset.dock === "close") dockClose(); else dockOpen(dk.dataset.dock); return; }
-        if (UI.dock && !t.closest("#tPop, #tDock, dialog")) dockClose();
+        // (a click on something its own panel has just drawn again is still inside it)
+        if (UI.dock && t.isConnected && !t.closest("#tPop, #tDock, dialog")) dockClose();
         const fh = t.closest(".t-fog .fog-hit"); if (fh) { toggleRoom(fh.dataset.fogroom); return; }
         if (t.closest(".t-fogpaint")) return;
         const b = t.closest("[data-t]"); if (!b || b.tagName === "SELECT" || b.tagName === "TEXTAREA" || (b.tagName === "INPUT") || b.tagName === "FORM") return;
