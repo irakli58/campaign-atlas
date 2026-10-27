@@ -554,7 +554,10 @@
   function screenNow() { return S.get("screen", "now") || { kind: "title" }; }
   // a handout once shown is the players' to keep: their window lists every one they have been given
   function show(doc) {
-    const t = Date.now(); S.set("screen", "now", Object.assign({ t }, doc));
+    const t = Date.now();
+    // a handout goes with its words, so the players' copy, which has none of the campaign, can show it and keep it
+    if (doc.kind === "handout" && doc.id && !doc.h) { const h = T.allHandouts().find(x => x.id === doc.id); if (h) doc = Object.assign({}, doc, { h }); }
+    S.set("screen", "now", Object.assign({ t }, doc));
     if (doc.kind === "handout" && doc.id) S.set("given", doc.id, doc.h ? { t, h: doc.h } : { t });
     note("On the players' screen now.");
   }
@@ -966,7 +969,9 @@
     return true;
   }
   function openScreen() {
-    const url = location.href.split("#")[0] + "#players";
+    // the players' copy beside this page when there is one (dist/players.html: none of the campaign in it, atlas-share.js),
+    // or else this page as the players' window
+    const url = A.playersPage ? new URL(A.playersPage, location.href).href : location.href.split("#")[0] + "#players";
     let w = null; try { w = window.open(url, "atlas-players", "popup=yes,width=1280,height=760"); } catch (e) { w = null; }
     if (w) { S.addPeer(w); note("The players' screen is open in a new window: drag it onto the television or the second screen, and press ⤢ there for full screen."); }
     else note(`Your browser kept the new window from opening. Open this page again on the other screen (or another computer), and there press "make this window the players' screen" in At the table, Players' screen.`);
@@ -1057,6 +1062,8 @@
       dockInit(); intro();
       if (A.mapEditor) A.mapEditor.init(S, ctx);
       if (A.locations) A.locations.init(S, ctx);
+      // the players' copy: what the players have been shown, kept for it as the table changes (atlas-share.js)
+      if (A.share) A.share.start(S, ctx.prefs);
       for (const p of TPLUGS) if (p.init) p.init(S, ctx);
       const MAP = { screen: ["screen", "home"], fog: ["screen"], clocks: ["clocks", "tonight", "home"], log: ["tonight", "home"], combat: ["combat", "home"], board: ["board", "home"], journal: ["party", "home"], safety: ["safety", "tonight", "home"], fly: ["make", "screen", "home"], clues: ["tonight", "board", "home"], status: ["tonight", "board"] };
       for (const f of Object.keys(MAP)) S.watch(f, () => {

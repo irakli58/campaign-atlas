@@ -122,6 +122,8 @@
 
   /* ---- registering a world, and laying the referee's changes over it */
   A.world = data => { A.worldData = data || {}; return A; };
+  // (the players' copy, atlas-share.js, works out from it which places the players know)
+  A.worldPrepare = (W, T, OV) => prepareWorld(W, T, OV);
   A.worldTerrain = data => { A.worldTerrainData = data || {}; return A; };
   const unb64 = s => {
     if (!s) return null; if (typeof s !== "string") return Uint8Array.from(s);

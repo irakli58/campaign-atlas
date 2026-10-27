@@ -715,10 +715,33 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
-  return { A, body, raw };
+  return { A, body, raw, link, style: css + "\n" + over, world, drawingJS };
+}
+// The players' copy (atlas-share.js): the players' window, in the campaign's dress, with none of the campaign in it. The
+// game master's page sends it what the players have been shown. Only the campaign's name, look and the lie of its land
+// (the world map's terrain, without the places on it) are written into it.
+// (the models the game master brought in, so the copy draws them where they stand)
+const customModels = dir => { const md = path.join(dir, "models"); return fs.existsSync(md) ? fs.readdirSync(md).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort().map(f => fs.readFileSync(path.join(md, f), "utf8")) : []; };
+const PLAYER_CFG = ["title", "strap", "system", "era", "gm", "grid", "paper", "fonts", "ui", "storageKey", "maps", "light", "people", "markers"];
+function playersPage(parts, dir) {
+  const { A, link, style, world, drawingJS } = parts, cfg = {};
+  for (const k of PLAYER_CFG) if (A.config[k] != null) cfg[k] = A.config[k];
+  // (the age the handouts are drawn in, worked out here from the setting, which stays out of the copy)
+  if (!cfg.era && A.table) cfg.era = A.table.era();
+  let terrain = "";
+  if (world && A.worldTerrainData) { const t = Object.assign({}, A.worldTerrainData); delete t.spots; delete t.routes; terrain = "ATLAS.worldTerrainData = " + JSON.stringify(t) + ";"; }
+  // (not the story store, which holds the game master's investigation, nor the cave generator's words, riddles and
+  // traps, whose lists of answers a player could look a riddle up in: only the cave's drawing, atlas-cave.js)
+  const leave = new Set(["atlas-story.js", "atlas-puzzles.js", "atlas-traps.js", "atlas-cave-words.js"]);
+  const files = [path.join(ENGINE, "atlas-engine.js"), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.filter(f => !leave.has(f)).map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-room3d.js")];
+  const raw = files.map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; })
+    .concat("ATLAS.configure(" + JSON.stringify(cfg) + ");", terrain, world ? drawingJS : "", modelsJS(dir), ...customModels(dir), "ATLAS.share.boot();").join("\n;\n");
+  try { new Function(raw); } catch (e) { die("The players' copy does not parse: " + e.message); }
+  const title = A.esc(cfg.title || "Campaign") + ": the players' window";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>${title}</title>\n${link}<style>\n${style}\n</style></head><body>\n<div class="wrap" id="app" data-mode="player"></div>\n<script>\n${raw.replace(/<\/script/gi, "<\\/script")}\n</script>\n</body></html>\n`;
 }
 // The story as the council wrote it (story/bible/*.md, or story/bible.md), then the council's debate and the story as
 // it was given. The page shows them on its Story tab, to the referee only, so the whole story can be read in one place.
@@ -740,13 +763,16 @@ function storyJS(dir) {
   return "ATLAS.storyData = " + JSON.stringify(out).split(String.fromCharCode(0x2028)).join(" ").split(String.fromCharCode(0x2029)).join(" ") + ";";
 }
 function cmdBuild(dir) {
-  const { A, body, raw } = pageParts(dir), out = path.join(dir, "dist"); fs.mkdirSync(out, { recursive: true });
+  const parts = pageParts(dir), { A, body, raw } = parts, out = path.join(dir, "dist"); fs.mkdirSync(out, { recursive: true });
   const name = slug(A.config.title) + ".html";
   try { new Function(raw); } catch (e) { die("The page script does not parse: " + e.message); }
   fs.writeFileSync(path.join(out, name), body);
-  fs.writeFileSync(path.join(out, "preview.html"), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>\n${body}</body></html>\n`);
+  // (opened on this computer, or from the app, the page's players' screen is the players' copy beside it)
+  fs.writeFileSync(path.join(out, "preview.html"), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>\n${body}<script>ATLAS.playersPage = "players.html";</script>\n</body></html>\n`);
+  const pp = playersPage(parts, dir); fs.writeFileSync(path.join(out, "players.html"), pp);
   console.log(`built ${path.join(out, name)} (${Math.round(body.length / 1024)} KB): publish this file as the Artifact`);
   console.log(`      ${path.join(out, "preview.html")}: the same page as a complete document, to open in a browser`);
+  console.log(`      ${path.join(out, "players.html")} (${Math.round(pp.length / 1024)} KB): the players' copy, with none of the campaign in it (the game master's page sends it what the players are shown)`);
 }
 function cmdExport(dir, want) {
   const A = load(dir), out = path.join(dir, "dist", "maps"); let n = 0;

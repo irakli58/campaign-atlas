@@ -491,7 +491,7 @@
     document.title = (cfg.title || "Campaign") + ": the players' window";
     // a window opened for the players has no way back to the referee's page; only the referee's own window, made into
     // theirs with "Make this window the players' screen", has one (and asks twice)
-    const mine = (() => { try { return sessionStorage.getItem(cfg.storageKey + "-players") === "1"; } catch (e) { return false; } })();
+    const mine = !A.playersCopy && (() => { try { return sessionStorage.getItem(cfg.storageKey + "-players") === "1"; } catch (e) { return false; } })();
     const TABS = [["table", "The table", "screen"], ["handouts", "Handouts", "handout"], ["board", "Our board", "board"], ["places", "Places", "map"], ["notes", "Our notes", "tonight"]];
     app.innerHTML = `<div class="ps" data-tab="table">
       <div class="ps-stage" id="psStage"></div>
@@ -533,7 +533,9 @@
       } else if (k === "scene") {
         stage.innerHTML = `<div class="ps-fit"><div class="ps-scene">${now.title ? `<h2>${esc(now.title)}</h2>` : ""}${paras(now.text)}</div></div>`;
       } else if (k === "world" && A.worldMount && A.worldData) {
-        if (!world) { stage.innerHTML = `<div class="ps-world"></div>`; world = A.worldMount(stage.firstChild, { mode: () => "player", placesAt: () => [], peopleAt: () => [], leadsInto: () => [], hasCity: () => false, cityName: id => id, enter() {}, open() {}, db: st.ready, store: ctx.prefStore }); }
+        // (the players' copy has the world as the game master's page shared it, the referee's changes already in it)
+        const copy = !!A.playersCopy;
+        if (!world) { stage.innerHTML = `<div class="ps-world"></div>`; world = A.worldMount(stage.firstChild, { mode: () => "player", placesAt: () => [], peopleAt: () => [], leadsInto: () => [], hasCity: () => false, cityName: id => id, enter() {}, open() {}, db: copy ? Promise.resolve(null) : st.ready, store: copy ? { get: () => null, set() {} } : ctx.prefStore }); }
         else world.sync();
       } else if (k === "board") {
         const [model, pos, W, H] = theirBoard();
@@ -546,6 +548,8 @@
     }
     // the players' own board: only what they have, laid out on its own
     function theirBoard() {
+      // (in the players' copy, the board as the game master's page shared it: atlas-share.js)
+      if (A.playersCopy) { const b = A.shareBoard || { nodes: [], edges: [], W: 1000, H: 620, pos: {} }; return [{ nodes: b.nodes, edges: b.edges }, b.pos, b.W, b.H]; }
       const all = boardModel(), keep = new Set(all.nodes.filter(nd => ctx.found(nd.id)).map(nd => nd.id));
       // a connection the referee saved shows only once they pin it up: finding two clues does not tell the players how they join
       const model = { nodes: all.nodes.filter(nd => keep.has(nd.id)), edges: all.edges.filter(e => keep.has(e.a) && keep.has(e.b) && (e.kind !== "story" || e.shown)) }, [W, H] = boardSize(Math.max(6, model.nodes.length));
@@ -645,6 +649,8 @@
     // the furnishings' pictures come as they are drawn (atlas-models.js), and models the game master brought in
     document.addEventListener("atlas-models", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
     if (A.models && A.models.watchLibrary) A.models.watchLibrary(st);
+    // in the players' copy, a place, a room or a clue the game master's page has just shared
+    document.addEventListener("atlas-share", () => { if (world && A.playersCopy) { world.dispose(); world = null; } render(); if (tab !== "table") renderPage(); });
     // the clues as the referee wrote them, and the connections they pinned up
     if (A.story && A.story.connect) { A.story.connect(st); document.addEventListener("atlas-story", () => { if (now.kind === "board") render(); if (tab === "places" || tab === "board") renderPage(); }); }
     st.watch("journal", () => paintNotes());

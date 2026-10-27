@@ -125,6 +125,13 @@ async function route(req, res) {
       const html = fs.readFileSync(f, "utf8").replace("<body>", `<body>\n<script src="/play/${mm[1]}/local-db.js"></script>`);
       return send(res, 200, html, TYPES[".html"]);
     }
+    // the players' copy beside it (none of the campaign in it: the page sends it what the players are shown), on the
+    // same database, so it follows the game master's page
+    if (m === "GET" && rest === "players.html") {
+      const f = path.join(dir, "dist", "players.html"); if (!fs.existsSync(f)) return send(res, 404, "<p>This campaign's players' copy has not been built yet: build the campaign again.</p>", TYPES[".html"]);
+      const html = fs.readFileSync(f, "utf8").replace("<body>", `<body>\n<script src="/play/${mm[1]}/local-db.js"></script>`);
+      return send(res, 200, html, TYPES[".html"]);
+    }
     if (m === "GET" && rest === "local-db.js") return send(res, 200, fs.readFileSync(path.join(UI, "local-db.js"), "utf8").replace("__TOKEN__", TOKEN).replace("__URL__", `/play/${mm[1]}/db`), TYPES[".js"]);
     if (m === "GET" && rest === "download") {
       const f = path.join(dir, "dist", "preview.html"); if (!fs.existsSync(f)) return fail(res, 404, "not built");
