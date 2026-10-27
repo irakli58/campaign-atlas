@@ -86,9 +86,12 @@ function geology(o, U) {
     bInfo[n] = { pa: plate[n], pb: other, conv: -(rvx * nx + rvy * ny), shear: Math.abs(rvx * ny - rvy * nx), ca: crust[n], cb: oc };
     near[n] = n; dist[n] = 0; q.push(n);
   }
-  for (let h = 0; h < q.length; h++) { const n = q[h], i = ci(n), j = cj(n); for (const [di, dj] of NB8) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a, d = dist[n] + Math.hypot(di, dj); if (d < dist[m] && d * ckm < 450) { dist[m] = d; near[m] = near[n]; q.push(m); } } }
+  for (let h = 0; h < q.length; h++) { const n = q[h], i = ci(n), j = cj(n); for (const [di, dj] of NB8) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a, d = dist[n] + Math.hypot(di, dj); if (d < dist[m] && d * ckm < (zs > 1 ? 900 : 450)) { dist[m] = d; near[m] = near[n]; q.push(m); } } }
   const up = new Float32Array(CN), ridge = new Float32Array(CN), trench = new Float32Array(CN), volc = [];
   const bump = (d, c, w) => gauss((d - c) / w);
+  // (on a whole planet the belts are as broad as the Earth's great ones, the Andes and the Himalaya with their high
+  // plateaus behind, rather than a regional map's narrower ridges, which at a planet's scale stand as thin walls)
+  const BW = zs > 1 ? 2 : 1, BA = zs > 1 ? .8 : 1;
   for (let n = 0; n < CN; n++) {
     // a slow broad warping of every continent: basins and swells
     // (most of a continent is an old shield barely rising: its plains; here and there a slow swell of upland)
@@ -99,26 +102,26 @@ function geology(o, U) {
     const along = .7 + .6 * U.fbm(nD, X(n) * 1.4 * zs, Y(n) * 1.4 * zs, 2);
     if (b.conv > .1) {
       const c = Math.min(1.5, b.conv) * along;
-      if (cHere && cOver) up[n] += c * (2.2 * bump(d, 40, 95) + .55 * bump(d, 190, 150));
-      else if (cHere) { up[n] += c * 1.8 * bump(d, 70, 60); if (Math.abs(d - 120) < ckm * .6 && rnd() < .05) volc.push(n); }
+      if (cHere && cOver) up[n] += c * BA * (2.2 * bump(d, 40 * BW, 95 * BW) + .55 * bump(d, 190 * BW, 150 * BW));
+      else if (cHere) { up[n] += c * BA * (1.8 * bump(d, 70 * BW, 60 * BW) + (zs > 1 ? .45 * bump(d, 280, 170) : 0)); if (Math.abs(d - 120) < ckm * .6 && rnd() < .05) volc.push(n); }
       else if (cOver) trench[n] += c * gauss(d / 60);
       else if (here > (mine ? b.pb : b.pa)) {
         // an island arc: a broken line of volcanic islands over the sinking plate
-        if (d > 70 && d < 130 && U.fbm(nA, X(n) * 9 * zs, Y(n) * 9 * zs, 2) > .5) { crust[n] = 2; up[n] += c * 1.4; if (rnd() < .06) volc.push(n); }
+        if (zs > 1 ? d > 70 && d < 150 && U.fbm(nA, X(n) * 14 * zs, Y(n) * 14 * zs, 2) > .6 : d > 70 && d < 130 && U.fbm(nA, X(n) * 9 * zs, Y(n) * 9 * zs, 2) > .5) { crust[n] = 2; up[n] += c * 1.4; if (rnd() < .06) volc.push(n); }
       } else trench[n] += c * gauss(d / 60);
     } else if (b.conv < -.1) {
       const c = Math.min(1.4, -b.conv) * along;
-      if (cHere) { up[n] += c * (-.2 * gauss(d / 35) + .4 * bump(d, 70, 40)); if (d < ckm && rnd() < .02) volc.push(n); }
+      if (cHere) { up[n] += c * (zs > 1 ? .12 : 1) * (-.2 * gauss(d / 35 / BW) + .4 * bump(d, 70 * BW, 40 * BW)); if (d < ckm && rnd() < .02) volc.push(n); }
       else ridge[n] += c * gauss(d / 100);
     }
   }
   // old belts, worn low, across the old continents
   for (let k = 0; k < nP; k++) {
     if (rnd() < .45) continue; const s = plates[k].seed; if (!crust[s]) continue;
-    const a = rnd() * Math.PI, ux = Math.cos(a), uy = Math.sin(a), L = (.2 + rnd() * .25) / (zs > 1 ? Math.sqrt(zs) : 1), cx = X(s), cy = Y(s), wd = zs > 1 ? 150 : 90;
+    const a = rnd() * Math.PI, ux = Math.cos(a), uy = Math.sin(a), L = (.2 + rnd() * .25) / (zs > 1 ? Math.sqrt(zs) : 1), cx = X(s), cy = Y(s), wd = zs > 1 ? 300 : 90, oa = zs > 1 ? .4 : .7;
     // (on a whole planet such a belt would run thousands of km dead straight: there it is shorter and bends along its
     // length, as the Appalachians and the Urals do)
-    for (let n = 0; n < CN; n++) { if (plate[n] !== k || !crust[n]) continue; const dx = X(n) - cx, dy = Y(n) - cy, t = dx * ux + dy * uy; if (Math.abs(t) > L) continue; const bend = zs > 1 ? (U.fbm(nD, t / L * 1.5 + k * 3.1, k * 1.7, 2) - .5) * L * 1.2 : 0, off = Math.abs(-dx * uy + dy * ux - bend) * cr * ckm; up[n] += .7 * gauss(off / wd) * (1 - (t / L) ** 2); }
+    for (let n = 0; n < CN; n++) { if (plate[n] !== k || !crust[n]) continue; const dx = X(n) - cx, dy = Y(n) - cy, t = dx * ux + dy * uy; if (Math.abs(t) > L) continue; const bend = zs > 1 ? (U.fbm(nD, t / L * 1.5 + k * 3.1, k * 1.7, 2) - .5) * L * 1.2 : 0, off = Math.abs(-dx * uy + dy * ux - bend) * cr * ckm; up[n] += oa * gauss(off / wd) * (1 - (t / L) ** 2); }
   }
   // hotspots: a chain of volcanic islands over a moving ocean plate; on a continent a gentle swell
   for (let h = 0; h < Math.floor(rnd() * 2.6); h++) {
@@ -131,7 +134,7 @@ function geology(o, U) {
     }
   }
   // (island arcs and hotspot islands rounded into islands, not blocks)
-  { const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = crust[n] === 2 ? 1 : 0; boxBlur(F, cc, cr, 1, 2); for (let n = 0; n < CN; n++) if (crust[n] !== 1) crust[n] = F[n] > .42 ? 2 : 0; }
+  { const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = crust[n] === 2 ? 1 : 0; boxBlur(F, cc, cr, zs > 1 ? 2 : 1, 2); for (let n = 0; n < CN; n++) if (crust[n] !== 1) crust[n] = F[n] > (zs > 1 ? .38 : .42) ? 2 : 0; }
   boxBlur(up, cc, cr, 1, 2);
   for (let n = 0; n < CN; n++) up[n] = Math.max(crust[n] ? .02 : 0, up[n]) / grav;
 
