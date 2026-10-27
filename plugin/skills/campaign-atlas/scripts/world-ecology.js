@@ -27,7 +27,7 @@ const MEDIAN_MM = { temperate: 760, varied: 620, cold: 460, polar: 260, warm: 56
 // L: { E (heights in m, water <= 0), lake (1 a lake), rain (the winds' rain, relative), temp (°C, from latitude and
 // height), want (the rain's median as calibrated) }; o: { cols, rows, km, climate, tempShift }; U: tools
 function ecology(L, o, U) {
-  const { cols, rows } = o, N = cols * rows, cellKm = (o.km || 3200) / cols, B = BIO.CODE, E = L.E;
+  const earth = o.model === "earth", { cols, rows } = o, N = cols * rows, cellKm = (o.km || 3200) / cols, B = BIO.CODE, E = L.E;
   const [la, lb] = LAT[o.climate] || LAT.temperate, lat = j => la + (lb - la) * (j + .5) / rows;
   const I = n => n % cols, J = n => (n / cols) | 0, land = n => E[n] > 0 && !L.lake[n];
   const ocean = new Uint8Array(N), st = [];
@@ -59,10 +59,12 @@ function ecology(L, o, U) {
     // at 60°, 8 °C at 70°); winters far colder inland than on the coast, where the sea keeps them mild, summers a little
     // warmer inland; both 6.5 °C colder for every km of height. The year's mean lies between them
     const cont = 1 - Math.exp(-dOcean[n] * cellKm / 550), lapse = e * .0065 - (o.tempShift || 0) * 40;
-    const tw = 30 - .0045 * a * a + 2 * cont - lapse, tc = 27 - .0085 * a * a - .35 * a * cont - lapse, t = (tw + tc) / 2;
+    // (a cold current keeps its coast cool and grey in summer: Lima, Walvis Bay, San Diego)
+    const fg = earth && L.fog ? L.fog[n] : 0;
+    const tw = 30 - .0045 * a * a + 2 * cont - lapse - 6 * fg, tc = 27 - .0085 * a * a - .35 * a * cont - lapse - fg, t = (tw + tc) / 2;
     T[n] = t; Tw[n] = tw; Tc[n] = tc;
     // the year's rain in mm, and when it falls (the share in the warm half of the year)
-    P[n] = Math.max(5, L.rain[n] / (L.want || .55) * med);
+    P[n] = Math.max(5, earth && L.mm ? L.mm[n] : L.rain[n] / (L.want || .55) * med);
     // (each belt's season blended smoothly into the next: the even rain of the equator, the summer rain of the monsoon
     // and savanna belt, the dry summers of the subtropical west coasts (the Mediterranean, California, central Chile),
     // the even rain of maritime coasts, the summer rain of continental interiors)
@@ -70,11 +72,16 @@ function ecology(L, o, U) {
     let s = .52 + mon * (.26 + .1 * cont) + (1 - mon) * smooth(26, 40, a) * .1 * cont + (a > 28 ? .08 * cont : 0) - medS * .34 - mar * .1;
     sf[n] = Math.max(.15, Math.min(.92, s));
     // what the air could take (a simple Thornthwaite-like demand), and so how dry the land is
-    const pet = Math.max(120, Math.min(2000, 62 * (t + 4)));
+    // (with the Earth model, Hargreaves' demand: the sun's strength at the latitude, the warmth, and the day's swing of
+    // temperature, wide under the clear skies of dry land and narrow under clouds or sea fog; so a hot desert's air takes
+    // three times the water a cool one's does, and the same 150 mm makes the Sahara at 25° and only steppe at 50°)
+    const ra = 15 + 21 * Math.pow(Math.cos(a * Math.PI / 180), 1.4), dtr = 7 + 8 * Math.exp(-P[n] / 400) + 4 * cont - 5 * fg;
+    const pet = earth ? Math.max(60, Math.min(2600, .0023 * .408 * ra * Math.max(0, t + 17.8) * Math.sqrt(Math.max(3, dtr)) * 365)) : Math.max(120, Math.min(2000, 62 * (t + 4)));
     AI[n] = P[n] / pet;
     if (!land(n)) continue;
     kop[n] = koppen(T[n], Tw[n], Tc[n], P[n], s);
   }
+  if (process.env.ATLAS_DEBUG) { const q = (F) => { const v = []; for (let n = 0; n < N; n++) if (land(n)) v.push(F[n]); v.sort((x, y) => x - y); return [.05, .25, .5, .75, .95].map(p => Math.round(v[Math.floor(p * (v.length - 1))] * 100) / 100).join(" "); }; console.error("P", q(P), "| AI", q(AI)); }
   // biomes, from the class and the ground
   for (let n = 0; n < N; n++) {
     if (!land(n)) continue;
@@ -84,8 +91,8 @@ function ecology(L, o, U) {
       case "E": b = k === "EF" ? B.icesheet : e > 1400 || Tw[n] > 6 && e > 900 ? B.alpine : B.tundra; break;
       case "B": b = k[1] === "W" ? (k[2] === "h" ? (e < 700 && sl < .012 && riv < accBig * .3 ? B.dunes : B.rockdesert) : B.colddesert) : (k[2] === "h" ? B.scrub : B.steppe); break;
       case "A": b = k === "Af" ? (e > 1300 ? B.cloud : B.rainforest) : k === "Am" ? B.monsoon : (ai > .95 ? B.woodland : B.savanna); break;
-      case "C": b = k[1] === "s" ? B.mediterranean : ai < .55 ? B.grass : ai < .8 ? B.woodland : k[1] === "w" ? B.woodland : k[2] === "a" ? B.subtropical : k[2] === "c" ? B.mixed : B.temperate; break;
-      default: b = ai < .5 ? B.steppe : ai < .78 ? B.grass : (k[2] === "a" || k[2] === "b") ? (ai < .95 ? B.mixed : B.temperate) : B.boreal;
+      case "C": b = k[1] === "s" ? B.mediterranean : ai < .55 ? B.grass : ai < (earth ? .65 : .8) ? B.woodland : k[1] === "w" ? B.woodland : k[2] === "a" ? B.subtropical : k[2] === "c" ? B.mixed : B.temperate; break;
+      default: b = ai < .5 ? B.steppe : ai < (earth ? .65 : .78) ? B.grass : (k[2] === "a" || k[2] === "b") ? (ai < .95 ? B.mixed : B.temperate) : B.boreal;
     }
     // above the trees: alpine meadow, then bare rock where it is steep, then snow
     if (k[0] !== "B" && Tw[n] < 9.5 && e > 600 && b !== B.icesheet) b = B.alpine;
@@ -111,13 +118,14 @@ function ecology(L, o, U) {
     const t = T[n], npp = Math.min(3000 / (1 + Math.exp(1.315 - .119 * t)), 3000 * (1 - Math.exp(-.000664 * P[n])));
     // (trees close over the land where the summers are warm enough (the warmest month above about 10 °C: the treeline)
     // and there is water enough (the aridity index above about a half); how thick they stand rises with productivity)
-    let c = Math.max(0, Math.min(1, (AI[n] - .45) / .5)) * Math.max(0, Math.min(1, (Tw[n] - 10) / 4)) * Math.min(1, .55 + npp / 1600);
+    let c = Math.max(0, Math.min(1, earth ? (AI[n] - .3) / .45 : (AI[n] - .45) / .5)) * Math.max(0, Math.min(1, (Tw[n] - 10) / 4)) * Math.min(1, .55 + npp / 1600);
     const b = biome[n];
     if (b === B.savanna) c *= .4; else if (b === B.woodland || b === B.mediterranean) c *= .6; else if (b === B.grass || b === B.steppe) c *= .2;
     else if (b === B.marsh || b === B.floodplain) c *= .15; else if (b === B.bog) c *= .3; else if (b === B.swampforest || b === B.mangrove) c = Math.max(c, .8);
     else if (b === B.gallery) c = Math.max(c, .55); else if (b === B.alpine || b === B.tundra) c *= .08; else if ([B.rock, B.icesheet, B.dunes, B.rockdesert, B.colddesert].includes(b)) c = 0;
     canopy[n] = Math.round(c * 255);
   }
+  if (process.env.ATLAS_DEBUG) { const cnt = {}, kc = {}; let L0 = 0; for (let n = 0; n < N; n++) if (land(n)) { L0++; const nm = BIO.LIST[biome[n]][0]; cnt[nm] = (cnt[nm] || 0) + 1; kc[KOP[kop[n]]] = (kc[KOP[kop[n]]] || 0) + 1; } const f = o => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, 9).map(([k, v]) => k + " " + Math.round(v / L0 * 100)).join(", "); console.error("biomes:", f(cnt)); console.error("koppen:", f(kc)); }
   // the five kinds of land the map shows (the user, 27 Oct 2026: "very simple: desert, flat lands, forest, mountains and
   // maybe swamp"), and snow where it never melts; the detailed biome stays in .detail. Mountains are the high, rugged
   // ground (about 1800 m and up, or above the trees); forest is wherever trees close over the land; the rest is flat
@@ -127,6 +135,8 @@ function ecology(L, o, U) {
     if (!land(n)) continue; const b = biome[n];
     simple[n] = b === B.icesheet ? B.snow : WET.has(b) ? B.swamp : (b === B.alpine || b === B.rock || E[n] > 1800) ? B.mountains : DES.has(b) ? B.desert : canopy[n] > 90 || b === B.gallery && canopy[n] > 60 ? B.forest : B.plains;
   }
+  const ground = earth ? groundEarth() : groundClassic();
+  function groundClassic() {
   // the bare ground of dry land, where little grows over it (the user, 27 Oct 2026: the desert "looks kinda
   // unnatural"): a desert is not one sand but a mosaic, each by its place in the land: bare rock on the uplands and
   // steep slopes (hamada), sand seas (ergs) filling the wide low basins where the wind drops its sand, gravel plains
@@ -147,6 +157,64 @@ function ecology(L, o, U) {
     for (let n = 0; n < N; n++) { if (!ground[n]) continue; dry++; if (AI[n] < .2 && slope(n) < .006 && E[n] - mean[n] < -110) salt[n] = 1; }
     blur(salt, cols, rows, 2, 1); const c = []; for (let n = 0; n < N; n++) if (salt[n] > .55 && ground[n] && ground[n] !== 3) c.push(n);
     c.sort((a, b) => (E[a] - mean[a]) - (E[b] - mean[b])); for (const n of c.slice(0, Math.round(dry * .02))) ground[n] = 4; }
+  return ground;
+  }
+  // the bare ground with the Earth model: what a desert's floor is made of, from its rock, its water and its wind
+  //   - rock (hamada) where the land is high, steep or stands above its surroundings: the wind strips it bare;
+  //   - badlands where soft ground at the foot of the uplands is cut by many dry gullies (the Dakota Badlands, the
+  //     Bardenas): dry land, moderate slopes, much water gathering in short bursts; few of them;
+  //   - sand seas (ergs) only where there is sand to make them: it comes from dry riverbeds, dry lakebeds and dry
+  //     coasts, is carried downwind (westward in the trades, eastward in the westerlies) and is dropped where the
+  //     ground is low and flat; so an erg lies downwind of its sources in a basin (the Namib's sand from the Orange
+  //     river, the Sahara's ergs in its basins), and most desert is not sand at all;
+  //   - salt pans on the lowest flat floors of the driest basins, dry lakebeds (clay pans) on those of the less dry;
+  //   - gravel plains (reg) everywhere else, and on the fans below the mountains;
+  //   - cold deserts (and the polar ones, under 250 mm a year beyond the trees) the same, in the colder colours.
+  // 0 not dry, 1 sand, 2 gravel, 3 rock, 4 salt, 5 dry lakebed, 6 badlands
+  function groundEarth() {
+    const ground = new Uint8Array(N), mean = Float32Array.from(E, v => Math.max(0, v)); blur(mean, cols, rows, 18, 2);
+    const dry = n => land(n) && biome[n] !== B.icesheet && (AI[n] < .5 || (Tw[n] < 10 && P[n] < 250));
+    let nd = 0; for (let n = 0; n < N; n++) if (dry(n)) nd++;
+    // the sand: made, carried and dropped
+    const src = new Float32Array(N);
+    for (let n = 0; n < N; n++) { if (!dry(n) || AI[n] > .35) continue; if (acc[n] > accBig * .3) src[n] += Math.min(3, acc[n] / (accBig * 3)); if (dOcean[n] * cellKm < 15) src[n] += .6; }
+    for (const n of L.playa || []) if (dry(n)) src[n] += 1.5;
+    const dep = new Float32Array(N);
+    for (let j = 0; j < rows; j++) {
+      const a = Math.abs(lat(j)), w = westShare(a) > .5 ? 1 : -1; let c = 0;
+      for (let s = 0; s < cols; s++) {
+        const i = w > 0 ? s : cols - 1 - s, n = j * cols + i;
+        if (!land(n)) { c *= .6; continue; }
+        c += src[n] * .08;
+        const trap = dry(n) && AI[n] < .25 ? smooth(.016, .004, slope(n)) * smooth(40, -80, E[n] - mean[n]) : 0;
+        const d = c * trap * .05; dep[n] += d; c -= d; c *= Math.exp(-cellKm / 900);
+      }
+    }
+    blur(dep, cols, rows, 3, 2);
+    // the gullied soft ground: where a great river cuts down through the soft fill of a dry basin, its banks break into
+    // badlands (the Missouri breaks, the Bardenas); the steeper ground within a few cells of such a river, few of them
+    const near = new Float32Array(N); for (let n = 0; n < N; n++) if (land(n) && acc[n] > accBig) near[n] = 1;
+    blur(near, cols, rows, 3, 1);
+    const gc = [];
+    for (let n = 0; n < N; n++) { if (!dry(n) || AI[n] > .45 || near[n] < .05) continue; const sl = slope(n), rel = E[n] - mean[n]; if (sl > .006 && sl < .04 && rel > -90 && rel < 200 && E[n] > 80 && E[n] < 1500) gc.push(n); }
+    gc.sort((x, y) => slope(y) * near[y] - slope(x) * near[x]);
+    const gul = new Float32Array(N); for (const n of gc.slice(0, Math.round(nd * .04))) gul[n] = 1;
+    blur(gul, cols, rows, 1, 1);
+    const ds = []; for (let n = 0; n < N; n++) if (dep[n] > 0) ds.push(dep[n]); ds.sort((x, y) => y - x);
+    const sandT = Math.max(1e-6, ds[Math.min(ds.length - 1, Math.round(nd * .25))] || 1e-6);
+    for (let n = 0; n < N; n++) {
+      if (!dry(n)) continue; const rel = E[n] - mean[n], sl = slope(n);
+      ground[n] = sl > .03 || rel > 160 || E[n] > 1600 ? 3 : gul[n] > .25 ? 6 : dep[n] >= sandT ? 1 : 2;
+    }
+    // the lowest flat floors of the basins: salt where it is driest, clay where some water still gathers
+    const pan = new Float32Array(N); for (let n = 0; n < N; n++) if (dry(n) && AI[n] < .45 && slope(n) < .006 && E[n] - mean[n] < -110) pan[n] = 1;
+    blur(pan, cols, rows, 2, 1);
+    const c = []; for (let n = 0; n < N; n++) if (pan[n] > .55 && ground[n] && ground[n] !== 3) c.push(n);
+    c.sort((x, y) => (E[x] - mean[x]) - (E[y] - mean[y]));
+    for (const n of c.slice(0, Math.round(nd * .025))) ground[n] = AI[n] < .2 ? 4 : 5;
+    for (const n of L.playa || []) if (dry(n)) ground[n] = AI[n] < .2 ? 4 : 5;
+    return ground;
+  }
   return { T, Tw, Tc, P, sf, AI, kop, biome: o.detailed ? biome : simple, detail: biome, canopy, acc, ground };
 }
 function blur(F, cols, rows, r, passes) {

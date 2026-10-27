@@ -127,14 +127,14 @@
     const desAt = share(DES), swpAt = share(SWP), snwAt = BIO ? share(BIO.CODE.snow) : null;
     // the bare ground under thin vegetation (world-ecology.js: sand seas, gravel plains, bare rock, salt pans), its
     // colours eased across the cells; hot deserts warmer in tone, cold ones greyer
-    let bare = null, sandAt = null;
+    let bare = null, sandAt = null, badAt = null;
     if (NA && WD.G.Gr) {
-      const G = WD.G, n0 = G.cols * G.rows, R = new Float32Array(n0), Gc = new Float32Array(n0), Bc = new Float32Array(n0), SD = new Float32Array(n0);
-      const COL = { hot: [null, [236, 178, 100], [198, 184, 158], [146, 108, 84], [244, 242, 236]], cold: [null, [218, 200, 156], [186, 178, 158], [128, 120, 110], [240, 240, 238]] };
-      for (let n = 0; n < n0; n++) { const g = G.Gr[n], hot = NA.Tm[n] > .55, c = (hot ? COL.hot : COL.cold)[g] || (hot ? [196, 172, 128] : [182, 168, 140]); R[n] = c[0]; Gc[n] = c[1]; Bc[n] = c[2]; SD[n] = g === 1 ? 1 : 0; }
+      const G = WD.G, n0 = G.cols * G.rows, R = new Float32Array(n0), Gc = new Float32Array(n0), Bc = new Float32Array(n0), SD = new Float32Array(n0), BD = new Float32Array(n0);
+      const COL = { hot: [null, [236, 178, 100], [198, 184, 158], [146, 108, 84], [244, 242, 236], [222, 208, 184], [182, 114, 82]], cold: [null, [218, 200, 156], [186, 178, 158], [128, 120, 110], [240, 240, 238], [214, 210, 200], [158, 122, 104]] };
+      for (let n = 0; n < n0; n++) { const g = G.Gr[n], hot = NA.Tm[n] > .55, c = (hot ? COL.hot : COL.cold)[g] || (hot ? [196, 172, 128] : [182, 168, 140]); R[n] = c[0]; Gc[n] = c[1]; Bc[n] = c[2]; SD[n] = g === 1 ? 1 : 0; BD[n] = g === 6 ? 1 : 0; }
       const bl = F => { const t = new Float32Array(n0); for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s += F[j * G.cols + a]; c++; } } t[j * G.cols + i] = s / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s += t[b * G.cols + i]; c++; } } F[j * G.cols + i] = s / c; } } };
-      bl(R); bl(Gc); bl(Bc); bl(SD);
-      bare = (x, y) => [NA.S(x, y, R), NA.S(x, y, Gc), NA.S(x, y, Bc)]; sandAt = (x, y) => NA.S(x, y, SD);
+      bl(R); bl(Gc); bl(Bc); bl(SD); bl(BD);
+      bare = (x, y) => [NA.S(x, y, R), NA.S(x, y, Gc), NA.S(x, y, Bc)]; sandAt = (x, y) => NA.S(x, y, SD); badAt = (x, y) => NA.S(x, y, BD);
     }
     const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
       if (h <= sea) {
@@ -156,10 +156,14 @@
         const ai = wet * 1.8, pn = nz(x * .09 + 17, y * .09);
         let g = smooth(.12, .6, ai) * (1 - smooth(.5, .8, t));
         g = clamp(g + (pn - .5) * 1.6 * g * (1 - g), 0, 1);
-        c = mix(bare(x, y), [150, 175, 108], g);
+        // (between the grass and the bare ground, the dry shrubland: grey-green bushes scattered thin over it)
+        c = mix(bare(x, y), [156, 154, 116], smooth(.03, .22, ai) * .45 * (1 - g));
+        c = mix(c, [150, 175, 108], g);
         const sd = sandAt(x, y);
         // gravel and rock mottled darker where the stones are varnished; the sand seas in long ridges, broken into fields
         c = c.map(v => v * (1 + (nz(x * .05 + 3, y * .05 + 9) - .5) * .14 * (1 - sd)));
+        // badlands: soft ground cut by many gullies, in bands of coloured rock
+        const bd = badAt(x, y); if (bd > .1) { const gul = Math.abs(nz(x * .35 + 7, y * .35) - .5) * 2, band = Math.sin(nz(x * .02, y * .02 + 3) * 30) * .5 + .5; c = c.map((v, k) => v * (1 + ((gul < .25 ? -.22 : .04) + (band - .5) * .12) * bd)); }
         if (sd > .1) { const f = smooth(.35, .6, nz(x * .03 + 41, y * .03)), rid = Math.sin(x * .42 + y * .1 + nz(x * .015 + 5, y * .015) * 9); c = c.map(v => v * (1 + rid * .05 * sd * f)); }
         c = mix(c, [38, 98, 42], fd);
       } else {

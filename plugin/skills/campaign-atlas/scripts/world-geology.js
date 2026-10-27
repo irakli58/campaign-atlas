@@ -21,7 +21,7 @@
    Heights follow the Earth's hypsometric curve at the end (rank for rank: the form stays, the proportions are real).
    Realism: "realistic", "fantasy", "alien" (gravity, air, water, warmth). The same seed makes the same world. */
 "use strict";
-const gauss = v => Math.exp(-v * v);
+const gauss = v => Math.exp(-v * v), smooth = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 const NB8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
 
 // U: the generator's tools (noiseFn, fbm, Heap, distance, mulberry32) from world-invent.js
@@ -184,7 +184,12 @@ function geology(o, U) {
   { const Z = new Float32Array(N); for (let n = 0; n < N; n++) Z[n] = isLand[n] ? -40 : E[n]; boxBlur(Z, cols, rows, 3, 2); for (let n = 0; n < N; n++) if (!isLand[n]) E[n] = Math.min(-5, dLand[n] < 3 ? E[n] : Z[n]); }
 
   /* 6. the climate on the land as it is */
-  let C = climate(E, cols, rows, o, nD, U, air);
+  // (`--climate-model earth`: the Earth's own causes of wet and dry, worked out (climateEarth below); the classic model
+  // stays the default until the user approves it. The land itself is the same either way: the erosion above always runs
+  // on the classic rain)
+  let C = o.climateModel === "earth" ? climateEarth(E, cols, rows, o, nD, U, air) : climate(E, cols, rows, o, nD, U, air);
+  if (C.mm) C.mm = Float32Array.from(C.rain);
+  if (process.env.ATLAS_DUMP && C.mm) require("fs").writeFileSync(process.env.ATLAS_DUMP, JSON.stringify({ cols, rows, la: (LAT[o.climate] || LAT.temperate), E: Array.from(E, v => Math.round(v)), mm: Array.from(C.mm, Math.round), sst: Array.from(C.sst, v => Math.round(v * 10) / 10), fog: Array.from(C.fog, v => Math.round(v * 100) / 100) }));
   { const r = []; for (let n = 0; n < N; n++) if (E[n] > 0) r.push(C.rain[n]); r.sort((a, b) => a - b);
     const med = r[Math.floor(r.length / 2)] || 1, want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
     for (let n = 0; n < N; n++) C.rain[n] *= want / med; }
@@ -203,7 +208,7 @@ function geology(o, U) {
 
   /* 8. what lives on it: climate classes, biomes and tree cover, from all of the above (world-ecology.js) */
   const want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
-  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes }, U);
+  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel }, U);
 
   /* to the grid the maps are drawn from */
   // (and each height's fraction, kept apart: a shaded relief map needs the land's slopes finer than 255 steps)
@@ -297,5 +302,92 @@ function climate(E, cols, rows, o, nz, U, air) {
   for (let n = 0; n < N; n++) rain[n] = rain[n] * (.85 + nz((n % cols) / 18, ((n / cols) | 0) / 18) * .3);
   return { temp, rain };
 }
+
+// the climate as the Earth makes its deserts (the user, 27 Oct 2026: "deserts should appear naturally because of the
+// world's climate and geography"). The winds of each belt cross the sea and the land as before, but now:
+//   - the sea's warmth sets how much water the air takes up (about 7% more for each degree: Clausius–Clapeyron), so
+//     cold seas and the polar air give little rain (the polar deserts);
+//   - cold currents run along the subtropical west coasts (the eastern side of each ocean: the Canary, Benguela,
+//     Humboldt and California currents), cooling the sea and steadying the air over it, so the coast beside them barely
+//     rains though it is foggy (the Namib, the Atacama, Baja);
+//   - warm currents run along the east coasts, making them wetter (Florida, south-east China, eastern Australia);
+//   - the air sinks in the subtropical highs (about 20 to 35°), so it rains little there; it rises at the equator and
+//     along the storm tracks of the westerlies (about 40 to 60°), so it rains much there (the Sahara, Arabia, Australia;
+//     the Congo; western Europe);
+//   - the air that climbs a range rains out on the windward side, and descending warms and dries (the foehn), so the
+//     lee lies in a rain shadow (Patagonia behind the Andes, the Great Basin behind the Sierra Nevada);
+//   - the moisture is used up as the air travels over land, so the deep interiors far from any sea are dry (the Gobi,
+//     the Taklamakan, central Asia);
+//   - in summer the heated land draws the sea's air in from the equator's side (the monsoon), so the rain fades
+//     poleward from an equatorward coast into the desert (West Africa: forest, savanna, the Sahel, the Sahara).
+// The rain comes out in mm a year, not scaled to the climate's median, so a dry world is dry because of where it lies.
+function climateEarth(E, cols, rows, o, nz, U, air) {
+  const N = cols * rows, [la, lb] = LAT[o.climate] || LAT.temperate, cellKm = (o.km || 3200) / cols;
+  const lat = j => la + (lb - la) * (j + .5) / rows, temp = new Float32Array(N), rain = new Float32Array(N), fog = new Float32Array(N);
+  for (let n = 0; n < N; n++) { const j = (n / cols) | 0, L = Math.abs(lat(j)) * Math.PI / 180; temp[n] = -22 + 49 * Math.pow(Math.cos(L), 1.25) - Math.max(0, E[n]) * .0065 + (o.tempShift || 0); }
+  // the sea's surface warmth, and the currents along its coasts: for each sea cell, how far the coast lies to its east
+  // (it is then on an ocean's eastern side, off a west coast) and to its west
+  const dE = new Float32Array(N), dW = new Float32Array(N), wideE = new Float32Array(N), sst = new Float32Array(N), cold = new Float32Array(N);
+  for (let j = 0; j < rows; j++) {
+    // (and how broad that land is: an island or a thin peninsula turns no ocean current)
+    let last = -1, run = 0, wide = 0; for (let i = cols - 1; i >= 0; i--) { const n = j * cols + i; if (E[n] > 0) { run++; last = i; wide = run * cellKm; } else run = 0; dE[n] = last < 0 ? 1e9 : (last - i) * cellKm; wideE[n] = wide; }
+    last = -1; for (let i = 0; i < cols; i++) { const n = j * cols + i; if (E[n] > 0) last = i; dW[n] = last < 0 ? 1e9 : (i - last) * cellKm; }
+  }
+  const warmC = new Float32Array(N);
+  for (let n = 0; n < N; n++) {
+    if (E[n] > 0) continue; const a = Math.abs(lat((n / cols) | 0));
+    cold[n] = smooth(6, 14, a) * (1 - smooth(36, 46, a)) * Math.exp(-dE[n] / 350) * (dW[n] > 400 ? 1 : .5) * smooth(250, 900, wideE[n]);
+    warmC[n] = smooth(4, 12, a) * (1 - smooth(38, 50, a)) * Math.exp(-dW[n] / 600);
+  }
+  // (a current is a broad stream, not a line along each row)
+  boxBlur(cold, cols, rows, 5, 2); boxBlur(warmC, cols, rows, 5, 2);
+  for (let n = 0; n < N; n++) { if (E[n] > 0) { cold[n] = 0; continue; } const a = Math.abs(lat((n / cols) | 0)); sst[n] = Math.max(-1.8, 28 - .0058 * a * a - 8 * cold[n] + 3 * warmC[n]); }
+  const cap = t => air * Math.min(1.8, Math.exp(.065 * (t - 25)));
+  const eff0 = cellKm / 1400, sub = a => gauss((a - 27) / 7.5), itcz = a => gauss(a / 8), storm = a => gauss((a - 50) / 14);
+  const mon = a => smooth(4, 9, a) * (1 - smooth(14, 24, a));
+  // one cell crossed by the air: st is the air's own state (its water q, the ground it last crossed, how steady the
+  // cold sea left it, how far it has come down)
+  const cross = (n, st, w, summer) => {
+    if (E[n] <= 0) { st.q += (cap(sst[n]) - st.q) * .15; st.stab += (cold[n] - st.stab) * .3; st.prev = 0; st.lee *= .5; return; }
+    const a = Math.abs(lat((n / cols) | 0)), d = (E[n] - st.prev) / 1000 * (8 / cellKm);
+    st.lee = st.lee * Math.exp(-cellKm / 120) + Math.max(0, -d);
+    // (the sinking air of the highs flows out toward the equator, taking its water with it; where the trades meet at
+    // the equator, and along the storm tracks, the air draws water in from both sides, so their rain does not fade
+    // inland; elsewhere the air slowly loses what it carries over a long road)
+    st.q *= Math.exp(-cellKm * (1 / 3000 + sub(a) * (summer ? .3 : 1) / 700));
+    // (inland, the rain falls mostly in the warm months, so the air's capacity there is the summer's: the year's mean
+    // warmth and some of the seasons' swing, more toward the poles)
+    const tL = temp[n] + 12 * smooth(20, 60, a), conv = .6 * itcz(a) + .9 * storm(a) + (summer ? .25 * mon(a) : 0); if (conv > .01) st.q += (cap(tL) * conv - st.q) * Math.min(1, conv * cellKm / 150) * (st.q < cap(tL) * conv ? 1 : 0);
+    let eff = eff0 * Math.max(.08, 1 + 1.6 * itcz(a) + 3 * storm(a) - (summer ? .2 : .85) * sub(a));
+    eff *= (1 - .9 * st.stab) / (1 + 3 * st.lee);
+    let r = Math.min(st.q * .5, st.q * (eff + Math.max(0, d) * .55 * (1 - .6 * sub(a) * (1 - st.lee * 0))));
+    // (cold air holds little: what it cannot hold falls as it cools inland and uphill)
+    const c = cap(tL + 5); if (st.q - r > c) r += (st.q - r - c) * .15;
+    rain[n] += r * w; fog[n] += st.stab * w; st.q -= r * .55; st.stab *= Math.exp(-cellKm / 200); st.prev = E[n];
+  };
+  const start = n => ({ q: E[n] > 0 ? cap(temp[n]) * .4 : cap(sst[n]), prev: 0, stab: E[n] > 0 ? 0 : cold[n], lee: 0 });
+  // the belt winds: from the east in the trades and the polar easterlies, from the west in the westerlies
+  const sweep = (dirx, tilt, w) => {
+    for (let j0 = 0; j0 < rows; j0++) {
+      const a0 = Math.abs(lat(j0)), dx = (a0 < 30 || a0 > 62 ? -1 : 1) * dirx; let jj = j0, st = null;
+      for (let s = 0; s < cols; s++) { const i = dx > 0 ? s : cols - 1 - s, j = Math.max(0, Math.min(rows - 1, Math.round(jj))); jj += tilt; const n = j * cols + i; if (!st) st = start(n); cross(n, st, w, false); }
+    }
+  };
+  sweep(1, 0, .25); sweep(1, .12, .15); sweep(1, -.12, .15); sweep(1, .05, .1); sweep(1, -.05, .1); sweep(-1, .07, .08); sweep(-1, -.07, .08);
+  // the summer monsoon: up each column from the equator's side, poleward (both ways where the map crosses the equator)
+  for (let i = 0; i < cols; i++) for (const up of [true, false]) {
+    let st = null;
+    for (let s = 0; s < rows; s++) {
+      const j = up ? rows - 1 - s : s, L = lat(j); if (up ? L < 0 : L > 0) { st = null; continue; }
+      const n = j * cols + i; if (!st) st = start(n); cross(n, st, .5 * mon(Math.abs(L)) + .02, true);
+    }
+  }
+  boxBlur(rain, cols, rows, 4, 2); boxBlur(fog, cols, rows, 3, 1);
+  for (let n = 0; n < N; n++) { rain[n] = rain[n] * (.88 + nz((n % cols) / 18, ((n / cols) | 0) / 18) * .24) * EARTH_MM / cellKm; fog[n] = Math.min(1, fog[n]); }
+  return { temp, rain, fog, sst, mm: true };
+}
+// (the scale to mm a year, set once so that the rainy tropics come to about 1500 mm and the subtropical deserts under
+// about 150, as on the Earth; per km of the air's road, so a world drawn finer or coarser rains the same)
+const EARTH_MM = 1600000;
 
 module.exports = { geology, landT };

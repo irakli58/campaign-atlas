@@ -438,7 +438,7 @@ function invent(A, flags, log) {
       // can carry), its water (how much of it is sea), its warmth
       const num = (k, d) => flags[k] != null && flags[k] !== true ? +flags[k] : W0[k] != null ? +W0[k] : d;
       const planet = realism === "alien" ? { gravity: num("gravity", 1), air: num("air", 1), water: flags.water != null || W0.water != null ? num("water", .5) : undefined } : {};
-      const G = require("./world-geology.js").geology({ cols, rows, seed, land, climate, landShare: 1 - (SEA_SHARE[land] || .5), planet, km: num("km", Math.round(w * 2.3)), tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed" }, { noiseFn, fbm, Heap, distance, mulberry32 });
+      const G = require("./world-geology.js").geology({ cols, rows, seed, land, climate, landShare: 1 - (SEA_SHARE[land] || .5), planet, km: num("km", Math.round(w * 2.3)), tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: flags["climate-model"] === "earth" ? "earth" : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco }; geo = G.info; T.rain = 1;
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)
