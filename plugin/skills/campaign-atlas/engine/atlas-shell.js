@@ -94,6 +94,7 @@
   <nav class="views" aria-label="View">
     <button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
     ${A.worldData && A.worldMount ? `<button type="button" id="v-world" aria-pressed="false">World map</button>` : ""}
+    ${A.galaxyParams && A.galaxyMount ? `<button type="button" id="v-galaxy" class="keeper" aria-pressed="false">Star chart</button>` : ""}
     ${A.tableUI ? `<button type="button" id="v-table" class="keeper v-play" aria-pressed="false" title="Everything for game night: the players' screen, handouts, clocks, dice and more">${A.table.icon("play")}At the table</button>` : ""}
     ${(A.storyData || []).length ? `<button type="button" id="v-story" class="keeper" aria-pressed="false">The story</button>` : ""}
     ${A.music && A.music.enabled && A.music.enabled() ? `<button type="button" id="v-music" aria-pressed="false">Music</button>` : ""}
@@ -107,6 +108,7 @@
   </section>
   <dialog id="keyDlg" class="kedlg" aria-label="Key editor"></dialog>
   ${A.worldData && A.worldMount ? `<section class="worldv" id="worldv" aria-label="World map"></section>` : ""}
+  ${A.galaxyParams && A.galaxyMount ? `<section class="galaxyv keeper" id="galaxyv" aria-label="The galaxy"></section>` : ""}
   ${A.cityData && A.cityMount ? `<section class="atlas" aria-label="Plan of the whole"><div class="citybar" id="citybar" hidden></div><div class="cmap" id="citybox"></div></section>` : ""}
   <div class="layout">
     <aside class="index"><div class="chips" id="cats" role="group" aria-label="Filter by type of place"></div><div class="list" id="list"></div></aside>
@@ -334,11 +336,14 @@
     if (v === "story" && (!story.length || state.mode !== "gm")) v = "gaz";
     if (v === "music" && !$("#v-music")) v = "gaz";
     if (v === "world" && !$("#v-world")) v = "gaz";
+    if (v === "galaxy" && (!$("#v-galaxy") || state.mode !== "gm")) v = "gaz";
     if (v === "table" && (!$("#v-table") || state.mode !== "gm")) v = "gaz";
     state.view = v; app.dataset.view = v;
     $("#v-gaz").setAttribute("aria-pressed", v === "gaz");
     if ($("#v-world")) $("#v-world").setAttribute("aria-pressed", v === "world");
     if (v === "world") { if (!WORLD) WORLD = A.worldMount($("#worldv"), WORLD_CTX); else WORLD.wake(); WORLD.search(state.q); renderCityBar(); }
+    if ($("#v-galaxy")) $("#v-galaxy").setAttribute("aria-pressed", v === "galaxy");
+    if (v === "galaxy") A.galaxyMount($("#galaxyv"));
     if ($("#v-story")) $("#v-story").setAttribute("aria-pressed", v === "story");
     if ($("#v-table")) $("#v-table").setAttribute("aria-pressed", v === "table");
     if (v === "table") A.tableUI.view();
@@ -609,6 +614,7 @@
     if (t.closest("#v-story")) { setView("story"); return; }
     if (t.closest("#v-music")) { setView("music"); return; }
     if (t.closest("#v-world")) { setView("world"); return; }
+    if (t.closest("#v-galaxy")) { setView("galaxy"); return; }
     if (t.closest("#v-table")) { setView("table"); return; }
     const wb = t.closest("[data-world]"); if (wb) { showWorld(wb.dataset.world || null); return; }
     const j = t.closest("[data-sjump]"); if (j) { const s = document.getElementById("st-" + j.dataset.sjump); if (s) s.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
@@ -624,7 +630,7 @@
     if (t.closest("#plNew")) { openPlaceEditor(); return; }
     const pd = t.closest("[data-pldel]"); if (pd) { if (TR.places[pd.dataset.pldel]) twice(pd, () => trWrite(db => db.collection("places").doc(pd.dataset.pldel).delete())); return; }
     const g = t.closest("[data-go]");
-    if (g && !g.closest(".lmap-sec")) { if (g.closest("#story, #tablev, #tDlg")) setView("gaz"); go(g.dataset.go, !!g.closest(".atlas")); return; }
+    if (g && !g.closest(".lmap-sec")) { if (g.closest("#story, #tablev, #tDlg, #galaxyv")) setView("gaz"); go(g.dataset.go, !!g.closest(".atlas")); return; }
     if (g) { go(g.dataset.go); return; }
     const c = t.closest("[data-cat]"); if (c) { state.cat = c.dataset.cat; renderAll(false); return; }
     if (t.closest("#m-keeper")) { setMode("gm"); return; }
@@ -696,7 +702,7 @@
   // the city on the plan: the chosen place's own (or the one shown last); #world and #city/<id> open those directly
   if (A.cityData && A.cityMount) { const h = hash(), want = /^city\//.test(h) ? h.slice(5) : byId[state.sel] ? cityOf(state.sel) : store.get("city"); mountCity(CITIES[want] ? want : mainCity); }
   if (/^city\//.test(hash()) && CITIES[hash().slice(5)]) enterCity(hash().slice(5));
-  else setView(hash() === "world" ? "world" : ["story", "music", "world", "table"].includes(store.get("view")) ? store.get("view") : "gaz");
+  else setView(hash() === "world" ? "world" : ["story", "music", "world", "table", "galaxy"].includes(store.get("view")) ? store.get("view") : "gaz");
 
   /* ---- connect the tracker to the artifact's database */
   (async function initTracker() {

@@ -574,6 +574,7 @@
       case "person": return d.name || "a person";
       case "scene": return d.title ? `"${d.title}"` : "words to read";
       case "world": return "the world map";
+      case "galaxy": return "the star chart";
       case "board": return "their board of what they know";
       case "safety": return "the lines and veils";
       case "blank": return "nothing (a dark screen)";
@@ -595,6 +596,7 @@
     else if (k === "person") inner = `<div class="ps-person">${T.PERSON_SIL}<h2>${esc(d.name || "")}</h2>${d.role ? `<p class="ps-role">${esc(d.role)}</p>` : ""}${d.look ? `<p>${esc(d.look)}</p>` : ""}</div>`;
     else if (k === "scene") inner = `<div class="ps-scene">${d.title ? `<h2>${esc(d.title)}</h2>` : ""}${T.paras(d.text)}</div>`;
     else if (k === "world") inner = word("map", "The world map");
+    else if (k === "galaxy") inner = word("map", "The star chart");
     else if (k === "board") inner = word("board", "Their board");
     else if (k === "safety") inner = word("safety", "Lines and veils");
     else if (k === "blank") return "";
@@ -678,7 +680,7 @@
       </section>
       ${lanAvail() ? `<section class="t-card t-lan"><h3>${T.icon("party")} On the players' own phones and laptops</h3><div id="tLan"><p class="t-small">…</p></div></section>` : ""}
       ${cardsFor("screen")}
-      <section class="t-card"><h3>Show them</h3><div class="t-tiles">${tile("title", "The title", "play")}${A.worldData && A.worldMount ? tile("world", "The world map", "map") : ""}${tile("board", "Their board", "board")}${tile("safety", "Lines and veils", "safety")}${tile("blank", "A dark screen", "close")}</div></section>
+      <section class="t-card"><h3>Show them</h3><div class="t-tiles">${tile("title", "The title", "play")}${A.worldData && A.worldMount ? tile("world", "The world map", "map") : ""}${A.galaxyParams ? tile("galaxy", "The star chart", "map") : ""}${tile("board", "Their board", "board")}${tile("safety", "Lines and veils", "safety")}${tile("blank", "A dark screen", "close")}</div></section>
       <div class="t-grid t-g2"><div>
         <section class="t-card"><h3>${T.icon("map")} A map, a room at a time</h3>${fogEditor()}</section></div>
       <div>

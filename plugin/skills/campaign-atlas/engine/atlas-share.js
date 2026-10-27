@@ -95,6 +95,8 @@
     for (const id of A.order) { const d = placeShare(S, id, screen); if (d) out["place:" + id] = d; }
     const w = worldShare(S, prefs); if (w) out.world = w;
     out.board = boardShare(S);
+    // the star chart: only what is charted (atlas-galaxy.js), never the seed the galaxy grows from
+    if (A.galaxyShare) { try { const g = A.galaxyShare(S); if (g) out.galaxy = g; } catch (e) { console.warn("atlas: the star chart could not be shared", e); } }
     return out;
   }
   // kept up to date: worked out again a moment after the table changes, and only what changed is written
@@ -107,7 +109,7 @@
       for (const k of Object.keys(have)) if (!(k in all)) { delete last[k]; S.set("share", k, null); }
     };
     const soon = () => { clearTimeout(t); t = setTimeout(run, 400); };
-    for (const c of ["share", "fog", "status", "clues", "screen", "board", "devstate", "world", "mapedits", "fly", "jcfg"]) S.watch(c, soon);
+    for (const c of ["share", "fog", "status", "clues", "screen", "board", "devstate", "world", "mapedits", "fly", "jcfg", "charts", "ship", "gedits"]) S.watch(c, soon);
     if (typeof document !== "undefined") document.addEventListener("atlas-story", soon);
     S.ready.then(soon);
     return { now: run };

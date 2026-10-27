@@ -528,7 +528,7 @@
     const when = t => new Date(t || 0).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     const placeName = id => (A.meta[id] || {}).name || id;
     // what is on the table, in the players' words
-    const nowWords = d => ({ map: "the map of " + placeName(d.place), handout: "a handout", person: d.name || "someone", scene: d.title || "words to read", world: "the world map", board: "your board", safety: "the lines and veils", blank: "nothing" })[d.kind] || "the title";
+    const nowWords = d => ({ map: "the map of " + placeName(d.place), galaxy: "the star chart", handout: "a handout", person: d.name || "someone", scene: d.title || "words to read", world: "the world map", board: "your board", safety: "the lines and veils", blank: "nothing" })[d.kind] || "the title";
 
     /* the table: what the referee sends */
     function render() {
@@ -556,6 +556,9 @@
         const copy = !!A.playersCopy;
         if (!world) { stage.innerHTML = `<div class="ps-world"></div>`; world = A.worldMount(stage.firstChild, { mode: () => "player", placesAt: () => [], peopleAt: () => [], leadsInto: () => [], hasCity: () => false, cityName: id => id, enter() {}, open() {}, db: copy ? Promise.resolve(null) : st.ready, store: copy ? { get: () => null, set() {} } : ctx.prefStore }); }
         else world.sync();
+      } else if (k === "galaxy") {
+        // the star chart: what the game master's page shared (atlas-galaxy.js), the charted systems only
+        stage.innerHTML = `<div class="ps-galaxy">${A.galaxyDraw ? A.galaxyDraw(st.get("share", "galaxy")) : ""}</div>`;
       } else if (k === "board") {
         const [model, pos, W, H] = theirBoard();
         stage.innerHTML = `<div class="ps-fit ps-board">${boardHTML(model, pos, id => ctx.found(id), W, H, false)}</div>`;
@@ -697,6 +700,7 @@
     });
     st.watch("fog", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
     st.watch("board", () => { if (now.kind === "board") render(); if (tab === "board") renderPage(); });
+    st.watch("share", () => { if (now.kind === "galaxy") render(); });
     st.watch("safety", () => { if (now.kind === "safety") render(); });
     for (const c of ["clues", "status"]) st.watch(c, () => { if (now.kind === "board") render(); if (tab === "board" || tab === "places") renderPage(); });
     st.watch("given", () => { badges(); if (tab === "handouts") renderPage(); });

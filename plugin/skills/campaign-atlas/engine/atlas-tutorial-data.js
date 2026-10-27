@@ -64,6 +64,14 @@
         { say: "Click a place for what is there; a place with a 3D map opens it with Enter.", sel: ".wl", act: "look" },
         { say: "Edit map moves places, adds places and routes, and marks the party's journey.", sel: "[data-w='edit']", act: "look" },
         { say: "Back to the Gazetteer.", sel: "#v-gaz", act: "click", auto: true }
+      ] },
+      { id: "galaxy", title: "The star chart", summary: "A galaxy of hundreds of systems: open a system and its worlds, plot a course, keep the players' charts.", features: ["galaxy", "systems", "starship", "charts"], needs: has("#v-galaxy"), steps: [
+        { say: "A campaign among the stars has its galaxy: every system grown from one seed, the same every time.", sel: "#v-galaxy", act: "click", try: "Click Star chart.", wait: 900 },
+        { say: "Drag to move and scroll to come closer: sectors, the powers' territories, the lanes, charted space, and the dangerous and restricted regions.", sel: "#galaxyv .gx-canvas", act: "look" },
+        { say: "The ship: where it is, its fuel and how far it can jump.", sel: "#galaxyv [data-gx='ship']", act: "click", try: "Click The ship.", wait: 700 },
+        { say: "Click any star to see its system. Open it to see its worlds, and a world to see all it is: its air, gravity, warmth, life, and whether anyone can land.", sel: "#galaxyv .gx-side", act: "look" },
+        { say: "Plot a course and Atlas gives the jumps, the fuel, the days and the dangers on the way; making the jump moves the world's time on.", sel: "#galaxyv .gx-side", act: "look" },
+        { say: "And what the players' charts show of each system: charted, rumoured, visited, or kept from them. Their screen shows only what is on their charts.", sel: "#galaxyv .gx-side", act: "look" }
       ] }
     ] },
     { id: "table", title: "Game night", lessons: [
@@ -146,7 +154,7 @@
     playersafe: ["Player-safe view", "secrets players safe"], dossier: ["A place's page", "dossier place page people clues"], floors: ["Floors", "floor level storey"], mapviews: ["Player view and your view of a map", "player view markers"],
     fullsize: ["Full size", "big map"], room3d: ["Rooms in 3D", "3d room view"], mapeditor: ["The map editor", "edit map rooms doors stairs"], furnish: ["Furnishing rooms", "furniture models furnish"], models: ["The model library", "models 3d library glb"],
     caves: ["Caves", "cave generator dungeon mine"], riddles: ["Riddles and puzzles", "riddle puzzle answer"], traps: ["Traps", "trap disarm"],
-    worldmap: ["The world map", "world map realm travel"], maplook: ["How the world map is drawn", "style parchment atlas survey engraved"], worldedit: ["Editing the world map", "places routes journey"],
+    worldmap: ["The world map", "world map realm travel"], galaxy: ["The star chart", "galaxy stars sectors space map"], systems: ["Star systems and worlds", "system planet world star moon gravity atmosphere habitable"], starship: ["The ship, courses and fuel", "ship fuel jump warp course travel refuel"], charts: ["The players' star charts", "charts charted explored scanned rumoured"], maplook: ["How the world map is drawn", "style parchment atlas survey engraved"], worldedit: ["Editing the world map", "places routes journey"],
     "players-screen": ["The players' screen", "television second screen players window"], fog: ["Fog of war", "fog brush reveal"], fog3d: ["Fog of war in 3D", "3d fog"], "players-copy": ["The players' copy", "players copy secrets"], phones: ["Players' phones", "phone qr wifi"],
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
@@ -165,7 +173,7 @@
   const COVERS = {
     tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", factions: "factions" },
     dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
-    view: { gaz: "gazetteer", table: "views", world: "worldmap", story: "bible", music: "music" },
+    view: { gaz: "gazetteer", table: "views", world: "worldmap", galaxy: "galaxy", story: "bible", music: "music" },
     tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues" },
     world: { edit: "worldedit", addloc: "worldedit", addroute: "worldedit", export: "worldedit", copy: "worldedit", editloc: "worldedit", editroute: "worldedit", delloc: "worldedit", delroute: "worldedit", resetloc: "worldedit", resetroute: "worldedit", plan: "worldedit", setoff: "worldedit", arrive: "worldedit", cancel: "worldedit", partyhere: "worldedit", enter: "worldmap", make: "worldmap", drawn: "maplook", close: "worldmap", dlgclose: "worldmap" }
   };

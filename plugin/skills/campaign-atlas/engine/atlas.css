@@ -1951,3 +1951,70 @@ button.ho-b:hover { color: var(--ink); }
 .ps-entry.theory { border-left: 3px solid #6b8acb; }
 .ps-entry.question { border-left: 3px solid #a07c10; }
 .ps-entry .ps-kind { display: inline-block; margin-bottom: 4px; }
+/* the galaxy (atlas-galaxy.js): the star chart, the side with the ship and the system chosen, and the players' drawing */
+#app:not([data-view="galaxy"]) #galaxyv { display: none; }
+#app[data-view="galaxy"] .bones, #app[data-view="galaxy"] .tracker, #app[data-view="galaxy"] .atlas, #app[data-view="galaxy"] .layout { display: none; }
+.galaxyv { margin: 14px 0 24px; }
+.gx-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; align-items: start; }
+@media (max-width: 900px) { .gx-wrap { grid-template-columns: minmax(0, 1fr); } }
+.gx-map { position: relative; border: 1px solid #1e2a3d; border-radius: 8px; overflow: hidden; background: #05070c; }
+.gx-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: rgba(5, 7, 12, .82); }
+.gx-find { flex: 1 1 150px; min-width: 0; background: #0b1220; color: #dbe7ff; border: 1px solid #2b3a52; border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 14px; }
+.gx-b { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .04em; border: 1px solid #2b3a52; background: #0b1220; color: #cfe0ff; border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+.gx-b[aria-pressed="true"] { background: #cfe0ff; color: #0b1220; }
+.gx-canvas { height: min(74vh, 700px); touch-action: none; cursor: grab; }
+.gx-canvas:active { cursor: grabbing; }
+.gx-svg { width: 100%; height: 100%; display: block; }
+.gx-bg { fill: #05070c; }
+.gx-lane { stroke: #2e4a73; stroke-width: .6; opacity: .75; vector-effect: non-scaling-stroke; }
+.gx-star.gx-unknown { opacity: .45; }
+.gx-star.gx-hidden { opacity: .25; }
+.gx-star.gx-visited { stroke: #8fd19e; stroke-width: .6; }
+.gx-terr { opacity: .09; }
+.gx-reg { fill-opacity: .07; stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.gx-explored { fill: #3b82f6; stroke: #3b82f6; }
+.gx-danger { fill: #ef4444; stroke: #ef4444; }
+.gx-restricted { fill: #f59e0b; stroke: #f59e0b; }
+.gx-sector { fill: #6d86ad; font-family: var(--f-mono); font-size: 15px; letter-spacing: .18em; text-transform: uppercase; text-anchor: middle; opacity: .32; pointer-events: none; }
+.gx-canvas[data-z="near"] .gx-sector { opacity: .14; }
+.gx-name { fill: #dbe7ff; font-family: var(--f-body); pointer-events: none; }
+.gx-name.gx-unknown, .gx-name.gx-hidden { fill: #6d7a90; }
+.gx-shipmark { fill: none; stroke: #8fd19e; stroke-width: 2.4; vector-effect: non-scaling-stroke; }
+.gx-reach { fill: #8fd19e; fill-opacity: .035; stroke: #8fd19e; stroke-width: 1; stroke-dasharray: 3 5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.gx-selmark { fill: none; stroke: #fff; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.gx-found { fill: none; stroke: #ffd166; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.gx-route { fill: none; stroke: #8fd19e; stroke-width: 2.2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
+.gx-route.bad { stroke: #ef4444; }
+.gx-key { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: 3px 12px; padding: 6px 10px; font-size: 12px; color: #b9c6dc; background: rgba(5, 7, 12, .8); }
+.gx-key i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.gx-k-danger { background: #ef4444; }
+.gx-k-restricted { background: #f59e0b; }
+.gx-k-explored { background: #3b82f6; }
+.gx-side { display: grid; gap: 10px; }
+.gx-card { border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; background: var(--panel); }
+.gx-card h3, .gx-card h4 { margin: 0 0 6px; }
+.gx-card p { margin: 6px 0; }
+.gx-f { font-size: 14.5px; margin: 3px 0; }
+.gx-f > .kn { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; margin-right: 3px; }
+.gx-fuel { height: 8px; border-radius: 4px; background: var(--rule); overflow: hidden; margin: 6px 0 2px; }
+.gx-fuel i { display: block; height: 100%; background: #3f8a4f; }
+.gx-sel { width: auto; margin: 0; padding: 2px 6px; font-size: 13.5px; }
+.gx-warn { color: #c0392b; font-size: 14px; }
+.gx-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.gx-tags span { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .04em; border: 1px solid var(--rule); border-radius: 999px; padding: 0 7px; }
+.gx-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.gx-gm { border-left: 3px solid var(--accent); padding-left: 8px; font-size: 14px; }
+.gx-risks { margin: 4px 0; padding-left: 18px; color: #c0392b; font-size: 14px; }
+.gx-sysmap { width: 100%; height: auto; display: block; border-radius: 6px; margin: 4px 0; }
+.gx-orbit { fill: none; stroke: #2e4a73; stroke-width: .6; }
+.gx-belt { fill: none; stroke: #8a7a5a; stroke-width: 2; stroke-dasharray: 1 2; }
+.gx-planet { cursor: pointer; stroke: #05070c; stroke-width: .6; }
+.gx-planet.on { stroke: #fff; stroke-width: 1.6; }
+.gx-p-gas { fill: #d9a066; } .gx-p-icegiant { fill: #7fb3e6; } .gx-p-ocean { fill: #3b82f6; } .gx-p-garden { fill: #4caf50; } .gx-p-desert { fill: #d6b36a; }
+.gx-p-lava { fill: #e05a2b; } .gx-p-ice { fill: #cfe8ff; } .gx-p-rocky { fill: #9a8f86; } .gx-p-barren { fill: #7d7d7d; } .gx-p-toxic { fill: #b5c43c; } .gx-p-dwarf { fill: #b0b0b0; }
+.gx-world { border-top: 1px solid var(--rule); margin-top: 8px; padding-top: 8px; }
+.ps-galaxy { position: absolute; inset: 0; }
+.gx-players text { fill: #dbe7ff; font-family: var(--f-body); }
+.gx-players .gx-lane { stroke-width: 1; }
+.gx-ship circle { fill: none; stroke: #8fd19e; stroke-width: 2.4; vector-effect: non-scaling-stroke; }
+.gx-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #8a857c; font-style: italic; font-size: 20px; }

@@ -23,6 +23,7 @@ It was distilled from a long project (the Wormroot Idol gazetteer: 51 places, ab
 |---|---|
 | `references/playbook.md` | First, every time. The route from story to finished atlas, step by step, with commands. |
 | `references/standards.md` | Before planning. What a finished campaign must be; most of it is enforced by `check`. |
+| `references/galaxy.md` | When the story travels between the stars: the galaxy grown from a seed (`atlas.js galaxy`), the systems the council names, the ship, courses and fuel, the players' charts. |
 | `references/council.md` | When the story arrives. Which council sits for which world (`atlas.js council`), how the writers work, how the judge judges them, how all five agree, and what they must produce for a mystery or a living world. |
 | `references/cities.md` | When the story has a setting. Real cities, invented cities, camps and bases; the city data format. |
 | `references/world.md` | When the story travels between places, or the user gives a map they drew. The world map: invented, real or from a drawing; several cities in one campaign. |
