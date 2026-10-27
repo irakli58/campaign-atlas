@@ -2018,3 +2018,14 @@ button.ho-b:hover { color: var(--ink); }
 .gx-players .gx-lane { stroke-width: 1; }
 .gx-ship circle { fill: none; stroke: #8fd19e; stroke-width: 2.4; vector-effect: non-scaling-stroke; }
 .gx-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #8a857c; font-style: italic; font-size: 20px; }
+/* a facility's systems (atlas-facility.js), on the place's page */
+.fac-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin: 8px 0; }
+.fac-sys { border: 1px solid var(--rule); border-left: 4px solid #3f8a4f; border-radius: 6px; padding: 6px 10px; }
+.fac-sys.fac-strained { border-left-color: #c9a227; }
+.fac-sys.fac-failing { border-left-color: #d9732b; }
+.fac-sys.fac-down { border-left-color: #b0161b; }
+.fac-h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.fac-lv { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.fac-down .fac-lv { color: #b0161b; }
+.fac-sys select { width: auto; margin: 0; padding: 2px 6px; }
+.fac-sys .t-n { width: 56px; margin: 0; }

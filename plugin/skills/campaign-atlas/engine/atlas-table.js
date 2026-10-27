@@ -43,7 +43,8 @@
     const M = Object.assign({}, src, { floors, edited: ed.t || 1 }); delete M.order; if (ed.order) M.order = ed.order;
     M.rooms = Object.assign({}, src.rooms || {}); for (const [rid, r] of Object.entries(ed.rooms || {})) M.rooms[rid] = Object.assign({}, M.rooms[rid] || {}, r);
     // a map made again on the page (a generated cave, atlas-caveui.js) brings its own overview, dangers and secret ways
-    for (const k of ["enc", "secrets"]) if (ed[k]) { M[k] = Object.assign({}, src[k] || {}, ed[k]); for (const [x, v] of Object.entries(ed[k])) if (v === null) delete M[k][x]; }   // (null: gone with the map it was on)
+    // (and the people, dangers and secrets placed with the map editor's Markers tool, atlas-mapmarks.js)
+    for (const k of ["enc", "secrets", "npcs"]) if (ed[k]) { M[k] = Object.assign({}, src[k] || {}, ed[k]); for (const [x, v] of Object.entries(ed[k])) if (v === null) delete M[k][x]; }   // (null: gone with the map it was on)
     for (const k of ["ov", "run", "ext", "cave", "start"]) if (ed[k] != null) M[k] = ed[k];
     A.maps[id] = M; delete A.exp[id]; A.mapEdits[id] = ed; A.state.cache = {};
     return A;

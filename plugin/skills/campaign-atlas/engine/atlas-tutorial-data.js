@@ -31,22 +31,24 @@
       ] }
     ] },
     { id: "places", title: "Places and their maps", lessons: [
-      { id: "place", title: "Reading a place", summary: "A place's page: what it is, its maps floor by floor, its people and clues.", features: ["dossier", "floors", "mapviews"], needs: has("#list li button[data-go]"), steps: [
+      { id: "place", title: "Reading a place", summary: "A place's page: what it is, its maps floor by floor, its people and clues.", features: ["facility", "dossier", "floors", "mapviews"], needs: has("#list li button[data-go]"), steps: [
         { say: "Open a place from the list.", sel: "#list li button[data-go]", act: "click", try: "Click a place in the list." },
         { say: "Its page tells you what it is, what is really going on, the people here and the clues to find.", sel: "#dossier", act: "look", wait: 600 },
         { say: "Its maps come floor by floor. Each floor has its own button.", sel: ".lmap-sec .lm-floors", act: "look" },
         { say: "Player view shows the map as the players may see it: no secret rooms, no markers.", sel: ".lmap-sec [data-lmv='player']", act: "click", try: "Click Player view." },
         { say: "Your view again, with every marker: clues, people, secrets and dangers.", sel: ".lmap-sec [data-lmv='gm']", act: "click", try: "Click your view." },
-        { say: "Below the map, its guide: every room, what is there, who is there, what can be found.", sel: ".lmap-sec .lm-ref", act: "look" }
+        { say: "Below the map, its guide: every room, what is there, who is there, what can be found.", sel: ".lmap-sec .lm-ref", act: "look" },
+        { say: "A station, a ship or a laboratory has its systems: power, oxygen, pressure and the rest. Change them as the story does, or let one worsen with the world's time.", sel: "#dossier .t-fac", act: "look", optional: true }
       ] },
       { id: "map3d", title: "Big maps and 3D", summary: "A map at full size, and the room in 3D from its one fixed angle.", features: ["fullsize", "room3d"], needs: has(".lmap-sec"), steps: [
         { say: "Full size opens the map as large as your screen allows.", sel: ".lmap-sec [data-lmfull]", act: "click", try: "Click Full size." },
         { say: "Close it again when you have looked.", sel: "#lmDlg[open] .lm-dlg-x", act: "click", auto: true },
         { say: "And here the floor in 3D, seen from one fixed angle so you never lose your way. Slide and zoom; it never turns.", sel: ".lmap-sec [data-m3d], .lmap-sec [data-lm3d]", act: "look" }
       ] },
-      { id: "editor", title: "Editing a map", summary: "Redraw any map: rooms, doors, stairs, furniture and models, in 2D or 3D.", features: ["mapeditor", "furnish", "models"], needs: has(".lmap-sec [data-medit]"), steps: [
+      { id: "editor", title: "Editing a map", summary: "Redraw any map: rooms, doors, stairs, furniture and models, in 2D or 3D.", features: ["mapeditor", "furnish", "models", "mapmarks"], needs: has(".lmap-sec [data-medit]"), steps: [
         { say: "Edit this map opens the map editor. Nothing is kept until you save.", sel: ".lmap-sec [data-medit]", act: "click", try: "Click Edit this map." },
         { say: "Its tools: draw rooms, doors and stairs; furnish with models from the library; place clues.", sel: "#meDlg .me-tools", act: "look", wait: 600 },
+        { say: "And put people, dangers and secrets on the map where they are, each with its words.", sel: "#meDlg [data-tool='marks']", act: "look" },
         { say: "Switch between the flat map and 3D: it is the same map.", sel: "#meDlg [data-r3v]", act: "look" },
         { say: "Close it without saving: your map stays as it was.", sel: "#meDlg [data-me='close']", act: "click", auto: true }
       ] },
@@ -152,14 +154,14 @@
   const FEATURES = {
     gazetteer: ["The Gazetteer", "views places list book"], search: ["Search", "find word name"], views: ["The views", "gazetteer table world story music"], help: ["Help and tutorials", "tutorial lesson help"],
     playersafe: ["Player-safe view", "secrets players safe"], dossier: ["A place's page", "dossier place page people clues"], floors: ["Floors", "floor level storey"], mapviews: ["Player view and your view of a map", "player view markers"],
-    fullsize: ["Full size", "big map"], room3d: ["Rooms in 3D", "3d room view"], mapeditor: ["The map editor", "edit map rooms doors stairs"], furnish: ["Furnishing rooms", "furniture models furnish"], models: ["The model library", "models 3d library glb"],
+    fullsize: ["Full size", "big map"], room3d: ["Rooms in 3D", "3d room view"], mapeditor: ["The map editor", "edit map rooms doors stairs"], mapmarks: ["People, dangers and secrets on the map", "npc marker person encounter danger secret place map editor"], furnish: ["Furnishing rooms", "furniture models furnish"], models: ["The model library", "models 3d library glb"],
     caves: ["Caves", "cave generator dungeon mine"], riddles: ["Riddles and puzzles", "riddle puzzle answer"], traps: ["Traps", "trap disarm"],
     worldmap: ["The world map", "world map realm travel"], galaxy: ["The star chart", "galaxy stars sectors space map"], systems: ["Star systems and worlds", "system planet world star moon gravity atmosphere habitable"], starship: ["The ship, courses and fuel", "ship fuel jump warp course travel refuel"], charts: ["The players' star charts", "charts charted explored scanned rumoured"], maplook: ["How the world map is drawn", "style parchment atlas survey engraved"], worldedit: ["Editing the world map", "places routes journey"],
     "players-screen": ["The players' screen", "television second screen players window"], fog: ["Fog of war", "fog brush reveal"], fog3d: ["Fog of war in 3D", "3d fog"], "players-copy": ["The players' copy", "players copy secrets"], phones: ["Players' phones", "phone qr wifi"],
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
-    worldtime: ["The world's time", "clock calendar date day hour time pause"], events: ["World events", "event plan happens approve due notification council suggest called off"], news: ["News for the players", "news told players notification"],
+    worldtime: ["The world's time", "clock calendar date day hour time pause"], events: ["World events", "event plan happens approve due notification council suggest called off"], news: ["News for the players", "news told players notification"], facility: ["A facility's systems", "power oxygen pressure temperature contamination security structure comms emergency station ship lab survival"],
     journal: ["The players' journal", "journal notes theories quests hints summaries manual assisted full"],
     factions: ["Factions", "faction power house guild government corporation stance allies enemies territory plan"], lives: ["Where everyone is", "schedule day week home work where now status missing"],
     investigation: ["The investigation", "clues connections"], clues: ["Clues", "clue evidence"], knowledge: ["Who knows what", "knowledge"], autoconnect: ["Auto-Connect", "connect suggest"],
@@ -174,7 +176,7 @@
     tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", factions: "factions" },
     dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
     view: { gaz: "gazetteer", table: "views", world: "worldmap", galaxy: "galaxy", story: "bible", music: "music" },
-    tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues" },
+    tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues", marks: "mapmarks" },
     world: { edit: "worldedit", addloc: "worldedit", addroute: "worldedit", export: "worldedit", copy: "worldedit", editloc: "worldedit", editroute: "worldedit", delloc: "worldedit", delroute: "worldedit", resetloc: "worldedit", resetroute: "worldedit", plan: "worldedit", setoff: "worldedit", arrive: "worldedit", cancel: "worldedit", partyhere: "worldedit", enter: "worldmap", make: "worldmap", drawn: "maplook", close: "worldmap", dlgclose: "worldmap" }
   };
   // where in the page each feature lives, for the little ? beside it (contextual help): [selector, feature]

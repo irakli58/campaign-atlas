@@ -114,6 +114,9 @@ Put the same id on both floors, on the same squares, one `"up"` and one `"down"`
 
 ### M: markers
 
+On the page, the map editor's tools place them: Clues for clues, Traps and Riddles for theirs, and **People, dangers, secrets** for `N`, `E` and `S` markers with their words (who someone is, what they are doing and know; what a danger is; how a secret is found and where it leads); they are kept with the map's edit (its `npcs`, `enc` and `secrets`).
+
+
 `[id, x, y]`, the centre of the disc in squares. The letter decides the list the entry lives in: `C` and `K` (and any letter you add) in `clues`, `N` in `npcs`, `S` in `secrets`, `E` in `enc`, `T` in `traps`, `P` in `riddles` (riddles and puzzles). Draw the marker inside the room named by the entry's `at`.
 
 ### Caves

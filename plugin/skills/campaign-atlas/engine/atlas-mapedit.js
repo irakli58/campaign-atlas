@@ -47,7 +47,7 @@
   }
   function draftOf(id) {
     const M = A.get(id);
-    const ed0 = A.mapEdits[id] || {}, more = {}; for (const k of ["ov", "run", "ext", "enc", "secrets", "cave", "start"]) if (ed0[k] != null) more[k] = copy(ed0[k]);
+    const ed0 = A.mapEdits[id] || {}, more = {}; for (const k of ["ov", "run", "ext", "enc", "secrets", "npcs", "cave", "start"]) if (ed0[k] != null) more[k] = copy(ed0[k]);
     return { t: M.t, more, rooms: copy((A.mapEdits[id] || {}).rooms || {}), order: M.order ? M.order.slice() : null,
       floors: M.floors.map(F => { const o = { n: F.n, w: F.w, h: F.h, R: copy(F.R || []), D: copy(F.D || []), ST: copy(F.ST || []), M: copy(F.M || []), I: copy(loose(F)), P: copy(F.P || []) }; if (F.gm || F.k) o.gm = 1; if (F.note) o.note = F.note; if (F.light) o.light = F.light; if (F.wh) o.wh = F.wh; if (F.cave) o.cave = 1; if (F.geo) o.geo = F.geo; return o; }) };
   }

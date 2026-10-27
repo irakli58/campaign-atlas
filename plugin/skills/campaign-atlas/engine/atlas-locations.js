@@ -271,7 +271,7 @@
   L.panel = p => {
     const def = A.customs[p.id] || {}, St = A.story, x = def.ext || {}, cond = (CONDS.find(c => c[0] === (x.cond || "")) || CONDS[0])[1];
     const links = St && St.linksOf ? St.linksOf("place:" + p.id).filter(l => l.src !== "written") : [];
-    const people = St && St.people ? St.people() : [], items = St && St.items ? Object.entries(St.items()).map(([id, it]) => ["item:" + id, it.n || id]) : [];
+    const people = St && St.people ? St.people() : [], items = (St && St.items ? Object.entries(St.items()).map(([id, it]) => ["item:" + id, it.n || id]) : []).concat(Object.entries(A.factionsData || {}).map(([id, f]) => ["faction:" + id, (f.n || id) + " (a faction)"]));
     const made = def.created ? new Date(def.created).toLocaleDateString() : "";
     return `<section class="sec keeper loc-panel"><h3>${ICON} A place of your own</h3>
       <p class="loc-sum">${esc(def.typeName || "A place")}${def.district ? " · " + esc(def.district) : ""} · ${esc(cond)}${def.locked ? " · locked" : ""}${made ? ` · made ${esc(made)}` : ""}${def.t && def.t !== def.created ? ` · changed ${esc(new Date(def.t).toLocaleDateString())}` : ""}</p>

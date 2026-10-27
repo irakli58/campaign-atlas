@@ -123,6 +123,7 @@ module.exports.makeShipPlace = function (o) {
     run: dead ? "Run it slowly: darkness, cold, sounds ahead, and the log that explains too late." : "Let the players move freely; the crew are busy and the ship has corners nobody watches.",
     ext: dead ? `${o.name} hangs dark against the stars, turning slowly; no running lights, and a long scar along the hull.` : `${o.name}: a working hull, scarred and patched, her name stencilled by the airlock in letters worn half away.`,
     entry: S.entry, start: 0, compass: false, floors: S.floors, rooms: rw, clues, npcs, secrets, enc };
-  return { map, size: S.floors.length + " deck" + (S.floors.length > 1 ? "s" : "") + " of " + S.W + "x" + S.H, rooms: Object.keys(S.rooms).length };
+  map.facility = null;
+  return { map, facility: dead ? { power: "down", oxygen: "failing", pressure: "strained", temperature: "failing", contamination: "strained", security: "failing", structure: "strained", comms: "down", emergency: "failing" } : true, size: S.floors.length + " deck" + (S.floors.length > 1 ? "s" : "") + " of " + S.W + "x" + S.H, rooms: Object.keys(S.rooms).length };
 };
 module.exports.ROOMS = Object.keys(ROOMS);

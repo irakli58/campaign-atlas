@@ -24,6 +24,7 @@ A campaign is played, not only read. Every page Atlas builds has an **At the tab
 18. The world's time: the calendar, events, news
 19. Factions and people's lives
 20. The players' journal
+21. A facility's systems
 
 ## 1. What the page does by itself
 
@@ -355,3 +356,16 @@ The user asked (26 Oct 2026, the master plan, part 9) for a journal for the play
 What fills it beyond what they found is what the referee gives, from the card: a quest (and when it is done), a hint or a next step, "Previously on…" from Tonight. The people they met are kept when the referee shows someone's face on their screen: the name, the plain part of the role (never what follows a semicolon or a dash) and the look the screen showed. Their notes may be a note, a theory or a question; a theory is never marked right or wrong. Nothing undiscovered, no secret, no faction's plan, no event the referee has not let happen, and none of the referee's notes is ever in it.
 
 **Where it is kept**: collections `jcfg` (the settings), `pquests`, `hints`, `recaps`, `met`, and `journal` (their notes, with `kind` "theory" or "question"). On the players' phones (the app), these are read with the rest of what the players' window reads.
+
+## 21. A facility's systems
+
+The user asked (26 Oct 2026, the master plan, part 13) for science-fiction horror in the manner of Mothership: abandoned stations, derelicts, laboratories, quarantined colonies, containment, where what kills is the place failing as much as anything in it, and nothing forces a fight. A place that is a station, a ship, a laboratory, a colony dome or a mine says which systems it has:
+
+```js
+ATLAS.place("ceres-shaft-nine", { …, facility: { power: "strained", oxygen: "ok", pressure: "ok", temperature: "ok", contamination: "strained", security: "failing", structure: "ok", comms: "down", emergency: "ok" } });
+// or facility: true for all nine, each working
+```
+
+Each is `ok`, `strained`, `failing` or `down`, in its own words on the page (power: running, brownouts, failing, dead; oxygen: breathable, thin, failing, gone; pressure: holding, leaking, falling, vacuum; temperature: normal, uncomfortable, dangerous, lethal; contamination: clean, traces, spreading, overrun; security: secure, patchy, breached, gone; structure: sound, stressed, failing, breaking up; communications: clear, static, intermittent, silent; emergency systems: ready, partial, failing, offline). `atlas.js ship` gives its ships all nine (a derelict's already failing).
+
+**At the table**, on the place's page (the referee's only): each system, changed with a choice, or set to **worsen in** so many hours of the world's time (section 18): when the hour comes it drops a level and the referee is told; **stop it** holds it. **Show the players the status board** puts the systems on their screen as words. An event changes one with an effect `{ place, system, to }` (section 19's effects), undone when the event is taken back. Kept in the page (collection `facility`, with every change logged). In a detective campaign the failing systems are evidence (who cut the power, when, and why the logs say otherwise); in a sandbox the place may simply be dangerous. `check` names a system or a level it does not know, and an event changing a place with no facility.
