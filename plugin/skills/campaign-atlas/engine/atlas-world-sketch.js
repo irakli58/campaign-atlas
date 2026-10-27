@@ -176,18 +176,42 @@
   }
   // onto the map's own grid: smoothly enlarged, the coast given a natural raggedness at the finer grain (noise: a
   // function (x, y) to 0..1), the shape as drawn
-  function fit(sk, cols, rows, noise) {
-    const N = cols * rows, land = new Uint8Array(N), mtn = new Float32Array(N), lake = new Uint8Array(N), river = new Float32Array(N), kind = new Uint8Array(N), F = Float32Array.from(sk.land);
+  // onto the map's own grid, and made natural (the user, 27 Oct 2026: "a human won't be able to make the mountains
+  // natural ... slightly modify the shape after it's done so it's natural"). loose: how freely, 0 exactly as drawn
+  // (only the coast's grain), .5 natural (the default), 1 loosely. noise: a function (x, y) to 0..1.
+  //   - the coast: the brush's own shapes eased away, then bent in bays and headlands at several scales and given a
+  //     ragged, fractal edge; the drawn shape stays, its outline is the land's;
+  //   - mountains: a painted band becomes a range: bent a little, higher at its peaks and low at its passes along its
+  //     length, spurs branching off its sides, its foothills spreading unevenly;
+  //   - forests, deserts, swamps, snow: their edges wander (more than the coast's), so no brush outline shows;
+  //   - lakes: a natural shore; rivers: as drawn (the water finds its own way down to them).
+  function fit(sk, cols, rows, noise, loose) {
+    const L = loose == null ? .5 : clamp(+loose, 0, 1), N = cols * rows, land = new Uint8Array(N), mtn = new Float32Array(N), lake = new Uint8Array(N), river = new Float32Array(N), kind = new Uint8Array(N);
+    const k = cols / sk.cols, F = Float32Array.from(sk.land), MW = Float32Array.from(sk.mtn), MS = Float32Array.from(sk.mtn);
     const LK = sk.lake ? Float32Array.from(sk.lake) : null, RV = sk.river ? Float32Array.from(sk.river) : null; if (RV) blur(RV, sk.cols, sk.rows, 1, 1);
-    blur(F, sk.cols, sk.rows, 1, 1);
+    // (the brush's shapes eased: more the looser)
+    const eb = Math.max(1, Math.round(sk.cols * (.004 + .012 * L))); blur(F, sk.cols, sk.rows, eb, 2); if (LK) blur(LK, sk.cols, sk.rows, Math.max(1, eb - 1), 1);
+    blur(MS, sk.cols, sk.rows, Math.max(2, Math.round(sk.cols * .02)), 2);   // a range's whole breadth, for its spurs and foothills
     const at = (A, x, y) => { const fx = x * sk.cols / cols - .5, fy = y * sk.rows / rows - .5, i = clamp(Math.floor(fx), 0, sk.cols - 1), j = clamp(Math.floor(fy), 0, sk.rows - 1), i1 = Math.min(sk.cols - 1, i + 1), j1 = Math.min(sk.rows - 1, j + 1), tx = clamp(fx - i, 0, 1), ty = clamp(fy - j, 0, 1); return (A[j * sk.cols + i] * (1 - tx) + A[j * sk.cols + i1] * tx) * (1 - ty) + (A[j1 * sk.cols + i] * (1 - tx) + A[j1 * sk.cols + i1] * tx) * ty; };
-    const k = cols / sk.cols;
+    const nz = noise || (() => .5), S = cols / 100;   // S: a hundredth of the map's width, in cells
+    const fbm = (x, y, o, f) => { let v = 0, a = 1, t = 0; for (let q = 0; q < o; q++) { v += (nz(x * f + q * 17.3, y * f - q * 9.1) - .5) * a; t += a; a *= .5; f *= 2.03; } return v / t * 2; };
+    const ridged = (x, y, f) => { let v = 0, a = 1, t = 0; for (let q = 0; q < 3; q++) { const r = 1 - Math.abs(nz(x * f + 50 + q * 7, y * f - q * 3) * 2 - 1); v += r * r * a; t += a; a *= .5; f *= 2.1; } return v / t; };
     for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-      const n = j * cols + i, x = i + .5, y = j + .5, wob = noise ? (noise(x / (k * 1.6), y / (k * 1.6)) - .5) * .5 + (noise(x / (k * .6) + 7, y / (k * .6)) - .5) * .22 : 0;
-      land[n] = at(F, x, y) + wob > .5 ? 1 : 0; mtn[n] = land[n] ? at(sk.mtn, x, y) : 0;
-      if (land[n] && LK) lake[n] = at(LK, x, y) + wob * .6 > .5 ? 1 : 0; if (land[n] && RV) river[n] = Math.min(1, at(RV, x, y) * 2.5);
-      // (a painted kind read from the nearest sketch cell, the place nudged a little so its edge wanders)
-      if (land[n] && sk.kind) { const fx = clamp(Math.floor((x + wob * k * 2.2) * sk.cols / cols), 0, sk.cols - 1), fy = clamp(Math.floor((y + wob * k * 2.2) * sk.rows / rows), 0, sk.rows - 1); kind[n] = sk.kind[fy * sk.cols + fx]; }
+      const n = j * cols + i, x = i + .5, y = j + .5;
+      // the coast: warped at a broad scale (bays, headlands), then a fractal grain on the edge itself
+      const wx = x + fbm(x, y, 3, 1 / (S * 9)) * S * 2.6 * L, wy = y + fbm(x + 31, y - 17, 3, 1 / (S * 9)) * S * 2.6 * L;
+      const edge = fbm(x, y, 5, 1 / (S * 2.2)) * (.1 + .32 * L);
+      land[n] = at(F, wx, wy) + edge > .5 ? 1 : 0; if (!land[n]) continue;
+      // mountains: bent with the land, peaks and passes along the range, spurs off its sides
+      const mx = wx + fbm(x - 9, y + 4, 2, 1 / (S * 5)) * S * 1.4 * L, my = wy + fbm(x + 6, y - 11, 2, 1 / (S * 5)) * S * 1.4 * L;
+      const core = at(MW, mx, my), wide = at(MS, mx, my);
+      if (core > .01 || wide > .01) {
+        const along = clamp(.55 + .45 * (fbm(x + 77, y, 3, 1 / (S * 3.5)) + 1) * .9, .3, 1.15), spur = ridged(x, y, 1 / (S * 1.3));
+        mtn[n] = clamp(L ? core * (1 - .55 * L + .55 * L * along) + wide * L * (.15 + .75 * spur * spur) : core, 0, 1);
+      }
+      if (LK) lake[n] = at(LK, wx, wy) + edge * .7 > .5 ? 1 : 0; if (RV) river[n] = Math.min(1, at(RV, x, y) * 2.5);
+      // kinds of land: read from the nearest sketch cell at a place nudged further, so their edges wander
+      if (sk.kind) { const d = S * (.6 + 2.4 * L), kx = wx + fbm(x + 3, y + 40, 4, 1 / (S * 3)) * d, ky = wy + fbm(x - 40, y + 3, 4, 1 / (S * 3)) * d, fx = clamp(Math.floor(kx * sk.cols / cols), 0, sk.cols - 1), fy = clamp(Math.floor(ky * sk.rows / rows), 0, sk.rows - 1); kind[n] = sk.kind[fy * sk.cols + fx]; }
     }
     return { land, mtn, lake, river, kind };
   }

@@ -449,7 +449,7 @@ function invent(A, flags, log) {
       if (whole && realism !== "alien") { const a = { arid: .8, wet: 1.2 }[climate]; if (a) planet.air = a; }
       // (a sketch: the land and the mountains drawn, read onto this grid with a coast ragged as real ones are)
       let sketch = null;
-      if (flags.sketch) { const SKM = require("../engine/atlas-world-sketch.js"), sk = typeof flags.sketch.land === "string" ? SKM.decode(flags.sketch) : flags.sketch; sketch = SKM.fit(sk, cols, rows, noiseFn(seed + 41)); }
+      if (flags.sketch) { const SKM = require("../engine/atlas-world-sketch.js"), sk = typeof flags.sketch.land === "string" ? SKM.decode(flags.sketch) : flags.sketch; sketch = SKM.fit(sk, cols, rows, noiseFn(seed + 41), flags.loose != null && flags.loose !== true ? +flags.loose : 0); }
       const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: 1 - (SEA_SHARE[land] || .5), planet, km: whole ? 40030 : num("km", Math.round(w * 2.3)), tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: whole || flags["climate-model"] === "earth" ? "earth" : undefined, lat: whole ? [90, -90] : undefined, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: whole ? 1.4e6 : undefined, noiseZoom: whole ? 6 : undefined, edgeMargin: whole ? .025 : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco }; geo = G.info; T.rain = 1;
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
