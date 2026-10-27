@@ -1114,7 +1114,7 @@
       let pic = null;
       dlg.innerHTML = `<form method="dialog" class="ke wm-newworld"><h3>Make a new world</h3>
         <p class="kn">A whole new land, made the way the Earth makes one: plates raise its mountains, rivers carve them, the winds bring its rain. Your places are set on it again; Undo brings back the old land.</p>
-        <label>How big <select name="size">${opt(sizes, g.size || "planet")}</select></label>
+        <label>How big <span class="wm-lsl"><span class="kn">Small</span><input type="range" name="sizeR" min="0" max="${sizes.length - 1}" step="1" value="${Math.max(0, sizes.findIndex(s2 => s2[0] === (g.size || "planet")))}" aria-label="How big the world is"><span class="kn">A whole planet</span></span><span class="kn wm-sval"></span><input type="hidden" name="size" value="${esc(g.size || "planet")}"></label>
         <label>Its shape <select name="land">${opt(lands, g.paint ? "paint" : g.sketch ? "sketch" : g.land || "continent")}</select></label>
         <div class="wm-nw-pic" hidden><label>Your drawing <input type="file" name="pic" accept="image/*"></label><p class="kn">A drawing on paper or a coloured map: the land you outlined (or did not colour blue) becomes the land, and the mountains you drew (peaks, hatching, or brown and grey) become ranges. A photo of a sketch works.</p><p class="kn wm-nw-read"></p></div>
         <div class="wm-nw-paint" hidden>
@@ -1151,6 +1151,9 @@
       const blank = () => { pSize(); pg.fillStyle = SK.WATER; pg.fillRect(0, 0, pcv.width, pcv.height); pInit = true; pUndo.length = 0; };
       const showPic = () => { const v = f.elements.land.value; picBox.hidden = v !== "sketch"; pBox.hidden = v !== "paint"; f.querySelector(".wm-nw-loose").hidden = v !== "sketch" && v !== "paint";  if (v === "paint" && !pInit && SK) { if (g.paint) { const im = new Image(); im.onload = () => { pSize(); pg.drawImage(im, 0, 0, pcv.width, pcv.height); pInit = true; }; im.src = g.paint; } else fromMap(); } };
       showPic(); f.elements.land.addEventListener("change", showPic);
+      // (the size slider: its step names the size, and how big and how long it is)
+      const sv = () => { const k = sizes[+f.elements.sizeR.value]; f.elements.size.value = k[0]; f.querySelector(".wm-sval").textContent = k[1]; f.elements.size.dispatchEvent(new Event("change")); };
+      sv(); f.elements.sizeR.addEventListener("input", sv);
       const lv = () => { const x = +f.elements.loose.value; f.querySelector(".wm-lval").textContent = x < .1 ? "Your drawing exactly: only the coast's grain added." : x < .35 ? "Close to your drawing, a little natural." : x < .7 ? "Natural: your shapes, with bays, headlands, peaks and passes as nature would make them (recommended)." : "Loosely: the coasts and ranges much freer, still where you drew them."; };
       lv(); f.elements.loose.addEventListener("input", lv);
       f.elements.size.addEventListener("change", () => { if (pInit) pSize(); });

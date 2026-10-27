@@ -34,6 +34,8 @@ What was asked, what was done, and what is waiting, so the next session can carr
 - A whole planet is the default size for new worlds (in the page and atlas.js world; about 2 to 3 min).
 - Natural touches for drawings are on by default (loose .5), with a slider in Make a new world ("make a slider on
   how close they want it to the drawing"): left exactly as drawn, right loosely.
+- "Map size slider would be good too": How big is a slider over the seven sizes (Small to A whole planet), naming
+  the size, its width and about how long it takes.
 
 ## Known rough spots
 - A painted swamp shows only faintly in the hydro look.
