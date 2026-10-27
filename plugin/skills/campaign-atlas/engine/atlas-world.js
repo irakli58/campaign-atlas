@@ -1106,7 +1106,7 @@
     }
     // Make a new world: how big, what shape (or the referee's own drawing), what climate, by which rules, the look
     function newWorldDlg() {
-      const g = OV.gen || {}, SK = A.worldSketch, km = k => k === "planet" ? "the whole planet, pole to pole" : `about ${Math.round(GEN_SIZES[k][0] * 2.3 / 100) * 100} km across`;
+      const g = OV.gen || {}, SK = A.worldSketch, nk = v => Math.round(v / 100) * 100, fmt = v => v.toLocaleString("en"), km = k => k === "planet" ? "40,000 km around, 20,000 km from pole to pole" : `${fmt(nk(GEN_SIZES[k][0] * 2.3))} km by ${fmt(nk(GEN_SIZES[k][1] * 2.3))} km`;
       const sizes = [["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"], ["vast", "Vast"], ["world", "A great continent"], ["planet", "A whole planet"]].map(([k, l]) => [k, `${l}: ${km(k)}${GEN_SECS[k] >= 60 ? ` (takes about ${Math.round(GEN_SECS[k] / 60)} min)` : ""}`]);
       const lands = [["continent", "One continent"], ["continents", "Several continents"], ["islands", "Islands"], ["archipelago", "An archipelago"], ["coast", "A coast (the sea on one side)"], ["inland", "All land"], ["paint", "Paint it myself"], ["sketch", "From a picture of my own"]];
       const looks = (A.worldArt ? A.worldArt.looksFor(WD) : []).map(([v, l]) => [v, l]);
