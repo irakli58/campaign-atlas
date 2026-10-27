@@ -146,6 +146,8 @@
         P.last = { lesson: L.id, step: R.si, mode: R.mode, list: R.list.map(l => l.id), li: R.li }; save();
         R.marks.push({ t: performance.now(), lesson: L.id, step: R.si, say: s.say });
         const el = await find(s.sel, s.auto ? 2500 : 3500); if (token !== R.token) return;
+        // (a step with nothing to say is done quietly: putting back what the lesson changed)
+        if (!s.say) { if (el) await perform(s, el); R.si++; continue; }
         target = el || null;
         if (el) { el.scrollIntoView({ block: "center", inline: "nearest", behavior: VIDEO ? "auto" : "smooth" }); await sleep(VIDEO ? 120 : 380); if (token !== R.token) return; light(el); }
         else spot.classList.remove("on");
@@ -204,7 +206,7 @@
   function libHTML(q) {
     q = String(q || "").toLowerCase().trim();
     const L = avail(), matches = l => !q || (l.title + " " + l.summary + " " + (l.features || []).map(f => (D.FEATURES[f] || [f, ""]).join(" ")).join(" ")).toLowerCase().includes(q);
-    const last = P.last && byId(P.last.lesson), doneN = L.filter(l => P.done[l.id]).length, beginner = L.filter(l => ["tour", "place", "screen", "dock"].includes(l.id)).map(l => l.id);
+    const last = P.last && byId(P.last.lesson), doneN = L.filter(l => P.done[l.id]).length, beginner = L.filter(l => (D.welcome || ["tour", "place", "screen", "dock"]).includes(l.id)).map(l => l.id);
     const row = l => `<div class="tu-l" data-tul="${esc(l.id)}"><span class="tu-ok" aria-label="${P.done[l.id] ? "Done" : "Not yet"}">${P.done[l.id] ? "✓" : "○"}</span><div><b>${esc(l.title)}</b><small>${esc(l.summary)}</small></div><button type="button" data-tus="show" data-id="${esc(l.id)}">Show me</button><button type="button" class="tu-p" data-tus="try" data-id="${esc(l.id)}">Let me try</button></div>`;
     const chs = D.chapters.map(c => { const ls = c.lessons.filter(ok).filter(matches); if (!ls.length) return ""; const d = ls.filter(l => P.done[l.id]).length; return `<div class="tu-ch">${esc(c.title)} <span>${d} of ${ls.length} done</span></div><div class="tu-ls">${ls.map(l => row(Object.assign({ chapter: c }, l))).join("")}</div>`; }).join("");
     const feats = Object.entries(D.FEATURES).filter(([k, [n, kw]]) => (!q || (n + " " + kw).toLowerCase().includes(q)) && L.some(l => (l.features || []).includes(k))).sort((a, b) => a[1][0].localeCompare(b[1][0]));
@@ -259,11 +261,11 @@
     }
   }
   function welcome() {
-    if (P.seen || VIDEO || !document.querySelector(".mode")) return;
+    if (P.seen || VIDEO || !(document.querySelector(".mode") || D.welcome)) return;
     P.seen = true; save();
     const t = document.createElement("div"); t.className = "tu-toast"; t.setAttribute("role", "note");
-    t.innerHTML = `<p><b>New to Atlas?</b> A few minutes' tour of your campaign's page: watch it done, or try it yourself.</p><div class="tu-bar"><button type="button" data-tw="show">Show me</button><button type="button" class="tu-p" data-tw="try">Let me try</button><button type="button" data-tw="no">Not now</button></div>`;
-    t.addEventListener("click", e => { const b = e.target.closest("[data-tw]"); if (!b) return; t.remove(); if (b.dataset.tw !== "no") start(["tour", "place", "screen", "dock"], b.dataset.tw); });
+    t.innerHTML = `<p><b>New to Atlas?</b> A few minutes' tour: watch it done, or try it yourself.</p><div class="tu-bar"><button type="button" data-tw="show">Show me</button><button type="button" class="tu-p" data-tw="try">Let me try</button><button type="button" data-tw="no">Not now</button></div>`;
+    t.addEventListener("click", e => { const b = e.target.closest("[data-tw]"); if (!b) return; t.remove(); if (b.dataset.tw !== "no") start(D.welcome || ["tour", "place", "screen", "dock"], b.dataset.tw); });
     document.body.appendChild(t); setTimeout(() => t.isConnected && t.remove(), 30000);
   }
   let pend = 0; const mo = new MutationObserver(() => { clearTimeout(pend); pend = setTimeout(() => { helpButton(); anchors(); }, 250); });

@@ -114,6 +114,8 @@ async function route(req, res) {
 
   if (m === "GET" && (p === "/" || p === "/index.html")) return send(res, 200, fs.readFileSync(path.join(UI, "index.html"), "utf8").replace("__TOKEN__", TOKEN), TYPES[".html"]);
   if (m === "GET" && p.startsWith("/ui/")) { const f = path.join(UI, path.normalize(p.slice(4)).replace(/^(\.\.[\\/])+/, "")); return f.startsWith(UI + path.sep) ? file(res, f) : fail(res, 404, "not found"); }
+  // the tutorials' player, the same as a campaign page's (the app's lessons are ui/tour-data.js)
+  if (m === "GET" && p === "/tour.js") return file(res, path.join(SHIPPED, "engine", "atlas-tutorial.js"));
 
   // a finished campaign, opened from the app: its page, with the app's database in place of claude.ai's
   let mm, mm2;
