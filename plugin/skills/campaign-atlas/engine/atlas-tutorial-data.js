@@ -89,6 +89,16 @@
         { say: "Improvise helps with the rest: a place to describe, a reaction, what follows, what happens next, and whether something fits.", sel: "#tPop [data-cp='mode'][data-m='imp']", act: "click", try: "Click Improvise.", wait: 400 },
         { say: "Close it from the toolbar.", sel: "#tDock [data-dock='talk']", act: "click", auto: true }
       ] },
+      { id: "more", title: "Everything else at the table", summary: "Combat, making things up, the board, the players' characters, safety tools, and the printed book.", features: ["tablehome", "combat", "make", "board", "party", "safety", "export"], needs: has("#v-table"), steps: [
+        { say: "At the table opens on Start here: every tool, with what it is for.", sel: "#v-table", act: "click", auto: true, wait: 400 },
+        { say: "Start here: the two things a game night turns on, and every other tool as a card.", sel: "[data-t='tab'][data-tab='home']", act: "click", try: "Click Start here.", wait: 400 },
+        { say: "Combat and dice: initiative, wounds and sanity, rolls in your game's rules.", sel: "[data-t='tab'][data-tab='combat']", act: "click", try: "Click Combat and dice.", wait: 400 },
+        { say: "Make it up: a person or a small mapped place on the spot, and random tables.", sel: "[data-t='tab'][data-tab='make']", act: "click", try: "Click Make it up.", wait: 400 },
+        { say: "The board: people, places and clues pinned to cork, with string between them. The players have their own, with only what they found.", sel: "[data-t='tab'][data-tab='board']", act: "click", try: "Click The board.", wait: 500 },
+        { say: "The party: the players' characters, each woven into the story, and the players' own notes.", sel: "[data-t='tab'][data-tab='party']", act: "click", try: "Click The party.", wait: 400 },
+        { say: "Safety: lines and veils, and the X-card the players can press on their screen.", sel: "[data-t='tab'][data-tab='safety']", act: "click", try: "Click Safety.", wait: 400 },
+        { say: "Print and export: the whole campaign as a book, the handouts to print, and maps for Foundry and Roll20.", sel: "[data-t='tab'][data-tab='export']", act: "click", try: "Click Print and export.", wait: 400 }
+      ] },
       { id: "tonight", title: "Tonight, clocks and handouts", summary: "The session sheet, the villains' clocks, and handouts drawn as the real thing.", features: ["tonight", "clocks", "handouts"], needs: has("#v-table"), steps: [
         { say: "Tonight: the session's plan, your notes, and a read-aloud Previously on.", sel: "[data-t='tab'][data-tab='tonight']", act: "click", try: "Click Tonight.", wait: 500 },
         { say: "Clocks: what each villain is doing while the party investigates. Tick them as the world moves.", sel: "[data-t='tab'][data-tab='clocks']", act: "click", try: "Click Clocks and stuck.", wait: 500 },
@@ -123,9 +133,21 @@
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
     investigation: ["The investigation", "clues connections"], clues: ["Clues", "clue evidence"], knowledge: ["Who knows what", "knowledge"], autoconnect: ["Auto-Connect", "connect suggest"],
-    consistency: ["Consistency", "contradiction check fits"], bible: ["The story bible", "story council tolkien"], music: ["Music", "music theme sound"]
+    consistency: ["Consistency", "contradiction check fits"], bible: ["The story bible", "story council tolkien"], music: ["Music", "music theme sound"],
+    tablehome: ["Start here", "game night overview tools"], combat: ["Combat and dice", "initiative wounds sanity combat"], make: ["Make it up", "random tables person place"], board: ["The board", "corkboard string conspiracy"],
+    party: ["The players' characters", "party pcs notes"], safety: ["Safety tools", "lines veils x-card"], export: ["Print and export", "book print vtt foundry roll20"]
+  };
+  // what in the page each feature is: the tabs of At the table, the quick tools, the views, the map editor's tools, the world
+  // map's buttons. dev/tutorial-coverage.js finds every one of these in the engine; one with no feature here, or a feature
+  // no lesson teaches, fails it: a new tool is not finished until it has its lesson.
+  const COVERS = {
+    tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency" },
+    dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", screen: "players-screen" },
+    view: { gaz: "gazetteer", table: "views", world: "worldmap", story: "bible", music: "music" },
+    tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues" },
+    world: { edit: "worldedit", addloc: "worldedit", addroute: "worldedit", export: "worldedit", copy: "worldedit", editloc: "worldedit", editroute: "worldedit", delloc: "worldedit", delroute: "worldedit", resetloc: "worldedit", resetroute: "worldedit", plan: "worldedit", setoff: "worldedit", arrive: "worldedit", cancel: "worldedit", partyhere: "worldedit", enter: "worldmap", make: "worldmap", drawn: "maplook", close: "worldmap", dlgclose: "worldmap" }
   };
   // where in the page each feature lives, for the little ? beside it (contextual help): [selector, feature]
   const ANCHORS = [[".lmap-sec .lm-bar", "mapviews"], ["#meDlg .me-tools", "mapeditor"], [".wm-bar", "worldmap"], ["#tablev .tv-acts", "players-screen"], [".cp-host", "copilot"], [".cc-top", "consistency"]];
-  A.tutorialData = { version: 1, chapters, FEATURES, ANCHORS };
+  A.tutorialData = { version: 1, chapters, FEATURES, ANCHORS, COVERS };
 })(window.ATLAS || (window.ATLAS = {}));

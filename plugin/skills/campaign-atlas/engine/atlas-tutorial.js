@@ -73,6 +73,7 @@
 .tu-toast p{margin:0 0 8px}
 @keyframes tuin{from{transform:translateY(16px);opacity:0}}
 .tu-video .tu-bar,.tu-video .tu-k span:last-child{display:none}
+.tu-card.tu-video{font-size:21px;line-height:1.45;max-width:min(560px,calc(100vw - 24px));padding:18px 22px 16px}.tu-card.tu-video .tu-k{font-size:13px}
 @media (prefers-reduced-motion:reduce){.tu-spot,.tu-cur,.tu-card{transition:none}.tu-spot.pulse{animation:none}}`;
   const style = document.createElement("style"); style.textContent = css; (document.head || document.documentElement).appendChild(style);
 
@@ -152,7 +153,7 @@
         if (el) { el.scrollIntoView({ block: "center", inline: "nearest", behavior: VIDEO ? "auto" : "smooth" }); await sleep(VIDEO ? 120 : 380); if (token !== R.token) return; light(el); }
         else spot.classList.remove("on");
         card.innerHTML = cardHTML(L, s, n, S.length, el); place(el); say(s.say);
-        if (!el) { await sleep(1400); R.si++; continue; }
+        if (!el) { R.marks[R.marks.length - 1].missing = true; await sleep(1400); R.si++; continue; }
         const read = Math.max(1800, s.say.split(/\s+/).length * 240);
         if (R.mode === "show" || s.auto) {
           await pointAt(el); if (token !== R.token) return;
