@@ -437,7 +437,7 @@ function invent(A, flags, log) {
   const K = A.worldKit, W0 = A.worldData || {}, old = A.worldTerrainData || {};
   const lookWord = (flags.look && flags.look !== true ? flags.look : null) || W0.look || old.look || lookOfCity(A);
   const look = K.LOOK_OF[String(lookWord).toLowerCase()]; if (!look) throw new Error(`unknown look "${lookWord}": hydro (a hydrographic relief print), relief (shaded relief), painted or parchment (fantasy), engraved (the past), atlas (the modern world), holo (a planet surveyed) or stars (a star map)`);
-  const sizeWord = flags.size && flags.size !== true ? String(flags.size) : old.sizeName || (old.height ? "medium" : "vast"), whole = sizeWord === "planet";
+  const sizeWord = flags.size && flags.size !== true ? String(flags.size) : old.sizeName || (old.height ? "medium" : "planet"), whole = sizeWord === "planet";
   // (dims: the map's own width and height, as a sketch's shape asks, the size's area kept)
   const [w, h] = Array.isArray(flags.dims) ? flags.dims.map(v => Math.round(v / 4) * 4) : Array.isArray(W0.size) ? W0.size : SIZES[sizeWord] || SIZES.medium;
   const land = flags.land && flags.land !== true ? String(flags.land) : old.land || (whole ? "continents" : "continent");
@@ -465,7 +465,12 @@ function invent(A, flags, log) {
   if (!["plates", "classic"].includes(geoWord)) throw new Error(`unknown geology "${geoWord}": plates (tectonics, erosion and climate) or classic`);
   if (flags.sketch && geoWord !== "plates") throw new Error("a world from a sketch is made by plate tectonics: leave out --geology classic");
   if (whole && geoWord !== "plates") throw new Error("a whole planet (--size planet) is made by plate tectonics: leave out --geology classic, or choose a smaller --size");
-  const T = { look, land, sizeName: SIZES[sizeWord] ? sizeWord : undefined, seed, w, h, cols, rows, cell, sea: 128, geology: geoWord === "plates" ? "plates" : undefined, realism: geoWord === "plates" ? realism : undefined, climate: before && climate === "temperate" && !flags.climate ? undefined : climate, planet: planetWord || undefined, spots: {}, labels: [], routes: [], rivers: [] };
+  // the climate's rules (the user approved the Earth's, 27 Oct 2026): a new world by the Earth's; a world made before
+  // by the plates without any said keeps the classic rules, so it comes out as it was; --climate-model says
+  const cmWord = flags["climate-model"] && flags["climate-model"] !== true ? String(flags["climate-model"]) : old.climateModel || (old.geology === "plates" && old.seed === seed ? "classic" : "earth");
+  if (!["earth", "classic"].includes(cmWord)) throw new Error(`unknown climate model "${cmWord}": earth or classic`);
+  const climateModel = whole ? "earth" : cmWord;
+  const T = { look, land, climateModel: geoWord === "plates" && climateModel === "earth" ? "earth" : undefined, sizeName: SIZES[sizeWord] ? sizeWord : undefined, seed, w, h, cols, rows, cell, sea: 128, geology: geoWord === "plates" ? "plates" : undefined, realism: geoWord === "plates" ? realism : undefined, climate: before && climate === "temperate" && !flags.climate ? undefined : climate, planet: planetWord || undefined, spots: {}, labels: [], routes: [], rivers: [] };
   let CV = null;
   let L, riverMask = new Uint8Array(N);
   if (look === "stars") {
@@ -487,8 +492,8 @@ function invent(A, flags, log) {
       if (whole && realism !== "alien") { const a = { arid: .8, wet: 1.2 }[climate]; if (a) planet.air = a; }
       // (a sketch: the land and the mountains drawn, read onto this grid with a coast ragged as real ones are)
       let sketch = null;
-      if (flags.sketch) { const SKM = require("../engine/atlas-world-sketch.js"), sk = typeof flags.sketch.land === "string" ? SKM.decode(flags.sketch) : flags.sketch; sketch = SKM.fit(sk, cols, rows, noiseFn(seed + 41), flags.loose != null && flags.loose !== true ? +flags.loose : 0); }
-      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: 1 - (SEA_SHARE[land] || .5), planet, km: whole ? 40030 : num("km", Math.round(w * 2.3)), tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: whole || flags["climate-model"] === "earth" ? "earth" : undefined, lat: whole ? [90, -90] : undefined, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: whole ? 1.4e6 : undefined, noiseZoom: whole ? 6 : undefined, edgeMargin: whole ? .025 : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
+      if (flags.sketch) { const SKM = require("../engine/atlas-world-sketch.js"), sk = typeof flags.sketch.land === "string" ? SKM.decode(flags.sketch) : flags.sketch; sketch = SKM.fit(sk, cols, rows, noiseFn(seed + 41), flags.loose != null && flags.loose !== true ? +flags.loose : .5); }
+      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: 1 - (SEA_SHARE[land] || .5), planet, km: whole ? 40030 : num("km", Math.round(w * 2.3)), tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: climateModel === "earth" ? "earth" : undefined, lat: whole ? [90, -90] : undefined, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: whole ? 1.4e6 : undefined, noiseZoom: whole ? 6 : undefined, edgeMargin: whole ? .025 : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)

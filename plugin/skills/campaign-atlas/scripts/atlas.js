@@ -473,7 +473,7 @@ async function cmdWorld(dir) {
     const buf = fs.readFileSync(file);
     if (buf.readUInt32BE(0) !== 0x89504e47) die("--sketch reads a PNG picture here: save the drawing as PNG, or open the campaign's page, World map, Edit map, Make a new world, and choose the picture there (any kind of picture works in the page)");
     const img = require("./png.js").readPNG(buf), SKM = require("../engine/atlas-world-sketch.js"), SZ = WI.SIZES;
-    const sizeWord = flags.size && flags.size !== true ? String(flags.size) : old.sizeName || "vast", whole = sizeWord === "planet", [sw, sh] = SZ[sizeWord] || SZ.vast;
+    const sizeWord = flags.size && flags.size !== true ? String(flags.size) : old.sizeName || "planet", whole = sizeWord === "planet", [sw, sh] = SZ[sizeWord] || SZ.vast;
     const a = whole ? 2 : Math.max(.4, Math.min(3, img.width / img.height)), area = sw * sh, [gc, gr] = SKM.gridFor(img.width, img.height, a);
     flags.sketch = SKM.read(img.data, img.width, img.height, gc, gr); flags.dims = whole ? [sw, sh] : [Math.sqrt(area * a), Math.sqrt(area / a)]; flags.replace = true;
     let l = 0, m = 0; for (let n = 0; n < flags.sketch.land.length; n++) { l += flags.sketch.land[n]; m += flags.sketch.mtn[n] > .25 ? 1 : 0; }

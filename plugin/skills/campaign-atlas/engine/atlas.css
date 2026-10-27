@@ -2131,3 +2131,6 @@ button.ho-b:hover { color: var(--ink); }
 .wm-pbar label { display: inline-flex; align-items: center; gap: .3rem; margin: 0; }
 .wm-pload { cursor: pointer; }
 .wm-pcv { width: 100%; height: auto; border: 1px solid var(--rule, #bbb); border-radius: 4px; touch-action: none; cursor: crosshair; image-rendering: auto; }
+.wm-lsl { display: flex; align-items: center; gap: .5rem; }
+.wm-lsl input { flex: 1; }
+.wm-lval { display: block; }

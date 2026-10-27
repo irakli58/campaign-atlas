@@ -28,10 +28,12 @@ What was asked, what was done, and what is waiting, so the next session can carr
    the line, from the lake it touches to the sea, joined across lakes, its bed cut downhill, drawn as the main river;
    the generator's own rivers stay too. No generator lakes are dug on a drawn river.
 
-## Open decisions for the user
-- Earth climate model as the default for regional maps?
-- Whole planet as the default size? (about 3 min to make)
-- "Natural" touches for drawings: approve strength, then make it the default and add it to the page.
+## Decided (the user: "okay I like everything now")
+- The Earth climate model is the default for new worlds (a plates world made before keeps the classic rules when made
+  again with the same seed; `--climate-model classic|earth` overrides; T.climateModel is written when earth).
+- A whole planet is the default size for new worlds (in the page and atlas.js world; about 2 to 3 min).
+- Natural touches for drawings are on by default (loose .5), with a slider in Make a new world ("make a slider on
+  how close they want it to the drawing"): left exactly as drawn, right loosely.
 
 ## Known rough spots
 - A painted swamp shows only faintly in the hydro look.

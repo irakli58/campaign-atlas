@@ -1114,7 +1114,7 @@
       let pic = null;
       dlg.innerHTML = `<form method="dialog" class="ke wm-newworld"><h3>Make a new world</h3>
         <p class="kn">A whole new land, made the way the Earth makes one: plates raise its mountains, rivers carve them, the winds bring its rain. Your places are set on it again; Undo brings back the old land.</p>
-        <label>How big <select name="size">${opt(sizes, g.size || "vast")}</select></label>
+        <label>How big <select name="size">${opt(sizes, g.size || "planet")}</select></label>
         <label>Its shape <select name="land">${opt(lands, g.paint ? "paint" : g.sketch ? "sketch" : g.land || "continent")}</select></label>
         <div class="wm-nw-pic" hidden><label>Your drawing <input type="file" name="pic" accept="image/*"></label><p class="kn">A drawing on paper or a coloured map: the land you outlined (or did not colour blue) becomes the land, and the mountains you drew (peaks, hatching, or brown and grey) become ranges. A photo of a sketch works.</p><p class="kn wm-nw-read"></p></div>
         <div class="wm-nw-paint" hidden>
@@ -1123,6 +1123,7 @@
           <canvas class="wm-pcv" width="600" height="400"></canvas>
           <p class="kn">Paint the land on the sea, then forests, deserts, swamps, snow, hills, mountains and volcanoes where you want them; blue inside the land is a lake, a thin blue line a river. The plates, the rivers and the climate make the rest: the land you paint, as the Earth would make it.</p>
         </div>
+        <label class="wm-nw-loose" hidden>How closely to follow my drawing <span class="wm-lsl"><span class="kn">Exactly as drawn</span><input type="range" name="loose" min="0" max="1" step="0.05" value="${g.loose != null ? g.loose : .5}" aria-label="How closely to follow my drawing: left exactly as drawn, right loosely"><span class="kn">Loosely</span></span><span class="kn wm-lval"></span></label>
         <label>Climate <select name="climate">${opt(clim, g.climate || "varied")}</select></label>
         <label>Where the deserts and rains fall <select name="rules">${opt([["earth", "As on the Earth: the winds, the seas, the mountains decide"], ["classic", "Atlas's older, simpler rules"]], g.rules || "earth")}</select></label>
         <label>Kind of world <select name="realism">${opt([["fantasy", "Fantasy: its own places (enchanted woods, ...)"], ["realistic", "Realistic: only what the Earth would make"]], g.realism || (WD.T && WD.T.realism) || "fantasy")}</select></label>
@@ -1148,8 +1149,10 @@
         pg.putImageData(img, 0, 0); pInit = true; pUndo.length = 0;
       };
       const blank = () => { pSize(); pg.fillStyle = SK.WATER; pg.fillRect(0, 0, pcv.width, pcv.height); pInit = true; pUndo.length = 0; };
-      const showPic = () => { const v = f.elements.land.value; picBox.hidden = v !== "sketch"; pBox.hidden = v !== "paint"; if (v === "paint" && !pInit && SK) { if (g.paint) { const im = new Image(); im.onload = () => { pSize(); pg.drawImage(im, 0, 0, pcv.width, pcv.height); pInit = true; }; im.src = g.paint; } else fromMap(); } };
+      const showPic = () => { const v = f.elements.land.value; picBox.hidden = v !== "sketch"; pBox.hidden = v !== "paint"; f.querySelector(".wm-nw-loose").hidden = v !== "sketch" && v !== "paint";  if (v === "paint" && !pInit && SK) { if (g.paint) { const im = new Image(); im.onload = () => { pSize(); pg.drawImage(im, 0, 0, pcv.width, pcv.height); pInit = true; }; im.src = g.paint; } else fromMap(); } };
       showPic(); f.elements.land.addEventListener("change", showPic);
+      const lv = () => { const x = +f.elements.loose.value; f.querySelector(".wm-lval").textContent = x < .1 ? "Your drawing exactly: only the coast's grain added." : x < .35 ? "Close to your drawing, a little natural." : x < .7 ? "Natural: your shapes, with bays, headlands, peaks and passes as nature would make them (recommended)." : "Loosely: the coasts and ranges much freer, still where you drew them."; };
+      lv(); f.elements.loose.addEventListener("input", lv);
       f.elements.size.addEventListener("change", () => { if (pInit) pSize(); });
       for (const b of f.querySelectorAll(".wm-pc")) b.addEventListener("click", () => { pCol = b.dataset.pc; for (const o of f.querySelectorAll(".wm-pc")) o.setAttribute("aria-pressed", o === b); });
       f.querySelector('[data-nw="fromMap"]').addEventListener("click", fromMap);
@@ -1187,6 +1190,7 @@
         if (!e.submitter || e.submitter.value !== "make") return; e.preventDefault();
         const v = { size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
         const whole = v.size === "planet";
+        if (f.elements.land.value === "paint" || f.elements.land.value === "sketch") v.loose = +f.elements.loose.value;
         if (f.elements.land.value === "paint") {
           // (the painting, read exactly by its colours; kept small as text, and as a picture to paint on again)
           const [sw, sh] = GEN_SIZES[v.size], a = whole ? 2 : pcv.width / pcv.height, d = pg.getImageData(0, 0, pcv.width, pcv.height);
@@ -1211,7 +1215,7 @@
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
       const W0 = JSON.parse(JSON.stringify(A.worldData || {})); delete W0.size;
       const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
-      if (g.rules === "earth") flags["climate-model"] = "earth"; if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
+      flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.loose != null) flags.loose = g.loose; if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
       const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
       return new Promise((ok, no) => {
         let w; try { w = new Worker(URL.createObjectURL(new Blob([A.worldGenSrc], { type: "text/javascript" }))); } catch (e) { no(e); return; }
