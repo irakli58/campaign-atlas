@@ -1766,3 +1766,27 @@ button.ho-b:hover { color: var(--ink); }
 .cp-out { margin-top: 10px; }
 .cp-err { color: var(--accent); }
 .cp-sm .cp-a { font-size: 14px; }
+
+
+/* the consistency check (atlas-consistency.js): each finding a card, with its evidence and what can be done */
+.cc { border: 1px solid var(--rule); border-left: 4px solid var(--muted); border-radius: 6px; padding: 10px 12px; margin: 8px 0; background: var(--panel); }
+.cc-error { border-left-color: #b4382c; }
+.cc-warn { border-left-color: #c48a1c; }
+.cc-note { border-left-color: var(--muted); }
+.cc-done { opacity: .6; }
+.cc-h { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.cc-h b { font-family: var(--f-display); font-weight: 400; font-size: 17px; }
+.cc-sev { font-family: var(--f-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: var(--accent-soft, rgba(0,0,0,.06)); color: var(--ink); }
+.cc-error .cc-sev:first-child { background: #b4382c; color: #fff; }
+.cc-warn .cc-sev:first-child { background: #c48a1c; color: #fff; }
+.cc-ai { background: transparent; border: 1px solid var(--rule); }
+.cc-why { margin: 6px 0; }
+.cc-ev { margin: 4px 0; padding-left: 18px; font-size: 13.5px; color: var(--muted); }
+.cc-sug { margin: 6px 0; font-size: 14px; }
+.cc-fix { margin: 6px 0; padding: 8px 10px; border: 1px dashed var(--rule); border-radius: 4px; font-size: 14px; }
+.cc-acts { gap: 4px; flex-wrap: wrap; align-items: center; }
+.cc-state { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.cc-areas { flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.cc-areas [aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cc-g { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; margin: 16px 0 4px; }
+.cc-list li { margin-bottom: 6px; }

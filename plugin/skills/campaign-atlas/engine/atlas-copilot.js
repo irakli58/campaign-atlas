@@ -23,7 +23,8 @@
     ["consequence", "What follows from it", "Believable consequences of what the players did"],
     ["details", "Details around them", "Small things to notice, sounds, people in the background"],
     ["next", "What could happen next", "Options from the story's open threads"],
-    ["encounter", "An encounter now", "Something to meet, fitting the place and the moment"]
+    ["encounter", "An encounter now", "Something to meet, fitting the place and the moment"],
+    ["check", "Does it fit?", "Whether something fits what the campaign has established, from the consistency check and the campaign's words"]
   ];
   const S = () => api.store();
   const docId = ref => String(ref).replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -117,9 +118,9 @@
       ${UI.err ? `<p class="t-small cp-err">${esc(UI.err)}</p>` : ""}</div>`;
   }
   function impHTML() {
-    const I = UI.imp, k = IMP.find(x => x[0] === I.kind) || IMP[0], placed = ["describe", "details", "encounter", "next", "consequence"].includes(I.kind), two = I.kind === "dialogue", one = I.kind === "react";
+    const I = UI.imp, k = IMP.find(x => x[0] === I.kind) || IMP[0], placed = ["describe", "details", "encounter", "next", "consequence", "check"].includes(I.kind), two = I.kind === "dialogue", one = I.kind === "react" || I.kind === "check";
     const pick = (name, cur) => `<select class="t-in" data-cp="${name}"><option value="">${name === "place" ? "Where (optional)" : "Who"}</option>${name === "place" ? A.order.filter(id => !String(id).startsWith("fly-")).map(id => `<option value="${esc(id)}"${id === cur ? " selected" : ""}>${esc(placeName(id))}</option>`).join("") : people().map(p => `<option value="${esc(p.ref)}"${p.ref === cur ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>`;
-    const ph = { describe: "The room they just entered, the weather, the mood (optional)", react: "What the players did or said", dialogue: "What they talk about", consequence: "What the players did", details: "What is going on around them (optional)", next: "Where things stand (optional)", encounter: "The mood or danger you want (optional)" }[I.kind];
+    const ph = { describe: "The room they just entered, the weather, the mood (optional)", react: "What the players did or said", dialogue: "What they talk about", consequence: "What the players did", details: "What is going on around them (optional)", next: "Where things stand (optional)", encounter: "The mood or danger you want (optional)", check: "Does she know something she shouldn't? Can they reach the clue? Does this new scene fit?" }[I.kind];
     return `<form class="cp-imp" data-cp="imp"><div class="cp-kinds" role="group" aria-label="What you need">${IMP.map(([v, l, h]) => `<button type="button" class="t-mini" data-cp="kind" data-k="${v}" aria-pressed="${v === I.kind}" title="${esc(h)}">${esc(l)}</button>`).join("")}</div>
       <p class="t-small">${esc(k[2])}.</p>
       <div class="t-row">${placed ? pick("place", I.place) : ""}${one || two ? pick("a", I.a) : ""}${two ? pick("b", I.b) : ""}</div>
@@ -156,13 +157,17 @@
       consequence: `The players did this: ${I.text || "(describe it)"}. Suggest believable consequences: what happens at once, what soon, what later; who notices and how they respond; what changes${I.place ? " at " + placeName(I.place) : ""}. Mark anything not grounded in the campaign as a suggestion.`,
       details: `Give five small details around the players${I.place ? " at " + placeName(I.place) : ""}${I.text ? " (" + I.text + ")" : ""}: sounds, smells, small things to notice, people in the background. One line each.`,
       next: `Where things stand: ${I.text || "(as the passages and the table's state say)"}. Suggest three things that could happen next, each from the story's open threads (the villains' clocks, leads not yet followed), with what sets it off. One short paragraph each.`,
-      encounter: `Suggest an encounter for right now${I.place ? " at " + placeName(I.place) : ""}${I.text ? " (" + I.text + ")" : ""}: who or what, what they want, how it could go (talk, flight or fight), and how it ties to the story. Name stat blocks only if the passages give them.`
+      encounter: `Suggest an encounter for right now${I.place ? " at " + placeName(I.place) : ""}${I.text ? " (" + I.text + ")" : ""}: who or what, what they want, how it could go (talk, flight or fight), and how it ties to the story. Name stat blocks only if the passages give them.`,
+      check: `The game master asks: ${I.text || "are there contradictions in the campaign?"}${I.place ? " (about " + placeName(I.place) + ")" : ""}${I.a ? " (about " + nameOf(I.a) + ")" : ""}. Answer from the consistency check's findings and the campaign's words below: say whether it fits what is established, quote what it would contradict, tell a deliberate lie or mystery apart from a mistake, and say what would need to change for it to make sense. Do not invent problems the material does not show.`
     }[I.kind];
+    // (the consistency check's findings that bear on it: atlas-consistency.js, the same the Consistency tab lists)
+    const found = I.kind === "check" && A.consistency ? A.consistency.about([I.text, I.place && placeName(I.place), I.a && nameOf(I.a)].filter(Boolean).join(" ") || "contradiction") : [];
+    const findings = found.length ? "THE CONSISTENCY CHECK FOUND:\n" + found.map(f => `- (${f.sev === "error" ? "certain" : "possible"}) ${f.title}: ${f.why}`).join("\n") + "\n\n" : I.kind === "check" ? "THE CONSISTENCY CHECK FOUND: nothing bearing on this.\n\n" : "";
     return `You help the game master of the tabletop roleplaying campaign "${c.title || ""}"${c.system ? " (" + c.system + ")" : ""} improvise during play. Ground everything in the campaign's own words below; never contradict them, and never decide what the players do or how the dice fall. Where you add something the campaign does not say, keep it small and consistent with it. Plain prose, no headings, no lists unless asked.
 
 ${asks}${again ? `\n\nGive something different from this: "${again.slice(0, 600)}"` : ""}
 
-${who ? "THE PEOPLE:\n" + who + "\n\n" : ""}WHAT HAS HAPPENED AT THE TABLE LATELY:\n${lately() || "(nothing recorded)"}
+${findings}${who ? "THE PEOPLE:\n" + who + "\n\n" : ""}WHAT HAS HAPPENED AT THE TABLE LATELY:\n${lately() || "(nothing recorded)"}
 
 THE CAMPAIGN'S OWN WORDS:
 ${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n") || "(nothing found)"}`;
