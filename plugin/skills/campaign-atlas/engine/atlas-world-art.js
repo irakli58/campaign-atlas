@@ -42,7 +42,7 @@
     const nz = vnoise(Math.floor(hash(W, H, 11) * 1e9)), detail = opts.detail == null ? 9 : opts.detail, wf = wetOf(WD);
     // (smooth: the slopes are lit from a smooth surface through the grid (a cubic B-spline), so they curve as land does
     // instead of breaking into the grid's facets; the colours and the coast keep to the grid itself)
-    const SC = opts.smooth ? cubic(G) : null, sv = SC ? new Float32Array(N) : hv, VL = opts.carve ? valleys(WD, cw, ch, k, ox, oy) : null;
+    const SC = opts.smooth ? cubic(G) : null, sv = SC ? new Float32Array(N) : hv, VL = opts.carve ? valleys(WD, cw, ch, k, ox, oy) : null, VF = opts.fine && SC ? gullies(WD, SC, cw, ch, k, ox, oy) : null;
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
       const x = ox + (px + .5) / k, y = oy + (py + .5) / k, h = S(x, y), i = py * cw + px;
       // fine relief the grid is too coarse to hold, on land only, more on the heights
@@ -50,7 +50,7 @@
       hv[i] = h + fine;
       // (and, for the light only, a fine grain of ridges and gullies, stronger on the heights, so the smooth surface
       // keeps the crispness of real ground)
-      if (SC) { const up = h > sea ? .25 + (h - sea) / (256 - sea) : 0; sv[i] = SC(x, y) + fine + (opts.grain ? ((nz(x * .3 + 31, y * .3) - .5) + (nz(x * .75 + 9, y * .75 + 4) - .5) * .3) * opts.grain * up : 0) + (opts.ridged && h > sea ? ridged(nz, x, y) * opts.ridged * (.025 + smooth(.06, .42, (h - sea) / (256 - sea))) : 0) - (VL && h > sea ? VL[i] * opts.carve * smooth(.04, .4, (h - sea) / (256 - sea)) : 0); }
+      if (SC) { const up = h > sea ? .25 + (h - sea) / (256 - sea) : 0; sv[i] = SC(x, y) + fine + (opts.grain ? ((nz(x * .3 + 31, y * .3) - .5) + (nz(x * .75 + 9, y * .75 + 4) - .5) * .3) * opts.grain * up : 0) + (opts.ridged && h > sea ? ridged(nz, x, y) * opts.ridged * (.025 + smooth(.06, .42, (h - sea) / (256 - sea))) : 0) - (VL && h > sea ? VL[i] * opts.carve * smooth(.04, .4, (h - sea) / (256 - sea)) : 0) - (VF && h > sea ? VF[i] * opts.fine * smooth(.04, .35, (h - sea) / (256 - sea)) : 0); }
       mv[i] = (G.M ? S(x, y, G.M) : 128) * wf;
     }
     const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
@@ -239,6 +239,34 @@
   }
   // valleys carved along every stream, the small ones too fine to draw as well: each line stroked onto a canvas the
   // raster's size, then softened into a V, so the light finds ridges and gullies branching as the water made them
+  // gullies finer than the grid, for a window seen up close: the land read at three times the grid's fineness, a
+  // gentle unevenness laid on it (more on the heights), the water let run down it, and where enough gathers a soft
+  // gully carved, so the slopes branch into ever smaller valleys as real ones do. The water is followed over a wide
+  // margin round the window, so the gullies run on across the tiles the page draws
+  function gullies(WD, SC, cw, ch, k, ox, oy) {
+    const G = WD.G, sea = G.sea, fc = G.cell / 3, mg = G.cell * 10, nz = vnoise(Math.floor(hash(G.cols, G.rows, 97) * 1e9));
+    const gx0 = Math.floor((ox - mg) / fc), gy0 = Math.floor((oy - mg) / fc), fw = Math.ceil((cw / k + 2 * mg) / fc) + 1, fh = Math.ceil((ch / k + 2 * mg) / fc) + 1, n0 = fw * fh;
+    const Z = new Float32Array(n0);
+    for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) {
+      const x = (gx0 + i + .5) * fc, y = (gy0 + j + .5) * fc, h = SC(x, y), t = Math.max(0, (h - sea) / (256 - sea));
+      Z[j * fw + i] = h + (h > sea ? ((nz(x * .18, y * .18) - .5) * 1.6 + (nz(x * .45 + 5, y * .45) - .5) * .7) * (.6 + 6 * t) : 0);
+    }
+    // the water's way: each cell to its lowest neighbour, the hollows filled, out at the window's edge or the sea
+    const lv = new Float32Array(n0), rec = new Int32Array(n0).fill(-1), seen = new Uint8Array(n0), order = [], hp = [];
+    const push = (n, v) => { hp.push([v, n]); let a = hp.length - 1; while (a) { const b = (a - 1) >> 1; if (hp[b][0] <= hp[a][0]) break; [hp[b], hp[a]] = [hp[a], hp[b]]; a = b; } };
+    const pop = () => { const top = hp[0], last = hp.pop(); if (hp.length) { hp[0] = last; let a = 0; for (;;) { const l = 2 * a + 1, r = l + 1; let m = a; if (l < hp.length && hp[l][0] < hp[m][0]) m = l; if (r < hp.length && hp[r][0] < hp[m][0]) m = r; if (m === a) break; [hp[m], hp[a]] = [hp[a], hp[m]]; a = m; } } return top; };
+    for (let n = 0; n < n0; n++) { const i = n % fw, j = (n / fw) | 0; if (Z[n] <= sea || !i || !j || i === fw - 1 || j === fh - 1) { seen[n] = 1; lv[n] = Z[n]; push(n, Z[n]); } }
+    while (hp.length) { const [v, c] = pop(); order.push(c); const i = c % fw, j = (c / fw) | 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= fw || b >= fh) continue; const m = b * fw + a; if (seen[m]) continue; seen[m] = 1; rec[m] = c; lv[m] = Math.max(Z[m], v + .0005); push(m, lv[m]); } }
+    const acc = new Float32Array(n0).fill(1); for (let q = order.length - 1; q >= 0; q--) { const n = order[q], r = rec[n]; if (r >= 0) acc[r] += acc[n]; }
+    const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch; const g = cv.getContext("2d"); g.lineCap = "round"; g.strokeStyle = "#fff";
+    // (each point nudged a little by a slow noise, so the gullies wander instead of running in the grid's eight ways)
+    const T = 14, jx = n => { const x = (gx0 + n % fw + .5) * fc, y = (gy0 + ((n / fw) | 0) + .5) * fc; return [x + (nz(x * .3 + 11, y * .3) - .5) * fc * 1.1, y + (nz(x * .3, y * .3 + 23) - .5) * fc * 1.1]; };
+    const px = n => (jx(n)[0] - ox) * k, py = n => (jx(n)[1] - oy) * k;
+    for (let n = 0; n < n0; n++) { const r = rec[n]; if (r < 0 || acc[n] < T || Z[n] <= sea) continue; g.globalAlpha = Math.min(1, .35 + .15 * Math.log2(acc[n] / T)); g.lineWidth = Math.max(1, k * fc * .5 * (1 + .3 * Math.log2(acc[n] / T))); g.beginPath(); g.moveTo(px(n), py(n)); g.lineTo(px(r), py(r)); g.stroke(); }
+    const d = g.getImageData(0, 0, cw, ch).data, F = new Float32Array(cw * ch); for (let i = 0; i < F.length; i++) F[i] = d[i * 4] / 255;
+    const rr = Math.max(1, Math.round(k * fc * .7)); for (let p = 0; p < 3; p++) boxB(F, cw, ch, rr);
+    return F;
+  }
   function boxB(F, w, h, r) {
     const t = new Float32Array(F.length);
     for (let y = 0; y < h; y++) { let a = 0; const o = y * w; for (let x = -r; x < w + r; x++) { if (x + r < w && x + r >= 0) a += F[o + x + r]; if (x - r - 1 >= 0 && x - r - 1 < w) a -= F[o + x - r - 1]; if (x >= 0 && x < w) t[o + x] = a / (2 * r + 1); } }
@@ -267,6 +295,7 @@
   // valleys, tan and brown mountains, pale grey peaks; every stream drawn
   const HYDRO = { lights: LOW_SUN, shade: [64, 48, 36], dark: .9, bright: 1.1, rx: 1.75, paper: [241, 239, 234], ridged: 2.5, carve: 7, ve: 30 };
   function hydro(WD, uid, o) { return relief(WD, uid, o, HYDRO); }
+  const RPREP = new WeakMap();
   function relief(WD, uid, o, P) {
     const [W, H] = WD.size, G = WD.G, pr = probe(WD), sea = G.sea, N = nat(WD);
     const C = { dry: hex("#ddc99c"), dryCool: hex("#cfc6a2"), grass: hex("#bfcd91"), wood: hex("#86a965"), forest: hex("#5d8a4b"), dense: hex("#3f6f38"), jungle: hex("#356a33"),
@@ -282,26 +311,31 @@
     // where a forest is denser, the land greener)
     const NA = nat(WD), simB = NA && WD.G.B ? WD.G.B : null, DES = BIO ? BIO.CODE.desert : -1, SWP = BIO ? BIO.CODE.swamp : -1;
     // (where the ecology says desert, the land's own share of it, and of swamp, eased across the cells)
-    const share = code => { if (!simB) return null; const G = WD.G, F = new Float32Array(G.cols * G.rows); for (let n = 0; n < F.length; n++) F[n] = simB[n] === code ? 1 : 0; const t = new Float32Array(F.length); for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s += F[j * G.cols + a]; c++; } } t[j * G.cols + i] = s / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s += t[b * G.cols + i]; c++; } } F[j * G.cols + i] = s / c; } } return (x, y) => NA.S(x, y, F); };
-    const desAt = share(DES), swpAt = share(SWP), snwAt = BIO ? share(BIO.CODE.snow) : null;
-    // the tree cover eased across the cells and read a little off the straight (a slow noise nudging where it is read),
-    // so a forest's edge wanders as a real one does instead of stepping along the grid
-    let canopyAt = null;
-    if (NA && NA.canopy) {
-      const G = WD.G, F = Float32Array.from(G.Cn), t = new Float32Array(F.length), wn = vnoise(Math.floor(hash(W, H, 53) * 1e9));
-      for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let a = 0, c = 0; for (let k = -1; k <= 1; k++) { const q = i + k; if (q >= 0 && q < G.cols) { a += F[j * G.cols + q]; c++; } } t[j * G.cols + i] = a / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let a = 0, c = 0; for (let k = -1; k <= 1; k++) { const q = j + k; if (q >= 0 && q < G.rows) { a += t[q * G.cols + i]; c++; } } F[j * G.cols + i] = a / c; } }
-      const amp = G.cell * 1.6; canopyAt = (x, y) => NA.S(x + (wn(x * .05, y * .05) - .5) * amp, y + (wn(x * .05 + 17, y * .05 + 5) - .5) * amp, F) / 255;
-    }
-    // the bare ground under thin vegetation (world-ecology.js: sand seas, gravel plains, bare rock, salt pans), its
-    // colours eased across the cells; hot deserts warmer in tone, cold ones greyer
-    let bare = null, sandAt = null, badAt = null;
-    if (NA && WD.G.Gr) {
-      const G = WD.G, n0 = G.cols * G.rows, R = new Float32Array(n0), Gc = new Float32Array(n0), Bc = new Float32Array(n0), SD = new Float32Array(n0), BD = new Float32Array(n0);
-      const COL = { hot: [null, [236, 178, 100], [198, 184, 158], [146, 108, 84], [244, 242, 236], [222, 208, 184], [182, 114, 82]], cold: [null, [218, 200, 156], [186, 178, 158], [128, 120, 110], [240, 240, 238], [214, 210, 200], [158, 122, 104]] };
-      for (let n = 0; n < n0; n++) { const g = G.Gr[n], hot = NA.Tm[n] > .55, c = (hot ? COL.hot : COL.cold)[g] || (hot ? [196, 172, 128] : [182, 168, 140]); R[n] = c[0]; Gc[n] = c[1]; Bc[n] = c[2]; SD[n] = g === 1 ? 1 : 0; BD[n] = g === 6 ? 1 : 0; }
-      const bl = F => { const t = new Float32Array(n0); for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s += F[j * G.cols + a]; c++; } } t[j * G.cols + i] = s / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s += t[b * G.cols + i]; c++; } } F[j * G.cols + i] = s / c; } } };
-      bl(R); bl(Gc); bl(Bc); bl(SD); bl(BD);
-      bare = (x, y) => [NA.S(x, y, R), NA.S(x, y, Gc), NA.S(x, y, Bc)]; sandAt = (x, y) => NA.S(x, y, SD); badAt = (x, y) => NA.S(x, y, BD);
+    // (what the colours read from, made once for a world and kept: a zoomed-in window is drawn many times)
+    let desAt = null, swpAt = null, snwAt = null, canopyAt = null, bare = null, sandAt = null, badAt = null;
+    const kept = RPREP.get(WD.G);
+    if (kept && kept.NA === NA) ({ desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt } = kept);
+    else {
+      const share = code => { if (!simB) return null; const G = WD.G, F = new Float32Array(G.cols * G.rows); for (let n = 0; n < F.length; n++) F[n] = simB[n] === code ? 1 : 0; const t = new Float32Array(F.length); for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s += F[j * G.cols + a]; c++; } } t[j * G.cols + i] = s / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s += t[b * G.cols + i]; c++; } } F[j * G.cols + i] = s / c; } } return (x, y) => NA.S(x, y, F); };
+        desAt = share(DES); swpAt = share(SWP); snwAt = BIO ? share(BIO.CODE.snow) : null;
+      // the tree cover eased across the cells and read a little off the straight (a slow noise nudging where it is read),
+      // so a forest's edge wanders as a real one does instead of stepping along the grid
+      if (NA && NA.canopy) {
+        const G = WD.G, F = Float32Array.from(G.Cn), t = new Float32Array(F.length), wn = vnoise(Math.floor(hash(W, H, 53) * 1e9));
+        for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let a = 0, c = 0; for (let k = -1; k <= 1; k++) { const q = i + k; if (q >= 0 && q < G.cols) { a += F[j * G.cols + q]; c++; } } t[j * G.cols + i] = a / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let a = 0, c = 0; for (let k = -1; k <= 1; k++) { const q = j + k; if (q >= 0 && q < G.rows) { a += t[q * G.cols + i]; c++; } } F[j * G.cols + i] = a / c; } }
+        const amp = G.cell * 1.6; canopyAt = (x, y) => NA.S(x + (wn(x * .05, y * .05) - .5) * amp, y + (wn(x * .05 + 17, y * .05 + 5) - .5) * amp, F) / 255;
+      }
+      // the bare ground under thin vegetation (world-ecology.js: sand seas, gravel plains, bare rock, salt pans), its
+      // colours eased across the cells; hot deserts warmer in tone, cold ones greyer
+      if (NA && WD.G.Gr) {
+        const G = WD.G, n0 = G.cols * G.rows, R = new Float32Array(n0), Gc = new Float32Array(n0), Bc = new Float32Array(n0), SD = new Float32Array(n0), BD = new Float32Array(n0);
+        const COL = { hot: [null, [236, 178, 100], [198, 184, 158], [146, 108, 84], [244, 242, 236], [222, 208, 184], [182, 114, 82]], cold: [null, [218, 200, 156], [186, 178, 158], [128, 120, 110], [240, 240, 238], [214, 210, 200], [158, 122, 104]] };
+        for (let n = 0; n < n0; n++) { const g = G.Gr[n], hot = NA.Tm[n] > .55, c = (hot ? COL.hot : COL.cold)[g] || (hot ? [196, 172, 128] : [182, 168, 140]); R[n] = c[0]; Gc[n] = c[1]; Bc[n] = c[2]; SD[n] = g === 1 ? 1 : 0; BD[n] = g === 6 ? 1 : 0; }
+        const bl = F => { const t = new Float32Array(n0); for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s += F[j * G.cols + a]; c++; } } t[j * G.cols + i] = s / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s += t[b * G.cols + i]; c++; } } F[j * G.cols + i] = s / c; } } };
+        bl(R); bl(Gc); bl(Bc); bl(SD); bl(BD);
+        bare = (x, y) => [NA.S(x, y, R), NA.S(x, y, Gc), NA.S(x, y, Bc)]; sandAt = (x, y) => NA.S(x, y, SD); badAt = (x, y) => NA.S(x, y, BD);
+      }
+      RPREP.set(WD.G, { NA, desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt });
     }
     const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
       if (h <= sea && P) return I.lake ? [128, 170, 192] : P.paper;
@@ -360,7 +394,7 @@
       if (I.mix) c = washed("painted", c, Object.assign({}, I, { mix: I.mix.filter(([q]) => !["glacier", "icesheet", "snowforest", "snow"].includes(BIO.LIST[q][0])) }), x, y, nz, t, false);
       if ((I.b && (I.b.id === "glacier" || I.b.id === "snow")) || (tm < .08 && t > .3)) c = mix(c, [245, 246, 248], .8);
       return lit(c, gx, gy, MPU ? 1 : P ? RX * P.rx : RX, P);
-    }, { detail: 0, max: P ? 3200 : 2600, smooth: true, grain: P ? 0 : 3.5, ridged: P ? P.ridged : 0, carve: P ? P.carve : 0, rect: o && o.rect, k: o && o.k, metric: MPU ? { mpu: MPU, ve: P.ve } : null });
+    }, { detail: 0, max: P ? 3200 : 2600, smooth: true, grain: P ? 0 : 3.5, ridged: P ? P.ridged : 0, carve: P ? P.carve : 0, rect: o && o.rect, k: o && o.k, fine: o && o.fine ? (P ? 5 : 4) : 0, metric: MPU ? { mpu: MPU, ve: P.ve } : null });
     if (o && o.only) return img;
     if (P) return hydroSvg(WD, uid, img, pr, N);
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
@@ -945,6 +979,6 @@
   // only); base: how many pixels a unit the whole map's own picture has
   const DETAIL = { hydro: 3200, relief: 2600 };
   const detailBase = (WD, look) => DETAIL[look] ? Math.min(2, DETAIL[look] / Math.max(WD.size[0], WD.size[1])) : 0;
-  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; return relief(WD, "d", { rect, k, only: true }, look === "hydro" ? HYDRO : undefined); }
+  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6 }, look === "hydro" ? HYDRO : undefined); }
   A.worldArt = { LOOKS, looksFor, draw, detail, detailBase };
 })(ATLAS);

@@ -876,7 +876,7 @@
         const per = WD.scale.per / k, want = 110 * per, p10 = Math.pow(10, Math.floor(Math.log10(want))), step = [1, 2, 5, 10].map(m => m * p10).filter(v => v <= want).pop() || p10, px = step / per;
         sc.hidden = false; sc.innerHTML = `<span style="width:${Math.round(px)}px"></span>${nice(step)} ${esc(plural(WD.scale.unit || "unit", step))}`;
       } else sc.hidden = true;
-      clearTimeout(refine.t); refine.t = setTimeout(refine, 350);
+      clearTimeout(refine.t); refine.t = setTimeout(refine, 350); refine.gen = (refine.gen || 0) + 1;
       clearTimeout(place.t); place.t = setTimeout(() => { try { ctx.store.set("world-view", JSON.stringify({ cx: (V.sw / 2 - V.tx) / V.k, cy: (V.sh / 2 - V.ty) / V.k, z: V.k / V.k0 })); } catch (e) {} }, 400);
     }
     const frame = () => { raf = 0; if (gone) return; if (anim) { const t = Math.min(1, (performance.now() - anim.t0) / anim.ms), e = t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; V.k = Math.exp(Math.log(anim.k0) + (Math.log(anim.k1) - Math.log(anim.k0)) * e); const cx = anim.c0[0] + (anim.c1[0] - anim.c0[0]) * e, cy = anim.c0[1] + (anim.c1[1] - anim.c0[1]) * e; V.tx = V.sw / 2 - cx * V.k; V.ty = V.sh / 2 - cy * V.k; if (t < 1) request(); else anim = null; } place(); };
@@ -891,10 +891,22 @@
       const x0 = Math.max(0, vx - vw * pad), y0 = Math.max(0, vy - vh * pad), x1 = Math.min(W, vx + vw * (1 + pad)), y1 = Math.min(H, vy + vh * (1 + pad));
       if (x1 <= x0 || y1 <= y0) return;
       const at = refine.at; if (at && at.k >= k * .85 && at.k <= k * 1.6 && vx >= at.r[0] && vy >= at.r[1] && vx + vw <= at.r[0] + at.r[2] && vy + vh <= at.r[1] + at.r[3]) return;
-      let href = null; try { href = A.worldArt.detail(WD, WD.look, [x0, y0, x1 - x0, y1 - y0], k); } catch (e) { console.warn("world map: the closer picture could not be drawn", e); }
-      if (!href) return;
-      slot.innerHTML = `<image href="${href}" x="${r1(x0)}" y="${r1(y0)}" width="${r1(x1 - x0)}" height="${r1(y1 - y0)}" preserveAspectRatio="none"/>`;
-      refine.at = { k, r: [x0, y0, x1 - x0, y1 - y0] };
+      // (drawn in small tiles from the middle of the view outward, the page free between them; moving the map again
+      // stops the drawing, and what was drawn stays until a new set is whole. Each tile is drawn with a margin and
+      // cropped, so the light and the valleys run on across the joins)
+      const gen = refine.gen = (refine.gen || 0) + 1, tu = 256 / k, m = 16 / k, tiles = [], layer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      for (let ty = y0; ty < y1; ty += tu) for (let tx = x0; tx < x1; tx += tu) tiles.push([tx, ty, Math.min(tu, x1 - tx), Math.min(tu, y1 - ty)]);
+      const cx = vx + vw / 2, cy = vy + vh / 2; tiles.sort((a, b) => Math.hypot(a[0] + a[2] / 2 - cx, a[1] + a[3] / 2 - cy) - Math.hypot(b[0] + b[2] / 2 - cx, b[1] + b[3] / 2 - cy));
+      slot.appendChild(layer); let q = 0;
+      const step = () => {
+        if (gone || refine.gen !== gen) return;
+        if (q >= tiles.length) { for (const old of [...slot.children]) if (old !== layer) old.remove(); refine.at = { k, r: [x0, y0, x1 - x0, y1 - y0] }; return; }
+        const [tx, ty, tw, th] = tiles[q++], R = [Math.max(0, tx - m), Math.max(0, ty - m)]; R.push(Math.min(W, tx + tw + m) - R[0], Math.min(H, ty + th + m) - R[1]);
+        let href = null; try { href = A.worldArt.detail(WD, WD.look, R, k); } catch (e) { console.warn("world map: the closer picture could not be drawn", e); return; }
+        if (href) layer.insertAdjacentHTML("beforeend", `<svg x="${r1(tx)}" y="${r1(ty)}" width="${r1(tw)}" height="${r1(th)}" viewBox="${r1(tx)} ${r1(ty)} ${r1(tw)} ${r1(th)}" preserveAspectRatio="none" overflow="hidden"><image href="${href}" x="${R[0]}" y="${R[1]}" width="${R[2]}" height="${R[3]}" preserveAspectRatio="none"/></svg>`);
+        setTimeout(step, 0);
+      };
+      setTimeout(step, 0);
     }
 
     /* ---- the camera */
@@ -1056,9 +1068,13 @@
     let lastLand = landKey();
     function rebuild() {
       const keepSel = S.sel, keepR = S.selRoute, was = WD.look;
+      const keepG = WD.G;
       WD = prepareWorld(A.worldData, A.worldTerrainData, OV); traced();
       // a new look: its colours, its icons, its land
       const lk = landKey();
+      // (the land itself unchanged: the same grid kept, so what was worked out from it, the climate's colours and the
+      // streams, need not be worked out again)
+      if (lk === lastLand && keepG && WD.G && keepG.cols === WD.G.cols && keepG.rows === WD.G.rows) WD.G = keepG;
       if (WD.look !== was) { st = STYLE[WD.look] || STYLE.parchment; root.classList.remove("wm-" + was); root.classList.add("wm-" + WD.look); }
       if (WD.look !== was || lk !== lastLand) { lastLand = lk; PG = null; ways.clear(); drawLand(); }
       if (keepSel && !WD.byId[keepSel]) S.sel = null; if (keepR && !WD.rById[keepR]) S.selRoute = null; if (S.selFeat && !featOf(S.selFeat)[1]) S.selFeat = null;
