@@ -9,6 +9,9 @@
                                                  [--near S12 --within 15] to see its systems (references/galaxy.md)
    node atlas.js ship <dir> <place-id> [--name ...] [--size small|medium|large] [--decks N] [--derelict] [--rooms lab,brig] [--system S12]
                                                  a SHIP to walk through, as places/<id>.js: decks, rooms, a lift, a first draft of what is aboard
+   node atlas.js wild <dir> <place-id> [--name ...] [--biome forest|mountains|desert|swamp|jungle|tundra|plains|coast|alien|hostile]
+                      [--size small|medium|large] [--location <world location>] [--system S12 --planet 2]
+                                                 the WILD: a stretch of country as a place: its ground, a trail, a river, landmarks, a hidden place
    node atlas.js check <dir> [place ...]         check maps, guides, player safety and the clue trail
    node atlas.js ascii <dir> <place> [floor] [--level N]   draw a floor as text
    node atlas.js dump <dir> <place ...>          print a place's rooms, clues, people (for writing guides)
@@ -53,7 +56,7 @@ const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -127,11 +130,13 @@ function reach(A, M, publicOnly) {
   M.floors.forEach((F, fi) => {
     if (publicOnly && A.isGmFloor(F)) return;
     const own = gridOf(A, F, publicOnly), key = c => c ? fi + "/" + c.rid : null;
+    // (on an outdoor floor, out: 1, all its ground is open country whatever it is made of, but rock, chasm and lava: atlas.js wild)
+    const open = c => A.isOut(c.kind) || (F.out && !/^R\d/.test(c.rid) && !A.isSolid(c.kind) && c.kind !== "lava" && c.kind !== "chasm");
     for (let j = 0; j < F.h; j++) for (let i = 0; i < F.w; i++) {
       const c = own[j][i]; if (!c) continue; const k = key(c); if (!nodes.has(k)) nodes.set(k, new Set());
-      if (A.isOut(c.kind) || entry.has(c.rid)) starts.push(k);
+      if (open(c) || entry.has(c.rid)) starts.push(k);
       // (in a cave, chambers and passages open into each other where they meet, unless one is built or hidden: atlas-cave.js)
-      for (const [di, dj] of [[1, 0], [0, 1]]) { const d = own[j + dj] && own[j + dj][i + di]; if (d && d.rid !== c.rid && ((A.isOut(c.kind) && A.isOut(d.kind)) || (F.cave && !A.isSolid(c.kind) && !A.isSolid(d.kind) && !c.o.b && !d.o.b && !c.o.h === !d.o.h))) link(k, key(d)); }
+      for (const [di, dj] of [[1, 0], [0, 1]]) { const d = own[j + dj] && own[j + dj][i + di]; if (d && d.rid !== c.rid && ((open(c) && open(d)) || (F.cave && !A.isSolid(c.kind) && !A.isSolid(d.kind) && !c.o.b && !d.o.b && !c.o.h === !d.o.h))) link(k, key(d)); }
     }
     for (const [x, y, o, type = "d", len = 1] of (F.D || [])) {
       if (type === "w" || (publicOnly && type === "s")) continue;
@@ -235,6 +240,7 @@ function checkMap(A, id, level, P, N) {
   else for (const k of full.all) {
     const [fi, rid] = k.split("/"), F = M.floors[fi], r = F.R.find(x => x[0] === rid);
     if (!r || !A.isIndoorKind(r[6])) continue;
+    if (F.out && !/^R\d/.test(rid)) continue;   // (on open country only its rooms need a way in: its chasms and lava are the ground)
     const hidden = (r[7] && r[7].h) || A.isGmFloor(F);
     if (!full.seen.has(k)) P(`"${F.n}" ${rid} "${r[5] || ""}" cannot be reached: it has no door, opening or stair${hidden ? " (a hidden room still needs a secret door)" : ""}`);
     else if (!hidden && !pub.seen.has(k)) N(`"${F.n}" ${rid} "${r[5] || ""}" can only be reached by a secret way but is drawn on the players' map: mark it hidden ({ h: 1 }) unless that is intended`);
@@ -984,6 +990,36 @@ ATLAS.place(${JSON.stringify(id)}, ${JSON.stringify(def, null, 1)});
   console.log(`${file}: ${o.name}, ${r.size} squares, ${r.rooms} rooms${o.derelict ? ", derelict" : ""} (tier ${tier}). Then: give her her place in the story (a lead to her, her people, her secrets), and run: node atlas.js check ${dir} ${id}`);
 }
 
+// The wild (references/workflow.md, "The wild"): a stretch of country as a place, at the campaign's scale; its land from
+// --biome, or from the world map's location it stands in (its kind: a forest, mountains, a marsh...)
+function cmdWild(dir, id) {
+  const W = require("./wild.js");
+  if (!dir || !id) die(`node atlas.js wild <dir> <place-id> [--name "The Thornwood"] [--biome ${W.BIOMES.join("|")}] [--size small|medium|large]
+      [--location <world location id>] [--system S12 --planet 2] [--tier 1|2|3] [--seed S] [--no-hidden] [--force]`);
+  const A = load(dir), file = path.join(dir, "places", id + ".js");
+  if (A.meta[id] && !flags.force) die(`${id} is already a place of this campaign. Choose another id, or add --force to make places/${id}.js again (the old file is replaced).`);
+  if (fs.existsSync(file) && !flags.force) die(`${file} is already there. Add --force to replace it.`);
+  // the land: as asked, or as the world map has it where the place stands, or as the galaxy's world is
+  let biome = typeof flags.biome === "string" ? flags.biome : "";
+  const loc = typeof flags.location === "string" && A.worldData ? (A.worldData.locations || []).find(l => l.id === flags.location) : null;
+  if (typeof flags.location === "string" && !loc) die(`--location: the world map has no location "${flags.location}"`);
+  if (!biome && loc) { const k = String(loc.kind || "") + " " + String(loc.name || ""); biome = /forest|wood|grove/i.test(k) ? "forest" : /mount|peak|pass|range|crag/i.test(k) ? "mountains" : /desert|waste|dune/i.test(k) ? "desert" : /swamp|marsh|bog|fen/i.test(k) ? "swamp" : /jungle/i.test(k) ? "jungle" : /tundra|ice|frozen|snow/i.test(k) ? "tundra" : /coast|cove|bay|cliff|port|harbour|beach/i.test(k) ? "coast" : "plains"; }
+  if (!biome && typeof flags.system === "string" && A.galaxyParams) { const G = A.galaxyGen.grow(A.galaxyParams), s0 = G.systems.find(x => x.id === flags.system); if (!s0) die(`--system: this galaxy has no system "${flags.system}"`); const p = A.galaxyGen.system(G, s0.i).planets.find(x => x.n === +flags.planet); if (!p) die(`--planet: ${s0.name} has no world ${flags.planet}`); if (/Impossible/.test(p.land)) die(`${p.name} is ${p.kname.toLowerCase()}: ${p.land.toLowerCase()}`); biome = p.kind === "garden" ? "jungle" : p.kind === "ocean" ? "coast" : p.kind === "desert" ? "desert" : p.kind === "ice" || p.kind === "dwarf" ? "tundra" : p.life ? "alien" : "hostile"; }
+  biome = biome || "forest"; if (!W.BIOMES.includes(biome)) die(`--biome is one of ${W.BIOMES.join(", ")}`);
+  const size = ["small", "medium", "large"].includes(flags.size) ? flags.size : "medium", tier = [1, 2, 3].includes(+flags.tier) ? +flags.tier : 3;
+  const o = { seed: typeof flags.seed === "string" ? flags.seed : Math.random().toString(36).slice(2, 10), name: typeof flags.name === "string" ? flags.name : "The Wild", biome, size, hidden: !flags["no-hidden"] };
+  const r = W.makeWildPlace(o), def = { name: o.name, tier, tagline: r.map.ext.split(";")[0].replace(/\.$/, "") + ".", music: { mood: biome === "hostile" || biome === "alien" ? "dread" : biome === "desert" ? "desert" : "wilds", also: {} }, tables: r.tables, map: r.map };
+  if (loc) def.location = loc.id;
+  if (typeof flags.system === "string") { def.system = flags.system; if (flags.planet != null) def.planet = +flags.planet; }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `// ${o.name}: the wild, made by "atlas.js wild" (seed "${o.seed}"; ${biome}, ${size}).
+// Every word is a draft: name the landmarks, rewrite who and what is out there into the story. The map editor changes
+// the ground after (its Terrain brush paints it), and keeps what it changed in edits/${id}.js.
+ATLAS.place(${JSON.stringify(id)}, ${JSON.stringify(def, null, 1)});
+`);
+  console.log(`${file}: ${o.name}, ${biome}, ${r.size} squares, ${r.rooms} rooms (${r.sites.join(", ")}). Then: give it its place in the story, and run: node atlas.js check ${dir} ${id}`);
+}
+
 // The council that sits on this campaign (references/council.md): the game master's choice in story/council.json, or
 // the council for the world it is set in (campaign.js genre, and the kind of story); and what its kind asks it to make
 function councilChosen(dir) {
@@ -1120,6 +1156,7 @@ switch (cmd) {
   case "council": cmdCouncil(pos[0]); break;
   case "galaxy": cmdGalaxy(pos[0]); break;
   case "ship": cmdShip(pos[0], pos[1]); break;
+  case "wild": cmdWild(pos[0], pos[1]); break;
   case "check": cmdCheck(pos[0], pos.slice(1)); break;
   case "ascii": cmdAscii(pos[0], pos[1], pos[2]); break;
   case "dump": cmdDump(pos[0], pos.slice(1)); break;

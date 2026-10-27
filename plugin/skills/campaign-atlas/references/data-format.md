@@ -119,6 +119,10 @@ On the page, the map editor's tools place them: Clues for clues, Traps and Riddl
 
 `[id, x, y]`, the centre of the disc in squares. The letter decides the list the entry lives in: `C` and `K` (and any letter you add) in `clues`, `N` in `npcs`, `S` in `secrets`, `E` in `enc`, `T` in `traps`, `P` in `riddles` (riddles and puzzles). Draw the marker inside the room named by the entry's `at`.
 
+### Open country
+
+A floor with `out: 1` is open country (`atlas.js wild` writes them: `workflow.md`, "The wild"): all its ground that is not a room counts as open whatever it is made of (gravel, ice, crystal, water, a river), joined wherever it meets, and only `rock`, `chasm` and `lava` stop the way. Its rooms (a ruin, a tent, a cabin) still need a door or an opening onto the ground, and a hidden one a secret way.
+
 ### Caves
 
 A floor with `cave: 1` is drawn as a cave: rock all round, the floor carved out of it along a line that follows the stone, chambers and passages opening into each other with no walls between (`atlas.js cave` writes them: `workflow.md`, "Caves, riddles and traps"). Its rooms are rectangles sharing an id, as an L-shaped room is; the rock is whatever no rectangle covers. `geo` names its stone (`limestone volcanic ice crystal sandstone ancient`). A rectangle may say `el: 2.5` (its floor stands 2.5 metres up: a ledge; more than about a body's height between neighbours is a cliff), `cl: 1` (it can be climbed there), `sw: 1` (a passage meant to be swum), `sl: 1` (sealed on purpose, by a fall of rock), and `b: "ruin"` (a built room: walls and doors as in any building). Floors of caves: `cave basalt gravel moss fungus ice crystal blight shallows` (walked or waded), `water` (swum), `lava` and `chasm` (barred, unless a `bridge` crosses). A map made by the generator says how in `cave: { v, seed, settings, roles }`.
