@@ -57,6 +57,9 @@ function namer(rnd, own) {
     desert: (auto, alien) => own_("desert") || (auto ? (alien ? `The ${pick(["Glass", "Rust", "Ash", "Violet", "Singing", "Burning"])} ${pick(["Flats", "Expanse", "Sands", "Barrens"])}` : rnd() < .5 ? `The ${word()} ${pick(["Waste", "Sands", "Desert"])}` : `The ${pick(ADJ)} ${pick(["Sands", "Waste", "Dunes", "Barrens"])}`) : null),
     swamp: auto => own_("swamp") || (auto ? `The ${rnd() < .5 ? word() : pick(ADJ)} ${pick(["Fens", "Mire", "Marshes", "Bog", "Wetlands"])}` : null),
     glacier: auto => own_("glacier") || (auto ? `The ${rnd() < .5 ? word() : pick(ADJ)} ${pick(["Ice", "Glacier", "Icefield"])}` : null),
+    // (the ocean's currents and gyres, world-ocean.js)
+    current: () => own_("current") || (rnd() < .6 ? `The ${word()} Current` : `The ${pick(ADJ)} ${pick(["Current", "Stream", "Drift"])}`),
+    gyre: () => own_("gyre") || `The ${rnd() < .5 ? word() : pick(ADJ)} Gyre`,
     volcano: auto => own_("volcano") || (auto ? `Mount ${word()}` : null),
     wood: (auto, kind) => own_("wood") || (auto ? ({ enchanted: `The ${pick(["Witch", "Elder", "Silver", "Dream", "Faerie"])}wood`, glowforest: `The ${pick(["Lantern", "Ember", "Star", "Moon"])} Grove`, mushrooms: `The ${pick(["Spore", "Cap", "Gill"])}wood`, corrupted: `The ${pick(["Blighted", "Rotting", "Thorn", "Hollow"])} Wood`, floating: `The ${pick(["Drifting", "Hanging", "Sky"])} Isles` }[kind] || `The ${word()} Wood`) : null),
     blight: (auto, kind) => own_("blight") || (auto ? (kind === "vale" ? `The Vale of ${word()}` : `The ${pick(["Blight", "Scar", "Ruin", "Shatterlands", "Withering"])}`) : null),
@@ -501,8 +504,24 @@ function invent(A, flags, log) {
       // its climate's middle; a whole planet from pole to pole)
       const kmA = SIZE_KM[sizeWord] || num("km", Math.round(w * 2.3)), LATS = require("./world-ecology.js").LAT[climate] || [52, 38], midL = (LATS[0] + LATS[1]) / 2, spanL = h / w * kmA / 111;
       const latA = whole ? [90, -90] : SIZE_KM[sizeWord] ? [Math.min(88, midL + spanL / 2), Math.max(-88, midL - spanL / 2)] : undefined;
-      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
+      // (the ocean's currents, on trial until the user approves them, 28 Oct 2026: --currents; kept when the world is made
+      // again; --spin retrograde for a planet that turns the other way)
+      const currentsOn = flags.currents != null ? flags.currents !== "off" && flags.currents !== false : !!old.currents;
+      const spinV = flags.spin != null && flags.spin !== true ? (/^(retro|-1|back)/i.test(String(flags.spin)) ? -1 : 1) : old.currents && old.currents.spin < 0 ? -1 : 1;
+      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", currents: currentsOn && climateModel === "earth", spin: spinV, climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
+      if (G.ocean) T.currents = packCurrents(G.ocean, name, cell);
+      // (the coasts as the waves, the drift and the sand made them: on trial until the user approves, 28 Oct 2026,
+      // --coast natural; scripts/world-coast.js. Barrier islands and spits are land it adds in the shallows)
+      const coastOn = flags.coast != null ? flags.coast === "natural" : old.coastModel === "natural";
+      if (coastOn && G.eco) {
+        const CO = require("./world-coast.js").coasts(G.H, cols, rows, { cellKm: kmA / cols, lat: latA || LATS, wrap: whole, spin: spinV, T: G.eco.T, AI: G.eco.AI, acc: G.eco.acc, sst: G.ocean ? G.ocean.sst : null, volcanoes: (G.info || {}).volcanoes });
+        for (const m of CO.raise) { G.H[m] = 129; if (G.Lo) G.Lo[m] = 0; }
+        T.coast = Buffer.from(CO.code).toString("base64"); T.coastModel = "natural";
+        const S0 = CO.stats; log(`  the coasts (${S0.coast} cells): sand ${S0.sand}, gravel ${S0.gravel}, cliffs ${S0.cliff}, rocky shore ${S0.rock}, salt marsh ${S0.marsh}, mangroves ${S0.mangrove}; ${S0.barriers} cells of barrier island, ${S0.spits} spits`);
+        for (const nt of CO.notes) log(`   - ${nt.text}`);
+        T.coastNotes = CO.notes.map(nt => ({ at: [Math.round((nt.at[0] + .5) * cell), Math.round((nt.at[1] + .5) * cell)], text: nt.text }));
+      }
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)
       if (G.eco && flags.biomes !== "classic") { T.biome = Buffer.from(G.eco.biome).toString("base64"); T.canopy = Buffer.from(G.eco.canopy).toString("base64"); T.tempC = Buffer.from(Uint8Array.from(G.eco.T, v => Math.max(0, Math.min(255, Math.round(v + 60))))).toString("base64"); if (G.eco.ground.some(v => v)) T.ground = Buffer.from(G.eco.ground).toString("base64"); }
@@ -752,4 +771,12 @@ ${L}
   return locs.length;
 }
 
+// the ocean's currents as the map keeps them: the coarse grid (each as bytes), the streams in the map's own units with
+// names for the greatest, the gyres named, the latitudes the map spans
+function packCurrents(OC, name, cell) {
+  const b64 = a => Buffer.from(new Uint8Array(a.buffer, a.byteOffset, a.byteLength)).toString("base64"), c = OC.coarse, r1 = v => Math.round(v * 10) / 10;
+  const streams = OC.streams.slice(0, 40).map((st, k) => Object.assign(k < 10 && st.pts.length > 22 ? { name: name.current() } : {}, st, { pts: st.pts.map(p => [r1(p[0] * cell), r1(p[1] * cell)]) }));
+  const gyres = OC.gyres.slice(0, 8).map(g => Object.assign({ name: name.gyre() }, g, { at: [r1(g.at[0] * cell), r1(g.at[1] * cell)] }));
+  return { f: c.f, cols: c.cols, rows: c.rows, u: b64(c.u), v: b64(c.v), up: b64(c.up), sst: b64(c.sst), lat: OC.lat, spin: OC.spin, wrap: OC.wrap || undefined, seaIce: Math.round(OC.seaIce * 1000) / 1000, streams, gyres };
+}
 module.exports = { invent, fromDrawing, imageSize, writeTerrain, starter, lookOfCity, SIZES, tools: { noiseFn, fbm, Heap, distance, mulberry32 } };

@@ -275,7 +275,7 @@ function geology(o, U) {
   const coast = U.distance(cols, rows, n => Hb[n] <= 128);
   const full = m => Math.min(rows - 1, Math.floor((cj(m) + .5) * f)) * cols + Math.min(cols - 1, Math.floor((ci(m) + .5) * f));
   const vols = [], maxV = Math.max(2, Math.round(N / 22000)); for (const m of volc) { const n = full(m); if (vols.length < maxV && Hb[n] > 128 && !lakeCells[n] && vols.every(v => Math.hypot(I(v) - I(n), J(v) - J(n)) > 28)) vols.push(n); }
-  return { H: Hb, Lo, M, coast, temp: C.temp, eco, info: { plates: nP, continental: plates.filter(p => crust[p.seed] === 1).length, volcanoes: vols, playa, lakes: lakeCells.reduce((s, v) => s + v, 0), peak: Math.round(top / 10) * 10 } };
+  return { H: Hb, Lo, M, coast, temp: C.temp, eco, ocean: C.ocean || null, info: { plates: nP, continental: plates.filter(p => crust[p.seed] === 1).length, volcanoes: vols, playa, lakes: lakeCells.reduce((s, v) => s + v, 0), peak: Math.round(top / 10) * 10 } };
 }
 // one step of the rivers' cutting: water routed down the land (through its hollows, which it fills and spills from:
 // a priority flood from the sea), gathered from all the land above, and the stream power law solved implicitly from
@@ -394,6 +394,17 @@ function climateEarth(E, cols, rows, o, nz, U, air) {
   // (a current is a broad stream, not a line along each row)
   boxBlur(cold, cols, rows, 5, 2); boxBlur(warmC, cols, rows, 5, 2);
   for (let n = 0; n < N; n++) { if (E[n] > 0) { cold[n] = 0; continue; } const a = Math.abs(lat((n / cols) | 0)); sst[n] = Math.max(-1.8, 28 - .0058 * a * a - 8 * cold[n] + 3 * warmC[n]); }
+  // (`--currents`, on trial until the user approves, 28 Oct 2026: the sea's warmth from the ocean's own circulation,
+  // world-ocean.js, instead of the rule of thumb above: cold where the currents bring polar water or deep water wells
+  // up, warm where they bring the tropics' water; and the coasts take that warmth or chill some way inland)
+  let OC = null;
+  if (o.currents) {
+    OC = require("./world-ocean.js").currents(E, cols, rows, { lat: [la, lb], wrap: Math.abs(la - lb) >= 179, spin: o.spin, warmC: o.warmC });
+    for (let n = 0; n < N; n++) { if (E[n] > 0) { cold[n] = 0; continue; } sst[n] = OC.sst[n]; cold[n] = Math.min(1, Math.max(0, -OC.anom[n] / 5, OC.up[n] * .9)); }
+    const A0 = new Float32Array(N), Wt = new Float32Array(N); for (let n = 0; n < N; n++) if (E[n] <= 0) { A0[n] = OC.anom[n]; Wt[n] = 1; }
+    const rad = Math.max(1, Math.round(250 / cellKm)); boxBlur(A0, cols, rows, rad, 2); boxBlur(Wt, cols, rows, rad, 2);
+    for (let n = 0; n < N; n++) if (E[n] > 0 && Wt[n] > .02) temp[n] += .6 * A0[n] / Wt[n] * Math.min(1, Wt[n] * 2.5);
+  }
   const cap = t => air * Math.min(1.8, Math.exp(.065 * (t - 25)));
   const eff0 = cellKm / 1400, sub = a => gauss((a - 27) / 7.5), itcz = a => gauss(a / 8), storm = a => gauss((a - 50) / 14);
   const mon = a => smooth(4, 9, a) * (1 - smooth(14, 24, a));
@@ -440,7 +451,7 @@ function climateEarth(E, cols, rows, o, nz, U, air) {
   }
   boxBlur(rain, cols, rows, 4, 2); boxBlur(fog, cols, rows, 3, 1);
   for (let n = 0; n < N; n++) { rain[n] = rain[n] * (.88 + nz((n % cols) / 18, ((n / cols) | 0) / 18) * .24) * EARTH_MM / cellKm; fog[n] = Math.min(1, fog[n]); }
-  return { temp, rain, fog, sst, mm: true };
+  return { temp, rain, fog, sst, mm: true, ocean: OC };
 }
 // (the scale to mm a year, set once so that the rainy tropics come to about 1500 mm and the subtropical deserts under
 // about 150, as on the Earth; per km of the air's road, so a world drawn finer or coarser rains the same)

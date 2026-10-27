@@ -663,10 +663,11 @@
         <span class="wm-sp"></span>
         <span class="wm-editbar keeper"></span>
         ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
+        <button type="button" class="wm-btn" data-w="currents" aria-pressed="false" hidden title="The ocean's currents: warm and cold, the gyres, the equator and the lines of latitude">Ocean currents</button>
         <button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-cur"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -815,6 +816,38 @@
     }
 
     /* ---- the routes, under the camera (their lines keep one width on the screen at any zoom) */
+    /* ---- the ocean's currents, a layer the viewer turns on and off (28 Oct 2026, the user's request: warm currents in red
+            or orange, cold in blue, arrows the way the water runs, the gyres, the equator and the lines of latitude,
+            names and strengths if wanted; world-ocean.js works them out) */
+    const CUR = { on: (() => { try { return ctx.store.get("world-currents") === "1"; } catch (e) { return false; } })(), names: (() => { try { return ctx.store.get("world-curnames") !== "0"; } catch (e) { return true; } })() };
+    function along(p, t) { let s = 0; for (let i = 1; i < p.length; i++) { const l = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); if (s + l >= t) { const q = (t - s) / (l || 1); return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * q, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * q, Math.atan2(p[i][1] - p[i - 1][1], p[i][0] - p[i - 1][0]) * 180 / Math.PI]; } s += l; } const a = p[p.length - 2], b = p[p.length - 1]; return [b[0], b[1], Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI]; }
+    function drawCurrents() {
+      const g = $(".wm-cur"), C = WD.T && WD.T.currents, btn = $('[data-w="currents"]');
+      if (btn) { btn.hidden = !C; btn.setAttribute("aria-pressed", !!(C && CUR.on)); }
+      if (!g) return; if (!C || !CUR.on) { g.innerHTML = ""; return; }
+      const [la, lb] = C.lat, yOf = f => (la - f) / (la - lb) * H, k = Math.min(W, H) / 700, word = v => v >= 1.3 ? "strong" : v >= .8 ? "moderate" : "gentle";
+      let s = "";
+      // the lines of latitude: every thirty degrees, the equator, the tropics and the polar circles
+      const LINES = [[0, "The equator", "eq"], [23.44, "The northern tropic", "tr"], [-23.44, "The southern tropic", "tr"], [66.56, "The northern polar circle", "pc"], [-66.56, "The southern polar circle", "pc"], [30, "30° north", ""], [60, "60° north", ""], [-30, "30° south", ""], [-60, "60° south", ""]];
+      for (const [f, nm, kind] of LINES) { if (f > Math.max(la, lb) || f < Math.min(la, lb)) continue; const y = yOf(f); s += `<line x1="0" x2="${W}" y1="${r1(y)}" y2="${r1(y)}" class="wc-lat ${kind}"/><text x="${r1(10 * k)}" y="${r1(y - 4 * k)}" class="wc-latl" style="font-size:${r1(11 * k)}px">${esc(nm)}</text>`; }
+      // the streams: warm red, cold blue, wider the stronger, arrows the way the water runs
+      let heads = "", names = "";
+      for (const st of C.streams || []) {
+        if (!st.pts || st.pts.length < 2) continue;
+        const p = chaikin(st.pts, 2, false), wd = r1(.9 + Math.min(1.8, st.s * 1.1)), L = plen(p);
+        s += `<path d="${pathD(p)}" class="wc-s ${st.warm ? "w" : "c"}" style="stroke-width:${wd}px"><title>${esc((st.name ? st.name + ": " : "") + (st.warm ? "a warm current" : "a cold current") + ", " + word(st.s))}</title></path>`;
+        for (let t = 26 * k; t < L - 8 * k; t += 64 * k) { const [x, y, a] = along(p, t); heads += `<path d="M${r1(-4 * k)} ${r1(-3.2 * k)}L${r1(4.4 * k)} 0L${r1(-4 * k)} ${r1(3.2 * k)}Z" transform="translate(${r1(x)} ${r1(y)}) rotate(${r1(a)})" class="wc-a ${st.warm ? "w" : "c"}"/>`; }
+        if (CUR.names && st.name) { const [x, y] = along(p, L / 2); names += `<text x="${r1(x)}" y="${r1(y - 6 * k)}" class="wc-n ${st.warm ? "w" : "c"}" style="font-size:${r1(10.5 * k)}px" text-anchor="middle">${esc(st.name)} · ${word(st.s)}</text>`; }
+      }
+      // the gyres: a ring about each, turning the way it turns
+      for (const gy of C.gyres || []) {
+        const R0 = 34 * k, [cx, cy] = gy.at, dir = gy.cw ? 1 : -1, a0 = -60 * Math.PI / 180, a1 = a0 + dir * 290 * Math.PI / 180;
+        const P0 = [cx + R0 * Math.cos(a0), cy + R0 * Math.sin(a0)], P1 = [cx + R0 * Math.cos(a1), cy + R0 * Math.sin(a1)], tang = (a1 + dir * Math.PI / 2) * 180 / Math.PI;
+        s += `<path d="M${r1(P0[0])} ${r1(P0[1])}A${r1(R0)} ${r1(R0)} 0 1 ${gy.cw ? 1 : 0} ${r1(P1[0])} ${r1(P1[1])}" class="wc-g"/><path d="M${r1(-4.5 * k)} ${r1(-3.5 * k)}L${r1(4.5 * k)} 0L${r1(-4.5 * k)} ${r1(3.5 * k)}Z" transform="translate(${r1(P1[0])} ${r1(P1[1])}) rotate(${r1(tang)})" class="wc-ga"/>`;
+        if (CUR.names) names += `<text x="${r1(cx)}" y="${r1(cy + 4 * k)}" class="wc-gn" style="font-size:${r1(11 * k)}px" text-anchor="middle">${esc(gy.name || "A gyre")}</text>`;
+      }
+      g.innerHTML = s + heads + names;
+    }
     function drawRoutes() {
       let s = "";
       for (const r of WD.routes) {
@@ -1084,6 +1117,8 @@
         : S.tool === "label" ? "Click where the name goes."
         : S.edit ? "Drag a place, a river, a realm's border or a name to move it. Click one to change it." : `Drag to pan · scroll or pinch to zoom · click a place for what is there${Object.keys(A.cities || {}).length ? " and to enter its 3D map" : ""}.`;
       $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
+      // (the currents' key, while their layer is shown)
+      if (CUR.on && WD.T && WD.T.currents) $(".wm-hint").insertAdjacentHTML("afterbegin", `<span class="lg"><svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" class="wc-s w" style="stroke-width:3px"/></svg>Warm current</span><span class="lg"><svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" class="wc-s c" style="stroke-width:3px"/></svg>Cold current</span><button type="button" class="wm-btn wc-nb" data-w="curnames">${CUR.names ? "Hide their names" : "Show their names"}</button>`);
     }
     // what the land is drawn from: when it changes (a stroke of the brush, a river, a realm, a name), it is drawn again
     const landKey = () => JSON.stringify([GEN.ver, WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.liquid, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
@@ -1134,6 +1169,7 @@
         <label class="wm-nw-loose" hidden>How closely to follow my drawing <span class="wm-lsl"><span class="kn">Exactly as drawn</span><input type="range" name="loose" min="0" max="1" step="0.05" value="${g.loose != null ? g.loose : .5}" aria-label="How closely to follow my drawing: left exactly as drawn, right loosely"><span class="kn">Loosely</span></span><span class="kn wm-lval"></span></label>
         <label>Climate <select name="climate">${opt(clim, g.climate || "varied")}</select></label>
         <label>Where the deserts and rains fall <select name="rules">${opt([["earth", "As on the Earth: the winds, the seas, the mountains decide"], ["classic", "Atlas's older, simpler rules"]], g.rules || "earth")}</select></label>
+        <label>The ocean's currents (on trial) <select name="currents">${opt([["", "Not worked out"], ["on", "Worked out: they warm and cool the coasts, bring fog and coastal deserts"], ["retro", "Worked out, on a world turning the other way"]], g.currents || "")}</select></label>
         <label>Kind of world <select name="realism">${opt([["fantasy", "Fantasy: its own places (enchanted woods, ...)"], ["realistic", "Realistic: only what the Earth would make"]], g.realism || (WD.T && WD.T.realism) || "fantasy")}</select></label>
         <label>Look <select name="look">${opt(looks, g.look || (looks.some(l => l[0] === "hydro") ? "hydro" : WD.look))}</select></label>
         <label>Seed <input type="number" name="seed" min="1" max="999999" value="${g.seed || 1000 + Math.floor(Math.random() * 9000)}"> <button type="button" class="wm-btn" data-nw="roll">Roll</button></label>
@@ -1203,7 +1239,7 @@
       });
       f.addEventListener("submit", e => {
         if (!e.submitter || e.submitter.value !== "make") return; e.preventDefault();
-        const v = { size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
+        const v = { size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, currents: f.elements.currents ? f.elements.currents.value : "", realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
         const whole = v.size === "planet";
         if (f.elements.land.value === "paint" || f.elements.land.value === "sketch") v.loose = +f.elements.loose.value;
         if (f.elements.land.value === "paint") {
@@ -1230,7 +1266,7 @@
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
       const W0 = JSON.parse(JSON.stringify(A.worldData || {})); delete W0.size;
       const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
-      flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
+      flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.currents && g.rules !== "classic") { flags.currents = true; if (g.currents === "retro") flags.spin = "retrograde"; } else flags.currents = "off"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
       const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
       return new Promise((ok, no) => {
         let w; try { w = new Worker(URL.createObjectURL(new Blob([A.worldGenSrc], { type: "text/javascript" }))); } catch (e) { no(e); return; }
@@ -1254,7 +1290,7 @@
       if (WD.size[0] !== W || WD.size[1] !== H) { [W, H] = WD.size; size(); home(true); }
       if (WD.look !== was || lk !== lastLand) { lastLand = lk; PG = null; ways.clear(); drawLand(); }
       if (keepSel && !WD.byId[keepSel]) S.sel = null; if (keepR && !WD.rById[keepR]) S.selRoute = null; if (S.selFeat && !featOf(S.selFeat)[1]) S.selFeat = null;
-      drawRoutes(); drawMarkers(); drawFx(); renderPanel(); renderBars();
+      drawCurrents(); drawRoutes(); drawMarkers(); drawFx(); renderPanel(); renderBars();
     }
     function note(t) { const n = $(".wm-note"); n.textContent = t; n.hidden = !t; clearTimeout(note.t); if (t) note.t = setTimeout(() => { n.hidden = true; }, 5000); }
 
@@ -1597,6 +1633,8 @@
         case "addroute": S.tool = S.tool === "route" ? null : "route"; S.first = null; renderBars(); break;
         case "export": exportJS(); break;
         case "newworld": newWorldDlg(); break;
+        case "currents": CUR.on = !CUR.on; try { ctx.store.set("world-currents", CUR.on ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
+        case "curnames": CUR.names = !CUR.names; try { ctx.store.set("world-curnames", CUR.names ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
         case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }
         case "dlgclose": closeDlg(); break;
@@ -1662,7 +1700,7 @@
     }
 
     /* ---- first paint */
-    drawLand(); renderBars();
+    drawLand(); drawCurrents(); renderBars();
     if (DRAW) {
       // trace the picture once it has loaded; the map is drawn again from what was found
       const img = new Image();

@@ -187,6 +187,51 @@
       for (const p of ring.concat([ring[0]])) { const v = ok(p[0], p[1]); if (v && (!cur.length || v === k)) { k = v; cur.push(p); } else { flush(); if (v) { k = v; cur.push(p); } } } flush(); }
     return (by[2] ? `<path d="${by[2]}" fill="none" stroke="#efe1b8" stroke-width="${wd * 2}" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#${clip})"/>` : "") + (by[1] ? `<path d="${by[1]}" fill="none" stroke="#e2d9bd" stroke-width="${wd * 2}" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#${clip})"/>` : "");
   }
+  // the coasts as the waves, the drift and the sand made them (world-terrain.js `coast`, scripts/world-coast.js, on trial:
+  // `--coast natural`): each stretch of shore drawn as what it became, beaches as wide as the sand that stayed, in the
+  // sand's own colour (pale quartz, white coral, black volcanic, grey gravel), cliffs as a dark rim, rocky shore grey,
+  // salt marsh and mangroves green; dunes rippled behind wide beaches; lagoons pale behind their barrier islands
+  const COASTK = { 1: ["#e4d1a0", "sand"], 2: ["#b5ab98", "sand"], 3: ["#4d3f33", "cliff"], 4: ["#8d877b", "rock"], 5: ["#8e9c6c", "marsh"], 6: ["#3e5a33", "marsh"], 7: ["#e4d1a0", "sand"], 9: ["#57524c", "sand"], 10: ["#f3eee0", "sand"] };
+  function naturalCoasts(WD, pr, clip) {
+    const G = WD.G, T = WD.T, cols = G.cols, rows = G.rows, cell = G.cell;
+    const code = T._coastU8 || (T._coastU8 = (() => { const b = typeof atob === "function" ? atob(T.coast) : Buffer.from(T.coast, "base64").toString("binary"), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; })());
+    if (code.length !== cols * rows) return "";
+    // (the kind of shore at a point of the coastline: the nearest coast cell that has one)
+    const kindAt = (x, y) => { const i0 = Math.floor(x / cell), j0 = Math.floor(y / cell); let best = 0, bd = 9; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const a = i0 + di, b = j0 + dj; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; const c = code[b * cols + a], k = c & 15; if (!k || k === 8 || k === 11) continue; const d = Math.hypot((a + .5) * cell - x, (b + .5) * cell - y); if (d < bd) { bd = d; best = c; } } return best; };
+    const by = {};
+    for (const ring0 of ringsAt(G, G.sea, cell * .5)) {
+      if (ring0.length < 12) continue; const ring = chaikin(ring0, 1, true); let cur = [], key = "";
+      const flush = () => { if (cur.length > 1 && key) by[key] = (by[key] || "") + pathD(cur, false); cur = []; };
+      for (const p of ring.concat([ring[0]])) {
+        const c = kindAt(p[0], p[1]), k = c & 15, w = c >> 4, kk = COASTK[k] ? k + ":" + (COASTK[k][1] === "sand" ? (w < 5 ? 1 : w < 10 ? 2 : 3) : 0) : "";
+        if (kk !== key) { if (cur.length) cur.push(p); flush(); key = kk; }
+        cur.push(p);
+      }
+      flush();
+    }
+    let s = "";
+    // (rock and cliff first, the beaches over them where they meet)
+    const order = Object.keys(by).sort((a, b) => (COASTK[a.split(":")[0]][1] === "sand" ? 1 : 0) - (COASTK[b.split(":")[0]][1] === "sand" ? 1 : 0));
+    for (const key of order) {
+      const [k, wb] = key.split(":"), [col, kind] = COASTK[k], d = by[key];
+      if (kind === "sand") s += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${r1(cell * (.5 + .45 * +wb) * 2)}" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#${clip})"/>`;
+      else if (kind === "cliff") s += `<path d="${d}" fill="none" stroke="${col}" stroke-opacity=".75" stroke-width="${r1(cell * .8)}" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#${clip})"/>`;
+      else if (kind === "rock") s += `<path d="${d}" fill="none" stroke="${col}" stroke-opacity=".6" stroke-width="${r1(cell * .7)}" stroke-dasharray="${r1(cell * .4)} ${r1(cell * .3)}" clip-path="url(#${clip})"/>`;
+      else s += `<path d="${d}" fill="none" stroke="${col}" stroke-opacity=".8" stroke-width="${r1(cell * 2.2)}" stroke-dasharray="${r1(cell * .25)} ${r1(cell * .35)}" clip-path="url(#${clip})"/>`;
+    }
+    // dunes behind the beaches, and the lagoons behind their barriers
+    let dune = "", rip = "", lag = "";
+    for (let n = 0; n < code.length; n++) {
+      const k = code[n] & 15; if (k !== 8 && k !== 11) continue; const x = (n % cols + .5) * cell, y = (((n / cols) | 0) + .5) * cell;
+      if (k === 11) { lag += `M${r1(x - cell * .6)} ${r1(y - cell * .6)}h${r1(cell * 1.2)}v${r1(cell * 1.2)}h${r1(-cell * 1.2)}Z`; continue; }
+      dune += `M${r1(x + cell * .7)} ${r1(y)}a${r1(cell * .7)} ${r1(cell * .7)} 0 1 0 ${r1(-cell * 1.4)} 0a${r1(cell * .7)} ${r1(cell * .7)} 0 1 0 ${r1(cell * 1.4)} 0`;
+      if ((n * 2654435761 >>> 0) % 3 === 0) rip += `M${r1(x - cell * .45)} ${r1(y + cell * .1)}q${r1(cell * .45)} ${r1(-cell * .35)} ${r1(cell * .9)} 0`;
+    }
+    if (lag) s += `<path d="${lag}" fill="#bcdcd8" fill-opacity=".55"/>`;
+    if (dune) s += `<path d="${dune}" fill="#ead9a8" fill-opacity=".7" clip-path="url(#${clip})"/>`;
+    if (rip) s += `<path class="lod1" d="${rip}" fill="none" stroke="#b89d62" stroke-opacity=".6" stroke-width="${r1(cell * .12)}" stroke-linecap="round" clip-path="url(#${clip})"/>`;
+    return s;
+  }
   function hydroSvg(WD, uid, img, pr, N) {
     const [W, H] = WD.size, G = WD.G, off = Math.min(Math.max(W, H) * .005, 12), ink = "#3b3328";  // (the slab no thicker than on a continent-sized map, however big the world)
     // (the slab is the land and its lakes together: the lakes lie on it, painted, not cut through it to the paper)
@@ -204,7 +249,7 @@
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#5a4d3c" stroke-opacity=".5" stroke-width=".5" stroke-linejoin="round"/>`;
     // (where the page lays a sharper picture of the land when the map is zoomed in, within the land's own outline)
     s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath><g class="wm-detail" clip-path="url(#${uid}-land)"></g>`;
-    s += beaches(WD, pr, uid + "-land");
+    s += (WD.T && WD.T.coast ? naturalCoasts : beaches)(WD, pr, uid + "-land");
     s += `<path d="${shore}" fill="none" stroke="#3f6f8c" stroke-opacity=".55" stroke-width=".45"/>`;
     s += streams(WD, "#4f7c95");
     s += N ? NT.rivers(WD, "relief", N, pr, "#3f6f8c", null, .9) : rivers(WD, "#3f6f8c", null, .9);
@@ -425,7 +470,7 @@
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     const cd = coastD(G, .6);
     s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/><g class="wm-detail"></g>`;
-    s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath>` + beaches(WD, pr, uid + "-land");
+    s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath>` + (WD.T && WD.T.coast ? naturalCoasts : beaches)(WD, pr, uid + "-land");
     s += N ? NT.rivers(WD, "relief", N, pr, "#2c5fc6", null, 1.25) : rivers(WD, "#2c5fc6", null, 1.25);
     const c = seaCorner(WD, pr);
     s += `<g class="wm-deco"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" fill="none" stroke="#2b2a24" stroke-width="1.4"/>${northArrow(W * c[0], H * c[1], Math.min(W, H) * .045, "#2b2a24", true)}${WD.title ? `<text class="wm-ttl" x="${W / 2}" y="34" text-anchor="middle" fill="#2b2a24">${A.esc ? A.esc(WD.title) : WD.title}</text>` : ""}</g>`;

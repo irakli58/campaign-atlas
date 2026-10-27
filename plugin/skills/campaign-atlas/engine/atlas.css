@@ -799,6 +799,24 @@ details.ci[open] > summary.cn { margin-bottom: 4px; }
 .wm-ck { display: flex !important; gap: 8px; align-items: center; }
 .wm-ck > input { width: auto; }
 .wm-hint .credit { flex-basis: 100%; }
+/* the ocean's currents (world-ocean.js): warm red-orange, cold blue, the gyres, the lines of latitude; never caught by
+   the pointer, so the map below works as ever */
+.wm-cur { pointer-events: none; }
+.wc-s { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: .82; vector-effect: non-scaling-stroke; }
+.wc-s.w { stroke: #e2552b; } .wc-s.c { stroke: #2b7ad2; }
+.wc-a { stroke: rgba(255, 255, 255, .7); stroke-width: .6px; vector-effect: non-scaling-stroke; }
+.wc-a.w { fill: #e2552b; } .wc-a.c { fill: #2b7ad2; }
+.wc-g { fill: none; stroke: var(--wm-label); stroke-opacity: .5; stroke-width: 1.4px; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
+.wc-ga { fill: var(--wm-label); fill-opacity: .6; }
+.wc-lat { stroke: var(--wm-label); stroke-opacity: .28; stroke-width: 1px; stroke-dasharray: 2 6; vector-effect: non-scaling-stroke; }
+.wc-lat.eq { stroke-opacity: .55; stroke-dasharray: none; stroke-width: 1.4px; }
+.wc-lat.tr, .wc-lat.pc { stroke-opacity: .42; stroke-dasharray: 9 5; }
+.wc-latl, .wc-n, .wc-gn { font-family: var(--f-body); font-style: italic; fill: var(--wm-label); paint-order: stroke; stroke: var(--wm-halo); stroke-width: 3px; stroke-opacity: .7; }
+.wc-latl { fill-opacity: .75; }
+.wc-n.w { fill: #f08a5c; } .wc-n.c { fill: #6fb0f0; }
+.wm-atlas .wc-n.w, .wm-engraved .wc-n.w, .wm-parchment .wc-n.w { fill: #b13c18; } .wm-atlas .wc-n.c, .wm-engraved .wc-n.c, .wm-parchment .wc-n.c { fill: #1d5ea8; }
+.wc-gn { font-style: normal; font-family: var(--f-sc); letter-spacing: .12em; fill-opacity: .7; }
+.wc-nb { padding: 2px 9px; }
 /* the world builder: the land's brush, rivers, realms and names drawn on the page */
 .wm-btn:disabled { opacity: .4; cursor: default; }
 .wm-brushbar { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12.5px; padding-left: 4px; }
