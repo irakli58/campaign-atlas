@@ -267,11 +267,26 @@
   // the referee's changes as the page keeps them (docs of the collection "world"): l- a location, r- a route, f- a river,
   // name or realm, and the reshaped land, the party, the look
   function ovFrom(docs) {
-    const OV = { loc: {}, route: {}, feat: {}, party: null, style: null, shape: null };
-    for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id.startsWith("f-")) OV.feat[id.slice(2)] = d; else if (id === "party") OV.party = d; else if (id === "style") OV.style = d; else if (id === "shape") OV.shape = d; }
+    const OV = { loc: {}, route: {}, feat: {}, party: null, style: null, shape: null, gen: null };
+    for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id.startsWith("f-")) OV.feat[id.slice(2)] = d; else if (id === "party") OV.party = d; else if (id === "style") OV.style = d; else if (id === "shape") OV.shape = d; else if (id === "gen") OV.gen = d && d.size ? d : null; }
     return OV;
   }
   A.worldOV = ovFrom;
+  // the sizes a world can be made at (scripts/world-invent.js SIZES), how far across each is, and about how long the
+  // page takes to make it
+  const GEN_SIZES = { small: [800, 560], medium: [1000, 700], large: [1400, 980], huge: [1800, 1260], vast: [2600, 1820], world: [3600, 2520], planet: [6400, 3200] };
+  const GEN_SECS = { small: 4, medium: 6, large: 12, huge: 18, vast: 30, world: 50, planet: 200 };
+  // a made world kept in this browser (IndexedDB), by its recipe, so it is made only once
+  function genCache(key, T) {
+    return new Promise(done => {
+      let h = 2166136261; for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+      const id = ((A.config && A.config.storageKey) || "atlas") + "-" + (h >>> 0).toString(36) + "-" + key.length;
+      let rq; try { rq = indexedDB.open("atlas-worlds", 1); } catch (e) { done(null); return; }
+      rq.onupgradeneeded = () => rq.result.createObjectStore("w");
+      rq.onerror = () => done(null);
+      rq.onsuccess = () => { try { const db = rq.result, tx = db.transaction("w", T ? "readwrite" : "readonly"), st = tx.objectStore("w"); if (T) { st.put({ key, T }, id); tx.oncomplete = () => done(T); tx.onerror = () => done(null); } else { const g = st.get(id); g.onsuccess = () => done(g.result && g.result.key === key ? g.result.T : null); g.onerror = () => done(null); } } catch (e) { done(null); } };
+    });
+  }
   // the world as the page draws it: the campaign's world.js, its terrain, and the referee's changes (OV) laid over them
   // (opt.noLand: the places and realms only, without working out the land)
   function prepareWorld(W, T, OV, opt) {
@@ -620,7 +635,12 @@
   A.worldMount = function (box, ctx) {
     const uid = "w" + Math.floor(Math.random() * 1e6).toString(36);
     const OV = ovFrom([]);
-    let WD = prepareWorld(A.worldData, A.worldTerrainData, OV);
+    // a world made in the page (Make a new world): its recipe is kept among the referee's changes, the land itself made
+    // from it in the background and kept in this browser; until it is ready, and without one, the campaign's own land
+    const GEN = { key: null, T: null, busy: null, ver: 0 };
+    const genKey = g => g ? JSON.stringify(g) : null;
+    const terrainNow = () => OV.gen && GEN.T && GEN.key === genKey(OV.gen) ? GEN.T : A.worldTerrainData;
+    let WD = prepareWorld(A.worldData, terrainNow(), OV);
     // the game master's own drawing, shown as drawn, or redrawn from its traced coasts (the choice is kept)
     const DRAW = WD.T.drawing && A.worldDrawingSrc ? { src: A.worldDrawingSrc, trace: null, mode: ctx.store.get("world-drawn") || "" } : null;
     const drawn = () => DRAW && (DRAW.mode === "drawn" || !DRAW.trace || WD.look === "stars");
@@ -1047,6 +1067,7 @@
         + (landy ? tb("brush", "Shape the land", S.tool === "brush", "Paint land, sea, mountains, forests, deserts and swamps") + tb("river", "+ River", S.tool === "river") : "")
         + tb("realm", WD.look === "stars" ? "+ Territory" : "+ Realm", S.tool === "realm", "Draw a kingdom, province or territory, and say who holds it") + tb("label", "+ Name", S.tool === "label", "Write a name on the map: a sea, a range, a forest")
         + `<button type="button" class="wm-btn" data-w="undo"${HIST.length ? "" : " disabled"} title="Undo (Ctrl+Z)">Undo</button><button type="button" class="wm-btn" data-w="redo"${REDO.length ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo</button>`
+        + (A.worldGenSrc && WD.look !== "stars" && !DRAW ? tb("newworld", "Make a new world", false, "Generate a whole new land: how big, its shape (from your own drawing if you like), its climate") : "")
         + tb("export", "Copy as world.js")
         + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
       $('[data-w="edit"]').setAttribute("aria-pressed", S.edit);
@@ -1064,12 +1085,99 @@
       $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
     }
     // what the land is drawn from: when it changes (a stroke of the brush, a river, a realm, a name), it is drawn again
-    const landKey = () => JSON.stringify([WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.liquid, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
+    const landKey = () => JSON.stringify([GEN.ver, WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.liquid, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
     let lastLand = landKey();
+    // the recipe changed: its land from this browser's keeping, or made afresh (the generator in a worker, so the page
+    // stays free); no recipe: back to the campaign's own land
+    function genCheck() {
+      const key = genKey(OV.gen);
+      if (!key) { if (GEN.T) { GEN.T = null; GEN.key = null; GEN.ver++; } GEN.busy = null; return; }
+      if (GEN.key === key || GEN.busy === key) return;
+      GEN.busy = key; const g = OV.gen, t0 = Date.now();
+      const tick = () => { if (GEN.busy !== key || gone) return; const n = $(".wm-note"); clearTimeout(note.t); n.hidden = false; n.textContent = `Making the world${g.sketch ? " from your drawing" : ""}: ${Math.round((Date.now() - t0) / 1000)} s (about ${GEN_SECS[g.size] || 20} s in all). The map works meanwhile.`; tick.t = setTimeout(tick, 1000); };
+      tick();
+      (async () => {
+        let T = await genCache(key); let err = null;
+        if (!T) try { T = await genRun(g); if (T) genCache(key, T); } catch (e) { err = e; }
+        clearTimeout(tick.t); if (GEN.busy !== key || gone) return; GEN.busy = null;
+        if (!T) { console.warn("world map: the world could not be made", err); note("The world could not be made" + (err && err.message ? ": " + String(err.message).split("\n")[0] : "") + "."); return; }
+        GEN.key = key; GEN.T = T; GEN.ver++; note("The new world is ready."); rebuild();
+      })();
+    }
+    // Make a new world: how big, what shape (or the referee's own drawing), what climate, by which rules, the look
+    function newWorldDlg() {
+      const g = OV.gen || {}, SK = A.worldSketch, km = k => k === "planet" ? "the whole planet, pole to pole" : `about ${Math.round(GEN_SIZES[k][0] * 2.3 / 100) * 100} km across`;
+      const sizes = [["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"], ["vast", "Vast"], ["world", "A great continent"], ["planet", "A whole planet"]].map(([k, l]) => [k, `${l}: ${km(k)}${GEN_SECS[k] >= 60 ? ` (takes about ${Math.round(GEN_SECS[k] / 60)} min)` : ""}`]);
+      const lands = [["continent", "One continent"], ["continents", "Several continents"], ["islands", "Islands"], ["archipelago", "An archipelago"], ["coast", "A coast (the sea on one side)"], ["inland", "All land"], ["sketch", "As I drew it (a picture)"]];
+      const looks = (A.worldArt ? A.worldArt.looksFor(WD) : []).map(([v, l]) => [v, l]);
+      const clim = Object.entries(A.worldBiomes ? A.worldBiomes.CLIMATES : { varied: [0, 0, 0, "Varied"] }).map(([k, v]) => [k, v[3]]);
+      let pic = null;
+      dlg.innerHTML = `<form method="dialog" class="ke wm-newworld"><h3>Make a new world</h3>
+        <p class="kn">A whole new land, made the way the Earth makes one: plates raise its mountains, rivers carve them, the winds bring its rain. Your places are set on it again; Undo brings back the old land.</p>
+        <label>How big <select name="size">${opt(sizes, g.size || "vast")}</select></label>
+        <label>Its shape <select name="land">${opt(lands, g.sketch ? "sketch" : g.land || "continent")}</select></label>
+        <div class="wm-nw-pic" hidden><label>Your drawing <input type="file" name="pic" accept="image/*"></label><p class="kn">A drawing on paper or a coloured map: the land you outlined (or did not colour blue) becomes the land, and the mountains you drew (peaks, hatching, or brown and grey) become ranges. A photo of a sketch works.</p><p class="kn wm-nw-read"></p></div>
+        <label>Climate <select name="climate">${opt(clim, g.climate || "varied")}</select></label>
+        <label>Where the deserts and rains fall <select name="rules">${opt([["earth", "As on the Earth: the winds, the seas, the mountains decide"], ["classic", "Atlas's older, simpler rules"]], g.rules || "earth")}</select></label>
+        <label>Kind of world <select name="realism">${opt([["fantasy", "Fantasy: its own places (enchanted woods, ...)"], ["realistic", "Realistic: only what the Earth would make"]], g.realism || (WD.T && WD.T.realism) || "fantasy")}</select></label>
+        <label>Look <select name="look">${opt(looks, g.look || (looks.some(l => l[0] === "hydro") ? "hydro" : WD.look))}</select></label>
+        <label>Seed <input type="number" name="seed" min="1" max="999999" value="${g.seed || 1000 + Math.floor(Math.random() * 9000)}"> <button type="button" class="wm-btn" data-nw="roll">Roll</button></label>
+        <p class="kn">The same seed and choices always make the same world.</p>
+        <div class="ka">${OV.gen ? `<button type="button" data-nw="back">Back to the campaign's own land</button>` : ""}<button type="submit" value="cancel" formnovalidate>Cancel</button><button type="submit" value="make" class="prim">Make it</button></div></form>`;
+      const f = dlg.querySelector("form"), picBox = f.querySelector(".wm-nw-pic"), readOut = f.querySelector(".wm-nw-read");
+      const showPic = () => { picBox.hidden = f.elements.land.value !== "sketch"; };
+      showPic(); f.elements.land.addEventListener("change", showPic);
+      f.querySelector('[data-nw="roll"]').addEventListener("click", () => { f.elements.seed.value = 1000 + Math.floor(Math.random() * 900000); });
+      const back = f.querySelector('[data-nw="back"]'); if (back) back.addEventListener("click", () => { closeDlg(); save("gen", null); note("Back to the campaign's own land."); });
+      // the picture, read as soon as it is chosen, so the referee sees what was understood
+      f.elements.pic.addEventListener("change", () => {
+        const file = f.elements.pic.files && f.elements.pic.files[0]; if (!file || !SK) return;
+        const img = new Image(), url = URL.createObjectURL(file);
+        img.onload = () => {
+          const iw = Math.min(1600, img.naturalWidth), ih = Math.round(iw * img.naturalHeight / img.naturalWidth), cv = document.createElement("canvas"); cv.width = iw; cv.height = ih;
+          const cx = cv.getContext("2d", { willReadFrequently: true }); cx.fillStyle = "#fff"; cx.fillRect(0, 0, iw, ih); cx.drawImage(img, 0, 0, iw, ih); URL.revokeObjectURL(url);
+          pic = { px: cx.getImageData(0, 0, iw, ih).data, iw, ih };
+          const sk = SK.read(pic.px, iw, ih, ...SK.gridFor(iw, ih)); let l = 0, m = 0; for (let n = 0; n < sk.land.length; n++) { l += sk.land[n]; m += sk.mtn[n] > .25 ? 1 : 0; }
+          readOut.textContent = `Read as ${sk.how === "colour" ? "a coloured map (its blue is the sea)" : "a line drawing (the sea is the paper outside your coasts)"}: ${Math.round(l / sk.land.length * 100)}% land, ${m ? "mountains where you drew them" : "no mountains drawn (the plates will raise them)"}.`;
+        };
+        img.onerror = () => { readOut.textContent = "That picture could not be read."; };
+        img.src = url;
+      });
+      f.addEventListener("submit", e => {
+        if (!e.submitter || e.submitter.value !== "make") return; e.preventDefault();
+        const v = { size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
+        const whole = v.size === "planet";
+        if (f.elements.land.value === "sketch") {
+          if (!pic && !(g.sketch)) { readOut.textContent = "Choose the picture of your drawing first."; return; }
+          const [sw, sh] = GEN_SIZES[v.size], a = whole ? 2 : pic ? Math.max(.4, Math.min(3, pic.iw / pic.ih)) : (g.dims ? g.dims[0] / g.dims[1] : sw / sh);
+          v.land = whole ? "continents" : "continent"; v.dims = whole ? [sw, sh] : [Math.round(Math.sqrt(sw * sh * a)), Math.round(Math.sqrt(sw * sh / a))];
+          v.sketch = pic ? SK.encode(SK.read(pic.px, pic.iw, pic.ih, ...SK.gridFor(pic.iw, pic.ih, a))) : g.sketch;
+        } else { v.land = f.elements.land.value; if (whole && v.land === "continent") v.land = "continents"; if (!whole && v.land === "continents") v.land = "islands"; }
+        closeDlg();
+        if (OV.shape && (OV.shape.strokes || []).length) save("shape", null);
+        if (v.look !== WD.look) save("style", Object.assign({}, OV.style || {}, { look: v.look }));
+        save("gen", v);
+      });
+      if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+    }
+    function genRun(g) {
+      if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
+      const W0 = JSON.parse(JSON.stringify(A.worldData || {})); delete W0.size;
+      const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
+      if (g.rules === "earth") flags["climate-model"] = "earth"; if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
+      const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
+      return new Promise((ok, no) => {
+        let w; try { w = new Worker(URL.createObjectURL(new Blob([A.worldGenSrc], { type: "text/javascript" }))); } catch (e) { no(e); return; }
+        w.onmessage = e => { w.terminate(); if (e.data && e.data.ok) ok(e.data.T); else no(new Error(e.data && e.data.error || "the generator stopped")); };
+        w.onerror = e => { w.terminate(); no(new Error(e.message || "the generator failed")); };
+        w.postMessage(msg);
+      });
+    }
     function rebuild() {
       const keepSel = S.sel, keepR = S.selRoute, was = WD.look;
       const keepG = WD.G;
-      WD = prepareWorld(A.worldData, A.worldTerrainData, OV); traced();
+      genCheck();
+      WD = prepareWorld(A.worldData, terrainNow(), OV); traced();
       // a new look: its colours, its icons, its land
       const lk = landKey();
       // (the land itself unchanged: the same grid kept, so what was worked out from it, the climate's colours and the
@@ -1086,13 +1194,13 @@
     let DB = null;
     function fromDocs(docs) { Object.assign(OV, ovFrom(docs)); }
     const localAll = () => { try { return JSON.parse(ctx.store.get("world-edits") || "{}") || {}; } catch (e) { return {}; } };
-    const docNow = doc => { const v = doc === "party" ? OV.party : doc === "style" ? OV.style : doc === "shape" ? OV.shape : doc.startsWith("l-") ? OV.loc[doc.slice(2)] : doc.startsWith("r-") ? OV.route[doc.slice(2)] : doc.startsWith("f-") ? OV.feat[doc.slice(2)] : null; return v == null ? null : JSON.parse(JSON.stringify(v)); };
+    const docNow = doc => { const v = doc === "party" ? OV.party : doc === "style" ? OV.style : doc === "shape" ? OV.shape : doc === "gen" ? OV.gen : doc.startsWith("l-") ? OV.loc[doc.slice(2)] : doc.startsWith("r-") ? OV.route[doc.slice(2)] : doc.startsWith("f-") ? OV.feat[doc.slice(2)] : null; return v == null ? null : JSON.parse(JSON.stringify(v)); };
     // undo and redo: every change but where the party is (that is play, not the map) can be taken back, and done again
     function save(doc, data, how) {
       if (doc !== "party" && how !== "hist") { HIST.push({ doc, before: docNow(doc), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; }
       // the change shows at once; the database follows
       const all = DB ? null : localAll();
-      if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc === "shape") OV.shape = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; } else if (doc.startsWith("f-")) { if (data) OV.feat[doc.slice(2)] = data; else delete OV.feat[doc.slice(2)]; }
+      if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc === "shape") OV.shape = data; else if (doc === "gen") OV.gen = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; } else if (doc.startsWith("f-")) { if (data) OV.feat[doc.slice(2)] = data; else delete OV.feat[doc.slice(2)]; }
       rebuild();
       if (DB) { const ref = DB.collection("world").doc(doc); return Promise.resolve(data ? ref.set(data) : ref.delete()).catch(e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); }); }
       if (data) all[doc] = data; else delete all[doc];
@@ -1420,6 +1528,7 @@
         case "addloc": S.tool = S.tool === "loc" ? null : "loc"; S.first = null; renderBars(); break;
         case "addroute": S.tool = S.tool === "route" ? null : "route"; S.first = null; renderBars(); break;
         case "export": exportJS(); break;
+        case "newworld": newWorldDlg(); break;
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
         case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }
         case "dlgclose": closeDlg(); break;

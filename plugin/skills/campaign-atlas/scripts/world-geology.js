@@ -62,7 +62,11 @@ function geology(o, U) {
   const landCost = sides => m => .12 + 5 * Math.pow(U.fbm(nB, X(m) * 2.2 * zs, Y(m) * 2.2 * zs, 5), 3) + .6 * Math.pow(U.fbm(nA, X(m) * 5 * zs + 3, Y(m) * 5 * zs, 3), 2) + edgeCost(m, sides);
   const side = Math.floor(rnd() * 4), others = [0, 1, 2, 3].filter(s => s !== side);
   let seedsC;
-  if (land === "inland") crust.fill(1);
+  // (a world drawn by hand: its land is the sketch's, read onto this grid (atlas-world-sketch.js), not grown)
+  const SK = o.sketch && o.sketch.land && o.sketch.land.length === cols * rows ? o.sketch : null;
+  const blockAvg = A => { const out = new Float32Array(CN), cn = new Float32Array(CN); for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { const m = Math.min(cr - 1, (j / f) | 0) * cc + Math.min(cc - 1, (i / f) | 0); out[m] += A[j * cols + i]; cn[m]++; } for (let m = 0; m < CN; m++) out[m] /= cn[m] || 1; return out; };
+  if (SK) { const a = blockAvg(SK.land); for (let n = 0; n < CN; n++) crust[n] = a[n] >= .5 ? 1 : 0; }
+  else if (land === "inland") crust.fill(1);
   else {
     if (land === "coast") { seedsC = []; for (let k = 0; k < 4; k++) { const t = .15 + k * .23; seedsC.push(side === 0 ? cell(.02, t) : side === 1 ? cell(asp - .02, t) : side === 2 ? cell(t * asp, .02) : cell(t * asp, .98)); } }
     else if (land === "islands") { seedsC = []; for (let k = 0; k < 5 + Math.floor(rnd() * 4); k++) seedsC.push(cell((.15 + rnd() * .7) * asp, .15 + rnd() * .7)); }
@@ -115,8 +119,12 @@ function geology(o, U) {
       else ridge[n] += c * gauss(d / 100);
     }
   }
+  // (the mountains the sketch shows: raised where they were drawn, the plates' own belts kept faint beside them so the
+  // drawing leads; with none drawn, the plates make the mountains as on any world)
+  let drawnM = false;
+  if (SK && SK.mtn) { const mC = blockAvg(SK.mtn); let s = 0, l = 0; for (let n = 0; n < CN; n++) if (crust[n]) { l++; s += mC[n] > .25 ? 1 : 0; } drawnM = s > l * .003; if (drawnM) for (let n = 0; n < CN; n++) up[n] = up[n] * .4 + (crust[n] ? 1.7 * mC[n] : 0); }
   // old belts, worn low, across the old continents
-  for (let k = 0; k < nP; k++) {
+  for (let k = 0; k < nP && !drawnM; k++) {
     if (rnd() < .45) continue; const s = plates[k].seed; if (!crust[s]) continue;
     const a = rnd() * Math.PI, ux = Math.cos(a), uy = Math.sin(a), L = (.2 + rnd() * .25) / (zs > 1 ? Math.sqrt(zs) : 1), cx = X(s), cy = Y(s), wd = zs > 1 ? 300 : 90, oa = zs > 1 ? .4 : .7;
     // (on a whole planet such a belt would run thousands of km dead straight: there it is shorter and bends along its
@@ -147,9 +155,12 @@ function geology(o, U) {
   let rain = new Float32Array(CN).fill(1);
   const K = .06 * Math.min(1.5, air), mExp = .45, kd = .05, steps = 220, dt = 1;
   const isBase = n => !crust[n];
+  const rivC = SK && SK.river ? blockAvg(SK.river) : null;
   for (let it = 0; it < steps; it++) {
     for (let n = 0; n < CN; n++) if (crust[n]) h[n] += up[n] * dt;
     landscapeStep(h, cc, cr, isBase, rain, K, mExp, dt, U);
+    // (a river the sketch shows keeps cutting its valley as the land rises, so the water gathers along it)
+    if (rivC) for (let n = 0; n < CN; n++) if (crust[n] && rivC[n] > .03) h[n] *= 1 - .02 * Math.min(1, rivC[n] * 1.5);
     // creep: hilltops round, steep slopes ease
     if (it % 2 === 0) creep(h, cc, cr, isBase, kd * 2 * dt);
     // halfway, the rain the ranges catch begins to feed the rivers that cut them
@@ -173,7 +184,7 @@ function geology(o, U) {
   const landVals = []; for (let n = 0; n < N; n++) if (Cf[n]) landVals.push(Hf[n]); landVals.sort((a, b) => a - b);
   const wantLand = Math.round(N * share), seaLvl = landVals.length > wantLand ? landVals[landVals.length - wantLand] : 0;
   const E = new Float32Array(N), isLand = new Uint8Array(N);
-  for (let n = 0; n < N; n++) if (Cf[n] && Hf[n] > seaLvl) isLand[n] = 1;
+  for (let n = 0; n < N; n++) if (SK ? SK.land[n] : Cf[n] && Hf[n] > seaLvl) isLand[n] = 1;
   // the land's heights, rank for rank, on the Earth's hypsometric curve (weak gravity lets them stand higher)
   { const idx = []; for (let n = 0; n < N; n++) if (isLand[n]) idx.push(n); idx.sort((a, b) => Hf[a] - Hf[b]);
     const Q = [[0, 2], [.1, 60], [.25, 200], [.5, 460], [.75, 1000], [.88, 1800], [.94, 2700], [.98, 4000], [.995, 5300], [1, 6400 + rnd() * 1800]];
@@ -192,6 +203,12 @@ function geology(o, U) {
 
   // (the deep floor is smooth at this scale: what the coarse grid left in it is eased away)
   { const Z = new Float32Array(N); for (let n = 0; n < N; n++) Z[n] = isLand[n] ? -40 : E[n]; boxBlur(Z, cols, rows, 3, 2); for (let n = 0; n < N; n++) if (!isLand[n]) E[n] = Math.min(-5, dLand[n] < 3 ? E[n] : Z[n]); }
+
+  // (a lake the sketch shows lies in a hollow: its floor below the lowest of its shore)
+  if (SK && SK.lake) { const seen = new Uint8Array(N);
+    for (let n = 0; n < N; n++) { if (seen[n] || !SK.lake[n] || !isLand[n]) continue; const cells = [n]; seen[n] = 1; let shore = 1e9;
+      for (let h = 0; h < cells.length; h++) { const c = cells[h], i = c % cols, j = (c / cols) | 0; for (const m of [i > 0 ? c - 1 : -1, i < cols - 1 ? c + 1 : -1, j > 0 ? c - cols : -1, j < rows - 1 ? c + cols : -1]) { if (m < 0) continue; if (SK.lake[m] && isLand[m]) { if (!seen[m]) { seen[m] = 1; cells.push(m); } } else if (isLand[m]) shore = Math.min(shore, E[m]); } }
+      if (shore < 1e9) for (const c of cells) E[c] = Math.max(1, Math.min(E[c], shore - 40)); } }
 
   /* 6. the climate on the land as it is */
   // (`--climate-model earth`: the Earth's own causes of wet and dry, worked out (climateEarth below); the classic model
@@ -215,6 +232,8 @@ function geology(o, U) {
   }
   { let landN = 0; const lk = []; for (let n = 0; n < N; n++) { if (E[n] > 0) landN++; if (lakeCells[n]) lk.push(n); }
     const room = Math.round(landN * .03); if (lk.length > room) { lk.sort((a, b) => (F[b] - E[b]) - (F[a] - E[a])); for (let k = room; k < lk.length; k++) lakeCells[lk[k]] = 0; } }
+  // (the lakes the sketch shows are lakes, whatever the rain and however many there are)
+  if (SK && SK.lake) for (let n = 0; n < N; n++) if (SK.lake[n] && E[n] > 0) lakeCells[n] = 1;
 
   /* 8. what lives on it: climate classes, biomes and tree cover, from all of the above (world-ecology.js) */
   const want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;

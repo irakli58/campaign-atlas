@@ -56,7 +56,7 @@ const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -453,7 +453,20 @@ async function cmdWorld(dir) {
   }
   let A = load(dir);
   const old = A.worldTerrainData || {}, log = m => console.log(m);
-  const mode = flags.drawing ? "drawing" : flags.real ? "real" : flags.land || flags.seed || flags.replace ? "invent" : old.drawing ? "drawing" : old.real ? "real" : "invent";
+  // a world drawn by hand, generated: the picture's land and mountains guide the plates, the rivers and the climate
+  // (engine/atlas-world-sketch.js); the map takes the picture's shape at the size asked (a whole planet stays 2 by 1)
+  if (flags.sketch && flags.sketch !== true) {
+    const file = path.resolve(String(flags.sketch)); if (!fs.existsSync(file)) die(`no picture at ${flags.sketch}`);
+    const buf = fs.readFileSync(file);
+    if (buf.readUInt32BE(0) !== 0x89504e47) die("--sketch reads a PNG picture here: save the drawing as PNG, or open the campaign's page, World map, Edit map, Make a new world, and choose the picture there (any kind of picture works in the page)");
+    const img = require("./png.js").readPNG(buf), SKM = require("../engine/atlas-world-sketch.js"), SZ = WI.SIZES;
+    const sizeWord = flags.size && flags.size !== true ? String(flags.size) : old.sizeName || "vast", whole = sizeWord === "planet", [sw, sh] = SZ[sizeWord] || SZ.vast;
+    const a = whole ? 2 : Math.max(.4, Math.min(3, img.width / img.height)), area = sw * sh, [gc, gr] = SKM.gridFor(img.width, img.height, a);
+    flags.sketch = SKM.read(img.data, img.width, img.height, gc, gr); flags.dims = whole ? [sw, sh] : [Math.sqrt(area * a), Math.sqrt(area / a)]; flags.replace = true;
+    let l = 0, m = 0; for (let n = 0; n < flags.sketch.land.length; n++) { l += flags.sketch.land[n]; m += flags.sketch.mtn[n] > .25 ? 1 : 0; }
+    log(`  the sketch (${flags.sketch.how === "colour" ? "a coloured map: its blue is the sea" : "a line drawing: the sea is the paper outside the coasts"}): ${Math.round(l / flags.sketch.land.length * 100)}% land, ${m ? Math.round(m / Math.max(1, l) * 100) + "% of it drawn as mountains" : "no mountains drawn (the plates make them)"}`);
+  }
+  const mode = flags.sketch ? "invent" : flags.drawing ? "drawing" : flags.real ? "real" : flags.land || flags.seed || flags.replace ? "invent" : old.drawing ? "drawing" : old.real ? "real" : "invent";
   const { T, summary } = mode === "drawing" ? WI.fromDrawing(dir, A, flags.drawing, flags, log) : mode === "real" ? await require("./world-real.js").realWorld(dir, A, flags, log) : WI.invent(A, flags, log);
   WI.writeTerrain(dir, T, A.config.title);
   console.log(`wrote ${path.join(dir, "world-terrain.js")}: ${summary}`);
