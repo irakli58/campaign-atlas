@@ -825,7 +825,9 @@
       const g = $(".wm-cur"), C = WD.T && WD.T.currents, btn = $('[data-w="currents"]');
       if (btn) { btn.hidden = !C; btn.setAttribute("aria-pressed", !!(C && CUR.on)); }
       if (!g) return; if (!C || !CUR.on) { g.innerHTML = ""; return; }
-      const [la, lb] = C.lat, yOf = f => (la - f) / (la - lb) * H, k = Math.min(W, H) / 700, word = v => v >= 1.3 ? "strong" : v >= .8 ? "moderate" : "gentle";
+      // (arrows, names and rings keep their size on the screen: k is a screen pixel in the map's units, drawn again as the
+      // map is brought closer or further)
+      CUR.k = V.k || 1; const [la, lb] = C.lat, yOf = f => (la - f) / (la - lb) * H, k = 1 / CUR.k, word = v => v >= 1.3 ? "strong" : v >= .8 ? "moderate" : "gentle";
       let s = "";
       // the lines of latitude: every thirty degrees, the equator, the tropics and the polar circles
       const LINES = [[0, "The equator", "eq"], [23.44, "The northern tropic", "tr"], [-23.44, "The southern tropic", "tr"], [66.56, "The northern polar circle", "pc"], [-66.56, "The southern polar circle", "pc"], [30, "30° north", ""], [60, "60° north", ""], [-30, "30° south", ""], [-60, "60° south", ""]];
@@ -841,7 +843,7 @@
       }
       // the gyres: a ring about each, turning the way it turns
       for (const gy of C.gyres || []) {
-        const R0 = 34 * k, [cx, cy] = gy.at, dir = gy.cw ? 1 : -1, a0 = -60 * Math.PI / 180, a1 = a0 + dir * 290 * Math.PI / 180;
+        const R0 = Math.max(34 * k, Math.min(W, H) * .035), [cx, cy] = gy.at, dir = gy.cw ? 1 : -1, a0 = -60 * Math.PI / 180, a1 = a0 + dir * 290 * Math.PI / 180;
         const P0 = [cx + R0 * Math.cos(a0), cy + R0 * Math.sin(a0)], P1 = [cx + R0 * Math.cos(a1), cy + R0 * Math.sin(a1)], tang = (a1 + dir * Math.PI / 2) * 180 / Math.PI;
         s += `<path d="M${r1(P0[0])} ${r1(P0[1])}A${r1(R0)} ${r1(R0)} 0 1 ${gy.cw ? 1 : 0} ${r1(P1[0])} ${r1(P1[1])}" class="wc-g"/><path d="M${r1(-4.5 * k)} ${r1(-3.5 * k)}L${r1(4.5 * k)} 0L${r1(-4.5 * k)} ${r1(3.5 * k)}Z" transform="translate(${r1(P1[0])} ${r1(P1[1])}) rotate(${r1(tang)})" class="wc-ga"/>`;
         if (CUR.names) names += `<text x="${r1(cx)}" y="${r1(cy + 4 * k)}" class="wc-gn" style="font-size:${r1(11 * k)}px" text-anchor="middle">${esc(gy.name || "A gyre")}</text>`;
@@ -923,6 +925,7 @@
         g.setAttribute("transform", `translate(${r1(m[0] * k + V.tx)} ${r1(m[1] * k + V.ty)})`);
       }
       cam.setAttribute("transform", `matrix(${k} 0 0 ${k} ${r1(V.tx)} ${r1(V.ty)})`);
+      if (CUR.on && CUR.k && (k / CUR.k > 1.3 || k / CUR.k < .77)) drawCurrents();
       if (S.draft || (S.edit && S.selFeat) || $(".wm-hdl").firstChild) drawHandles();
       for (const t of cam.querySelectorAll(".wm-rl")) t.style.opacity = z > 5 ? 0 : z > 3 ? (5 - z) / 2 : 1;
       const sc = $(".wm-scale");
