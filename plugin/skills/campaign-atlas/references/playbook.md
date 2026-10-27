@@ -16,7 +16,7 @@ This is the order that works, with the command for each step. It was arrived at 
 | 6 | Every place registered | one `ATLAS.place(id, {...})` line each | Tier, category, region, tagline, position on the map |
 | 7 | The trail planned | `A check` | Every place that matters has two leads in, on paper |
 | 8 | The places, one at a time | the loop below | `A check <place>` is clean for each |
-| 8b | The table | `table.js`, and on the places (`references/table.md`) | Clocks, the session plan, the players' characters woven in, handouts, rolls, stat blocks, rescues, random tables, intensity; `check`'s "the table" line is OK |
+| 8b | The table | `table.js`, and on the places (`references/table.md`) | Clocks, the session plan, the calendar and the world's events, the players' characters woven in, handouts, rolls, stat blocks, rescues, random tables, intensity; `check`'s "the table" line is OK |
 | 9 | Build and look | `A build`, the preview | Both modes, light and dark, phone width |
 | 10 | Publish | the Artifact tool | One address, saved to memory and to the folder's notes |
 | 11 | Report | to the user | What was made, what the council changed, what was invented |
@@ -77,7 +77,7 @@ What makes this fast:
 
 ## Step 8b: the table
 
-When the places are mapped, write `table.js` (`references/table.md`): a clock for each enemy working in the background, the campaign split into sessions (a strong start and a cliffhanger each, every tier 1 and 2 place in one), the players' characters woven in when they were given (`story/pcs.md`: a hook, a secret and a clue of their own placed in a place, which the place file then holds too), the ways back that belong to no one clue, the campaign's own random tables, and any handout that is not a clue. `A check` reads it on its "the table" line. The page does the rest by itself: the players' screen with fog of war, the board, combat and sanity, people and places made on the spot, Ask the campaign, the printed book, maps for online tables, the safety tools.
+When the places are mapped, write `table.js` (`references/table.md`): a clock for each enemy working in the background, the campaign split into sessions, the calendar and the events that happen in the world whether or not the party acts (on a date, or when the party does something; each waits for the referee's yes) (a strong start and a cliffhanger each, every tier 1 and 2 place in one), the players' characters woven in when they were given (`story/pcs.md`: a hook, a secret and a clue of their own placed in a place, which the place file then holds too), the ways back that belong to no one clue, the campaign's own random tables, and any handout that is not a clue. `A check` reads it on its "the table" line. The page does the rest by itself: the players' screen with fog of war, the board, combat and sanity, people and places made on the spot, Ask the campaign, the printed book, maps for online tables, the safety tools.
 
 ## Steps 9 to 11: out of the door
 
@@ -106,7 +106,7 @@ Where there is no Artifact tool (plain Claude Code, Codex, the Campaign Atlas ap
 | "Add a place" | Register it, give it two leads in from existing clues, map it, rebuild |
 | "Here are my players' characters" | Save them as `story/pcs.md`; weave each in (`references/table.md`, section 5): `ATLAS.pcs` in `table.js` and their own clue in its place; check, build |
 | "How do I show my players the map", "a second screen", "handouts" | Nothing to make: the page's At the table view, Players' screen tab (`references/table.md`, section 1). Tell them how |
-| "Add a clock", "split it into sessions", "make this a handout" | `table.js` or the clue's `handout` (`references/table.md`); check, build |
+| "Add a clock", "split it into sessions", "make this a handout", "add an event", "set the date" | `table.js` or the clue's `handout` (`references/table.md`); check, build |
 | "Players should not see X" | `h: 1`, door type `"s"`, or `gm: 1`; then `check` |
 | A new story | A new campaign folder; start at step 0 |
 

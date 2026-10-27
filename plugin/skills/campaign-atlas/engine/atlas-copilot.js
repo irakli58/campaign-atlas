@@ -46,6 +46,8 @@
     const found = []; for (const [pl, d] of Object.entries(st.get("clues") || {})) for (const k of (d && d.done) || []) { const c = ((A.get(pl, 99) || {}).clues || {})[k]; if (c) found.push(`${c.t || k} (${placeName(pl)})`); }
     if (found.length) out.push("Clues the party has found: " + found.slice(-15).join("; "));
     for (const c of A.clocksData || []) { const at = api.clockAt(c); if (at) out.push(`${c.name}: ${at} of ${+c.segments || (c.ticks || []).length || 4} — ${(c.ticks || [])[at - 1] || ""}`); }
+    // the world's time and what has happened in it (atlas-worldtime.js)
+    const W = A.worldTime; if (W && (A.calendarData || (A.eventsData || []).length)) { const d = W.at(W.now()); out.push(`It is now ${d.long}, ${d.time} (day ${d.day} of the story).`); const r = W.recent(); if (r.length) out.push("Lately in the world: " + r.join("; ")); }
     return out.join("\n");
   }
 
@@ -236,5 +238,5 @@ ${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n") || "(nothing
   });
   if (TU.addDock) TU.addDock("talk", "Talk", "ask", head => head("ask", "Talk as them", "copilot", "Copilot") + `<div class="cp-host">${panelHTML(true)}</div>`);
   // from a person's page in the investigation: carry on with them here
-  A.copilot = { talkTo(ref) { UI.mode = "talk"; UI.who = ref; UI.mem = null; if (api.openDock) api.openDock("talk"); else api.open("copilot"); paint(); }, prompt: talkPrompt, impPrompt };
+  A.copilot = { talkTo(ref) { UI.mode = "talk"; UI.who = ref; UI.mem = null; if (api.openDock) api.openDock("talk"); else api.open("copilot"); paint(); }, prompt: talkPrompt, impPrompt, lately };
 })(ATLAS);

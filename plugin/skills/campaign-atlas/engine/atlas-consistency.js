@@ -18,7 +18,7 @@
   "use strict";
   const TU = A.tableUI, T = A.table, St = A.story; if (!TU || !T || !St) return;
   const api = TU.api, esc = A.esc;
-  const AREAS = [["story", "The story and its clues"], ["people", "People and what they know"], ["maps", "The maps"], ["table", "What the players have done"], ["time", "Sessions and clocks"]];
+  const AREAS = [["story", "The story and its clues"], ["people", "People and what they know"], ["maps", "The maps"], ["table", "What the players have done"], ["time", "Time, sessions and clocks"]];
   const SEV = [["error", "Certain"], ["warn", "Possible"], ["note", "Worth a look"]];
   const S = () => api.store();
   const placeName = id => (A.meta[id] || {}).name || id;

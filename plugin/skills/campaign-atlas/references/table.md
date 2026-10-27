@@ -21,6 +21,7 @@ A campaign is played, not only read. Every page Atlas builds has an **At the tab
 15. Riddles and traps at the table
 16. The copilot: Talk and Improvise
 17. Checking the campaign for consistency
+18. The world's time: the calendar, events, news
 
 ## 1. What the page does by itself
 
@@ -62,6 +63,7 @@ Its menu along the bottom (fading on The table until the mouse moves):
 - **Handouts**: every handout the referee has given them, newest first, to read again (a count shows the new ones).
 - **Our board**: their corkboard of what they have found.
 - **Places**: the places they know of, the first impressions, what they found there, and the maps with only the rooms they have seen.
+- **News**: what the referee has let them hear of the world (section 18), newest first, with a count of what is new; the world's date stands in a corner of The table.
 - **Our notes**: the notes the party keeps, which the referee can read and add to.
 - **Stop**: the X-card.
 
@@ -82,6 +84,7 @@ Where it keeps things: the page's database on claude.ai and in the Atlas app; an
 | Rescues | a clue's `rescue`; `table.js`: `ATLAS.rescues([...])` | Doyle and Christie |
 | Random tables | a place's `tables`; `table.js`: `ATLAS.tables({...})` | Poe (atmosphere), Christie (rumour) |
 | Intensity and content | each place's `intensity` and `content` | The clerk, honestly |
+| The calendar and the world's events | `table.js`: `ATLAS.calendar({...})`, `ATLAS.events([...])` (section 18) | Christie (what the world does on its own), Doyle (what the players can learn of it) |
 
 `table.js` sits in the campaign folder beside `campaign.js` (`atlas.js init` writes an empty one). Write it after the bible is agreed and the places are registered, so every id it names exists.
 
@@ -213,7 +216,7 @@ The page reads the story's age from the city's look and the year in `setting`, t
 
 ## 12. What `check` asks
 
-`check` reads the table material with everything else. It is a **problem** when an id points nowhere (a session's place, a character's clue's place, a rescue's place), a clock has fewer ticks than segments, a handout has no text or an unknown kind, a table is not a list of words, or an intensity is outside 1 to 5. It is a **note** (which also stands between the campaign and "all clear") when the campaign has no clock, no session plan, fewer than three handouts, no character woven in while `story/pcs.md` exists, a tier 1 or 2 place with no intensity or no random table, a tier 1 or 2 place none of whose clues names its roll, or no stat block at all though the game has rules.
+`check` reads the table material with everything else. It is a **problem** when an id points nowhere (a session's place, a character's clue's place, a rescue's place), a clock has fewer ticks than segments, a handout has no text or an unknown kind, a table is not a list of words, or an intensity is outside 1 to 5, or an event waits on what is not there, has neither a `when` nor an `after`, or a `when` that cannot be read. It is a **note** (which also stands between the campaign and "all clear") when the campaign has no clock, no session plan, fewer than three handouts, no character woven in while `story/pcs.md` exists, a tier 1 or 2 place with no intensity or no random table, a tier 1 or 2 place none of whose clues names its roll, or no stat block at all though the game has rules, or sessions but no world events.
 
 ## 13. Publishing
 
@@ -257,3 +260,42 @@ The user asked (27 Oct 2026) for the campaign to stay consistent as the story de
 Every finding is **Certain**, **Possible** or **Worth a look**, with why, its evidence (each a link to what it names) and how to mend it. The referee can go to it, mend it by the one change offered where there is one (remove a dead connection, say how someone knows a thing, mark a place open), ask Claude for the smallest fix, mark it **intentional** (a lie, a misunderstanding, a mystery on purpose) or dismiss it; a marked finding comes back only if its evidence changes (collection `consist`). Nothing changes without the referee. "Ask Claude to read for contradictions" sends the story, the places, the people, the sessions and tonight's notes; each contradiction it returns is kept only if both sides are quoted from that material word for word, and is listed as possible. The checks run again a moment after the table or the investigation changes. The copilot's Improvise has **Does it fit?**, which answers from the same findings. Later systems add their own checks with `A.consistency.add(name, fn)`.
 
 Write campaigns so they pass it: every clue's `to` a place id, every `at` a room of the map, a way into every room, a way to every hidden clue (a secret door and its secret), and knowledge passed on only from someone who knows it.
+
+## 18. The world's time: the calendar, events, news
+
+The user asked (26 Oct 2026, the master plan, parts 4 and 5) for a world that moves whether or not the party acts, and moves for reasons, not at random: a world clock and calendar; events the game master writes and the council plans, each with its time, its conditions, who and what it involves, its hidden cause, its consequences and what the players may know of it; events that are called off when what they rest on is gone; how much each matters, with the significant ones waiting for the game master's approval; small random happenings only if wanted, and never disasters; a word on the screen for the game master and the players; and the world's news, which may differ from the truth. It is a tab of At the table (**The world's time**) and **Time** in the toolbar, with a count of what waits (atlas-worldtime.js).
+
+**What the council writes**, in `table.js`, after the clocks and sessions (Christie leads, as with the clocks: what the enemies and the world do on their own; Doyle sees that each one changes something the players can find out, and that each has a reason in the story):
+
+```js
+ATLAS.calendar({ start: "2291-03-14 06:00" });   // a real date and hour; or the world's own calendar:
+// ATLAS.calendar({ start: { day: 1, hour: 8, year: 1203 }, months: [["Frostmoon", 30], ["Thaw", 28]], weekdays: ["Moonday", "Tirsday"], era: "AR" });
+ATLAS.events([
+  { id: "notice-up", title: "Operations closes Hydroponics 9", when: "day 1 14:00", place: "hydroponics", importance: "major", who: ["Dr. Adaeze Okafor"],
+    what: "Okafor has Operations post the maintenance notice; the deck's doors lock.",
+    why: "She wants the beds out of sight while she decides whether to burn them; the notice is her cover story.",
+    then: "Anyone wanting into Hydroponics now needs her clearance, a forged one, or the crawl.",
+    unless: [{ clue: "med-lab/C3" }],
+    news: { headline: "Hydroponics 9 closed for maintenance", text: "…", paper: "Station bulletin" } },
+  { id: "hale-runs", title: "Hale tries to leave the station", after: [{ clue: "docking-bay/C4" }], unless: [{ event: "quarantine" }], importance: "major",
+    what: "Once his ledger is found, the dockmaster books passage out.", outcomes: ["He gets away", "Okafor stops him first", "The party reaches him and he talks"],
+    players: "Word on the dock: the dockmaster has booked himself on tonight's freighter." },
+  { id: "rash", title: "A grow tech reports a rash", when: "day 2 09:00", importance: "notable", what: "…", tick: ["green", 1] },
+  { id: "quarantine", title: "The station AI seals the inner ring", after: [{ clock: ["green", 6] }], importance: "critical", what: "…" },
+  { id: "inquiry", title: "The survey office asks after its samples", after: [{ event: "notice-up", hours: 48 }], importance: "background", what: "…" }
+]);
+```
+
+- `when`: `"day 3 06:00"` (day 1 is the day the story starts), a date and hour like the calendar's start when it is a real date, or `{ day, hour }`. Without `when`, the event waits only on `after`.
+- `after`: what must have happened first, all of it: `{ clue: "place/clue id" }` found, `{ visit: place }` the party there (the place open, or a room of it shown), `{ known: place }` the party knowing of it, `{ clock: [id, n] }` a villain's clock at step n, `{ event: id, hours }` another event happened (and so many hours since).
+- `unless`: the same kinds of condition; if any has happened when the event comes due (or while it waits for the game master), it is **called off**, with the reason recorded. This is how events stay conditional: the rebels' attack is called off if the party exposed them first.
+- `importance`: `background` (a small change, recorded quietly), `notable` (recorded, with a word to the game master), `major` (could change the campaign) or `critical`. By default background and notable events happen by themselves when they come due, and major and critical ones wait for the game master; the game master moves that line ("Wait for me before…": everything, notable and up, major and critical, only critical). (`minor`, the older word, reads as notable.)
+- For the game master: `place`, `who` (the people involved), `factions`, `what` (what happens), `why` (the cause, hidden plans and motives: never shown to the players), `then` (what follows), `outcomes` (how it may go). For the players: `players` (a line they hear), or `news: { headline, text, paper }` (a bulletin, a rumour, a broadcast, a paper); it may be incomplete or wrong, since the truth stays in `what` and `why`.
+- `tick: [clock, n]`: when it happens it moves a villain's clock on (undoing it moves it back).
+- Six to twelve events for a campaign, three or four for a one-shot: some on dates (the world's routine, the enemy's timetable), some on what the party does (the enemy's answer to being found out), each with a reason the campaign gives and, where it makes sense, an `unless`. Each changes something the players can notice or hear of. Nothing random and nothing catastrophic without a cause in the story.
+
+**At the table.** The tab shows the date and hour, with buttons to move time on (+10 minutes to +1 week, any number of minutes, hours, days or weeks, and Undo), and **Pause the world** (time stands still and nothing comes due). Then: what waits for the game master, critical first, each with everything about it (what, who, factions, because, why, what follows, how it may go, what calls it off, what the players hear) and **It happens** (telling the players if it has something for them), **Quietly**, **Change it first**, **An hour later**, **Tomorrow**, **Not at all**; what is coming, with its hour, and what waits on something happening, each with **change**; **Plan an event**, a form for all of an event's parts (its conditions chosen from the campaign's own clues, places, clocks and events); **Ask the council**, where the game master may say what to think about and Claude, as the story council, suggests two to five events from the campaign's own words (each condition must name what is in the campaign, or it is dropped; each says the passage it grows from, and is marked "From the campaign" when that passage is really there, "A new idea" when not), added only with **Add it** or **Change it, then add**; and **What has happened**, with what happened by itself, what was called off and why, **tell the players** for what they were not told, and **undo** (an event undone that is still due comes back to wait for the game master). Beside it: the world's news, with news of the game master's own; **Small happenings** (off unless ticked; when half a day or more passes, a roll on one of the campaign's random tables, rarely, sometimes or often; always small and local); and **The calendar**, to set the start, or the world's own year, era, months and weekdays, over the council's. The events the game master writes or changes are kept in the page (collection `eventdefs`), over the council's; a changed one can go back to the council's, a removed one can be brought back.
+
+**The players** see the world's date in a corner of their screen, and a **News** tab with all they have been told, newest first; news that comes while they are elsewhere shows a word on the screen and a count on the tab. Their copy and their phones get the date in words and the news, never the events, their causes or what is planned.
+
+**Where it is kept**: collections `clock` (`now`: minutes since the start, and the date in words; `opts`: who must approve, paused, small happenings; `cal`: the game master's calendar), `events` (each event's state: pending, done, later, dismissed, off, with what it moved and told), `eventdefs` (the game master's own and changed events), `news`. The copilot is told the date and what has happened lately; the consistency check finds an event that waits on, or is called off by, a place, clue, clock or event that is not there, a `when` that cannot be read, an event set before the story begins, or events that wait on each other in a circle. `check` asks the same of `table.js` (section 12), and notes a campaign with sessions but no events.

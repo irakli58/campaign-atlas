@@ -19,6 +19,10 @@
   A.tables = obj => { A.tablesData = Object.assign(A.tablesData || {}, obj || {}); return A; };
   A.handouts = list => { A.handoutsData = (A.handoutsData || []).concat(list || []); return A; };
   A.rescues = list => { A.rescuesData = (A.rescuesData || []).concat(list || []); return A; };
+  // the world's time (atlas-worldtime.js; the user asked for a world clock, its events and news, 26 Oct 2026): the
+  // calendar ({ start, months, weekdays, era }) and the events that happen in the world whether or not the party acts
+  A.calendar = cal => { A.calendarData = Object.assign({}, A.calendarData || {}, cal || {}); return A; };
+  A.events = list => { A.eventsData = (A.eventsData || []).concat(list || []); return A; };
 
   /* ---- a map as the referee redrew it (the map editor, atlas-mapedit.js; the user asked, 21 Oct 2026, to get a place's
           map exactly as they want it). An edit replaces the place's floors (rooms, doors, stairs, markers, hand-placed
@@ -492,9 +496,9 @@
     // a window opened for the players has no way back to the referee's page; only the referee's own window, made into
     // theirs with "Make this window the players' screen", has one (and asks twice)
     const mine = !A.playersCopy && (() => { try { return sessionStorage.getItem(cfg.storageKey + "-players") === "1"; } catch (e) { return false; } })();
-    const TABS = [["table", "The table", "screen"], ["handouts", "Handouts", "handout"], ["board", "Our board", "board"], ["places", "Places", "map"], ["notes", "Our notes", "tonight"]];
+    const TABS = [["table", "The table", "screen"], ["handouts", "Handouts", "handout"], ["news", "News", "news"], ["board", "Our board", "board"], ["places", "Places", "map"], ["notes", "Our notes", "tonight"]];
     app.innerHTML = `<div class="ps" data-tab="table">
-      <div class="ps-stage" id="psStage"></div>
+      <div class="ps-stage" id="psStage"></div><div class="ps-date" hidden></div>
       <main class="ps-page" id="psPage" hidden></main>
       <nav class="ps-menu" aria-label="The players' window">${TABS.map(([k, l, ic]) => `<button type="button" class="ps-tab" data-ptab="${k}" aria-pressed="${k === "table"}">${icon(ic)}<span>${l}</span><b class="ps-badge" hidden></b></button>`).join("")}
         <span class="ps-sep" aria-hidden="true"></span>
@@ -561,6 +565,7 @@
     }
 
     /* the players' own pages */
+    const news = () => Object.values(st.get("news") || {}).filter(n => n && n.headline).sort((a, b) => (b.t || 0) - (a.t || 0));
     const given = () => { const g = st.get("given") || {}, all = allHandouts(); return Object.entries(g).map(([id, x]) => ({ t: x.t || 0, h: all.find(h => h.id === id) || x.h || null })).filter(x => x.h).sort((a, b) => b.t - a.t); };
     function known() {
       const out = [];
@@ -595,6 +600,11 @@
               ${floors.map(([F, fi]) => `<figure class="ps-pmap">${fogSVG(id, fi, fog[fi], true, fogD)}</figure>`).join("")}</section>`;
           }).join("") : `<p class="ps-empty">No places yet. They appear here as you learn of them.</p>`}`;
         }
+        case "news": {
+          // what the game master let happen in the world and told them (atlas-worldtime.js), newest first
+          const l = news();
+          return `<h2>News</h2><p class="ps-hint">What you hear of the world: word in the street, the papers, a message. The newest first.</p>${l.length ? l.map(n => `<article class="ps-news"><div class="ps-when">${esc(n.when || when(n.t))}${n.paper ? ` · ${esc(n.paper)}` : ""}</div><h3>${esc(n.headline || "")}</h3>${n.text ? paras(n.text) : ""}</article>`).join("") : `<p class="ps-empty">No news yet.</p>`}`;
+        }
         case "notes":
           return `<h2>Our notes</h2><p class="ps-hint">What the party knows and suspects: names, theories, things to check. The game master can read these, and may add to them.</p><form class="ps-add"><textarea maxlength="2000" rows="3" placeholder="A note, a theory, a name to remember"></textarea><button type="submit">Add</button></form><div class="ps-entries"></div>`;
       }
@@ -625,14 +635,20 @@
       if (k === "table") { fit(); requestAnimationFrame(fit); if (world) world.wake && world.wake(); }
       else { page.scrollTop = 0; renderPage(); }
       if (k === "handouts") { pref.set("seen", String(Date.now())); badges(); }
+      if (k === "news") { pref.set("seennews", String(Date.now())); badges(); }
       app.querySelector(".ps-toast").hidden = true;
     }
     // a count on Handouts of what has come since they last looked
     function badges() {
       const seen = +pref.get("seen") || 0, n = given().filter(x => x.t > seen).length, b = root.querySelector('[data-ptab="handouts"] .ps-badge');
       b.hidden = !n || tab === "handouts"; b.textContent = n;
+      const sn = +pref.get("seennews") || 0, nn = news().filter(x => (x.t || 0) > sn).length, bn = root.querySelector('[data-ptab="news"] .ps-badge');
+      bn.hidden = !nn || tab === "news"; bn.textContent = nn;
     }
-    const toast = (t, look) => { const el = app.querySelector(".ps-toast"); el.querySelector("span").textContent = t; el.querySelector("button").hidden = !look; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 6000); };
+    // the world's date, as the game master's clock last wrote it
+    function dateLine() { const d = st.get("clock", "now") || {}, el = root.querySelector(".ps-date"); el.hidden = !d.date; el.innerHTML = d.date ? `<b>${esc(d.date)}</b>${d.time ? `<span>${esc(d.time)}</span>` : ""}` : ""; }
+    // (look: true for a Look button to The table, or the tab it goes to)
+    const toast = (t, look) => { const el = app.querySelector(".ps-toast"), lb = el.querySelector("button"); el.querySelector("span").textContent = t; lb.hidden = !look; lb.dataset.ptab = typeof look === "string" ? look : "table"; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 6000); };
 
     st.watch("screen", d => {
       const n = d.now || { kind: "title" }, changed = (n.t || 0) !== (now.t || 0);
@@ -645,6 +661,14 @@
     st.watch("safety", () => { if (now.kind === "safety") render(); });
     for (const c of ["clues", "status"]) st.watch(c, () => { if (now.kind === "board") render(); if (tab === "board" || tab === "places") renderPage(); });
     st.watch("given", () => { badges(); if (tab === "handouts") renderPage(); });
+    // news of the world, with a word on the screen when it comes (not for what was there before the window opened)
+    let newsSeen = null;
+    st.watch("news", () => {
+      const l = news(), top = l[0], firstLoad = newsSeen == null; newsSeen = newsSeen || new Set();
+      if (!firstLoad && top && !newsSeen.has(top.t) && Date.now() - (top.t || 0) < 10 * 60 * 1000 && tab !== "news") toast(`News: ${top.headline}`, "news");
+      l.forEach(n => newsSeen.add(n.t)); badges(); if (tab === "news") renderPage();
+    });
+    st.watch("clock", () => dateLine());
     st.watch("mapedits", d => { if (applyMapEdits(d)) { if (now.kind === "map") render(); if (tab === "places") renderPage(); } });
     // the furnishings' pictures come as they are drawn (atlas-models.js), and models the game master brought in
     document.addEventListener("atlas-models", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
@@ -706,6 +730,8 @@
     stuck: `<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5"/><path d="M6 6l3.5 3.5M18 6l-3.5 3.5M6 18l3.5-3.5M18 18l-3.5-3.5"/>`,
     person: `<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.6-4 3.3-6 7-6s6.4 2 7 6"/>`,
     handout: `<rect x="3.5" y="5.5" width="17" height="13" rx="1"/><path d="M3.5 6.5 12 13l8.5-6.5"/>`,
+    time: `<rect x="4" y="5.5" width="16" height="14.5" rx="1.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4M8 13.5h2M11 13.5h2M14 13.5h2M8 16.5h2M11 16.5h2"/>`,
+    news: `<path d="M4 5.5h13v13.5H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-4 0M7 9h7M7 12.5h7M7 16h4.5"/>`,
     map: `<path d="M3.5 6.5 9 4.5l6 2 5.5-2v13L15 19.5l-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>`,
     tables: `<path d="M9 6.5h11M9 12h11M9 17.5h11"/><rect x="3.5" y="4.5" width="3.5" height="3.5" rx=".6"/><rect x="3.5" y="10.2" width="3.5" height="3.5" rx=".6"/><rect x="3.5" y="15.8" width="3.5" height="3.5" rx=".6"/>`,
     play: `<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 3v6.5M4 7.5l8 2 8-2M12 9.5 7 17h10z"/>`,

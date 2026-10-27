@@ -88,7 +88,7 @@ function load(dir) {
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-city.js"), "utf8"))(A);   // gives campaigns ATLAS.city(); loading it needs no browser
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-music.js"), "utf8"))(A);  // the lists of moods and flavours, for the checker
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-world.js"), "utf8"))(A);  // gives campaigns ATLAS.world()
-  new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-table.js"), "utf8"))(A);  // gives campaigns ATLAS.clocks(), sessions(), pcs(), tables(), handouts(), rescues()
+  new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-table.js"), "utf8"))(A);  // gives campaigns ATLAS.clocks(), sessions(), pcs(), tables(), handouts(), rescues(), calendar(), events()
   for (const f of MODEL_FILES) new Function("ATLAS", fs.readFileSync(path.join(ENGINE, f), "utf8"))(A);  // the model library, for the checker
   for (const f of sources(dir)) { try { new Function("ATLAS", fs.readFileSync(f, "utf8"))(A); } catch (e) { die(`${path.relative(dir, f)}: ${e.message}`); } }
   Object.defineProperty(A, "__dir", { value: dir });
@@ -536,6 +536,33 @@ function checkTable(A) {
   }
   if (!ses.length) N(`no session plan: split the campaign into evenings of play, each with a strong start and a cliffhanger (ATLAS.sessions in table.js)`);
   else { const left = big.filter(id => A.maps[id] && !inSession.has(id)); if (left.length) N(`tier 1 and 2 places in no session: ${left.join(", ")}`); }
+  // the world's time (atlas-worldtime.js): the calendar, and events that come due on a date or when something happens
+  const cal = A.calendarData, evs = A.eventsData || [], evIds = new Set(), DATE = /^\d{1,4}-\d{1,2}-\d{1,2}(?:[ T]\d{1,2}(?::\d{2})?)?$/;
+  const realStart = cal && typeof cal.start === "string" && DATE.test(cal.start.trim());
+  if (cal) {
+    if (cal.start != null && !realStart && typeof cal.start !== "object") P(`the calendar's start is "${cal.start}": a date like "1888-10-31 21:00", or { day, hour, year } of the world's own calendar`);
+    if (cal.months && !(Array.isArray(cal.months) && cal.months.every(m => typeof m === "string" || (Array.isArray(m) && has(m[0]) && +m[1] > 0)))) P(`the calendar's months are a list of names, or of [name, days]`);
+  }
+  for (const e of evs) {
+    const nm = e.title || e.id || "an event";
+    if (!e.id) P(`the event "${nm}" has no id`); else if (evIds.has(e.id)) P(`two events have the id "${e.id}"`); else evIds.add(e.id);
+    if (!has(e.title)) P(`the event ${e.id || ""} has no title`);
+    if (e.importance && !["background", "notable", "minor", "major", "critical"].includes(e.importance)) P(`the event "${nm}" is of importance "${e.importance}": background, notable, major or critical`);
+    const w = e.when, after = [].concat(e.after || []);
+    if (w != null && !(typeof w === "number" || (typeof w === "object" && +w.day > 0) || (typeof w === "string" && (/^day\s*\d+(\s+\d{1,2}(:\d{2})?)?$/i.test(w.trim()) || (realStart && DATE.test(w.trim())))))) P(`when "${nm}" happens cannot be read ("${w}"): "day 3 06:00", or a date like the calendar's start`);
+    if (w == null && !after.length) P(`the event "${nm}" has neither a when nor an after, so it never comes due`);
+    if (!has(e.what)) N(`the event "${nm}" does not say what happens (what)`);
+    if (e.place && !isPlace(e.place)) P(`the event "${nm}" happens at "${e.place}", which is not a place`);
+    if (e.tick && !ids.has([].concat(e.tick)[0])) P(`the event "${nm}" ticks the clock "${[].concat(e.tick)[0]}", which does not exist`);
+    for (const c of after.concat([].concat(e.unless || []))) {
+      if (c.clue) { const [pl, cid] = String(c.clue).split("/"); if (!A.maps[pl] || !(A.get(pl, 99).clues || {})[cid]) P(`the event "${nm}" waits on the clue "${c.clue}", which is not in the campaign (place/clue id)`); }
+      if (c.visit && !isPlace(c.visit)) P(`the event "${nm}" waits on the party at "${c.visit}", which is not a place`);
+      if (c.known && !isPlace(c.known)) P(`the event "${nm}" waits on the party knowing of "${c.known}", which is not a place`);
+      if (c.clock && !ids.has([].concat(c.clock)[0])) P(`the event "${nm}" waits on the clock "${[].concat(c.clock)[0]}", which does not exist`);
+    }
+  }
+  for (const e of evs) for (const c of [].concat(e.after || [], e.unless || [])) if (c.event && !evIds.has(c.event)) P(`the event "${e.title || e.id}" waits on the event "${c.event}", which does not exist`);
+  if (!evs.length && ses.length) N(`no world events: what happens in the world whether or not the party acts, on a date or when something happens (ATLAS.calendar and ATLAS.events in table.js)`);
   // the players' characters
   const pcs = A.pcsData || {};
   for (const [k, pc] of Object.entries(pcs)) {
@@ -574,7 +601,7 @@ function checkTable(A) {
   }
   stats += Object.values(A.castData || {}).filter(c => c.stats).length;
   if (!stats && has(A.config.system)) N(`no stat blocks: give the dangers and anyone who may fight their numbers in ${A.config.system}'s rules (stats:)`);
-  const line = `the table: ${clocks.length} clock${clocks.length === 1 ? "" : "s"} · ${ses.length} session${ses.length === 1 ? "" : "s"} · ${Object.keys(pcs).length} character${Object.keys(pcs).length === 1 ? "" : "s"} · ${hs.length} handout${hs.length === 1 ? "" : "s"} · ${stats} stat block${stats === 1 ? "" : "s"}`;
+  const line = `the table: ${clocks.length} clock${clocks.length === 1 ? "" : "s"} · ${ses.length} session${ses.length === 1 ? "" : "s"} · ${Object.keys(pcs).length} character${Object.keys(pcs).length === 1 ? "" : "s"} · ${hs.length} handout${hs.length === 1 ? "" : "s"} · ${stats} stat block${stats === 1 ? "" : "s"}${evs.length ? ` · ${evs.length} world event${evs.length === 1 ? "" : "s"}` : ""}`;
   return { line, out, problems, notes };
 }
 function cmdCheck(dir, want) {
@@ -715,7 +742,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-art.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-copilot.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-consistency.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-art.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-copilot.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-consistency.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-worldtime.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw, link, style: css + "\n" + over, world, drawingJS };

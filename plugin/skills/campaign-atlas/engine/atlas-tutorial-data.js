@@ -103,6 +103,18 @@
         { say: "Tonight: the session's plan, your notes, and a read-aloud Previously on.", sel: "[data-t='tab'][data-tab='tonight']", act: "click", try: "Click Tonight.", wait: 500 },
         { say: "Clocks: what each villain is doing while the party investigates. Tick them as the world moves.", sel: "[data-t='tab'][data-tab='clocks']", act: "click", try: "Click Clocks and stuck.", wait: 500 },
         { say: "Handouts, drawn as the letters and newspapers they are, go to the players' screen with one click.", sel: "[data-t='tab'][data-tab='screen']", act: "click", auto: true }
+      ] },
+      { id: "time", title: "The world's time", summary: "The date in the story, events that wait for your yes, and news for the players.", features: ["worldtime", "events", "news"], needs: has("[data-t='tab'][data-tab='time']"), steps: [
+        { say: "The world moves while the party investigates.", sel: "#v-table", act: "click", auto: true, wait: 400 },
+        { say: "The world's time: the date in the story, what is coming, and what waits for you.", sel: "[data-t='tab'][data-tab='time']", act: "click", try: "Click The world's time.", wait: 500 },
+        { say: "Move time on as the story does: a conversation, a night's rest, a day's journey.", sel: "#tvBody .tw-adv", act: "look" },
+        { say: "Events come due at their hour, or when what they wait on happens: a clue found, a place reached, a clock filled. Small ones happen by themselves; anything that could change the campaign waits for you. An event whose reason is gone is called off.", sel: "#tvBody .tw-due, #tvBody .tw-ev", act: "look" },
+        { say: "Plan an event of your own: when, what it waits on, what calls it off, its hidden cause, and what the players hear.", sel: "#tvBody [data-tw='new']", act: "click", try: "Click Plan an event.", wait: 500 },
+        { say: "Cancel for now.", sel: "#tvBody [data-tw='cancel']", act: "click", auto: true, wait: 300 },
+        { say: "Or ask the council: it suggests what the world does next, from the campaign's own words. Nothing is added until you say so.", sel: "#tvBody .tw-council", act: "look" },
+        { say: "What you let the players hear goes to their screen as news, with a word on it that it came. Send news of your own here too.", sel: "#tvBody .tw-own", act: "look" },
+        { say: "Time is in the quick tools as well, with a count of what waits for you.", sel: "#tDock [data-dock='time']", act: "click", try: "Click Time.", wait: 500 },
+        { say: "Close it from the toolbar.", sel: "#tDock [data-dock='time']", act: "click", auto: true }
       ] }
     ] },
     { id: "story", title: "The story", lessons: [
@@ -132,6 +144,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    worldtime: ["The world's time", "clock calendar date day hour time pause"], events: ["World events", "event plan happens approve due notification council suggest called off"], news: ["News for the players", "news told players notification"],
     investigation: ["The investigation", "clues connections"], clues: ["Clues", "clue evidence"], knowledge: ["Who knows what", "knowledge"], autoconnect: ["Auto-Connect", "connect suggest"],
     consistency: ["Consistency", "contradiction check fits"], bible: ["The story bible", "story council tolkien"], music: ["Music", "music theme sound"],
     tablehome: ["Start here", "game night overview tools"], combat: ["Combat and dice", "initiative wounds sanity combat"], make: ["Make it up", "random tables person place"], board: ["The board", "corkboard string conspiracy"],
@@ -141,13 +154,13 @@
   // map's buttons. dev/tutorial-coverage.js finds every one of these in the engine; one with no feature here, or a feature
   // no lesson teaches, fails it: a new tool is not finished until it has its lesson.
   const COVERS = {
-    tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency" },
-    dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", screen: "players-screen" },
+    tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime" },
+    dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
     view: { gaz: "gazetteer", table: "views", world: "worldmap", story: "bible", music: "music" },
     tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues" },
     world: { edit: "worldedit", addloc: "worldedit", addroute: "worldedit", export: "worldedit", copy: "worldedit", editloc: "worldedit", editroute: "worldedit", delloc: "worldedit", delroute: "worldedit", resetloc: "worldedit", resetroute: "worldedit", plan: "worldedit", setoff: "worldedit", arrive: "worldedit", cancel: "worldedit", partyhere: "worldedit", enter: "worldmap", make: "worldmap", drawn: "maplook", close: "worldmap", dlgclose: "worldmap" }
   };
   // where in the page each feature lives, for the little ? beside it (contextual help): [selector, feature]
-  const ANCHORS = [[".lmap-sec .lm-bar", "mapviews"], ["#meDlg .me-tools", "mapeditor"], [".wm-bar", "worldmap"], ["#tablev .tv-acts", "players-screen"], [".cp-host", "copilot"], [".cc-top", "consistency"]];
+  const ANCHORS = [[".lmap-sec .lm-bar", "mapviews"], ["#meDlg .me-tools", "mapeditor"], [".wm-bar", "worldmap"], ["#tablev .tv-acts", "players-screen"], [".cp-host", "copilot"], [".cc-top", "consistency"], ["#tvBody .tw-now", "worldtime"]];
   A.tutorialData = { version: 1, chapters, FEATURES, ANCHORS, COVERS };
 })(window.ATLAS || (window.ATLAS = {}));

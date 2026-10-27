@@ -95,7 +95,7 @@ Ties among the writers are settled in this order: the Core; then what plays best
 - **The endings.** At least three: one earned, one costly, one failed. Say what each one takes.
 - **Hooks and handouts.** How the player characters are drawn in, and the letters, clippings, photographs and maps the players will hold, each written out in full, as the players will read it, in the voice of whoever wrote it.
 - **The players' characters, woven in.** When the game master gives their players' characters (`story/pcs.md`), each one gets a reason the story is theirs (a hook tied to the cast or the crime), a secret the story can bring out, and a clue only they would recognise, placed in one of the places. Christie finds the secret and the tie; Doyle places the clue. The game master's own words for who the character is stay as they are.
-- **For the table** (`references/table.md`): the antagonists' clocks as steps the referee ticks, each a thing that changes in the world; the campaign split into sessions, each with a strong start and a cliffhanger; a rescue for every clue the story needs (a way it reaches the party if they miss it); the roll that finds each clue and the numbers of whatever may fight, in the game's own rules; a random table or two for each important place; and how hard each place hits, with what it holds, honestly named. These go into `table.js` and the place files when the places are written.
+- **For the table** (`references/table.md`): the antagonists' clocks as steps the referee ticks, each a thing that changes in the world; the campaign split into sessions, each with a strong start and a cliffhanger; the calendar the story keeps and the events that happen in the world whether or not the party acts, some on a date and some in answer to what the party does, each something the players can notice or hear of; a rescue for every clue the story needs (a way it reaches the party if they miss it); the roll that finds each clue and the numbers of whatever may fight, in the game's own rules; a random table or two for each important place; and how hard each place hits, with what it holds, honestly named. These go into `table.js` and the place files when the places are written.
 
 ## 7. The playability audit
 
@@ -154,7 +154,7 @@ A long bible is written in parts, one file per chapter, each finished before the
 | `story/judgement.md` | Tolkien's judgement: his verdict, grades and reasons, chapter by chapter, and his judgement again after the mending. |
 | `canon.md` | The Core and the facts sheet every map is checked against, brought up to date from the bible. |
 | `campaign.js` | `ATLAS.cast({...})` for the principals; the places registered with their tiers. |
-| `table.js` | The clocks, the session plan, the players' characters, ways back, random tables and handouts that belong to no clue (`references/table.md`). |
+| `table.js` | The clocks, the session plan, the calendar and the world's events, the players' characters, ways back, random tables and handouts that belong to no clue (`references/table.md`). |
 | `story/pcs.md` | The players' characters as the game master gave them, when they did. Never edited. |
 
 `build` puts the bible on the page's Story view, and with it, under "How it was made", the council's debate, Tolkien's judgement and the story as given.

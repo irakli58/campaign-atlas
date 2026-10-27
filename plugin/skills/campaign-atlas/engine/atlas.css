@@ -1826,3 +1826,64 @@ button.ho-b:hover { color: var(--ink); }
 .wm-hud text { font-family: var(--f-mono); letter-spacing: .12em; }
 .wm-deco, .wm-cart { pointer-events: none; }
 .wm-look { font: inherit; font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .04em; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 8px; background: transparent; color: inherit; }
+/* the world's time (atlas-worldtime.js): the date, the events waiting for the game master, what is coming, the news */
+.tw-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 2px 0 10px; }
+.tw-date { font-family: var(--f-display); font-size: 24px; line-height: 1.15; }
+.tw-time { font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; color: var(--muted); }
+.tw-adv { margin-bottom: 6px; }
+.tw-ev { border-top: 1px solid var(--rule); padding: 8px 0; }
+.tw-ev:first-of-type { border-top: 0; }
+.tw-ev p { margin: 4px 0 6px; }
+.tw-due { border: 1px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.tw-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.tw-imp { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--rule); border-radius: 999px; padding: 0 8px; }
+.tw-major { border-color: #c9a227; color: #a07c10; }
+.tw-critical { border-color: #b0161b; background: #b0161b; color: #fff; }
+.tw-sub { font-family: var(--f-mono); font-weight: 500; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+.tw-own { display: grid; gap: 6px; margin-top: 10px; }
+.tw-own .t-btn { justify-self: start; }
+.tw-hist { margin: 0; padding-left: 20px; }
+.tw-hist li { margin: 0 0 4px; }
+.tw-n { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; border-radius: 8px; background: #b0161b; color: #fff; font: 600 10px/16px var(--f-mono); text-align: center; padding: 0 4px; }
+.tw-n[hidden] { display: none; }
+.tw-background { color: var(--muted); border-style: dashed; }
+.tw-notable { border-color: var(--accent); color: var(--accent); }
+.tw-due.tw-r3 { border-width: 2px; border-color: #b0161b; }
+.tw-f { font-size: 14.5px; margin: 2px 0; }
+.tw-f > .kn { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
+.tw-paused { margin: 0 0 8px; padding: 6px 10px; border-radius: 6px; background: var(--accent-soft); font-size: 14px; }
+.tw-custom { align-items: center; margin-top: 4px; }
+.tw-custom .kn { display: inline-flex; gap: 6px; align-items: center; }
+.tw-sel, .tw-custom .t-in, .tw-ask .t-in { width: auto; margin: 0; }
+.tw-ask { display: inline-flex; gap: 6px; align-items: center; }
+.tw-hh { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; justify-content: space-between; }
+.tw-tag { font-family: var(--f-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tw-edit { border-color: var(--accent); }
+.tw-l { display: block; margin: 0 0 8px; }
+.tw-l > span { display: block; font-size: 13.5px; color: var(--muted); margin-bottom: 3px; }
+.tw-l > small { display: block; margin-top: -2px; font-size: 12.5px; }
+.tw-l .t-in.t-n, .tw-tm { width: auto; display: inline-block; }
+.tw-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 12px; }
+@media (max-width: 560px) { .tw-2 { grid-template-columns: minmax(0, 1fr); } }
+.tw-conds { margin: 0 0 10px; padding: 8px 10px; border: 1px dashed var(--rule); border-radius: 6px; }
+.tw-conds > .kn { display: block; font-size: 13.5px; margin-bottom: 4px; }
+.tw-cond { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.tw-cond select { flex: 1; min-width: 0; margin: 0; }
+.tw-cond .t-in.t-n { margin: 0; }
+.tw-ground { font-family: var(--f-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tw-ground.ok { color: #3f8a4f; }
+.tw-basis { font-style: italic; }
+.tw-hist .tw-r0 { opacity: .7; }
+.tw-hist .tw-off { text-decoration: none; opacity: .75; }
+.t-err { color: #b0161b; font-size: 14px; margin: 4px 0 8px; }
+.t-danger { border-color: #b0161b; color: #b0161b; }
+#tDock [data-dock="time"] { position: relative; }
+/* the players' window: the date in the corner, and the news */
+.ps-date { position: absolute; top: 14px; left: 18px; z-index: 7; display: flex; flex-direction: column; gap: 1px; padding: 7px 12px; border-radius: 8px; background: rgba(15, 16, 18, .72); border: 1px solid #2c2f31; color: #e8e4da; pointer-events: none; }
+.ps-date b { font-family: var(--f-display); font-weight: 400; font-size: 18px; }
+.ps-date span { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; color: #9a948a; }
+.ps-date[hidden], .ps:not([data-tab="table"]) .ps-date { display: none; }
+.ps-news { border-top: 1px solid #2c2f31; padding: 18px 0 8px; }
+.ps-news .ps-when { text-align: left; margin: 0 0 4px; }
+.ps-news h3 { font-family: var(--f-display); font-weight: 400; font-size: 30px; line-height: 1.15; margin: 0 0 8px; color: #fff; }
+.ps-news p { font-size: 18px; line-height: 1.55; color: #d6d0c4; margin: 0 0 10px; }
