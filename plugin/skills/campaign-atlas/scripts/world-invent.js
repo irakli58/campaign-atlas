@@ -104,10 +104,30 @@ function makeRivers(o, L) {
   const T = Math.max(40, N * .0065), river = n => H[n] > 128 && acc[n] >= T, fed = new Uint8Array(N);
   for (let n = 0; n < N; n++) if (river(n) && parent[n] >= 0) fed[parent[n]] = 1;
   const done = new Uint8Array(N), out = [], mask = new Uint8Array(N);
-  const heads = []; for (let n = 0; n < N; n++) if (river(n) && !fed[n]) heads.push(n);
+  const heads0 = []; for (let n = 0; n < N; n++) if (river(n) && !fed[n]) heads0.push(n);
+  // every river rises in the mountains or the high hills, as rivers do (the user, 27 Oct 2026): from where enough water
+  // has gathered, its course is followed up its catchment, cell by cell, toward the highest ground that drains into it,
+  // to where it springs; a river whose catchment holds no high ground at all is not drawn
+  const kids = new Int32Array(N).fill(-1), next = new Int32Array(N).fill(-1);
+  for (let n = 0; n < N; n++) { const p = parent[n]; if (p >= 0) { next[n] = kids[p]; kids[p] = n; } }
+  const maxUp = new Float32Array(N); for (let n = 0; n < N; n++) maxUp[n] = H[n];
+  for (let k = order.length - 1; k >= 0; k--) { const c = order[k], p = parent[c]; if (p >= 0 && maxUp[c] > maxUp[p]) maxUp[p] = maxUp[c]; }
+  const landH = []; for (let n = 0; n < N; n++) if (H[n] > 128) landH.push(H[n]); landH.sort((a, b) => a - b);
+  const SRC = Math.min(198, landH.length ? landH[Math.floor(landH.length * .92)] : 198), HILLS = Math.min(175, landH.length ? landH[Math.floor(landH.length * .8)] : 175);
+  const spring = h => {
+    const up = []; let n = h;
+    for (let g = 0; g < N && H[n] < SRC; g++) {
+      let best = -1; for (let c = kids[n]; c >= 0; c = next[c]) if (H[c] > 128 && (best < 0 || maxUp[c] > maxUp[best] || (maxUp[c] === maxUp[best] && acc[c] > acc[best]))) best = c;
+      if (best < 0) break; up.push(best); n = best;
+    }
+    return up.reverse();
+  };
+  const heads = heads0.filter(h => maxUp[h] >= HILLS);
   heads.sort((a, b) => acc[b] - acc[a]);
   for (const h of heads) {
-    const pts = []; let n = h, last = h;
+    // (the stretch above where it gathers, from its spring down; then on down to the sea as before)
+    const up = spring(h); for (const m of up) { mask[m] = 1; done[m] = 1; }
+    const pts = up.slice(); let n = h, last = h;
     for (let g = 0; g < N; g++) {
       pts.push(n); mask[n] = 1; last = n;
       if (done[n] && n !== h) break; done[n] = 1;

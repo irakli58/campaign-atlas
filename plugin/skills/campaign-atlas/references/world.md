@@ -26,6 +26,7 @@ node atlas.js world <dir> [--look painted|parchment|engraved|atlas|holo|stars] [
 1. The first run writes `world.js` with a location for each of the campaign's cities.
 2. Add the story's other places to `world.js` (below), with no `at:`.
 3. Run it again: the same seed keeps the same land.
+   - Its rivers run as water would, down to the sea, and every one rises in the mountains (or, where a land has none, its highest hills): the user asked for it on 27 Oct 2026, "like in the real world". A river with no high ground in its catchment is not drawn. A river the game master draws on the page (Edit map, + River) runs wherever they draw it.
    - Every location without `at:` is stood where its kind belongs: a port on the coast, a city by a river, a castle on the hills, a mine or a lair in the mountains, a moon beside its planet.
    - Locations already placed keep their spots.
    - While `world.js` has no routes of its own, it suggests roads, trails, passes and sea routes between neighbours.
