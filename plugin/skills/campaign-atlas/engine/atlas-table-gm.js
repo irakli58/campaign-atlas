@@ -449,7 +449,7 @@
     body.innerHTML = f();
     if (UI.tab === "board") bindBoard();
     if (plug && plug.bind) plug.bind(body);
-    fitPreviews(); requestAnimationFrame(fitPreviews);
+    fitPreviews(); requestAnimationFrame(fitPreviews); fogPrev3();
   }
   const visible = () => X && X.state.view === "table";
   const refresh = tabs => { if (visible() && (!tabs || tabs.includes(UI.tab))) renderTab(); };
@@ -560,7 +560,7 @@
   }
   function nowText(d) {
     switch (d.kind) {
-      case "map": return `the map of ${placeName(d.place)}${d.floor ? ", floor " + (+d.floor + 1) : ""}`;
+      case "map": return `the map of ${placeName(d.place)}${d.floor ? ", floor " + (+d.floor + 1) : ""}${d.view === "3d" ? ", in 3D" : ""}`;
       case "handout": { const h = T.allHandouts().find(x => x.id === d.id) || d.h || {}; return `the handout "${h.title || h.headline || "untitled"}"`; }
       case "person": return d.name || "a person";
       case "scene": return d.title ? `"${d.title}"` : "words to read";
@@ -620,13 +620,15 @@
       ${doc.off ? `<p class="t-legend">The fog is off on this map: the players see all of it (but never what is hidden).</p>` : `<p class="t-legend"><span><i class="lg-h"></i>hidden from the players</span><span><i class="lg-s"></i>they can see it</span><span>${mode === "rooms" ? "Click a room to show it or hide it again" : mode === "reveal" ? "Drag over the map to clear the fog" : "Drag over the map to bring the fog back"} · ${plural(fog.length, "room")}${painted ? " and " + plural(painted, "square") : ""} shown on this floor</span></p>`}
       ${M && !doc.off && brush ? `<div class="t-row t-fogtools" role="group" aria-label="How to clear the fog"><button type="button" class="t-mini" data-t="fogmode" data-m="rooms" aria-pressed="${mode === "rooms"}">Room by room</button><button type="button" class="t-mini" data-t="fogmode" data-m="reveal" aria-pressed="${mode === "reveal"}">Brush the fog away</button><button type="button" class="t-mini" data-t="fogmode" data-m="cover" aria-pressed="${mode === "cover"}">Paint the fog back</button><label class="t-fogsz">Brush <select data-t="fogbrush">${[[1, "1 square"], [2, "2 squares"], [3, "3 squares"], [5, "5 squares"], [8, "8 squares"]].map(([v, l]) => `<option value="${v}"${(UI.fogBrush || 3) === v ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>` : ""}
       <div class="t-row">${doc.off ? "" : `<button type="button" class="t-mini" data-t="fogall">Show every room</button><button type="button" class="t-mini" data-t="fognone">Hide them all</button>`}<button type="button" class="t-mini" data-t="fogreset" title="Every floor of this map back under fog, as before the party came">Start exploring again</button><label class="t-fogck"><input type="checkbox" data-t="fogoff"${doc.off ? "" : " checked"}> Fog on this map</label><label class="t-fogck"><input type="checkbox" data-t="fogprev"${UI.fogPrev ? " checked" : ""}> What the players see</label></div>
-      <div class="t-fog${mode !== "rooms" ? " t-fogpaint" : ""}" data-fogpaint="${mode !== "rooms" ? mode : ""}">${M ? T.fogSVG(id, UI.fogFloor, fog, !!UI.fogPrev, doc, { hits: mode === "rooms" }) : `<p class="kn">No mapped places yet.</p>`}</div>`;
+      ${M && A.room3d ? `<div class="t-row t-fogview" role="group" aria-label="How their screen shows the map"><span class="t-small">Their screen shows it</span><button type="button" class="t-mini" data-t="fogview" data-v="2d" aria-pressed="${fogView() !== "3d"}">Flat</button><button type="button" class="t-mini" data-t="fogview" data-v="3d" aria-pressed="${fogView() === "3d"}" title="In 3D, under the same fog: what they have not seen is not there at all">In 3D</button></div>` : ""}
+      ${M && UI.fogPrev && fogView() === "3d" && A.room3d ? `<div class="t-fog3d"></div><p class="t-small">In 3D, as on their screen. To clear the fog, untick "What the players see" and use the flat map: the 3D follows it.</p>`
+        : `<div class="t-fog${mode !== "rooms" ? " t-fogpaint" : ""}" data-fogpaint="${mode !== "rooms" ? mode : ""}">${M ? T.fogSVG(id, UI.fogFloor, fog, !!UI.fogPrev, doc, { hits: mode === "rooms" }) : `<p class="kn">No mapped places yet.</p>`}</div>`}`;
   }
   function openFog(id) {
     if (!id || !A.maps[id]) return;
     UI.fogPlace = id; const M = A.get(id), first = M.floors.findIndex(F => !A.isGmFloor(F)); UI.fogFloor = Math.max(0, first);
     const fl = Object.values(S.get("fly") || {}).find(f => f.id === id) || (UI.fly && UI.fly.id === id ? UI.fly : null);
-    show({ kind: "map", place: id, floor: UI.fogFloor, fly: fl || null });
+    show({ kind: "map", place: id, floor: UI.fogFloor, fly: fl || null, view: fogView() });
     let dlg = document.getElementById("tFogDlg");
     if (!dlg) { dlg = document.createElement("dialog"); dlg.id = "tFogDlg"; dlg.className = "t-dlg t-fogdlg"; document.body.appendChild(dlg); dlg.addEventListener("click", e => { if (e.target === dlg || e.target.closest("[data-x]")) dlg.close(); }); }
     fogDlgPaint(dlg);
@@ -637,6 +639,20 @@
     const sc = dlg.querySelector(".t-fog") ? dlg.querySelector(".t-fog").scrollTop : 0;
     dlg.innerHTML = `<div class="t-dlgbar">${T.icon("screen")}<b>On the players' screen: ${esc(placeName(UI.fogPlace))}</b><span class="t-sp"></span><span class="t-scrstat${screenOpen() ? " on" : ""}">${esc(screenStatus())}</span>${screenOpen() ? "" : `<button type="button" class="t-mini" data-t="openscreen">Open it</button>`}<button type="button" class="t-mini" data-x="1">Done</button></div><div class="t-dlgbody t-light"><p class="t-small">The players see this place's map with every room dark. Click a room when they enter it, and it appears on their screen.</p>${fogEditor()}</div>`;
     const f = dlg.querySelector(".t-fog"); if (f) f.scrollTop = sc;
+    fogPrev3();
+  }
+  // how the players' screen shows a map: flat, or in 3D (the user asked for the fog in 3D, 27 Oct 2026); a campaign
+  // whose rooms are in 3D starts in 3D
+  const fogView = () => UI.fogView || (A.config.maps === "3d" ? "3d" : "2d");
+  // "What the players see", in 3D: one view, moved into whichever fog panel is drawn, shown again as the fog changes
+  let prev3 = null;
+  function fogPrev3() {
+    const ph = document.querySelector("#tFogDlg[open] .t-fog3d") || document.querySelector("#tvBody .t-fog3d");
+    if (!ph) { if (prev3) { prev3.dispose(); prev3 = null; } return; }
+    if (!prev3) { const h = document.createElement("div"); h.className = "t-fog3dh"; prev3 = T.fog3d(h); }
+    if (prev3.host.parentNode !== ph) ph.appendChild(prev3.host);
+    const doc = S.get("fog", UI.fogPlace) || {};
+    prev3.show(UI.fogPlace, UI.fogFloor, (doc.f || {})[UI.fogFloor] || [], doc);
   }
   function screenHTML() {
     const d = screenNow(), hs = T.allHandouts(), open = screenOpen();
@@ -896,7 +912,8 @@
       case "openscreen": openScreen(); break;
       case "beplayers": try { sessionStorage.setItem(cfg().storageKey + "-players", "1"); } catch (_) {} location.hash = "players"; location.reload(); break;
       case "screen": show({ kind: d.kind }); refresh(["screen"]); break;
-      case "showmap": { const id = d.id || UI.fogPlace; if (!id || !A.maps[id]) return; UI.fogPlace = id; const fl = Object.values(S.get("fly") || {}).find(f => f.id === id) || (UI.fly && UI.fly.id === id ? UI.fly : null); show({ kind: "map", place: id, floor: UI.fogFloor || 0, fly: fl || null }); refresh(["screen"]); fogDlgPaint(); break; }
+      case "showmap": { const id = d.id || UI.fogPlace; if (!id || !A.maps[id]) return; UI.fogPlace = id; const fl = Object.values(S.get("fly") || {}).find(f => f.id === id) || (UI.fly && UI.fly.id === id ? UI.fly : null); show({ kind: "map", place: id, floor: UI.fogFloor || 0, fly: fl || null, view: fogView() }); refresh(["screen"]); fogDlgPaint(); break; }
+      case "fogview": { UI.fogView = b.dataset.v; const cur = screenNow(); if (cur.kind === "map" && cur.place === UI.fogPlace) show(Object.assign({}, cur, { view: UI.fogView })); renderTab(); fogDlgPaint(); break; }
       case "fogopen": dockClose(); openFog(d.id); break;
       case "hplace": { const hs = T.allHandouts().filter(h => h.place === d.id); if (hs.length) openHandout(hs[0].id, d.id); break; }
       case "rtables": { const el = document.querySelector("#dossier .t-rt"); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); el.classList.remove("lm-hl"); void el.offsetWidth; el.classList.add("lm-hl"); } break; }
@@ -935,7 +952,7 @@
       case "personkeep": if (UI.person) { const id = uid("p"); S.set("fly", id, { id, kind: "person", person: UI.person, t: Date.now() }); note(`${UI.person.name} is kept.`); } break;
       case "fly": UI.fly = makeFly((boxOf(b).querySelector('[data-t="flykind"]') || {}).value); renderTab(); break;
       case "flykeep": if (UI.fly) S.set("fly", UI.fly.id, UI.fly); break;
-      case "flyshow": if (UI.fly) { flyPlace(UI.fly); UI.fogPlace = UI.fly.id; UI.fogFloor = 0; if (!S.get("fly", UI.fly.id)) S.set("fly", UI.fly.id, UI.fly); show({ kind: "map", place: UI.fly.id, floor: 0, fly: UI.fly }); } break;
+      case "flyshow": if (UI.fly) { flyPlace(UI.fly); UI.fogPlace = UI.fly.id; UI.fogFloor = 0; if (!S.get("fly", UI.fly.id)) S.set("fly", UI.fly.id, UI.fly); show({ kind: "map", place: UI.fly.id, floor: 0, fly: UI.fly, view: fogView() }); } break;
       case "flyopen": { const f = S.get("fly", d.id); if (f) { UI.fly = f; renderTab(); } break; }
       case "flydel": twice(b, () => { S.set("fly", d.id, null); if (UI.fly && UI.fly.id === d.id) UI.fly = null; }); break;
       case "bzoom": UI.boardZoom = Math.max(.35, Math.min(1.4, UI.boardZoom + +d.d * .15)); renderTab(); break;

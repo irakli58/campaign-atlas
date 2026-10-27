@@ -255,6 +255,43 @@
   }
   // has the players' map of this floor anything on it?
   const fogSeen = (doc, fi, F) => !!(doc && (((doc.f || {})[fi] || []).length || (fogCells(doc, fi, F) || []).includes("1")));
+  // the same fog for the 3D view (atlas-room3d.js): each square seen (1) or not (0), as the flat map draws it (the rooms
+  // opened, then squares fogged again, then squares brushed open), and the hidden rooms shown; key says when it changed
+  function fogVis(doc, fi, F, open) {
+    doc = doc || {}; const W = F.w, H = F.h, vis = new Uint8Array(W * H), show = fogShown(doc, fi, F, open), cs = fogCells(doc, fi, F);
+    if (doc.off) vis.fill(1);
+    else {
+      const set = new Set(open || []);
+      for (const r of F.R) { const [rid, x, y, w, h, , kind, o = {}] = r; if (!set.has(rid) || (o.h && !show.has(rid)) || A.isSolid(kind)) continue; for (let j = Math.max(0, y); j < Math.min(H, y + h); j++) for (let i = Math.max(0, x); i < Math.min(W, x + w); i++) vis[j * W + i] = 1; }
+      if (cs) for (let c = 0; c < W * H; c++) { if (cs[c] === "1") vis[c] = 1; else if (cs[c] === "0") vis[c] = 0; }
+    }
+    return { vis, show, key: (doc.off ? "off" : "") + (open || []).slice().sort().join(",") + "|" + (cs ? cs.join("") : "") + "|" + [...show].sort().join(",") };
+  }
+  // a floor of a place in 3D on the players' side, under its fog: mounted in host, shown again when the fog changes
+  function fog3d(host) {
+    let st = null, busy = null, want = null, gone = false, box = null, framed = "";
+    const go = async () => {
+      if (!st || !want || gone) return;
+      const { id, fi, open, doc } = want, M = A.get(id), F = M && M.floors[fi]; if (!F) return;
+      const R3 = A.room3d, fog = fogVis(doc, fi, F, open);
+      // what has been seen, as a box: the view opens on it (Fit comes back to it), not on the whole dark floor
+      let x0 = F.w, y0 = F.h, x1 = -1, y1 = -1; for (let j = 0; j < F.h; j++) for (let i = 0; i < F.w; i++) if (fog.vis[j * F.w + i]) { x0 = Math.min(x0, i); y0 = Math.min(y0, j); x1 = Math.max(x1, i); y1 = Math.max(y1, j); }
+      box = x1 >= 0 ? [x0, y0, x1 - x0 + 1, y1 - y0 + 1] : null;
+      await st.show(F, { gm: false, svg: () => fogSVG(id, fi, open, true, doc), light: R3.lightOf(A.keyOf ? A.keyOf(id) : id, F), key: "ps/" + id + "/" + fi, fog });
+      if (framed !== id + "/" + fi && box) { framed = id + "/" + fi; st.fit(); }
+    };
+    return {
+      show(id, fi, open, doc) {
+        want = { id, fi, open: open || [], doc: doc || {} };
+        if (st) { go(); return; }
+        if (busy || !A.room3d || !A.room3d.stage) return;
+        host.innerHTML = `<p class="m3-wait">Building the room…</p>`;
+        busy = A.room3d.stage(host, { panOnly: true, markers: false, focus: () => box }).then(s => { busy = null; if (gone) { s.dispose(); return; } const w = host.querySelector(".m3-wait"); if (w) w.remove(); st = s; go(); })
+          .catch(err => { busy = null; host.innerHTML = `<p class="m3-wait">The 3D view cannot start here (${esc(err.message || err)}).</p>`; });
+      },
+      host, dispose() { gone = true; if (st) st.dispose(); st = null; }
+    };
+  }
   function fogSVG(id, fi, open, forPlayers, doc, opt) {
     const M = A.get(id), F = M.floors[fi]; if (!F) return "";
     doc = doc || {}; opt = opt || {};
@@ -466,7 +503,7 @@
         ${mine ? `<button type="button" class="ps-btn ps-back" data-ps="back" title="Back to the game master's page (click twice)" aria-label="Back to the game master's page">⌂</button>` : ""}</nav>
       <div class="ps-toast" hidden><span></span><button type="button" data-ptab="table">Look</button></div></div>`;
     const root = app.querySelector(".ps"), stage = app.querySelector("#psStage"), page = app.querySelector("#psPage");
-    let now = { kind: "title" }, world = null, tab = "table", first = true;
+    let now = { kind: "title" }, world = null, room3 = null, tab = "table", first = true;
     const pref = { get(k) { try { return localStorage.getItem(cfg.storageKey + "-p-" + k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(cfg.storageKey + "-p-" + k, v); } catch (e) {} } };
     const fit = () => { const el = stage.firstElementChild; if (!el || !el.classList.contains("ps-fit")) return; const w = el.offsetWidth, h = el.offsetHeight, s = Math.min(stage.clientWidth * .94 / w, stage.clientHeight * .86 / h, 3); el.style.transform = `translate(-50%, -50%) scale(${s})`; };
     const when = t => new Date(t || 0).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -477,9 +514,15 @@
     /* the table: what the referee sends */
     function render() {
       if (world && now.kind !== "world") { world.dispose(); world = null; }
-      const k = now.kind;
+      const k = now.kind, in3d = k === "map" && now.view === "3d" && A.maps[now.place] && A.room3d;
+      if (room3 && !in3d) { room3.dispose(); room3 = null; }
       if (k === "map" && now.fly && !A.maps[now.place] && A.table.flyPlace) A.table.flyPlace(now.fly);
-      if (k === "map" && A.maps[now.place]) {
+      if (in3d) {
+        // the map in 3D, as the game master chose: the same fog, nothing of what is under it built
+        const fog = st.get("fog", now.place) || {}, fi = +now.floor || 0;
+        if (!room3 || !stage.contains(room3.host)) { if (room3) room3.dispose(); stage.innerHTML = `<div class="ps-map3d"></div>`; room3 = fog3d(stage.firstChild); }
+        room3.show(now.place, fi, (fog.f || {})[fi] || [], fog);
+      } else if (k === "map" && A.maps[now.place]) {
         const fog = st.get("fog", now.place) || {}, fi = +now.floor || 0;
         stage.innerHTML = `<div class="ps-map">${fogSVG(now.place, fi, (fog.f || {})[fi] || [], true, fog)}</div>`;
       } else if (k === "handout") {
@@ -666,5 +709,5 @@
   const icon = (k, cls) => `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${IC[k] || ""}</svg>`;
 
   // for the referee's tools (atlas-table-gm.js), the checker and the build
-  A.table = { fogCells, fogSeen, applyMapEdits, plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
+  A.table = { fogCells, fogSeen, fogVis, fog3d, applyMapEdits, plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
 })(ATLAS);

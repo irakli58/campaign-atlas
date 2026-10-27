@@ -1073,6 +1073,12 @@ details.ci[open] > summary.cn { margin-bottom: 4px; }
 .ps-fit { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); transform-origin: 50% 50%; width: max-content; max-width: none; }
 .ps-map { position: absolute; inset: 20px 20px 64px; display: grid; place-items: center; }
 .ps-map svg { width: 100%; height: 100%; display: block; }
+/* a map in 3D on the players' screen, and the game master's 3D look at it, under the same fog */
+.ps-map3d { position: absolute; inset: 0 0 56px; }
+.ps-map3d .r3, .t-fog3dh .r3 { position: absolute; inset: 0; height: auto; }
+.t-fog3d { position: relative; margin-top: 8px; height: min(60vh, 520px); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: #0b0c0d; }
+.t-fog3dh { position: absolute; inset: 0; }
+.t-fogview { align-items: center; margin-top: 6px; }
 .ps-world { position: absolute; inset: 0; }
 .ps-world .wm { height: 100%; }
 .ps-world .wm-stage { height: calc(100vh - 50px) !important; }

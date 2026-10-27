@@ -91,9 +91,10 @@
   /* ---- the walls: which stand full height and which are cut down so the camera sees in. Looking from the south-west,
           a room's north and east walls are behind it; the building's own outer walls behind it stand full, the rest
           are cut down, as a model house is cut away. */
-  R3.walls = (F, gm, mode) => {
+  // (show: the hidden rooms the fog of war has shown the players)
+  R3.walls = (F, gm, mode, show) => {
     const own = Array.from({ length: F.h }, () => Array(F.w).fill(null));
-    for (const r of F.R || []) { const [rid, x, y, w, h, , kind, op = {}] = r; if (op.h && !gm) continue; for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (j >= 0 && j < F.h && i >= 0 && i < F.w) own[j][i] = { rid, kind, o: op }; }
+    for (const r of F.R || []) { const [rid, x, y, w, h, , kind, op = {}] = r; if (op.h && !gm && !(show && show.has(rid))) continue; for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (j >= 0 && j < F.h && i >= 0 && i < F.w) own[j][i] = { rid, kind, o: op }; }
     const at = (i, j) => (i < 0 || j < 0 || i >= F.w || j >= F.h) ? null : own[j][i], indoor = c => !!c && A.isIndoorKind(c.kind);
     const door = new Map(); for (const d of F.D || []) { const [x, y, or, type = "d", len = 1] = d; if (type === "s" && !gm) continue; for (let k = 0; k < len; k++) door.set(or + (or === "h" ? (x + k) + ":" + y : x + ":" + (y + k)), type); }
     const edge = (i, j, or) => {
@@ -153,6 +154,13 @@
     sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0006; scene.add(hemi, sun, sun.target);
     const S = { F: null, gm: true, walls: pref("walls", "cut"), light: "normal", lightOver: "", grid: pref("grid", "1") === "1", keys: {}, props: [], items: [], lamps: [], disp: [], gen: 0, sel: null, hoverOn: false, last: null, grabY: 0, focus: null, key: "" };
     const own = x => { S.disp.push(x); return x; };   // geometry and materials this stage made, to free at the end
+    // the fog of war, on the players' side (show's fog, from the players' screen: the squares they have seen, and the
+    // hidden rooms shown to them; the user asked for it in 3D on 27 Oct 2026). What they have not seen is not built at
+    // all, rock, walls, models or stairs, and darkness lies over it; the game master's own view never has it.
+    const fogOn = () => !S.gm && !!S.fog;
+    const seen = (x, y) => { if (!fogOn()) return true; const F = S.F, i = Math.floor(x), j = Math.floor(y); return i >= 0 && j >= 0 && i < F.w && j < F.h && S.fog.vis[j * F.w + i] === 1; };
+    const hiddenRoom = q => !!(q[7] && q[7].h) && !S.gm && !(S.fog && S.fog.show && S.fog.show.has(q[0]));
+    const shownSet = () => (!S.gm && S.fog && S.fog.show && S.fog.show.size) ? S.fog.show : null;
     const ndc = new T.Vector2(), ray = new T.Raycaster(), plane = new T.Plane(new T.Vector3(0, 1, 0), 0);
 
     /* -- the view: slid and zoomed, never turned */
@@ -251,8 +259,8 @@
     const waterM = own(new T.MeshStandardMaterial({ color: 0x1d4b55, transparent: true, opacity: .55, roughness: .08, metalness: .25, depthWrite: false }));
     const lavaM = own(new T.MeshStandardMaterial({ color: 0xff5a14, emissive: 0xff4a10, emissiveIntensity: .9, roughness: .6 }));
     function buildCave(F, gm) {
-      const O = A.cave.outline(F, gm), m = O.m, W = F.w, D = F.h, mode = S.walls, tall = mode === "low" ? 1 : (+F.wh || 2.7) * .95, low = mode === "full" ? tall : mode === "low" ? 1 : .55;
-      const floorAt = (x, y) => { const i = Math.floor(x), j = Math.floor(y); if (i < 0 || j < 0 || i >= W || j >= D) return false; const c = j * W + i; return m.own[c] >= 0 && (gm || !m.hid[c]); };
+      const show = shownSet(), O = A.cave.outline(F, gm, show), m = O.m, W = F.w, D = F.h, mode = S.walls, tall = mode === "low" ? 1 : (+F.wh || 2.7) * .95, low = mode === "full" ? tall : mode === "low" ? 1 : .55;
+      const floorAt = (x, y) => { const i = Math.floor(x), j = Math.floor(y); if (i < 0 || j < 0 || i >= W || j >= D) return false; const c = j * W + i; return m.own[c] >= 0 && (gm || !m.hid[c] || !!(show && show.has(m.rooms[m.own[c]].id))); };
       const n2 = (x, y) => Math.sin(x * 1.7 + y * .9) * .5 + Math.sin(x * .6 - y * 1.3) * .5;
       // which side of a loop the rock is on, and how high it stands there
       const height = (x, y, nx, ny) => { const face = (-nx + ny) / Math.SQRT2, f = Math.max(0, Math.min(1, .5 - face * 1.1)); return Math.max(.35, low + (tall - low) * f + n2(x, y) * .22); };
@@ -264,15 +272,20 @@
       const hAt = new Map(), key = p => p[0].toFixed(3) + "," + p[1].toFixed(3);
       // the faces of the rock: for each loop, from the floor up, the middle bulging toward the floor
       loops.forEach(L => {
-        const n = L.length, ring0 = [], ring1 = [], ring2 = [];
+        const n = L.length, ring0 = [], ring1 = [], ring2 = [], nrm = [];
         for (let i = 0; i < n; i++) {
           const a = L[(i - 1 + n) % n], b = L[(i + 1) % n], tx = b[0] - a[0], ty = b[1] - a[1], tl = Math.hypot(tx, ty) || 1;
           let nx = ty / tl, ny = -tx / tl; if (floorAt(L[i][0] + nx * .3, L[i][1] + ny * .3)) { nx = -nx; ny = -ny; }   // (nx, ny) points into the rock
           const h = height(L[i][0], L[i][1], nx, ny), bul = .12 + .1 * n2(L[i][1], L[i][0]);
-          hAt.set(key(L[i]), h);
+          hAt.set(key(L[i]), h); nrm.push([nx, ny]);
           ring0.push(vtx(L[i][0], L[i][1], 0)); ring1.push(vtx(L[i][0] - nx * bul, L[i][1] - ny * bul, h * .5)); ring2.push(vtx(L[i][0], L[i][1], h));
         }
-        for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(ring0[i], ring0[j], ring1[j], ring0[i], ring1[j], ring1[i], ring1[i], ring1[j], ring2[j], ring1[i], ring2[j], ring2[i]); }
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          // (under the fog, the rock is raised only where the floor in front of it has been seen)
+          if (fogOn() && !seen((L[i][0] + L[j][0]) / 2 - (nrm[i][0] + nrm[j][0]) * .22, (L[i][1] + L[j][1]) / 2 - (nrm[i][1] + nrm[j][1]) * .22)) continue;
+          idx.push(ring0[i], ring0[j], ring1[j], ring0[i], ring1[j], ring1[i], ring1[i], ring1[j], ring2[j], ring1[i], ring2[j], ring2[i]);
+        }
       });
       const faces = new T.BufferGeometry(); faces.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); faces.setIndex(idx); faces.computeVertexNormals();
       const fm = new T.Mesh(own(faces), rockOf(F.geo)); fm.material.side = T.DoubleSide; fm.castShadow = fm.receiveShadow = true; G.walls.add(fm);
@@ -308,6 +321,12 @@
         }
         tris = out; if (!any || tris.length > 400000) break;
       }
+      // under the fog, the top of the rock only next to what has been seen (a square's width of it, as wide whatever lies beyond)
+      if (fogOn()) {
+        const V = S.fog.vis, near = new Uint8Array(W * D);
+        for (let j = 0; j < D; j++) for (let i = 0; i < W; i++) if (V[j * W + i]) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const X = i + dx, Y = j + dy; if (X >= 0 && Y >= 0 && X < W && Y < D) near[Y * W + X] = 1; }
+        tris = tris.filter(([a, b, c]) => { const i = Math.floor((P[a][0] + P[b][0] + P[c][0]) / 3), j = Math.floor((P[a][1] + P[b][1] + P[c][1]) / 3); return i >= 0 && j >= 0 && i < W && j < D && near[j * W + i] === 1; });
+      }
       const cpos = new Float32Array(P.length * 3); P.forEach(([x, y], i) => { const h = hAt.get(x.toFixed(3) + "," + y.toFixed(3)); cpos[i * 3] = x * sq; cpos[i * 3 + 1] = h != null ? h : hField(x, y); cpos[i * 3 + 2] = y * sq; });
       const cap = new T.BufferGeometry(); cap.setAttribute("position", new T.BufferAttribute(cpos, 3)); cap.setIndex(tris.flat()); cap.computeVertexNormals(); cap0.dispose();
       const cm = new T.Mesh(own(cap), rockOf(F.geo)); cm.material.side = T.DoubleSide; cm.receiveShadow = true; G.walls.add(cm);
@@ -325,19 +344,34 @@
         for (const L of Ls) { const sg = new T.ShapeGeometry(new T.Shape(toV(L))); sg.rotateX(Math.PI / 2); sg.scale(sq, 1, sq); sg.translate(0, k === "lava" ? .03 : .05, 0); const me = new T.Mesh(own(sg), mat); me.renderOrder = 2; G.walls.add(me); }
       }
       // high ground: the floor raised, wearing the same drawing, its sides of rock
-      for (const r of F.R || []) {
-        const [, x, y, w, h, , kind, o = {}] = r; if (!(o.el > 0) || (o.h && !gm) || A.isSolid(kind)) continue;
-        const e = +o.el, sideM = rockOf(F.geo), top = new T.PlaneGeometry(w * sq, h * sq), uv = top.attributes.uv;
+      const slab = (x, y, w, h, e) => {
+        const sideM = rockOf(F.geo), top = new T.PlaneGeometry(w * sq, h * sq), uv = top.attributes.uv;
         for (let i = 0; i < uv.count; i++) { const u = uv.getX(i), v = uv.getY(i); uv.setXY(i, (x + u * w) / W, 1 - (y + (1 - v) * h) / D); }
         const tm = new T.Mesh(own(top), floorMat); tm.rotation.x = -Math.PI / 2; tm.position.set((x + w / 2) * sq, e + .002, (y + h / 2) * sq); tm.receiveShadow = true; G.walls.add(tm);
         box(w * sq, e, h * sq, [sideM, sideM, floorMat, sideM, sideM, sideM], (x + w / 2) * sq, 0, (y + h / 2) * sq, 0, G.walls, { cave: 1 });
+      };
+      for (const r of F.R || []) {
+        const [, x, y, w, h, , kind, o = {}] = r; if (!(o.el > 0) || hiddenRoom(r) || A.isSolid(kind)) continue;
+        if (!fogOn()) { slab(x, y, w, h, +o.el); continue; }
+        // under the fog, only its squares that have been seen, a row at a time
+        for (let j = y; j < y + h; j++) { let i = x; while (i < x + w) { if (!seen(i + .5, j + .5)) { i++; continue; } let e = i; while (e < x + w && seen(e + .5, j + .5)) e++; slab(i, j, e - i, 1, +o.el); i = e; } }
       }
     }
     function buildWalls(F, gm) {
       G.walls.clear(); G.stairs.clear();
       if (F.cave && A.cave && A.cave.outline) buildCave(F, gm);
       const th0 = Math.max(1, sq / 1.524), H = wallH();
-      for (const s of R3.walls(F, gm, S.walls)) {
+      let runs = R3.walls(F, gm, S.walls, shownSet());
+      // under the fog, a wall stands only where a square beside it has been seen
+      if (fogOn()) runs = runs.flatMap(s => {
+        const out = []; let a = null;
+        for (let t = s.i0; t <= s.i1; t++) {
+          const ok = t < s.i1 && (s.or === "h" ? seen(t + .5, s.k - .5) || seen(t + .5, s.k + .5) : seen(s.k - .5, t + .5) || seen(s.k + .5, t + .5));
+          if (ok && a == null) a = t; else if (!ok && a != null) { out.push(Object.assign({}, s, { i0: a, i1: t })); a = null; }
+        }
+        return out;
+      });
+      for (const s of runs) {
         const th = (s.ext ? .22 : .12) * th0, top = s.tall ? H : Math.min(LOW, H), side = s.ext ? extM : wallM, mats = [side, side, capM, side, side, side];
         const [x0, z0, x1, z1] = s.or === "h" ? [s.i0 * sq, s.k * sq, s.i1 * sq, s.k * sq] : [s.k * sq, s.i0 * sq, s.k * sq, s.i1 * sq];
         const len = Math.hypot(x1 - x0, z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, ry = s.or === "v" ? Math.PI / 2 : 0, data = { wall: s };
@@ -362,9 +396,9 @@
         }
       }
       // stairs: steps rising across them
-      const inHidden = (x, y) => (F.R || []).some(q => q[7] && q[7].h && x >= q[1] && x < q[1] + q[3] && y >= q[2] && y < q[2] + q[4]);
+      const inHidden = (x, y) => (F.R || []).some(q => hiddenRoom(q) && x >= q[1] && x < q[1] + q[3] && y >= q[2] && y < q[2] + q[4]);
       for (const st of F.ST || []) {
-        const [, x, y, w, h, ud, , dir = "n"] = st; if (!gm && inHidden(x + w / 2, y + h / 2)) continue;
+        const [, x, y, w, h, ud, , dir = "n"] = st; if (!gm && (inHidden(x + w / 2, y + h / 2) || !seen(x + w / 2, y + h / 2))) continue;
         const n = 8, vert = dir === "n" || dir === "s";
         for (let k = 0; k < n; k++) {
           const f = k / n, hh = Math.max(.05, (ud === "up" ? (k + 1) / n : 1 - k / n) * 1.2), sw = vert ? w * sq : w * sq / n, sd = vert ? h * sq / n : h * sq;
@@ -372,6 +406,16 @@
           box(sw, hh, sd, stepM, sx, 0, sz, 0, G.stairs, { stair: st[0] });
         }
       }
+      if (fogOn()) darkness(F);
+    }
+    // the fog itself: darkness over every square not yet seen, just above water and lava, so nothing under it shows
+    const fogM = own(new T.MeshBasicMaterial({ color: 0x0b0c0d, side: T.DoubleSide }));
+    function darkness(F) {
+      const pts = [], ix = [], y = .09; let n = 0;
+      for (let j = 0; j < F.h; j++) { let i = 0; while (i < F.w) { if (seen(i + .5, j + .5)) { i++; continue; } let e = i; while (e < F.w && !seen(e + .5, j + .5)) e++; pts.push(i * sq, y, j * sq, e * sq, y, j * sq, e * sq, y, (j + 1) * sq, i * sq, y, (j + 1) * sq); ix.push(n, n + 2, n + 1, n, n + 3, n + 2); n += 4; i = e; } }
+      if (!n) return;
+      const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pts, 3)); g.setIndex(ix);
+      const me = new T.Mesh(own(g), fogM); me.renderOrder = 3; G.walls.add(me);
     }
 
     /* -- models: the furniture raised from the drawing, and the game master's own */
@@ -395,7 +439,7 @@
     }
     const pkey = p => M.specKey(p) + "|" + [p.x, p.y, p.r || 0, p.s || 1, p.z || 0, p.h ? 1 : 0].join(",");
     async function buildProps(F, gm, g) {
-      const list = (F.P || []).map((p, i) => [p, i]).filter(([p]) => gm || !p.h);
+      const list = (F.P || []).map((p, i) => [p, i]).filter(([p]) => gm || (!p.h && seen(p.x, p.y)));
       const keepIdx = new Set(list.map(([, i]) => i));
       // what is gone or changed is taken off; what is new is built
       for (let i = S.props.length - 1; i >= 0; i--) { const it = S.props[i]; if (!it) continue; const p = (F.P || [])[i]; if (!keepIdx.has(i) || !p || it.k !== pkey(p)) { G.props.remove(it.obj); S.props[i] = null; } }
@@ -408,9 +452,9 @@
     }
     async function buildItems(F, gm, g) {
       G.items.clear(); S.items = [];
-      const inHidden = (x, y) => (F.R || []).some(q => q[7] && q[7].h && x >= q[1] && x < q[1] + q[3] && y >= q[2] && y < q[2] + q[4]);
+      const inHidden = (x, y) => (F.R || []).some(q => hiddenRoom(q) && x >= q[1] && x < q[1] + q[3] && y >= q[2] && y < q[2] + q[4]);
       for (const it of F.I || []) {
-        if (!gm && (it[6] || inHidden(it[1] + (it[3] || 1) / 2, it[2] + (it[4] || 1) / 2))) continue;
+        if (!gm && (it[6] || inHidden(it[1] + (it[3] || 1) / 2, it[2] + (it[4] || 1) / 2) || !seen(it[1] + (it[3] || 1) / 2, it[2] + (it[4] || 1) / 2))) continue;
         for (const p of R3.raise(it, F) || []) {
           const e = M.entry(p.a), obj = await modelObj(p, e, { data: { item: it[0], name: e.n } }); if (g !== S.gen || gone) return;
           if (obj) { G.items.add(obj); S.items.push({ p, e, obj }); }
@@ -497,10 +541,10 @@
       // lamps: where the room has something that gives light, or else in its biggest rooms; never more than eight
       const at = [];
       for (const it of S.items) if (it.p.glow || GLOW_RX.test(it.p.a)) at.push([it.p.x, it.p.y]);
-      for (const p of F.P || []) if ((GLOW_RX.test(p.a) || (M.entry(p.a) || {}).glow) && (S.gm || !p.h)) at.push([p.x, p.y]);
-      // a cave's lava glows: a lamp over each pool of it
-      if (F.cave) for (const r of F.R || []) if (r[6] === "lava" && r[3] * r[4] >= 2) at.unshift([r[1] + r[3] / 2, r[2] + r[4] / 2]);
-      if (at.length < 3 && k !== "normal" && k !== "lab") for (const q of (F.R || []).filter(q => A.isIndoorKind(q[6]) && (S.gm || !(q[7] && q[7].h))).sort((a, b) => b[3] * b[4] - a[3] * a[4]).slice(0, 6)) at.push([q[1] + q[3] / 2, q[2] + q[4] / 2]);
+      for (const p of F.P || []) if ((GLOW_RX.test(p.a) || (M.entry(p.a) || {}).glow) && (S.gm || (!p.h && seen(p.x, p.y)))) at.push([p.x, p.y]);
+      // a cave's lava glows: a lamp over each pool of it (under the fog, only the pools seen)
+      if (F.cave) for (const r of F.R || []) if (r[6] === "lava" && r[3] * r[4] >= 2 && seen(r[1] + r[3] / 2, r[2] + r[4] / 2)) at.unshift([r[1] + r[3] / 2, r[2] + r[4] / 2]);
+      if (at.length < 3 && k !== "normal" && k !== "lab") for (const q of (F.R || []).filter(q => A.isIndoorKind(q[6]) && !hiddenRoom(q) && seen(q[1] + q[3] / 2, q[2] + q[4] / 2)).sort((a, b) => b[3] * b[4] - a[3] * a[4]).slice(0, 6)) at.push([q[1] + q[3] / 2, q[2] + q[4] / 2]);
       const pick = []; for (const p of at) if (pick.length < 8 && !pick.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 3)) pick.push(p);
       pick.forEach(([x, y], i) => { const pl = new T.PointLight(L.lamp[i % L.lamp.length], L.li, sq * 9, 1.6); pl.position.set(x * sq, 1.9, y * sq); G.lights.add(pl); S.lamps.push({ l: pl, base: L.li, ph: i * 1.7 }); });
       anim = !!L.fx && S.lamps.length > 0; wrap.dataset.light = k; if (anim) dirty();
@@ -658,11 +702,13 @@
 
     /* -- the stage's own words */
     const st = {
-      /* show a floor: F (finished), and { gm, svg() (its 2D drawing), light, key (where it is remembered), under } */
+      /* show a floor: F (finished), and { gm, svg() (its 2D drawing), light, key (where it is remembered), under, fog:
+         { vis (a square seen: 1), show (hidden rooms shown), key } for the players' side } */
       async show(F, s) {
         const g = ++S.gen; s = s || {};
-        const geoK = JSON.stringify([F.w, F.h, F.R, F.D, F.ST, s.gm, F.wh]), itemK = JSON.stringify([F.I, F.R, s.gm]), first = !S.F;
-        const keyChanged = s.key !== S.key; S.key = s.key || ""; S.F = F; S.gm = s.gm !== false; S.light = s.light || "normal";
+        const fk = s.fog && s.gm === false ? s.fog.key || "fog" : "";
+        const geoK = JSON.stringify([F.w, F.h, F.R, F.D, F.ST, s.gm, F.wh, fk]), itemK = JSON.stringify([F.I, F.R, s.gm, fk]), first = !S.F;
+        const keyChanged = s.key !== S.key; S.key = s.key || ""; S.F = F; S.gm = s.gm !== false; S.light = s.light || "normal"; S.fog = fk ? s.fog : null;
         if (keyChanged) { S.lightOver = ""; S.props.forEach(it => it && G.props.remove(it.obj)); S.props = []; }
         hud.querySelector('[data-r3="walls"]').value = S.walls; hud.querySelector('[data-r3="light"]').value = S.lightOver || S.light; hud.querySelector('[data-r3="grid"]').setAttribute("aria-pressed", S.grid);
         floorMesh.scale.set(F.w * sq, F.h * sq, 1); floorMesh.position.set(F.w * sq / 2, 0, F.h * sq / 2);
@@ -678,7 +724,7 @@
         if (S.keys.items !== itemK) { S.keys.items = itemK; await buildItems(F, S.gm, g); if (g !== S.gen) return; }
         await buildProps(F, S.gm, g); if (g !== S.gen || gone) return;
         buildPins(F);
-        const lk = JSON.stringify([S.lightOver || S.light, F.w, F.h, (F.P || []).filter(p => GLOW_RX.test(p.a)).map(p => [p.x, p.y]), S.items.length]);
+        const lk = JSON.stringify([S.lightOver || S.light, F.w, F.h, (F.P || []).filter(p => GLOW_RX.test(p.a)).map(p => [p.x, p.y]), S.items.length, fk]);
         if (S.keys.light !== lk) { S.keys.light = lk; lightUp(F); }
         if (keyChanged || first) { const v = VIEWS.get(S.key); if (v) { cam.position.fromArray(v.p); cam.zoom = v.z; cam.updateProjectionMatrix(); } else fitFloor(); }
         overKey = ""; dirty();
