@@ -1821,6 +1821,17 @@ button.ho-b:hover { color: var(--ink); }
 /* the world map's art (atlas-world-art.js): the finer things come in as the map comes closer; the two looks added on
    27 Oct 2026 (the past's engraved plate, science fiction's survey); the titles, grids and compass letters it draws */
 .wm[data-z="0"] .wm-land .lod1, .wm[data-z="0"] .wm-land .lod2, .wm[data-z="1"] .wm-land .lod2, .wm:not([data-z]) .wm-land .lod1, .wm:not([data-z]) .wm-land .lod2 { display: none; }
+/* the painted fantasy map: cream names with dark halos over the colours, red roofs, grey stone */
+.wm-painted { --wm-ink: #2a2016; --wm-mk: #efe4c9; --wm-bg: #2e5468; --wm-label: #f6eedb; --wm-halo: #1f1810; }
+.wm-painted .wm-rl { font-family: var(--f-sc); fill: #f4ecd6; fill-opacity: .95; stroke: #241b12; stroke-width: 3.2px; stroke-opacity: .75; letter-spacing: .26em; }
+.wm-painted .wm-rl.w { font-family: var(--f-display); font-style: italic; fill: #dbe9ea; stroke: #1c3440; letter-spacing: .2em; }
+.wm-painted .wl .wi .r { fill: #a8432c; }
+.wm-painted .wl .wi .s { fill: #b9b3a3; }
+.wm-painted .wl-t { font-family: var(--f-sc); font-style: normal; font-weight: 600; letter-spacing: .04em; stroke-width: 3.4px; stroke-opacity: .85; }
+.wm-painted .wl.dn .wi { fill: #9d968a; }
+.wm-painted .wm-ttl { fill: #2a2016; }
+.wm-lgt { font-family: var(--f-sc); font-size: 12px; letter-spacing: .14em; font-weight: 700; }
+.wm-lgi { font-family: var(--f-body); font-size: 11px; }
 .wm-engraved { --wm-ink: #262019; --wm-mk: #f7f1e2; --wm-bg: #e9e1c8; --wm-label: #1f1a14; --wm-halo: #f1e9d4; }
 .wm-holo { --wm-ink: #5ae2f0; --wm-mk: #06202b; --wm-bg: #020d16; --wm-label: #d6fbff; --wm-halo: #020d16; }
 .wm-engraved .wm-grain { background: radial-gradient(ellipse at center, transparent 70%, rgba(40, 30, 10, .1) 100%); }

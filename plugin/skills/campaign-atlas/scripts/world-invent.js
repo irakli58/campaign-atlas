@@ -278,7 +278,8 @@ function invent(A, flags, log) {
   return { T, summary: `${look === "stars" ? "a star map" : `the land: ${land}, ${sea}% sea, ${T.rivers.length} rivers`}, ${w} by ${h} (seed ${seed}); ${T.labels.length} named features; ${placedN} location${placedN === 1 ? "" : "s"} placed${Object.keys(keepOld).length ? `, ${Object.keys(T.spots).length - placedN} kept where they stood` : ""}${routesN ? `; ${routesN} routes suggested (world.js has none of its own)` : ""}` };
 }
 // the look a campaign's world wears by itself (the game master may choose another on the page): a planet's surface a
-// survey, space a star chart, the modern world an atlas, the past an engraved plate, fantasy and the middle ages parchment
+// survey, space a star chart, the modern world an atlas, the past an engraved plate, fantasy a painted map (27 Oct
+// 2026, as the user asked) and the middle ages parchment
 function lookOfCity(A) {
   const c = A.cityData || {}, lk = typeof c.look === "string" ? c.look : c.look && c.look.base, setting = String((A.config || {}).setting || "") + " " + String((A.config || {}).system || "");
   const era = A.table && A.table.era ? A.table.era() : "";
@@ -286,6 +287,7 @@ function lookOfCity(A) {
   if (lk === "scifi" || lk === "future" || era === "future" || /space|star|orbit|planet|mothership|traveller/i.test(setting)) return "stars";
   if (lk === "modern" || era === "modern") return "atlas";
   if (era === "victorian" || era === "1920s" || lk === "victorian" || lk === "industrial") return "engraved";
+  if (lk === "fantasy" || (A.config || {}).genre === "fantasy" || /fantas|sorcer|dragon|elv|elf|dwar|wizard|dungeons/i.test(setting)) return "painted";
   return "parchment";
 }
 // ---- a map the game master drew (or painted, or photographed): the picture is kept beside the campaign as
@@ -362,7 +364,7 @@ function starter(dir, A, flags, size) {
   if (m) {
     const unit = (m[2] || "mile").toLowerCase().replace(/(?<!s)s$/, "").replace(/^km$/, "km");
     scale = { unit, per: Math.round(+m[1] / w * 10000) / 10000 };
-    if (lk === "parchment" && /mile|league|km/.test(unit)) { const k = unit === "league" ? 1 / 3 : unit === "km" ? 1.6 : 1; speeds = { road: Math.round(24 * k), trail: Math.round(16 * k), pass: Math.round(10 * k), river: Math.round(30 * k), sea: Math.round(72 * k) }; }
+    if ((lk === "parchment" || lk === "painted") && /mile|league|km/.test(unit)) { const k = unit === "league" ? 1 / 3 : unit === "km" ? 1.6 : 1; speeds = { road: Math.round(24 * k), trail: Math.round(16 * k), pass: Math.round(10 * k), river: Math.round(30 * k), sea: Math.round(72 * k) }; }
   }
   const L = locs.map(l => "    " + JSON.stringify(l).replace(/"(\w+)":/g, "$1: ")).join(",\n");
   const txt = `// The world map of ${title}: the places the story travels between, and the ways between them (references/world.md).

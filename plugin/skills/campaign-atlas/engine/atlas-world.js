@@ -26,7 +26,8 @@
   // the look of the map: a parchment map (fantasy, and the past), an atlas (the modern world) or a star map (the future)
   // (27 Oct 2026: the past has its own look, an engraved atlas plate; a planet in science fiction a survey; the game
   // master may choose another, kept as the world's "style": atlas-world-art.js draws each)
-  const LOOK_OF = { parchment: "parchment", fantasy: "parchment", medieval: "parchment",
+  // (27 Oct 2026: fantasy is painted in colour by default, as the user asked; parchment stays one choice)
+  const LOOK_OF = { painted: "painted", fantasy: "painted", colour: "painted", color: "painted", parchment: "parchment", medieval: "parchment",
     engraved: "engraved", old: "engraved", antique: "engraved", industrial: "engraved", historical: "engraved", victorian: "engraved", "1920s": "engraved",
     atlas: "atlas", modern: "atlas", political: "atlas", holo: "holo", survey: "holo", planet: "holo", alien: "holo",
     stars: "stars", star: "stars", scifi: "stars", future: "stars", space: "stars" };
@@ -55,6 +56,14 @@
       land: [[0, hex("#f2e8ca")], [.35, hex("#ecdeb8")], [.6, hex("#e0cc9f")], [.84, hex("#d2b98c")], [.93, hex("#ece4d2")], [1, hex("#f6f1e4")]],
       wet: hex("#d6dbab"), dry: hex("#f3dfaa"), tree: "#c8c48c",
       routes: { road: ["#7a2e1d", 1.9, "7 3"], trail: ["#6e5233", 1.6, "1.6 3.4"], pass: ["#5a3a22", 1.7, "5 2 1.6 2"], river: ["#3e6a86", 1.9, "6 3"], sea: ["#2f4f6f", 1.7, "9 5"], rail: ["#2b2119", 2.2, "10 3"], air: ["#55504a", 1.3, "3 4"], tunnel: ["#5a5048", 1.7, "3 3"], portal: ["#6a3f9e", 1.9, "2 3"], lane: ["#2f4f6f", 1.7, "8 4"], jump: ["#6a3f9e", 1.7, "2 4"] }
+    },
+    // (the painted map's routes stand out on green land and dark sea)
+    painted: {
+      ink: "#2a2016", paper: "#e9dcc0", mk: "#efe4c9", river: "#4d8098", label: "#f6eedb",
+      sea: [[0, hex("#5f8f99")], [.5, hex("#376172")], [1, hex("#27475b")]],
+      land: [[0, hex("#98a350")], [.4, hex("#76903f")], [.6, hex("#8f7356")], [.85, hex("#a68d70")], [1, hex("#eef0ec")]],
+      wet: hex("#5a6a42"), dry: hex("#bba75e"), tree: "#4c7a2c",
+      routes: { road: ["#5b2e1c", 2.2, "9 2.5"], trail: ["#3d2c1a", 1.6, "2 3"], pass: ["#2a2016", 1.8, "5 2 1.6 2"], river: ["#24597a", 2, "6 3"], sea: ["#e6eef0", 1.7, "8 5"], rail: ["#2a2016", 2.2, "10 3"], air: ["#3d3a35", 1.3, "3 4"], tunnel: ["#3d3a35", 1.7, "3 3"], portal: ["#6a3f9e", 2, "2 3"], lane: ["#e6eef0", 1.7, "8 4"], jump: ["#c08aff", 1.7, "2 4"] }
     },
     atlas: {
       ink: "#2b3440", paper: "#f4f1e8", mk: "#ffffff", river: "#6f9fc8", label: "#26303a",
@@ -133,6 +142,25 @@
     }
   };
   ICONS.engraved = ICONS.parchment;
+  // the painted map's settlements: the parchment's shapes with red roofs (class r) and grey stone (class s)
+  const ROOF = (d) => `<path class="r" d="${d}"/>`;
+  ICONS.painted = Object.assign({}, ICONS.parchment, {
+    capital: '<path class="s" d="M-10 7V-5h5v4h2V-9l3-3 3 3v8h2v-4h5V7Z"/>' + ROOF("M-11-5l3.5-3.5L-4-5ZM4-5l3.5-3.5L11-5ZM-3-9L0-13l3 4Z") + '<path class="k" d="M-1.6 7V4.4a1.6 1.6 0 0 1 3.2 0V7Z"/><path class="r" d="M0-13v-5.5l5.5 1.8L0-14.8Z"/>',
+    city: '<path class="s" d="M-10 7V-5h5v4h2V-9l3-3 3 3v8h2v-4h5V7Z"/>' + ROOF("M-11-5l3.5-3.5L-4-5ZM4-5l3.5-3.5L11-5ZM-3-9L0-13l3 4Z") + '<path class="k" d="M-1.6 7V4.4a1.6 1.6 0 0 1 3.2 0V7Z"/>',
+    town: '<path d="M-9 7V0h8v7Z"/><path d="M-2 7V-2.5h10V7Z"/>' + ROOF("M-10 .5L-5-4.5 0 .5ZM-3-2L3-8l6 6Z"),
+    village: '<path d="M-5.5 7V0.5h11V7Z"/>' + ROOF("M-7 1L0-6l7 7Z") + '<path class="k" d="M-1.3 7V3.6h2.6V7Z"/>',
+    hamlet: '<path d="M-4 7V2h8v5Z"/>' + ROOF("M-5.4 2.6L0-3l5.4 5.6Z"),
+    farm: '<path d="M-7 7V1h14v6Z"/>' + ROOF("M-8.4 1.6L0-5l8.4 6.6Z") + '<path d="M-3 7V3.5h6V7" fill="none"/>',
+    inn: '<path d="M-7 7V0.5h12V7Z"/>' + ROOF("M-8.4 1L-1-5.5 6.4 1Z") + '<path d="M5-1h4M8-1v2" fill="none"/><path class="r" d="M6.4 1h3.2v3H6.4Z"/>',
+    manor: '<path d="M-9 7V-1h18v8Z"/>' + ROOF("M-10.4-1l3-5h14.8l3 5Z"),
+    castle: '<path class="s" d="M-7 7V-6h2.3v2h2.3v-2h4.8v2h2.3v-2H7V7Z"/><path class="k" d="M-1.8 7V3.6a1.8 1.8 0 0 1 3.6 0V7Z"/><path class="r" d="M0-6v-5l4 1.4L0-8.4Z"/>',
+    keep: '<path class="s" d="M-7 7V-6h2.3v2h2.3v-2h4.8v2h2.3v-2H7V7Z"/><path class="k" d="M-1.8 7V3.6a1.8 1.8 0 0 1 3.6 0V7Z"/>',
+    fort: '<path class="s" d="M-10 7V-1h3v-2.5h3V-1h8v-2.5h3V-1h3v8Z"/><path class="k" d="M-1.8 7V4a1.8 1.8 0 0 1 3.6 0V7Z"/>',
+    tower: '<path class="s" d="M-3 7V-4h6V7Z"/>' + ROOF("M-4.2-4L0-12l4.2 8Z"),
+    ruin: '<path class="s" d="M-7 7V-4l1.5 1.2L-4-6l1.4 2.5L-1-3V7Z"/><path class="s" d="M2 7V1.5l1.6-1 1.2 1.6L6.5.6 7 7Z"/>',
+    temple: '<path class="s" d="M-9-2L0-8l9 6Z"/><path class="s" d="M-8 7h16V5.6H-8Z"/><path d="M-6-2v7.5M-2-2v7.5M2-2v7.5M6-2v7.5" fill="none"/>',
+    monastery: '<path class="s" d="M-8 7V0h16v7Z"/>' + ROOF("M-9.4.6L0-5l9.4 5.6Z") + '<path class="s" d="M3-5V-10h3v5"/>'
+  });
   const PLANETS = ["#c97b4a", "#5f8fc9", "#8fbf6a", "#c9b36a", "#9b6ac9", "#6ac9c0", "#d9d2c4", "#c96a7e"];
   const iconOf = (look, L) => {
     const set = ICONS[look] || ICONS.parchment, k = String(L.kind || "").toLowerCase();
@@ -595,7 +623,7 @@
       const G = WD.G;
       // the look's own art (atlas-world-art.js), with the region names over it
       if (A.worldArt) {
-        try { s += A.worldArt.draw(WD, WD.look, uid, { seen: L => seen(L), palette: WD.W.palette || WD.T.palette }); } catch (e) { console.warn("world map: the art could not be drawn", e); }
+        try { s += A.worldArt.draw(WD, WD.look, uid, { seen: L => seen(L), palette: WD.W.palette || WD.T.palette, realms: WD.realms.filter(g => g.name && (gm() || !g.hidden)).map(g => ({ name: g.name, colour: realmCol(g) })) }); } catch (e) { console.warn("world map: the art could not be drawn", e); }
         s += realmsSVG();
         for (const L of WD.labels) if (L && L.name && Array.isArray(L.at)) {
           const water = /sea|ocean|lake|bay|gulf|strait|sound|river/.test(L.kind || ""), fs = (L.size || (L.kind === "river" ? 10 : water ? 20 : L.kind === "region" ? 24 : 15)) * 1.15;

@@ -92,7 +92,7 @@ node scripts/atlas.js kit list | use <dir> <kit> | save <dir>
                                                     buildings made for one place (a city's own landmarks and streets):
                                                     the kits there are, one into a campaign, a campaign's kept for next time
 node scripts/atlas.js city <dir> ... --id <id>      another city of the campaign (cities/<id>.js), for a location of the world map
-node scripts/atlas.js world <dir> [--look parchment|atlas|stars] [--land continent|islands|coast|inland]
+node scripts/atlas.js world <dir> [--look painted|parchment|engraved|atlas|holo|stars] [--land continent|islands|coast|inland]
                                                     the world map: an invented land under world.js, its locations placed
 node scripts/atlas.js world <dir> --drawing <picture>   the world map from the game master's own drawing
 node scripts/atlas.js world <dir> --real "Region"   the real world: true coasts, rivers, mountains; places found by name

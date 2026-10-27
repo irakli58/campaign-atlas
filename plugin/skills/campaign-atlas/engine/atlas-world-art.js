@@ -2,6 +2,8 @@
    the campaign: Fantasy, Modern and Sci-Fi, and the past, chosen from the setting and changeable by the game master).
    atlas-world.js keeps everything the map does (its places, roads, journeys, editing, the doors into the 3D cities);
    this file only draws the land under them, each look by its own hand:
+   - painted (fantasy, the default since 27 Oct 2026): a map painted in colour, forests tree by tree, shaded ranges,
+     farmland round the towns, a glowing coast, ships, an eight-pointed compass;
    - parchment (fantasy): an inked coast with lines echoing it out to sea, ranges of hatched mountains, foothills, woods
      of broadleaf and pine, marsh, sand, waves and ships, a compass rose, a chequered frame and a title cartouche;
    - engraved (the past): an atlas plate of the 1800s: hachured slopes, water-lining, a graduated border, a north arrow;
@@ -16,7 +18,7 @@
   const K = A.worldDraw; if (!K) return;
   const { sampler, coastRings, chaikin, rdpRing, pathD, hash, ramp, mix, hex, clamp, vnoise } = K;
   const r1 = v => Math.round(v * 10) / 10;
-  const LOOKS = [["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["stars", "Science fiction: a star chart"]];
+  const LOOKS = [["painted", "Fantasy: a painted map"], ["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["stars", "Science fiction: a star chart"]];
   // the looks a world may wear: a world with land may wear any but the star chart; a star chart only that
   const looksFor = WD => WD.G && !WD.stars && WD.look !== "stars" ? LOOKS.filter(l => l[0] !== "stars") : LOOKS.filter(l => l[0] === "stars");
 
@@ -168,6 +170,175 @@
     return s;
   }
 
+  /* ================================================================ fantasy: a painted map */
+  // (the user asked, 27 Oct 2026, for fantasy maps "way more detailed", showing maps painted in colour: green lowland,
+  // ochre and orange dry land, forests drawn tree by tree, ranges of shaded brown mountains capped with snow, a deep
+  // blue-green sea with a pale glow and ripples along every coast, farmland round the towns, ships at sea)
+  function painted(WD, uid, o) {
+    const [W, H] = WD.size, G = WD.G, pr = probe(WD), sea = G.sea, ink = "#2a2016";
+    const SEA = [[0, hex("#5f8f99")], [.1, hex("#457383")], [.32, hex("#376172")], [.65, hex("#2e5468")], [1, hex("#27475b")]], GLOW = hex("#c9dedb");
+    const C = { desert: hex("#d08a42"), dry: hex("#bba75e"), grass: hex("#98a350"), lush: hex("#76903f"), floor: hex("#4b682e"), swamp: hex("#5a6a42"), beach: hex("#cdb67d"), rock: hex("#8f7356"), high: hex("#a68d70"), snow: hex("#eef0ec") };
+    // how far each stretch of sea is from land: the pale glow along the coasts
+    const { cols, rows, cell } = G, N = cols * rows, dL = new Float32Array(N).fill(1e9), q = [];
+    for (let n = 0; n < N; n++) if (G.H[n] > sea) { dL[n] = 0; q.push(n); }
+    for (let h = 0; h < q.length; h++) { const n = q[h], i = n % cols, j = (n / cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < cols - 1 ? n + 1 : -1, j > 0 ? n - cols : -1, j < rows - 1 ? n + cols : -1]) if (m >= 0 && dL[m] > dL[n] + 1) { dL[m] = dL[n] + 1; q.push(m); } }
+    for (let n = 0; n < N; n++) dL[n] = Math.min(dL[n], 60);
+    const S = sampler(G), nz2 = vnoise(Math.floor(hash(W, H, 29) * 1e9)), fz = vnoise(Math.floor(hash(W, H, 31) * 1e9));
+    // where the woods are: the wetter lowland, gathered into clumps (the same in the paint and in the trees)
+    const forest = (x, y, m, t) => t <= .012 || t > .52 ? 0 : clamp((m - 116) / 46 + (fz(x * .022, y * .022) - .5) * 1.5 - (t > .4 ? (t - .4) * 4 : 0), 0, 1);
+    const img = raster(WD, (h, m, gx, gy, x, y, nz) => {
+      const grain = (hash(x * 4 | 0, y * 4 | 0, 7) - .5) * .05, mot = (nz2(x * .03, y * .03) - .5) * .15 + (nz(x * .13, y * .13) - .5) * .08;
+      if (h <= sea) {
+        const dp = clamp((sea - h) / Math.max(1, sea) * 2.4, 0, 1), d = S(x, y, dL) * cell, glow = Math.exp(-d / 9) * .62 + Math.exp(-d / 26) * .16;
+        return mix(ramp(SEA, dp), GLOW, glow).map(v => v * (1 + mot * .6 + grain));
+      }
+      const t = (h - sea) / (255 - sea);
+      let c = m < 48 ? mix(C.desert, C.dry, m / 48) : m < 92 ? mix(C.dry, C.grass, (m - 48) / 44) : mix(C.grass, C.lush, clamp((m - 92) / 80, 0, 1));
+      if (m > 212 && t < .15) c = mix(c, C.swamp, clamp((m - 212) / 30, 0, 1));
+      const fo = forest(x, y, m, t); if (fo > 0) c = mix(c, C.floor, Math.min(.8, fo * 1.1));
+      // (the colour wanders a little, as a painter's would)
+      const hv = nz2(x * .011 + 40, y * .011); c = mix(c, hv > .5 ? C.lush : C.dry, Math.abs(hv - .5) * .3);
+      if (t < .025 && m < 200) c = mix(c, C.beach, (1 - t / .025) * .55);
+      if (t > .42) c = mix(c, C.rock, clamp((t - .42) * 3, 0, 1));
+      if (t > .7) c = mix(c, C.high, clamp((t - .7) * 4, 0, 1));
+      if (t > .9) c = mix(c, C.snow, clamp((t - .9) * 5, 0, .6));
+      const sh = clamp(shade(gx, gy, .04), .6, 1.3);
+      return c.map(v => v * sh * (1 + mot + grain));
+    }, { detail: 10 });
+    const cd = coastD(G, .6), coarse = coastD(G, 1.3);
+    let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
+    // ripples along the coast, fainter further out
+    for (const [w, op] of [[34, .16], [24, .24], [15, .34], [7.6, .48]]) s += `<path d="${coarse}" fill="none" stroke="#e2efec" stroke-opacity="${op}" stroke-width="${r1(w + .8)}"/><path d="${coarse}" fill="none" stroke="url(#${uid}-b)" stroke-width="${r1(w - .8)}"/>`;
+    s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#33281c" stroke-width="1.15" stroke-linejoin="round"/>`;
+    s += rivers(WD, "#4d8098", "#2b3a33", 1.15);
+    s += paintedSymbols(WD, pr, o, forest, uid);
+    s += paintedSea(WD, pr);
+    s += frame(WD, ink, "painted", o);
+    return s;
+  }
+  function paintedSymbols(WD, pr, o, forest, uid) {
+    const [W, H] = WD.size;
+    // where a mountain or a hill stands, trees and fields keep off (a grid of 4 units)
+    const occ = new Set(), mark = (x, y, w, h) => { for (let a = Math.floor((x - w) / 4); a <= Math.floor((x + w) / 4); a++) for (let b = Math.floor((y - h) / 4); b <= Math.floor(y / 4); b++) occ.add(a + "," + b); }, free = (x, y) => !occ.has(Math.floor(x / 4) + "," + Math.floor(y / 4));
+    const taken = [], near = (x, y, r) => taken.some(([a, b, rr]) => Math.abs(a - x) < (r + rr) * .6 && Math.abs(b - y) < (r + rr) * .34);
+    // mountains, drawn by hand (the user, 27 Oct 2026: "draw them instead of using geometric shapes"): a few mountains
+    // drawn once as an illustrator would (a single peak with a shoulder, twin peaks, a broad massif, a spire), each with
+    // its crags, its lit and shaded faces shaded from the summit down, the pen's strokes down the slopes, a spur, a
+    // shadow at the foot, and a snowy version; set down across the ranges at many sizes, nearest last
+    const MT = [
+      { sil: [[-1, 0], [-.8, -.17], [-.64, -.34], [-.52, -.4], [-.4, -.58], [-.24, -.82], [-.07, -1.12], [.05, -1], [.17, -.88], [.29, -.71], [.42, -.6], [.57, -.43], [.76, -.22], [1, 0]], peak: 6,
+        cr: [[[-.07, -1.12], [-.01, -.88], [-.06, -.68], [.04, -.46], [.01, -.24], [.12, 0]]], spur: [[-.52, -.4], [-.36, -.24], [-.34, 0]],
+        dk: [[-.01, -.86, .12, -.76], [-.04, -.7, .16, -.58], [.03, -.5, .24, -.4], [.02, -.32, .3, -.22], [.06, -.16, .4, -.08], [.22, -.8, .28, -.7]], lt: [[-.22, -.78, -.3, -.64], [-.42, -.52, -.48, -.4], [-.66, -.28, -.72, -.18]],
+        snow: [[[-.07, -1.12], [-.24, -.82], [-.17, -.84], [-.14, -.74], [-.08, -.8], [-.02, -.72], [-.01, -.88]], [[-.07, -1.12], [-.01, -.88], [.04, -.8], [.08, -.88], [.13, -.84], [.17, -.88], [.05, -1]]] },
+      { sil: [[-1, 0], [-.74, -.28], [-.56, -.5], [-.4, -.7], [-.28, -.86], [-.17, -1.04], [-.08, -.9], [.02, -.76], [.12, -.8], [.22, -.9], [.31, -.95], [.4, -.82], [.52, -.66], [.66, -.46], [.82, -.24], [1, 0]], peak: 5, peak2: 10,
+        cr: [[[-.17, -1.04], [-.12, -.82], [-.17, -.6], [-.09, -.38], [-.13, -.16], [-.06, 0]], [[.31, -.95], [.36, -.74], [.32, -.52], [.4, -.3], [.37, 0]]], spur: [[-.4, -.7], [-.3, -.46], [-.34, -.2]],
+        dk: [[-.12, -.82, -.02, -.72], [-.15, -.6, 0, -.52], [-.09, -.4, .08, -.34], [-.12, -.2, .06, -.14], [.36, -.74, .5, -.62], [.33, -.54, .54, -.42], [.4, -.32, .64, -.22], [.38, -.12, .7, -.06]], lt: [[-.32, -.8, -.4, -.66], [-.5, -.56, -.58, -.44], [.18, -.84, .14, -.72], [-.7, -.26, -.76, -.16]],
+        snow: [[[-.17, -1.04], [-.3, -.84], [-.24, -.86], [-.2, -.78], [-.15, -.84], [-.12, -.82]], [[-.17, -1.04], [-.12, -.82], [-.08, -.86], [-.04, -.82], [-.08, -.9]], [[.31, -.95], [.24, -.88], [.29, -.86], [.33, -.82], [.36, -.74]], [[.31, -.95], [.36, -.74], [.4, -.8], [.44, -.78], [.4, -.82]]] },
+      { sil: [[-1, 0], [-.82, -.2], [-.66, -.42], [-.5, -.56], [-.36, -.66], [-.22, -.78], [-.1, -.86], [.02, -.84], [.12, -.88], [.22, -.8], [.36, -.66], [.52, -.5], [.7, -.32], [.86, -.16], [1, 0]], peak: 8,
+        cr: [[[.12, -.88], [.1, -.66], [.18, -.46], [.12, -.26], [.2, 0]]], spur: [[-.36, -.66], [-.3, -.5], [-.38, -.36], [-.34, -.16]], spur2: [[-.1, -.86], [-.06, -.72], [-.14, -.6]],
+        dk: [[.1, -.66, .28, -.58], [.16, -.48, .4, -.4], [.13, -.3, .48, -.2], [.18, -.12, .6, -.06], [.26, -.74, .34, -.64]], lt: [[-.5, -.5, -.58, -.36], [-.7, -.3, -.76, -.18], [-.2, -.7, -.26, -.58], [.0, -.78, -.04, -.66]],
+        snow: [[[.12, -.88], [.02, -.84], [-.1, -.86], [-.14, -.78], [-.06, -.8], [0, -.74], [.06, -.8], [.1, -.66]], [[.12, -.88], [.1, -.66], [.16, -.74], [.2, -.7], [.22, -.8]]] },
+      { sil: [[-.85, 0], [-.66, -.26], [-.5, -.5], [-.38, -.7], [-.28, -.92], [-.16, -1.16], [-.05, -1.34], [.04, -1.2], [.14, -1.02], [.24, -.84], [.34, -.66], [.5, -.44], [.66, -.22], [.85, 0]], peak: 6,
+        cr: [[[-.05, -1.34], [0, -1.06], [-.04, -.78], [.04, -.52], [0, -.26], [.08, 0]]], spur: [[-.38, -.7], [-.24, -.46], [-.26, -.2]],
+        dk: [[0, -1.06, .12, -.96], [-.02, -.82, .2, -.7], [.03, -.56, .3, -.44], [.01, -.32, .4, -.22], [.06, -.12, .56, -.06]], lt: [[-.2, -1, -.26, -.86], [-.36, -.66, -.42, -.52], [-.56, -.36, -.6, -.24]],
+        snow: [[[-.05, -1.34], [-.2, -1.06], [-.13, -1.08], [-.1, -.98], [-.05, -1.04], [0, -1.06]], [[-.05, -1.34], [0, -1.06], [.05, -1], [.08, -1.08], [.12, -1.04], [.04, -1.2]]] }
+    ];
+    const pts = a => a.map(p => `${p[0]} ${p[1]}`).join("L"), poly = a => `M${pts(a)}Z`, line = a => `M${pts(a)}`;
+    // a mountain's faces: lit from its left foot to its first crease, the middle between creases, shaded from the last crease to its right foot
+    function faces(m) {
+      const S = m.sil, c0 = m.cr[0], cl = m.cr[m.cr.length - 1], out = [];
+      out.push(["l", [...S.slice(0, m.peak + 1), ...c0.slice(1)]]);
+      if (m.cr.length > 1) out.push(["m", [...S.slice(m.peak, m.peak2 + 1), ...cl.slice(1), ...c0.slice(1).reverse()]]);
+      const last = m.peak2 || m.peak; out.push(["d", [...S.slice(last), ...cl.slice(1).reverse()]]);
+      return out;
+    }
+    const FILL = { l: `url(#${uid}-ml)`, m: `url(#${uid}-mm)`, d: `url(#${uid}-mr)` };
+    let stamps = "";
+    MT.forEach((m, k) => {
+      const body = `<ellipse cx=".18" cy=".03" rx="1.18" ry=".13" fill="#26240f" fill-opacity=".22"/>` + faces(m).map(([t, a]) => `<path d="${poly(a)}" fill="${FILL[t]}"/>`).join("");
+      const ink = `<path d="${m.dk.map(s => `M${s[0]} ${s[1]}L${s[2]} ${s[3]}`).join("")}" fill="none" stroke="#3f2b1b" stroke-width=".038" stroke-linecap="round" stroke-opacity=".85"/><path d="${m.lt.map(s => `M${s[0]} ${s[1]}L${s[2]} ${s[3]}`).join("")}" fill="none" stroke="#f6e7c4" stroke-width=".045" stroke-linecap="round" stroke-opacity=".85"/>`
+        + `<path d="${line(m.sil)}${m.cr.map(line).join("")}${m.spur ? line(m.spur) : ""}${m.spur2 ? line(m.spur2) : ""}" fill="none" stroke="#2c2015" stroke-width=".052" stroke-linejoin="round" stroke-linecap="round"/>`;
+      const snow = m.snow.map((a, i) => `<path d="${poly(a)}" fill="${i % 2 ? "#c3cbd2" : "#f7f6f1"}"/>`).join("");
+      stamps += `<g id="${uid}-m${k}">${body}${ink}</g><g id="${uid}-m${k}s">${body}${snow}${ink}</g>`;
+    });
+    // hills: soft mounds, one or two humps, shaded on the right, a stroke or two of the pen
+    const HL = [{ f: "M-1 0C-.8-.5-.4-.8 0-.8C.4-.78.75-.5 1 0Z", d: "M0-.8C.4-.78.75-.5 1 0L.15 0C.25-.3.18-.6 0-.8Z", s: "M.32-.5q.12.1.2.3M.16-.3q.1.08.16.24" },
+      { f: "M-1 0C-.85-.45-.55-.62-.3-.6C-.12-.72.15-.74.35-.62C.62-.5.85-.3 1 0Z", d: "M.05-.7C.2-.72.4-.66.5-.56C.7-.42.88-.24 1 0L.25 0C.32-.26.24-.5.05-.7Z", s: "M.5-.4q.1.1.16.26M-.32-.56q.06.12.04.26" },
+      { f: "M-1 0C-.7-.35-.5-.9-.1-.92C.3-.92.6-.5 1 0Z", d: "M-.1-.92C.3-.92.6-.5 1 0L.1 0C.2-.4.1-.7-.1-.92Z", s: "M.3-.56q.1.12.16.3M.1-.2q.08.06.12.18" }];
+    HL.forEach((h, k) => { stamps += `<g id="${uid}-h${k}"><ellipse cx=".15" cy=".03" rx="1.1" ry=".12" fill="#26240f" fill-opacity=".16"/><path d="${h.f}" fill="url(#${uid}-hl)"/><path d="${h.d}" fill="#5f5730" fill-opacity=".45"/><path d="${h.s}" fill="none" stroke="#3a2e1e" stroke-width=".05" stroke-opacity=".7" stroke-linecap="round"/><path d="${h.f}" fill="none" stroke="#3a2e1e" stroke-width=".05" stroke-opacity=".8"/></g>`; });
+    const defs = `<defs><linearGradient id="${uid}-ml" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="#efdbb2"/><stop offset=".55" stop-color="#cfae80"/><stop offset="1" stop-color="#a7835a"/></linearGradient><linearGradient id="${uid}-mm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b89470"/><stop offset="1" stop-color="#806040"/></linearGradient><linearGradient id="${uid}-mr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8d6c4b"/><stop offset="1" stop-color="#523a26"/></linearGradient><linearGradient id="${uid}-hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c2b26c"/><stop offset="1" stop-color="#8c8246"/></linearGradient>${stamps}</defs>`;
+    const placed = [];
+    lattice(W, H, 8, 6.2, 21, (x, y, r) => {
+      const t = pr.t(x, y); if (t < .46 || r > (t - .42) * 2.8) return;
+      const w = 6.5 + (t - .46) * 30 + r * 3.5, h = w * (1.05 + hash(x, y, 9) * .45); if (near(x, y, w)) return; taken.push([x, y, w]); mark(x, y, w * .9, h * .8);
+      const hk = hash(x, y, 15), k = t > .68 ? (hk < .4 ? 3 : hk < .75 ? 0 : 1) : t > .56 ? (hk < .4 ? 0 : hk < .75 ? 1 : hk < .9 ? 3 : 2) : (hk < .35 ? 2 : hk < .7 ? 0 : 1);
+      placed.push([y, `<use href="#${uid}-m${k}${t > .66 ? "s" : ""}" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h / 1.1 * 100) / 100})"/>`]);
+    });
+    lattice(W, H, 9, 6.6, 31, (x, y, r) => {
+      const t = pr.t(x, y); if (t < .32 || t >= .47 || r > .3 || near(x, y, 5)) return;
+      const w = 5 + r * 8, h = w * (.75 + hash(x, y, 33) * .3); taken.push([x, y, w * .7]); mark(x, y, w, h);
+      placed.push([y, `<use href="#${uid}-h${Math.floor(hash(x, y, 34) * HL.length)}" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h * 100) / 100})"/>`]);
+    });
+    placed.sort((a, b) => a[0] - b[0]);
+    const mtn = placed.map(p => p[1]).join(""), hills = "";
+    // farmland round the settlements the viewer may see: patches of fields in the colours of crops
+    let fields = "";
+    const FC = ["#d3c06c", "#b9b65c", "#a2b057", "#cba95c", "#aabb69", "#c4b876"], FR = { capital: 30, city: 24, town: 17, port: 15, village: 11, hamlet: 7, farm: 8, manor: 9, monastery: 7, inn: 5 };
+    for (const L of WD.locs || []) {
+      const R = FR[L.kind]; if (!R || !Array.isArray(L.at) || (o.seen && !o.seen(L))) continue;
+      const n = Math.round(R * .7), byC = FC.map(() => "");
+      for (let i = 0; i < n; i++) {
+        const a = hash(i, L.at[0] | 0, 3) * Math.PI * 2, d = R * (.35 + hash(i, L.at[1] | 0, 4) * .75), x = L.at[0] + Math.cos(a) * d, y = L.at[1] + Math.sin(a) * d * .8;
+        const t = pr.t(x, y), m = pr.M(x, y); if (t < .006 || t > .42 || forest(x, y, m, t) > .3 || m < 40 || !free(x, y)) continue;
+        const fw = 3 + hash(i, 7, L.at[0] | 0) * 3.5, fh = 2.2 + hash(i, 8, L.at[1] | 0) * 2.5, rot = (hash(i, 9, 1) - .5) * .9, ca = Math.cos(rot), sa = Math.sin(rot);
+        const P = [[-fw, -fh], [fw, -fh * .9], [fw * .95, fh], [-fw, fh * 1.05]].map(([u, v]) => [x + u * ca - v * sa, y + u * sa + v * ca]);
+        byC[Math.floor(hash(i, 10, L.at[0] | 0) * FC.length)] += `M${P.map(p => r1(p[0]) + " " + r1(p[1])).join("L")}Z`;
+      }
+      byC.forEach((d, k) => { if (d) fields += `<path d="${d}" fill="${FC[k]}" stroke="#5a4d2c" stroke-opacity=".55" stroke-width=".35"/>`; });
+    }
+    // forests, tree by tree: broadleaf in the lowland, pines higher up; the core of a wood thick, its edge thinning out
+    const TB = new Map(), tput = (y, k, d) => { const b = Math.floor(y / 4); if (!TB.has(b)) TB.set(b, { c0: "", c1: "", c2: "", hi: "", pine: "", pine2: "" }); TB.get(b)[k] += d; };
+    lattice(W, H, 3.3, 2.8, 41, (x, y, r) => {
+      const t = pr.t(x, y), m = pr.M(x, y); if (t <= .012 || t > .5 || !free(x, y)) return;
+      const fo = forest(x, y, m, t), dens = fo > 0 ? Math.min(1, fo * 1.6) : m > 100 ? .02 : 0; if (r >= dens) return;
+      if (t > .28 || hash(x, y, 77) < .18 || m > 225) { const hh = 4.6 + hash(x, y, 79) * 1.6, ww = 1.8 + hash(x, y, 80) * .5; tput(y, hash(x, y, 81) < .5 ? "pine" : "pine2", `M${r1(x)} ${r1(y - hh)}l${r1(ww)} ${r1(hh * .62)}h${r1(-ww * .45)}l${r1(ww * .7)} ${r1(hh * .38)}h${r1(-ww * 2.5)}l${r1(ww * .7)} ${r1(-hh * .38)}h${r1(-ww * .45)}Z`); return; }
+      const rr = 1.85 + hash(x, y, 78) * .75, k = Math.floor(hash(x, y, 82) * 3);
+      tput(y, "c" + k, `M${r1(x + rr)} ${r1(y - rr)}a${r1(rr)} ${r1(rr)} 0 1 0 ${r1(-2 * rr)} 0a${r1(rr)} ${r1(rr)} 0 1 0 ${r1(2 * rr)} 0`);
+      const hr = rr * .45; tput(y, "hi", `M${r1(x - rr * .3 + hr)} ${r1(y - rr * 1.35)}a${r1(hr)} ${r1(hr)} 0 1 0 ${r1(-2 * hr)} 0a${r1(hr)} ${r1(hr)} 0 1 0 ${r1(2 * hr)} 0`);
+    });
+    let trees = ""; for (const b of [...TB.keys()].sort((a, c) => a - c)) { const v = TB.get(b); trees += (v.c0 ? `<path d="${v.c0}" fill="#5b8a34"/>` : "") + (v.c1 ? `<path d="${v.c1}" fill="#4c7a2c"/>` : "") + (v.c2 ? `<path d="${v.c2}" fill="#6b9a3b"/>` : "") + (v.hi ? `<path class="lod1" d="${v.hi}" fill="#8db956" fill-opacity=".8"/>` : "") + (v.pine ? `<path d="${v.pine}" fill="#3d6834"/>` : "") + (v.pine2 ? `<path d="${v.pine2}" fill="#335c2e"/>` : ""); }
+    // (each wood is outlined once, round its trees: an ink edge on every crown would make it a smudge at this size)
+    trees = `<g stroke="#1e2f16" stroke-width=".42" stroke-opacity=".85" stroke-linejoin="round">${trees}</g>`;
+    // dunes, marsh, tufts of grass
+    let dune = "", duneHi = "", marsh = "", pools = "", grass = "", bush = "";
+    lattice(W, H, 6.5, 5, 51, (x, y, r, row) => {
+      const t = pr.t(x, y), m = pr.M(x, y); if (t <= .01 || t > .45 || !free(x, y)) return;
+      if (m < 70 && r < (70 - m) / 70 * 1.3) { const w = 2.8 + r * 2.5; dune += `M${r1(x - w)} ${r1(y)}q${r1(w)} ${r1(-w * .7)} ${r1(w * 2)} 0`; duneHi += `M${r1(x - w * .9)} ${r1(y - .5)}q${r1(w * .6)} ${r1(-w * .55)} ${r1(w)} ${r1(-w * .35)}`; return; }
+      if (m > 212 && t < .14 && r < .55) { marsh += `M${r1(x - 1.8)} ${r1(y)}l.6-2.4M${r1(x)} ${r1(y)}v-3M${r1(x + 1.8)} ${r1(y)}l-.6-2.4`; if (r < .2) pools += `M${r1(x + 4)} ${r1(y + 1)}a2.2 .9 0 1 0 -4.4 0a2.2 .9 0 1 0 4.4 0`; return; }
+      if (m > 75 && t < .4 && forest(x, y, m, t) < .2) {
+        if (r < .16) grass += `M${r1(x - 1.4)} ${r1(y)}l.7-1.7l.7 1.7l.7-1.7l.7 1.7`;
+        else if (r < .26) bush += `M${r1(x + 1.1)} ${r1(y)}a1.1 1 0 1 0 -2.2 0a1.1 1 0 1 0 2.2 0`;
+      }
+    });
+    const p = (d, a, cls) => d ? `<path${cls ? ` class="${cls}"` : ""} d="${d}" ${a}/>` : "";
+    return defs + fields + p(pools, `fill="#4f7f88" stroke="#2e4a44" stroke-width=".4"`) + p(dune, `fill="none" stroke="#9a5a26" stroke-opacity=".6" stroke-width=".8" stroke-linecap="round"`) + p(duneHi, `fill="none" stroke="#f0c27a" stroke-opacity=".55" stroke-width=".6" stroke-linecap="round"`)
+      + p(marsh, `fill="none" stroke="#33442a" stroke-width=".55" stroke-linecap="round"`) + p(grass, `fill="none" stroke="#5c6a2c" stroke-width=".5"`) + p(bush, `fill="#5d7f33" stroke="#2c3d1c" stroke-width=".35"`) + hills + trees + mtn;
+  }
+  // the open sea: a few waves, and ships under sail where it is widest
+  function paintedSea(WD, pr) {
+    const [W, H] = WD.size; let wv = "", wv1 = ""; const deep = [];
+    lattice(W, H, 40, 30, 57, (x, y, r) => {
+      const h = pr.S(x, y); if (h > pr.sea - 18) return;
+      if (h < pr.sea - 38) deep.push([x, y, h]);
+      const d = `M${r1(x - 4)} ${r1(y)}q2-2 4 0t4 0`; if (r < .35) wv += d; else if (r < .7) wv1 += d;
+    });
+    let s = (wv ? `<path d="${wv}" fill="none" stroke="#d6e6e6" stroke-opacity=".35" stroke-width=".7" stroke-linecap="round"/>` : "") + (wv1 ? `<path class="lod1" d="${wv1}" fill="none" stroke="#d6e6e6" stroke-opacity=".3" stroke-width=".6" stroke-linecap="round"/>` : "");
+    deep.sort((a, b) => a[2] - b[2]);
+    const ships = []; for (const p of deep) { if (ships.length >= 4) break; if (ships.every(q => Math.hypot(q[0] - p[0], q[1] - p[1]) > W * .22) && Math.min(p[0], p[1], W - p[0], H - p[1]) > 50) ships.push(p); }
+    for (const [x, y] of ships) { const f = hash(x, y, 3) < .5 ? -1 : 1; s += `<g transform="translate(${r1(x)} ${r1(y)}) scale(${f} 1)" stroke="#2a2016" stroke-width=".6" stroke-linejoin="round"><path d="M-9 4q8 3 17 0" fill="none" stroke="#e2efec" stroke-opacity=".6"/><path d="M-8 1h16l-3 3.4h-10.5Z" fill="#6b4a2e"/><path d="M-1 1V-10" fill="none"/><path d="M-1-9.5q5 2.5 0 9" fill="#efe6cf"/><path d="M-1.6-8q-5 3.5-.2 8" fill="#e6dcc2"/><path d="M-1-10l3 1-3 1" fill="#a33b2a" stroke-width=".4"/></g>`; }
+    return s;
+  }
+
   /* ================================================================ the past: an engraved plate */
   function engraved(WD, uid, o) {
     const [W, H] = WD.size, G = WD.G, ink = "#262019", pr = probe(WD), sea = G.sea;
@@ -286,6 +457,19 @@
       if (title) { const w = Math.min(W * .34, 60 + title.length * 10.5), [x, y] = cartoucheAt(WD, pr, w, 30, [cx, cy, R * 1.2]); s += cartouche(x, y, w, title, ink); }
       return s + `<rect x="5" y="5" width="${W - 10}" height="${H - 10}" fill="none" stroke="${ink}" stroke-width="5" stroke-dasharray="24 24"/><rect x="2.5" y="2.5" width="${W - 5}" height="${H - 5}" fill="none" stroke="${ink}" stroke-width="1.4"/><rect x="8.5" y="8.5" width="${W - 17}" height="${H - 17}" fill="none" stroke="${ink}" stroke-width="1"/></g>`;
     }
+    if (look === "painted") {
+      const c = pr ? seaCorner(WD, pr) : [.87, .83], cx = W * c[0], cy = H * c[1], R = Math.min(W, H) * .1;
+      let s = `<g class="wm-deco">` + star8(cx, cy, R, ink, "#ece4cf");
+      if (title) { const w = Math.min(W * .36, 64 + title.length * 11), [x, y] = cartoucheAt(WD, pr, w, 30, [cx, cy, R * 1.2]); s += cartouche(x, y, w, title, ink); }
+      // the realms, in a box away from the compass (as a painted map keeps its key)
+      const RL = (o.realms || []).slice(0, 8);
+      if (RL.length) {
+        const lw = Math.min(W * .3, 46 + Math.max(...RL.map(g => g.name.length)) * 6.4), lh = 26 + RL.length * 15, lx = cx > W / 2 ? 18 : W - 18 - lw, ly = cy > H / 2 ? 18 : H - 18 - lh;
+        s += `<g class="wm-legend"><rect x="${r1(lx)}" y="${r1(ly)}" width="${r1(lw)}" height="${lh}" fill="#e9dcc0" fill-opacity=".93" stroke="${ink}" stroke-width="1.2"/><rect x="${r1(lx + 3)}" y="${r1(ly + 3)}" width="${r1(lw - 6)}" height="${lh - 6}" fill="none" stroke="${ink}" stroke-width=".5"/><text x="${r1(lx + 10)}" y="${r1(ly + 17)}" class="wm-lgt" fill="${ink}">The realms</text>`
+          + RL.map((g, i) => `<rect x="${r1(lx + 10)}" y="${r1(ly + 25 + i * 15)}" width="16" height="9" fill="${g.colour}" fill-opacity=".55" stroke="${g.colour}" stroke-width="1.4" stroke-dasharray="4 1.5"/><text x="${r1(lx + 32)}" y="${r1(ly + 33 + i * 15)}" class="wm-lgi" fill="${ink}">${A.esc ? A.esc(g.name) : g.name}</text>`).join("") + `</g>`;
+      }
+      return s + `<rect x="3" y="3" width="${W - 6}" height="${H - 6}" fill="none" stroke="#1d160f" stroke-width="6"/><rect x="7.5" y="7.5" width="${W - 15}" height="${H - 15}" fill="none" stroke="#c9b98f" stroke-width="1.4"/></g>`;
+    }
     if (look === "engraved") {
       let ticks = ""; const step = 25; for (let x = 0; x < W; x += step) ticks += `<rect x="${x}" y="4" width="${step}" height="4" fill="${(x / step) % 2 ? "#f1e9d4" : ink}"/><rect x="${x}" y="${H - 8}" width="${step}" height="4" fill="${(x / step) % 2 ? "#f1e9d4" : ink}"/>`; for (let y = 0; y < H; y += step) ticks += `<rect x="4" y="${y}" width="4" height="${step}" fill="${(y / step) % 2 ? "#f1e9d4" : ink}"/><rect x="${W - 8}" y="${y}" width="4" height="${step}" fill="${(y / step) % 2 ? "#f1e9d4" : ink}"/>`;
       const c = pr ? seaCorner(WD, pr) : [.87, .83], cx = W * c[0], cy = H * c[1];
@@ -309,6 +493,15 @@
     for (let i = 1; i < 16; i += 2) s += pt(i / 16 * Math.PI * 2, R * .42, R * .05);
     for (let i = 0; i < 16; i += 4) s += pt(i / 16 * Math.PI * 2, R * .98, R * .13, i === 0);
     s += `<circle r="${r1(R * .06)}" fill="${paper}" stroke="${ink}" stroke-width=".6"/><text y="${r1(-R * 1.1)}" text-anchor="middle" font-size="${r1(R * .3)}" fill="${ink}" class="wm-roseN">N</text></g>`;
+    return s;
+  }
+  // the painted map's compass: an eight-pointed star over two rings, pale on the sea
+  function star8(cx, cy, R, ink, pale) {
+    let s = `<g transform="translate(${r1(cx)} ${r1(cy)})" stroke="${ink}" stroke-linejoin="round"><circle r="${r1(R * .5)}" fill="none" stroke="${pale}" stroke-width="${r1(R * .09)}" stroke-opacity=".9"/><circle r="${r1(R * .5)}" fill="none" stroke-width=".7"/><circle r="${r1(R * .38)}" fill="none" stroke="${pale}" stroke-width="1.4"/>`;
+    const pt = (a, len, w) => { const tip = [Math.sin(a) * len, -Math.cos(a) * len], l = [Math.sin(a - Math.PI / 2) * w, -Math.cos(a - Math.PI / 2) * w], r = [Math.sin(a + Math.PI / 2) * w, -Math.cos(a + Math.PI / 2) * w]; return `<path d="M${r1(l[0])} ${r1(l[1])}L${r1(tip[0])} ${r1(tip[1])}L0 0Z" fill="${pale}" stroke-width=".7"/><path d="M${r1(r[0])} ${r1(r[1])}L${r1(tip[0])} ${r1(tip[1])}L0 0Z" fill="#b9ad8c" stroke-width=".7"/>`; };
+    for (let i = 1; i < 8; i += 2) s += pt(i / 8 * Math.PI * 2, R * .62, R * .1);
+    for (let i = 0; i < 8; i += 2) s += pt(i / 8 * Math.PI * 2, R, R * .14);
+    s += `<circle r="${r1(R * .08)}" fill="${pale}" stroke-width=".7"/><text y="${r1(-R * 1.08)}" text-anchor="middle" font-size="${r1(R * .26)}" fill="${pale}" stroke="${ink}" stroke-width=".6" paint-order="stroke" class="wm-roseN">N</text></g>`;
     return s;
   }
   function northArrow(cx, cy, R, ink, plain) {
@@ -338,7 +531,7 @@
   function draw(WD, look, uid, o) {
     o = o || {};
     if (look === "stars" || !WD.G) return stars(WD, uid, o);
-    return ({ parchment, engraved, atlas, holo })[look](WD, uid, o);
+    return ({ painted, parchment, engraved, atlas, holo })[look](WD, uid, o);
   }
   A.worldArt = { LOOKS, looksFor, draw };
 })(ATLAS);

@@ -18,10 +18,10 @@ The user asked for it on 20 Oct 2026, and the same day for maps made from their 
 ### An invented land
 
 ```
-node atlas.js world <dir> [--look parchment|engraved|atlas|holo|stars] [--land continent|islands|coast|inland] [--size small|medium|large] [--seed N] [--across "600 miles"]
+node atlas.js world <dir> [--look painted|parchment|engraved|atlas|holo|stars] [--land continent|islands|coast|inland] [--size small|medium|large] [--seed N] [--across "600 miles"]
 ```
 
-**Looks** (the user asked, 27 Oct 2026, for world maps that look professionally drawn, in a style fitting the setting; atlas-world-art.js draws them, atlas-world.js keeps everything the map does): `parchment` for fantasy and the middle ages (an inked coast echoed out to sea, hatched mountain ranges, woods of broadleaf and pine, marsh, sand, waves and ships, a compass rose, a chequered frame, a title cartouche); `engraved` for the past (an atlas plate of the 1800s: hachured slopes, water-lining, a graduated border, a north arrow); `atlas` for the modern world (shaded relief in height colours, sea depths, built-up areas round the towns, a coordinate grid); `holo` for a planet in science fiction (a survey display: glowing contours, a lettered grid, a frame of readouts; `palette: "alien"` in world.js for an alien world's colours); `stars` for a star chart. Without `--look`, a world takes the look of its campaign's setting and age. On the page the game master changes it in the map's bar (kept as the world's `style`; the players see the same). Finer things (more woods, waves, contour and depth lines, stipple) come in as the map is brought closer.
+**Looks** (the user asked, 27 Oct 2026, for world maps that look professionally drawn, in a style fitting the setting; atlas-world-art.js draws them, atlas-world.js keeps everything the map does): `painted` for fantasy (the default since 27 Oct 2026, when the user asked for fantasy maps "way more detailed", after maps painted in colour: green lowland, ochre and orange dry land, forests drawn tree by tree, mountains drawn by hand in ranges, lit and shaded, with crags, spurs and snow, hills, dunes, marsh, farmland round the settlements, a blue-green sea glowing pale along the coasts with ripples, ships, settlements with red roofs, an eight-pointed compass, a title scroll and a key of the realms); `parchment` for the middle ages, and fantasy when chosen (an inked coast echoed out to sea, hatched mountain ranges, woods of broadleaf and pine, marsh, sand, waves and ships, a compass rose, a chequered frame, a title cartouche); `engraved` for the past (an atlas plate of the 1800s: hachured slopes, water-lining, a graduated border, a north arrow); `atlas` for the modern world (shaded relief in height colours, sea depths, built-up areas round the towns, a coordinate grid); `holo` for a planet in science fiction (a survey display: glowing contours, a lettered grid, a frame of readouts; `palette: "alien"` in world.js for an alien world's colours); `stars` for a star chart. Without `--look`, a world takes the look of its campaign's setting and age. On the page the game master changes it in the map's bar (kept as the world's `style`; the players see the same). Finer things (more woods, waves, contour and depth lines, stipple) come in as the map is brought closer.
 
 1. The first run writes `world.js` with a location for each of the campaign's cities.
 2. Add the story's other places to `world.js` (below), with no `at:`.
@@ -32,7 +32,8 @@ node atlas.js world <dir> [--look parchment|engraved|atlas|holo|stars] [--land c
 4. Name the land's features in `regions:` ({ name, kind: "sea" | "lake" | "range" | "forest" }), largest first. Unnamed ones get names in the same spirit; `--names none` leaves them unnamed.
 
 Looks:
-- `parchment` is fantasy and the past: ink, mountains and woods drawn as a cartographer would.
+- `painted` is fantasy: a map painted in colour, as a fantasy map is drawn today.
+- `parchment` is the middle ages (and fantasy when the game master chooses it): ink, mountains and woods drawn as a cartographer would.
 - `atlas` is the modern world.
 - `stars` is a star map with nebulae and space lanes.
 
@@ -84,7 +85,7 @@ Written by hand (never `world-terrain.js`, which the command writes).
 ```js
 ATLAS.world({
   title: "The Wyrmwater Reach",
-  look: "parchment",                                // parchment · engraved · atlas · holo · stars (the game master may change it on the page)
+  look: "painted",                                  // painted · parchment · engraved · atlas · holo · stars (the game master may change it on the page)
   scale: { unit: "mile", per: 0.5 },               // one unit of the map; without it no distances are shown (a real map knows its own)
   speeds: { road: 24, trail: 16, pass: 10, river: 30, sea: 72 },   // a day's travel by each kind of route, in that unit
   regions: [{ name: "The Wyrmwater", kind: "sea" }],
