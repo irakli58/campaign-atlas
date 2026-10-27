@@ -202,7 +202,7 @@ async function realWorld(dir, A, flags, log) {
   }
   if (lost.length) log(`  not found in ${R.name}: ${lost.join(", ")}. Give each a geo: "Place, Country" (its real name, or a real place near it), geo: [lat, lon], or at: [x, y] on the map (${w} by ${h})`);
   T.height = Buffer.from(H).toString("base64"); T.moist = Buffer.from(M).toString("base64");
-  const lookWord = (flags.look && flags.look !== true ? flags.look : null) || W0.look || old.look || "parchment";
+  const lookWord = (flags.look && flags.look !== true ? flags.look : null) || W0.look || old.look || require("./world-invent").lookOfCity(A);
   T.look = K.LOOK_OF[String(lookWord).toLowerCase()] || "parchment";
   const share = Math.round(H.reduce((s, v) => s + (v > 128 ? 1 : 0), 0) / N * 100);
   return { T, summary: `the real ${R.name}: ${Math.round(R.wk)} by ${Math.round(R.hk)} km (1 unit = ${T.scale.per} ${T.scale.unit}), ${share}% land${gotElev ? ", with its true heights" : ""}, ${T.rivers.length} rivers, ${T.labels.length} names; ${found} location${found === 1 ? "" : "s"} found by name` };

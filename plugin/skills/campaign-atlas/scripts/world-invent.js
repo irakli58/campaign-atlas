@@ -157,7 +157,7 @@ function labelOf(p, cols, cell, best) {
 function invent(A, flags, log) {
   const K = A.worldKit, W0 = A.worldData || {}, old = A.worldTerrainData || {};
   const lookWord = (flags.look && flags.look !== true ? flags.look : null) || W0.look || old.look || lookOfCity(A);
-  const look = K.LOOK_OF[String(lookWord).toLowerCase()]; if (!look) throw new Error(`unknown look "${lookWord}": parchment (fantasy and the past), atlas (the modern world) or stars (a star map)`);
+  const look = K.LOOK_OF[String(lookWord).toLowerCase()]; if (!look) throw new Error(`unknown look "${lookWord}": parchment (fantasy), engraved (the past), atlas (the modern world), holo (a planet surveyed) or stars (a star map)`);
   const sizeWord = flags.size && flags.size !== true ? String(flags.size) : old.sizeName || "medium";
   const [w, h] = Array.isArray(W0.size) ? W0.size : SIZES[sizeWord] || SIZES.medium;
   const land = flags.land && flags.land !== true ? String(flags.land) : old.land || "continent";
@@ -277,10 +277,15 @@ function invent(A, flags, log) {
   const sea = look === "stars" ? 0 : Math.round(L.H.reduce((s, v) => s + (v <= 128 ? 1 : 0), 0) / N * 100);
   return { T, summary: `${look === "stars" ? "a star map" : `the land: ${land}, ${sea}% sea, ${T.rivers.length} rivers`}, ${w} by ${h} (seed ${seed}); ${T.labels.length} named features; ${placedN} location${placedN === 1 ? "" : "s"} placed${Object.keys(keepOld).length ? `, ${Object.keys(T.spots).length - placedN} kept where they stood` : ""}${routesN ? `; ${routesN} routes suggested (world.js has none of its own)` : ""}` };
 }
+// the look a campaign's world wears by itself (the game master may choose another on the page): a planet's surface a
+// survey, space a star chart, the modern world an atlas, the past an engraved plate, fantasy and the middle ages parchment
 function lookOfCity(A) {
   const c = A.cityData || {}, lk = typeof c.look === "string" ? c.look : c.look && c.look.base, setting = String((A.config || {}).setting || "") + " " + String((A.config || {}).system || "");
-  if (lk === "scifi" || lk === "future" || /space|star|orbit|planet|mothership|traveller/i.test(setting)) return "stars";
-  if (lk === "modern") return "atlas";
+  const era = A.table && A.table.era ? A.table.era() : "";
+  if (/colony|planet ?side|planet's surface|surface of|alien world|terraform/i.test(setting)) return "holo";
+  if (lk === "scifi" || lk === "future" || era === "future" || /space|star|orbit|planet|mothership|traveller/i.test(setting)) return "stars";
+  if (lk === "modern" || era === "modern") return "atlas";
+  if (era === "victorian" || era === "1920s" || lk === "victorian" || lk === "industrial") return "engraved";
   return "parchment";
 }
 // ---- a map the game master drew (or painted, or photographed): the picture is kept beside the campaign as
@@ -365,7 +370,7 @@ function starter(dir, A, flags, size) {
 // no at: [x, y] where its kind belongs, and suggests routes while there are none here. Run it again after adding places.
 ATLAS.world({
   title: ${JSON.stringify(title)},
-  look: ${JSON.stringify(lk)},                       // parchment (fantasy, the past) · atlas (the modern world) · stars (a star map)
+  look: ${JSON.stringify(lk)},                       // parchment (fantasy) · engraved (the past) · atlas (the modern world) · holo (a planet) · stars (a star map)
   ${scale ? `scale: ${JSON.stringify(scale).replace(/"(\w+)":/g, "$1: ")},` : `// scale: { unit: "mile", per: 0.6 },     // how far one unit of the map is (the map is ${w} units across); without it, no distances`}
   ${speeds ? `speeds: ${JSON.stringify(speeds).replace(/"(\w+)":/g, "$1: ")},` : `// speeds: { road: 24, trail: 16, pass: 10, river: 30, sea: 72 },   // a day's travel on each kind of route, in the scale's unit`}
   regions: [],                              // names for the seas, ranges and forests: { name: "The Grey Sea", kind: "sea" }

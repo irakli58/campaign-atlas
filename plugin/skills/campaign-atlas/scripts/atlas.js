@@ -32,7 +32,7 @@
    node atlas.js city <dir> ... --id <id>        another city of the campaign (cities/<id>.js), for its world map
 
    The world map (world.js, by hand; world-terrain.js, by the command):
-   node atlas.js world <dir> [--look parchment|atlas|stars] [--land continent|islands|coast|inland] [--size small|medium|large]
+   node atlas.js world <dir> [--look parchment|engraved|atlas|holo|stars] [--land continent|islands|coast|inland] [--size small|medium|large]
                       [--seed N] [--across "600 miles"] [--names none] [--replace]
                                                  an INVENTED land under world.js, and where its locations stand (references/world.md);
                                                  starts a world.js from the campaign's cities when there is none
@@ -370,7 +370,7 @@ function checkCity(A, rid) {
 function checkWorld(A) {
   const out = [], K = A.worldKit, W0 = A.worldData || {}; let problems = 0, notes = 0;
   const P = m => { out.push("   ! " + m); problems++; }, N = m => { out.push("   - " + m); notes++; };
-  if (W0.look && !K.LOOK_OF[String(W0.look).toLowerCase()]) P(`unknown look "${W0.look}": parchment, atlas or stars`);
+  if (W0.look && !K.LOOK_OF[String(W0.look).toLowerCase()]) P(`unknown look "${W0.look}": parchment, engraved, atlas, holo or stars`);
   if (W0.size && !(Array.isArray(W0.size) && W0.size[0] > 0 && W0.size[1] > 0)) P("size must be [width, height]");
   const ids = new Set();
   (W0.locations || []).forEach((l, i) => {
@@ -715,7 +715,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-copilot.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-consistency.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-art.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-copilot.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-consistency.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw, link, style: css + "\n" + over, world, drawingJS };
@@ -736,7 +736,7 @@ function playersPage(parts, dir) {
   // (not the story store, which holds the game master's investigation, nor the cave generator's words, riddles and
   // traps, whose lists of answers a player could look a riddle up in: only the cave's drawing, atlas-cave.js)
   const leave = new Set(["atlas-story.js", "atlas-puzzles.js", "atlas-traps.js", "atlas-cave-words.js"]);
-  const files = [path.join(ENGINE, "atlas-engine.js"), ...(world ? [path.join(ENGINE, "atlas-world.js")] : []), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.filter(f => !leave.has(f)).map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-room3d.js")];
+  const files = [path.join(ENGINE, "atlas-engine.js"), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-art.js")] : []), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.filter(f => !leave.has(f)).map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-room3d.js")];
   const raw = files.map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; })
     .concat("ATLAS.configure(" + JSON.stringify(cfg) + ");", terrain, world ? drawingJS : "", modelsJS(dir), ...customModels(dir), "ATLAS.share.boot();").join("\n;\n");
   try { new Function(raw); } catch (e) { die("The players' copy does not parse: " + e.message); }

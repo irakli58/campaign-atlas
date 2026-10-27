@@ -67,13 +67,13 @@
     const OV = { loc: {}, route: {}, party: null };
     let docs = Object.entries(S.get("world") || {});
     if (!docs.length && prefs) { try { docs = Object.entries(JSON.parse(prefs.get("world-edits") || "{}") || {}); } catch (e) { docs = []; } }
-    for (const [k, d] of docs) { if (k.startsWith("l-")) OV.loc[k.slice(2)] = d; else if (k.startsWith("r-")) OV.route[k.slice(2)] = d; else if (k === "party") OV.party = d; }
+    for (const [k, d] of docs) { if (k.startsWith("l-")) OV.loc[k.slice(2)] = d; else if (k.startsWith("r-")) OV.route[k.slice(2)] = d; else if (k === "party") OV.party = d; else if (k === "style") OV.style = d; }
     const WD = A.worldPrepare(A.worldData, A.worldTerrainData, OV), seen = id => WD.byId[id] && WD.byId[id].state !== "unknown";
     const keep = (o, ks) => { const x = {}; for (const k of ks) if (o[k] != null && o[k] !== "") x[k] = Array.isArray(o[k]) ? o[k].slice() : o[k]; return x; };
     const locations = WD.locs.filter(l => l.state !== "unknown").map(l => keep(l, ["id", "name", "kind", "at", "state", "region"]));
     const routes = WD.routes.filter(r => !r.hidden && seen(r.from) && seen(r.to)).map(r => keep(r, ["id", "from", "to", "kind", "name", "path"]));
     const party = WD.party && seen(WD.party.at) ? { at: WD.party.at, plan: [], trail: (WD.party.trail || []).filter(seen) } : null;
-    return { title: WD.W.title || "", look: WD.W.look || "", size: WD.size, scale: WD.W.scale || null, speeds: WD.W.speeds || null, labels: (WD.W.labels || []).slice(), locations, routes, party };
+    return { title: WD.W.title || "", look: WD.look || WD.W.look || "", palette: WD.W.palette || "", size: WD.size, scale: WD.W.scale || null, speeds: WD.W.speeds || null, labels: (WD.W.labels || []).slice(), locations, routes, party };
   }
   // their board, as their own window draws it: what they have found, and the strings the game master pinned up (laid out
   // again only when what is on it changes)

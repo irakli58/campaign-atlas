@@ -1796,3 +1796,33 @@ button.ho-b:hover { color: var(--ink); }
 .t-lanqr > svg { flex: none; width: 168px; height: 168px; border-radius: 6px; background: #fff; }
 .t-lanqr > div { flex: 1; min-width: 200px; }
 .t-lanurl { font-family: var(--f-mono); font-size: 15px; word-break: break-all; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); }
+
+/* the world map's art (atlas-world-art.js): the finer things come in as the map comes closer; the two looks added on
+   27 Oct 2026 (the past's engraved plate, science fiction's survey); the titles, grids and compass letters it draws */
+.wm[data-z="0"] .wm-land .lod1, .wm[data-z="0"] .wm-land .lod2, .wm[data-z="1"] .wm-land .lod2, .wm:not([data-z]) .wm-land .lod1, .wm:not([data-z]) .wm-land .lod2 { display: none; }
+.wm-engraved { --wm-ink: #262019; --wm-mk: #f7f1e2; --wm-bg: #e9e1c8; --wm-label: #1f1a14; --wm-halo: #f1e9d4; }
+.wm-holo { --wm-ink: #5ae2f0; --wm-mk: #06202b; --wm-bg: #020d16; --wm-label: #d6fbff; --wm-halo: #020d16; }
+.wm-engraved .wm-grain { background: radial-gradient(ellipse at center, transparent 70%, rgba(40, 30, 10, .1) 100%); }
+.wm-holo .wm-grain { background: repeating-linear-gradient(0deg, rgba(90, 226, 240, .035) 0 1px, transparent 1px 3px), radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, .55) 100%); }
+.wm-engraved .wm-rl { font-family: var(--f-display); font-style: italic; letter-spacing: .35em; fill-opacity: .8; }
+.wm-engraved .wm-rl.w { fill: #3c5568; }
+.wm-holo .wm-rl { font-family: var(--f-mono); fill: #5ae2f0; fill-opacity: .55; stroke: none; letter-spacing: .45em; text-transform: uppercase; }
+.wm-engraved .wl-t { font-family: var(--f-display); font-style: normal; }
+.wm-engraved .wl.i1 .wl-t { font-family: var(--f-sc); letter-spacing: .08em; }
+.wm-holo .wl .wi { stroke: #5ae2f0; fill: #06202b; }
+.wm-holo .wl .wi .k { fill: #5ae2f0; }
+.wm-holo .wl-t, .wm-holo .wl.i1 .wl-t, .wm-holo .wl.i2 .wl-t { font-family: var(--f-mono); font-style: normal; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; }
+.wm-holo .wl:hover .wl-t, .wm-holo .wl.sel .wl-t { fill: #ffd166; }
+.wm-holo .wl.sel .wl-ring { fill: rgba(90, 226, 240, .14); stroke: #5ae2f0; }
+.wm-holo .wl-3d rect { fill: #5ae2f0; stroke: #020d16; }
+.wm-holo .wl-3d text { fill: #020d16; }
+.wm-holo .wl-party path + path { fill: #ffd166; }
+.wm-holo .wj-been, .wm-holo .wj-plan { stroke: #ffd166; }
+.wm-holo .wm-ctl button, .wm-stars .wm-ctl button { background: #06202b; color: #9feaf5; border-color: #2b6b7a; }
+.wm-ttl { font-family: var(--f-sc); font-size: 17px; letter-spacing: .12em; }
+.wm-engraved .wm-ttl { font-family: var(--f-display); font-size: 20px; letter-spacing: .4em; }
+.wm-gl { font-family: var(--f-mono); pointer-events: none; }
+.wm-roseN { font-family: var(--f-sc); font-weight: 700; }
+.wm-hud text { font-family: var(--f-mono); letter-spacing: .12em; }
+.wm-deco, .wm-cart { pointer-events: none; }
+.wm-look { font: inherit; font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .04em; border: 1px solid var(--rule); border-radius: 999px; padding: 3px 8px; background: transparent; color: inherit; }

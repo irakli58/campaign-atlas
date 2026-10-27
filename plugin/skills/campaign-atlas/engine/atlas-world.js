@@ -24,8 +24,12 @@
 
   /* ---- what a world can hold */
   // the look of the map: a parchment map (fantasy, and the past), an atlas (the modern world) or a star map (the future)
-  const LOOK_OF = { parchment: "parchment", fantasy: "parchment", old: "parchment", antique: "parchment", medieval: "parchment", industrial: "parchment", historical: "parchment",
-    atlas: "atlas", modern: "atlas", political: "atlas", stars: "stars", star: "stars", scifi: "stars", future: "stars", space: "stars" };
+  // (27 Oct 2026: the past has its own look, an engraved atlas plate; a planet in science fiction a survey; the game
+  // master may choose another, kept as the world's "style": atlas-world-art.js draws each)
+  const LOOK_OF = { parchment: "parchment", fantasy: "parchment", medieval: "parchment",
+    engraved: "engraved", old: "engraved", antique: "engraved", industrial: "engraved", historical: "engraved", victorian: "engraved", "1920s": "engraved",
+    atlas: "atlas", modern: "atlas", political: "atlas", holo: "holo", survey: "holo", planet: "holo", alien: "holo",
+    stars: "stars", star: "stars", scifi: "stars", future: "stars", space: "stars" };
   // what the party knows of a place. Unknown places are not shown on the players' map.
   const STATES = [["unknown", "Unknown to the party"], ["rumoured", "Rumoured"], ["known", "Known"], ["visited", "Visited"], ["done", "Done with"]];
   // kinds of location: [importance 1 to 3 (1 is always named on the map), name]
@@ -58,6 +62,14 @@
       land: [[0, hex("#d6e6bd")], [.3, hex("#e4e2b8")], [.55, hex("#dccfa2")], [.8, hex("#c8b18f")], [.93, hex("#eeeae2")], [1, hex("#fbfbf8")]],
       wet: hex("#bdd8a6"), dry: hex("#ede0b6"), tree: "#a9c98f",
       routes: { road: ["#c0392b", 2.2, ""], trail: ["#8a6d4a", 1.5, "4 3"], pass: ["#8a5a2a", 1.7, "5 2 1.5 2"], river: ["#3f7fb5", 1.9, "6 3"], sea: ["#2d6da3", 1.6, "8 5"], rail: ["#222", 2.2, "9 4"], air: ["#666", 1.3, "3 4"], tunnel: ["#666", 1.7, "3 3"], portal: ["#7b4fb5", 1.8, "2 3"], lane: ["#2d6da3", 1.6, "8 4"], jump: ["#7b4fb5", 1.6, "2 4"] }
+    },
+    engraved: {
+      ink: "#262019", paper: "#f1e9d4", mk: "#f7f1e2", river: "#262019", label: "#1f1a14",
+      routes: { road: ["#262019", 1.6, ""], trail: ["#262019", 1.2, "3 2"], pass: ["#262019", 1.3, "5 2 1.5 2"], river: ["#4c6a80", 1.6, "6 3"], sea: ["#4c6a80", 1.4, "8 5"], rail: ["#262019", 2.2, "8 2"], air: ["#55504a", 1.2, "3 4"], tunnel: ["#5a5048", 1.5, "3 3"], portal: ["#6a3f9e", 1.7, "2 3"], lane: ["#2f4f6f", 1.5, "8 4"], jump: ["#6a3f9e", 1.5, "2 4"] }
+    },
+    holo: {
+      ink: "#5ae2f0", paper: "#020d16", mk: "#06202b", river: "#5ae2f0", label: "#d6fbff",
+      routes: { road: ["#ffd166", 1.8, ""], trail: ["#5ae2f0", 1.3, "3 3"], pass: ["#5ae2f0", 1.4, "5 2 1.5 2"], river: ["#5ae2f0", 1.4, "6 3"], sea: ["#5ae2f0", 1.4, "8 5"], rail: ["#ffd166", 2, "10 3"], air: ["#9fb5c9", 1.2, "3 4"], tunnel: ["#9fb5c9", 1.4, "3 3"], portal: ["#c08aff", 1.8, "2 3"], lane: ["#5ad1e6", 1.6, "8 5"], jump: ["#e07ad8", 1.6, "2 4"] }
     },
     stars: {
       ink: "#9fd9ff", paper: "#05070d", mk: "#0b1424", river: "#4a7aa0", label: "#cfe6ff",
@@ -109,11 +121,21 @@
       ship: '<path d="M8 0L-6-5-3 0-6 5Z"/>', wreck: '<path d="M8 0L-6-5-3 0-6 5Z" stroke-dasharray="2 1.5"/>',
       anomaly: '<circle r="7" fill="none" stroke-dasharray="1.5 2.5"/><circle class="k" r="2"/>',
       _: '<path d="M0-6L6 0 0 6-6 0Z"/>'
+    },
+    // a survey's settlements: shapes a machine would draw
+    holo: {
+      capital: '<path d="M0-8L7-4V4L0 8-7 4V-4Z"/><path class="k" d="M0-4L3.5-2V2L0 4-3.5 2V-2Z"/>', city: '<path d="M0-7L6-3.5V3.5L0 7-6 3.5V-3.5Z"/><circle class="k" r="2"/>',
+      town: '<path d="M0-5.5L4.8-2.8V2.8L0 5.5-4.8 2.8V-2.8Z"/>', village: '<rect x="-3" y="-3" width="6" height="6"/>', hamlet: '<rect x="-2.4" y="-2.4" width="4.8" height="4.8"/>',
+      port: '<path d="M-6 3L0-6 6 3Z"/><path class="k" d="M-2 3h4v2h-4Z"/>', base: '<rect x="-5" y="-5" width="10" height="10"/><path d="M-5 0H5M0-5V5" fill="none"/>', outpost: '<rect x="-4" y="-4" width="8" height="8" transform="rotate(45)"/>',
+      station: '<circle r="5.5"/><circle class="k" r="2"/><path d="M-8 0h2.5M5.5 0H8M0-8v2.5M0 5.5V8" fill="none"/>', mine: '<path d="M-5 5L0-5 5 5Z"/><path d="M-2 5V2h4v3" fill="none"/>',
+      ruin: '<path d="M-5 5V-1l2-2 2 2M1 5V-4l2 1 2-1V5" fill="none" stroke-dasharray="2 1"/>', site: '<circle r="4.5" fill="none"/><circle class="k" r="1.5"/>',
+      _: '<path d="M0-6L6 0 0 6-6 0Z"/>'
     }
   };
+  ICONS.engraved = ICONS.parchment;
   const PLANETS = ["#c97b4a", "#5f8fc9", "#8fbf6a", "#c9b36a", "#9b6ac9", "#6ac9c0", "#d9d2c4", "#c96a7e"];
   const iconOf = (look, L) => {
-    const set = ICONS[look], k = String(L.kind || "").toLowerCase();
+    const set = ICONS[look] || ICONS.parchment, k = String(L.kind || "").toLowerCase();
     let s = set[k] || set._;
     if (look === "stars" && /class="pf"/.test(s)) s = s.replace(/class="pf"/g, `class="pf" style="fill:${PLANETS[Math.floor(strHash(L.id) * PLANETS.length)]}"`);
     return s;
@@ -122,6 +144,8 @@
 
   /* ---- registering a world, and laying the referee's changes over it */
   A.world = data => { A.worldData = data || {}; return A; };
+  // what the map's art draws with (atlas-world-art.js)
+  A.worldDraw = { sampler: G => sampler(G), coastRings: G => coastRings(G), chaikin: (p, n, c) => chaikin(p, n, c), rdpRing: (r, e) => rdpRing(r, e), pathD: (p, c) => pathD(p, c), hash, ramp, mix, hex, clamp, vnoise: s => vnoise(s) };
   // (the players' copy, atlas-share.js, works out from it which places the players know)
   A.worldPrepare = (W, T, OV) => prepareWorld(W, T, OV);
   A.worldTerrain = data => { A.worldTerrainData = data || {}; return A; };
@@ -134,7 +158,10 @@
   // the world as the page draws it: the campaign's world.js, its terrain, and the referee's changes (OV) laid over them
   function prepareWorld(W, T, OV) {
     W = W || {}; T = T || {}; OV = OV || {};
-    const look = LOOK_OF[String(W.look || T.look || "parchment").toLowerCase()] || "parchment";
+    let look = LOOK_OF[String(W.look || T.look || "parchment").toLowerCase()] || "parchment";
+    // the game master's choice (OV.style), where the world can wear it: a star chart stays one, a world with land any other
+    const want = OV.style && LOOK_OF[String(OV.style.look || "").toLowerCase()], starry = !!T.stars || look === "stars";
+    if (want && (want === "stars") === starry) look = want;
     const size = Array.isArray(W.size) && W.size[0] > 0 ? W.size.slice(0, 2) : T.w ? [T.w, T.h] : [1000, 700];
     const G = T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist) } : null;
     const spots = T.spots || {}, locs = [], byId = {};
@@ -458,7 +485,7 @@
     const DRAW = WD.T.drawing && A.worldDrawingSrc ? { src: A.worldDrawingSrc, trace: null, mode: ctx.store.get("world-drawn") || "" } : null;
     const drawn = () => DRAW && (DRAW.mode === "drawn" || !DRAW.trace || WD.look === "stars");
     const traced = () => { if (DRAW && DRAW.trace) { WD.G = DRAW.trace.G; WD.rivers = DRAW.trace.rivers; WD.labels = [...DRAW.trace.labels, ...WD.labels]; } };
-    const st = STYLE[WD.look], gm = () => ctx.mode() === "gm";
+    let st = STYLE[WD.look] || STYLE.parchment; const gm = () => ctx.mode() === "gm";
     const [W, H] = WD.size;
     const filt = Object.assign({ kinds: {}, know: "all", only3d: false, routes: {} }, (() => { try { return JSON.parse(ctx.store.get("world-filter") || "{}"); } catch (e) { return {}; } })());
     const S = { sel: null, selRoute: null, hover: null, edit: false, tool: null, first: null, q: "", hits: null, journey: null, drag: null, note: "" };
@@ -467,6 +494,7 @@
     box.innerHTML = `<div class="wm wm-${WD.look}">
       <div class="wm-bar">
         <span class="wm-title">${esc(WD.title || "The world")}</span>
+        <select class="wm-look keeper" aria-label="How the map is drawn" title="How the map is drawn: the players see it the same way" hidden></select>
         <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
         <span class="wm-sp"></span>
         <span class="wm-editbar keeper"></span>
@@ -493,9 +521,18 @@
 
     /* ---- the land, drawn once */
     function drawLand() {
-      let s = `<rect width="${W}" height="${H}" fill="${WD.look === "stars" ? "#05070d" : WD.look === "atlas" ? "#c7deee" : "#d8cfb1"}"/>`;
+      let s = `<rect width="${W}" height="${H}" fill="${WD.look === "stars" ? "#05070d" : WD.look === "holo" ? "#020d16" : WD.look === "atlas" ? "#c7deee" : "#d8cfb1"}"/>`;
       if (drawn()) { $(".wm-land").innerHTML = s + `<image href="${DRAW.src}" width="${W}" height="${H}" preserveAspectRatio="none"/><rect width="${W}" height="${H}" fill="none" stroke="${st.ink}" stroke-opacity=".55" stroke-width="2"/>`; return; }
       const G = WD.G;
+      // the look's own art (atlas-world-art.js), with the region names over it
+      if (A.worldArt) {
+        try { s += A.worldArt.draw(WD, WD.look, uid, { seen: L => seen(L), palette: WD.W.palette || WD.T.palette }); } catch (e) { console.warn("world map: the art could not be drawn", e); }
+        for (const L of WD.labels) if (L && L.name && Array.isArray(L.at)) {
+          const water = /sea|ocean|lake|bay|gulf|strait|sound|river/.test(L.kind || ""), fs = (L.size || (L.kind === "river" ? 10 : water ? 20 : L.kind === "region" ? 24 : 15)) * 1.15;
+          s += `<text class="wm-rl${water ? " w" : ""}" x="${r1(L.at[0])}" y="${r1(L.at[1])}" font-size="${fs}" text-anchor="middle"${L.angle ? ` transform="rotate(${r1(L.angle)} ${r1(L.at[0])} ${r1(L.at[1])})"` : ""}>${esc(L.name)}</text>`;
+        }
+        $(".wm-land").innerHTML = s; return;
+      }
       if (G) {
         const img = paintTerrain(WD), pat = (id, src) => src ? `<pattern id="${uid}-${id}" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${src}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern>` : "";
         s += `<defs>${pat("s", img.sea)}${pat("l", img.land)}<clipPath id="${uid}-c"><rect width="${W}" height="${H}"/></clipPath></defs><g clip-path="url(#${uid}-c)">`;
@@ -617,6 +654,8 @@
     // where each marker stands on the screen, which are named, and the scale bar
     function place() {
       const k = V.k, z = k / V.k0, boxes = [], crowd = over.querySelectorAll(".wl").length;
+      // how close the map is: finer things are drawn as it comes closer (classes lod1, lod2 of the art)
+      const zl = z < 1.5 ? "0" : z < 2.8 ? "1" : "2"; if (root.dataset.z !== zl) root.dataset.z = zl;
       const items = [];
       for (const g of over.querySelectorAll(".wl")) {
         const L = WD.byId[g.dataset.loc]; if (!L) continue;
@@ -766,13 +805,18 @@
       eb.innerHTML = S.edit && gm() ? `<button type="button" class="wm-btn" data-w="addloc" aria-pressed="${S.tool === "loc"}">+ Place</button><button type="button" class="wm-btn" data-w="addroute" aria-pressed="${S.tool === "route"}">+ Route</button><button type="button" class="wm-btn" data-w="export">Copy as world.js</button>` : "";
       $('[data-w="edit"]').setAttribute("aria-pressed", S.edit);
       const dw = $('[data-w="drawn"]'); if (dw) { dw.setAttribute("aria-pressed", !!drawn()); dw.hidden = WD.look === "stars" || !DRAW.trace; }
+      // how the map is drawn: the game master chooses among the looks this world can wear
+      const lk = $(".wm-look"), opts = A.worldArt ? A.worldArt.looksFor(WD) : [];
+      if (lk) { lk.hidden = !gm() || opts.length < 2 || drawn(); lk.innerHTML = opts.map(([v, l]) => `<option value="${v}"${v === WD.look ? " selected" : ""}>${esc(l)}</option>`).join(""); }
       const sw = (k) => { const [c, w, d] = st.routes[k] || st.routes.road; return `<svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" stroke="${c}" stroke-width="${w}" stroke-dasharray="${d}" stroke-linecap="round"/></svg>`; };
       const how = S.tool === "loc" ? "Click the map where the new place stands." : S.tool === "route" ? (S.first ? `Now click where the route from ${esc(WD.byId[S.first] ? WD.byId[S.first].name : "")} goes.` : "Click the place the route starts from.") : S.edit ? "Drag a place to move it. Click a place or a route to change it." : `Drag to pan · scroll or pinch to zoom · click a place for what is there${Object.keys(A.cities || {}).length ? " and to enter its 3D map" : ""}.`;
       $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
     }
     function rebuild() {
-      const keepSel = S.sel, keepR = S.selRoute;
+      const keepSel = S.sel, keepR = S.selRoute, was = WD.look;
       WD = prepareWorld(A.worldData, A.worldTerrainData, OV); traced();
+      // a new look: its colours, its icons, its land
+      if (WD.look !== was) { st = STYLE[WD.look] || STYLE.parchment; root.classList.remove("wm-" + was); root.classList.add("wm-" + WD.look); drawLand(); }
       if (keepSel && !WD.byId[keepSel]) S.sel = null; if (keepR && !WD.rById[keepR]) S.selRoute = null;
       drawRoutes(); drawMarkers(); renderPanel(); renderBars();
     }
@@ -780,12 +824,12 @@
 
     /* ---- what the referee changes, kept in the page's database (or this browser), laid over the campaign's world */
     let DB = null;
-    function fromDocs(docs) { OV.loc = {}; OV.route = {}; OV.party = null; for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id === "party") OV.party = d; } }
+    function fromDocs(docs) { OV.loc = {}; OV.route = {}; OV.party = null; OV.style = null; for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id === "party") OV.party = d; else if (id === "style") OV.style = d; } }
     const localAll = () => { try { return JSON.parse(ctx.store.get("world-edits") || "{}") || {}; } catch (e) { return {}; } };
     function save(doc, data) {
       // the change shows at once; the database follows
       const all = DB ? null : localAll();
-      if (doc === "party") OV.party = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; }
+      if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; }
       rebuild();
       if (DB) { const ref = DB.collection("world").doc(doc); return Promise.resolve(data ? ref.set(data) : ref.delete()).catch(e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); }); }
       if (data) all[doc] = data; else delete all[doc];
@@ -1018,6 +1062,8 @@
     }
     function onChange(e) {
       const t = e.target;
+      // the map drawn another way: kept with the world (the players' screen and copy follow)
+      if (t.matches(".wm-look")) { if (gm()) save("style", { look: t.value }); return; }
       if (t.matches("[data-fk]")) filt.kinds[t.dataset.fk] = t.checked;
       else if (t.matches("[data-fr]")) filt.routes[t.dataset.fr] = t.checked;
       else if (t.matches("[data-fknow]")) filt.know = t.value;
