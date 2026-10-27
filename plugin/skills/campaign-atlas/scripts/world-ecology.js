@@ -1,0 +1,162 @@
+/* Campaign Atlas: the living cover of a world, worked out from its geography and climate (the user, 27 Oct 2026:
+   "actual biome simulation, not randomly placed biome decorations ... vegetation and ecosystems developed naturally
+   from the geography and climate"). world-geology.js calls it once the land, the sea, the lakes and the rain are made.
+   Every cell gets, in order:
+     - its climate: the year's mean temperature (latitude, and 6.5 °C less for every km of height), how far the seasons
+       swing (more toward the poles, more far from the sea: continentality), the year's rain in mm (the winds' moisture,
+       rained out on windward slopes, scarce in rain shadows and far inland), when the rain falls (a dry season in the
+       monsoon belt, dry summers on subtropical west coasts, summer rain deep inland), the water the air could take from
+       it (potential evapotranspiration), and so how dry it is (the aridity index, rain over that demand);
+     - its Köppen climate class (A tropical, B dry, C temperate, D continental, E polar, with their letters);
+     - its biome: from the class, and then from the ground itself: forest thinning to alpine meadow above the treeline,
+       bare rock and permanent snow above that; wetlands only where the land is flat, low and waterlogged (marsh, bog,
+       swamp forest, mangrove on hot coasts, floodplain along the great rivers); a green corridor along each river
+       through dry country; sand dunes in the low desert basins, stony desert on the uplands;
+     - its tree cover, 0 to 255, from the year's productivity (Lieth's Miami model: warmth and rain together), so a
+       forest thins into woodland, grassland, scrub and desert as the climate does.
+   The biome codes are those of engine/atlas-world-biomes.js. Nothing here draws: the map's looks draw these layers each
+   in their own way. */
+"use strict";
+const BIO = require("../engine/atlas-world-biomes.js");
+
+// latitude across the sheet for each climate (north at the top): [top, bottom], degrees
+const LAT = { temperate: [52, 38], varied: [68, 4], cold: [70, 52], polar: [84, 66], warm: [36, 22], tropical: [16, -6], arid: [33, 17], wet: [56, 42] };
+// the middle land's yearly rain for each climate, in mm (the winds' pattern is scaled to it)
+const MEDIAN_MM = { temperate: 760, varied: 620, cold: 460, polar: 260, warm: 560, tropical: 1500, arid: 190, wet: 1300 };
+
+// L: { E (heights in m, water <= 0), lake (1 a lake), rain (the winds' rain, relative), temp (°C, from latitude and
+// height), want (the rain's median as calibrated) }; o: { cols, rows, km, climate, tempShift }; U: tools
+function ecology(L, o, U) {
+  const { cols, rows } = o, N = cols * rows, cellKm = (o.km || 3200) / cols, B = BIO.CODE, E = L.E;
+  const [la, lb] = LAT[o.climate] || LAT.temperate, lat = j => la + (lb - la) * (j + .5) / rows;
+  const I = n => n % cols, J = n => (n / cols) | 0, land = n => E[n] > 0 && !L.lake[n];
+  const ocean = new Uint8Array(N), st = [];
+  for (let n = 0; n < N; n++) { const i = I(n), j = J(n); if (E[n] <= 0 && !L.lake[n] && (!i || !j || i === cols - 1 || j === rows - 1)) { ocean[n] = 1; st.push(n); } }
+  while (st.length) { const n = st.pop(), i = I(n), j = J(n); for (const m of [i > 0 ? n - 1 : -1, i < cols - 1 ? n + 1 : -1, j > 0 ? n - cols : -1, j < rows - 1 ? n + cols : -1]) if (m >= 0 && !ocean[m] && E[m] <= 0 && !L.lake[m]) { ocean[m] = 1; st.push(m); } }
+  const dOcean = U.distance(cols, rows, n => ocean[n] === 1);
+  // how far the wind has come over land: for each cell the distance back to the sea, upwind (westerlies blow from the
+  // west, the trade winds and the polar winds from the east)
+  // (the belts meet over several degrees, not on a line: near 30° and 60° the two winds are blended by how far into
+  // each belt the cell lies)
+  const upW = new Float32Array(N), upE = new Float32Array(N), upwind = new Float32Array(N);
+  for (let j = 0; j < rows; j++) {
+    let lw = -1e9, le = -1e9;
+    for (let s = 0; s < cols; s++) { const n = j * cols + s; if (ocean[n]) lw = s; upW[n] = (s - lw) * cellKm; }
+    for (let s = 0; s < cols; s++) { const i = cols - 1 - s, n = j * cols + i; if (ocean[n]) le = s; upE[n] = (s - le) * cellKm; }
+  }
+  const westShare = a => smooth(26, 34, a) * (1 - smooth(56, 64, a));
+  for (let n = 0; n < N; n++) { const w = westShare(Math.abs(lat(J(n)))); upwind[n] = Math.min(4000, upW[n]) * w + Math.min(4000, upE[n]) * (1 - w); }
+  // the rivers: water gathered down the land (to know which ground is waterlogged, and where rivers cross dry land)
+  const acc = flow(E, cols, rows, U);
+  const T = new Float32Array(N), Tw = new Float32Array(N), Tc = new Float32Array(N), P = new Float32Array(N), sf = new Float32Array(N), AI = new Float32Array(N);
+  const kop = new Uint8Array(N), biome = new Uint8Array(N), canopy = new Uint8Array(N), med = MEDIAN_MM[o.climate] || 620;
+  const slope = n => { const i = I(n), j = J(n); let s = 0; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; s = Math.max(s, Math.abs(E[b * cols + a] - E[n])); } return s / (cellKm * 1000); };
+  const accBig = Math.max(30, N * .0025);
+  for (let n = 0; n < N; n++) {
+    const j = J(n), a = Math.abs(lat(j)), e = Math.max(0, E[n]);
+    // warmth: the latitude's, less with height; the seasons swing more toward the poles and far from the sea
+    // the warmest and the coldest month, each from the Earth's own averages by latitude (July about 21 °C at 45°, 14 °C
+    // at 60°, 8 °C at 70°); winters far colder inland than on the coast, where the sea keeps them mild, summers a little
+    // warmer inland; both 6.5 °C colder for every km of height. The year's mean lies between them
+    const cont = 1 - Math.exp(-dOcean[n] * cellKm / 550), lapse = e * .0065 - (o.tempShift || 0) * 40;
+    const tw = 30 - .0045 * a * a + 2 * cont - lapse, tc = 27 - .0085 * a * a - .35 * a * cont - lapse, t = (tw + tc) / 2;
+    T[n] = t; Tw[n] = tw; Tc[n] = tc;
+    // the year's rain in mm, and when it falls (the share in the warm half of the year)
+    P[n] = Math.max(5, L.rain[n] / (L.want || .55) * med);
+    // (each belt's season blended smoothly into the next: the even rain of the equator, the summer rain of the monsoon
+    // and savanna belt, the dry summers of the subtropical west coasts (the Mediterranean, California, central Chile),
+    // the even rain of maritime coasts, the summer rain of continental interiors)
+    const mon = smooth(6, 12, a) * (1 - smooth(22, 28, a)), medS = smooth(29, 33, a) * (1 - smooth(39, 43, a)) * (1 - smooth(250, 500, upwind[n])), mar = smooth(38, 46, a) * (1 - smooth(300, 700, upwind[n]));
+    let s = .52 + mon * (.26 + .1 * cont) + (1 - mon) * smooth(26, 40, a) * .1 * cont + (a > 28 ? .08 * cont : 0) - medS * .34 - mar * .1;
+    sf[n] = Math.max(.15, Math.min(.92, s));
+    // what the air could take (a simple Thornthwaite-like demand), and so how dry the land is
+    const pet = Math.max(120, Math.min(2000, 62 * (t + 4)));
+    AI[n] = P[n] / pet;
+    if (!land(n)) continue;
+    kop[n] = koppen(T[n], Tw[n], Tc[n], P[n], s);
+  }
+  // biomes, from the class and the ground
+  for (let n = 0; n < N; n++) {
+    if (!land(n)) continue;
+    const k = KOP[kop[n]], e = E[n], ai = AI[n], sl = slope(n), riv = acc[n];
+    let b;
+    switch (k[0]) {
+      case "E": b = k === "EF" ? B.icesheet : e > 1400 || Tw[n] > 6 && e > 900 ? B.alpine : B.tundra; break;
+      case "B": b = k[1] === "W" ? (k[2] === "h" ? (e < 700 && sl < .012 && riv < accBig * .3 ? B.dunes : B.rockdesert) : B.colddesert) : (k[2] === "h" ? B.scrub : B.steppe); break;
+      case "A": b = k === "Af" ? (e > 1300 ? B.cloud : B.rainforest) : k === "Am" ? B.monsoon : (ai > .95 ? B.woodland : B.savanna); break;
+      case "C": b = k[1] === "s" ? B.mediterranean : ai < .55 ? B.grass : ai < .8 ? B.woodland : k[1] === "w" ? B.woodland : k[2] === "a" ? B.subtropical : k[2] === "c" ? B.mixed : B.temperate; break;
+      default: b = ai < .5 ? B.steppe : ai < .78 ? B.grass : (k[2] === "a" || k[2] === "b") ? (ai < .95 ? B.mixed : B.temperate) : B.boreal;
+    }
+    // above the trees: alpine meadow, then bare rock where it is steep, then snow
+    if (k[0] !== "B" && Tw[n] < 9.5 && e > 600 && b !== B.icesheet) b = B.alpine;
+    if ((b === B.alpine || b === B.tundra) && (sl > .09 || Tw[n] < 4)) b = B.rock;
+    if (Tw[n] < 1.5 && e > 300) b = B.icesheet;
+    // wetlands: flat, low, and waterlogged (much water gathering, or more rain than the air takes)
+    const flat = sl < .007 && e < 400, soaked = riv > accBig * .7 || (ai > 1.2 && riv > accBig * .15) || (ai > 1.6 && e < 60);
+    if (flat && soaked && k[0] !== "B" && k[0] !== "E") {
+      if (T[n] > 21 && dOcean[n] * cellKm < 25) b = B.mangrove;
+      else if (T[n] > 18) b = B.swampforest;
+      else if (k[0] === "D" || T[n] < 4) b = B.bog;
+      else b = riv > accBig * 6 ? B.floodplain : B.marsh;
+    }
+    // a river through dry land keeps a green corridor along it
+    if ((k[0] === "B" || ai < .45) && riv > accBig * 2.5 && b !== B.icesheet) b = B.gallery;
+    biome[n] = b;
+  }
+  // a corridor is as wide as its river allows: spread it a cell or two from the channel, only into dry land
+  { const add = []; for (let n = 0; n < N; n++) if (biome[n] === B.gallery) { const i = I(n), j = J(n), w = acc[n] > accBig * 10 ? 1 : 0; for (let dj = -w; dj <= w; dj++) for (let di = -w; di <= w; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; const m = b * cols + a; if (land(m) && [B.dunes, B.rockdesert, B.colddesert, B.scrub, B.steppe].includes(biome[m])) add.push(m); } } for (const m of add) biome[m] = B.gallery; }
+  // tree cover, from the year's productivity (Lieth's Miami model), the treeline, fire in the savanna, the wetlands
+  for (let n = 0; n < N; n++) {
+    if (!land(n)) continue;
+    const t = T[n], npp = Math.min(3000 / (1 + Math.exp(1.315 - .119 * t)), 3000 * (1 - Math.exp(-.000664 * P[n])));
+    // (trees close over the land where the summers are warm enough (the warmest month above about 10 °C: the treeline)
+    // and there is water enough (the aridity index above about a half); how thick they stand rises with productivity)
+    let c = Math.max(0, Math.min(1, (AI[n] - .45) / .5)) * Math.max(0, Math.min(1, (Tw[n] - 10) / 4)) * Math.min(1, .55 + npp / 1600);
+    const b = biome[n];
+    if (b === B.savanna) c *= .4; else if (b === B.woodland || b === B.mediterranean) c *= .6; else if (b === B.grass || b === B.steppe) c *= .2;
+    else if (b === B.marsh || b === B.floodplain) c *= .15; else if (b === B.bog) c *= .3; else if (b === B.swampforest || b === B.mangrove) c = Math.max(c, .8);
+    else if (b === B.gallery) c = Math.max(c, .55); else if (b === B.alpine || b === B.tundra) c *= .08; else if ([B.rock, B.icesheet, B.dunes, B.rockdesert, B.colddesert].includes(b)) c = 0;
+    canopy[n] = Math.round(c * 255);
+  }
+  // the five kinds of land the map shows (the user, 27 Oct 2026: "very simple: desert, flat lands, forest, mountains and
+  // maybe swamp"), and snow where it never melts; the detailed biome stays in .detail. Mountains are the high, rugged
+  // ground (about 1800 m and up, or above the trees); forest is wherever trees close over the land; the rest is flat
+  // land, or desert where the climate is dry
+  const simple = new Uint8Array(N), DES = new Set([B.dunes, B.rockdesert, B.colddesert, B.scrub]), WET = new Set([B.marsh, B.bog, B.swampforest, B.mangrove, B.floodplain]);
+  for (let n = 0; n < N; n++) {
+    if (!land(n)) continue; const b = biome[n];
+    simple[n] = b === B.icesheet ? B.snow : WET.has(b) ? B.swamp : (b === B.alpine || b === B.rock || E[n] > 1800) ? B.mountains : DES.has(b) ? B.desert : canopy[n] > 90 || b === B.gallery && canopy[n] > 60 ? B.forest : B.plains;
+  }
+  return { T, Tw, Tc, P, sf, AI, kop, biome: o.detailed ? biome : simple, detail: biome, canopy, acc };
+}
+function smooth(a, b, v) { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); }
+// the flow of water over the land: each cell's share of the rain gathered from above it (the priority flood fills the
+// hollows so the water runs on)
+function flow(E, cols, rows, U) {
+  const N = cols * rows, seen = new Uint8Array(N), rec = new Int32Array(N).fill(-1), order = [], hp = new U.Heap(), lvl = new Float32Array(N);
+  for (let n = 0; n < N; n++) { const i = n % cols, j = (n / cols) | 0; if (E[n] <= 0 || !i || !j || i === cols - 1 || j === rows - 1) { seen[n] = 1; lvl[n] = E[n]; hp.push(n, E[n]); } }
+  while (hp.size) { const c = hp.pop(); order.push(c); const i = c % cols, j = (c / cols) | 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; const m = b * cols + a; if (seen[m]) continue; seen[m] = 1; rec[m] = c; lvl[m] = Math.max(E[m], lvl[c] + .01); hp.push(m, lvl[m]); } }
+  const A = new Float32Array(N); for (let n = 0; n < N; n++) A[n] = E[n] > 0 ? 1 : 0;
+  for (let k = order.length - 1; k >= 0; k--) { const n = order[k], r = rec[n]; if (r >= 0) A[r] += A[n]; }
+  return A;
+}
+// the Köppen classes, by their letters; each cell keeps the index
+const KOP = ["", "Af", "Am", "Aw", "BWh", "BWk", "BSh", "BSk", "Csa", "Csb", "Cwa", "Cwb", "Cfa", "Cfb", "Cfc", "Dsa", "Dsb", "Dwa", "Dwb", "Dwc", "Dfa", "Dfb", "Dfc", "Dfd", "ET", "EF"];
+const KI = Object.fromEntries(KOP.map((k, i) => [k, i]));
+// T the year's mean, Tw the warmest month, Tc the coldest (°C); P the year's rain (mm); s the share falling in summer
+function koppen(T, Tw, Tc, P, s) {
+  if (Tw < 0) return KI.EF;
+  if (Tw < 10) return KI.ET;
+  const th = 20 * T + (s >= .7 ? 280 : s <= .3 ? 0 : 140);
+  if (P < th) return P < th / 2 ? (T >= 18 ? KI.BWh : KI.BWk) : (T >= 18 ? KI.BSh : KI.BSk);
+  // the driest month's rain, roughly, from the year's and how unevenly it falls
+  const dry = P / 12 * Math.max(.05, 1 - Math.abs(s - .5) * 2.4);
+  if (Tc >= 18) return dry >= 60 ? KI.Af : dry >= 100 - P / 25 ? KI.Am : KI.Aw;
+  const sub = Tw >= 22 ? "a" : "b", wet = s <= .32 ? "s" : s >= .72 ? "w" : "f";
+  if (Tc > -3) { if (wet === "s") return KI["Cs" + sub]; if (wet === "w") return KI["Cw" + sub]; return Tw < 15 ? KI.Cfc : KI["Cf" + sub]; }
+  if (wet === "s") return KI["Ds" + sub];
+  if (wet === "w") return Tw < 15 ? KI.Dwc : KI["Dw" + sub];
+  return Tc < -38 ? KI.Dfd : Tw < 15 ? KI.Dfc : KI["Df" + sub];
+}
+
+module.exports = { ecology, KOP, LAT, MEDIAN_MM };

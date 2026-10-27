@@ -27,7 +27,7 @@
   // (27 Oct 2026: the past has its own look, an engraved atlas plate; a planet in science fiction a survey; the game
   // master may choose another, kept as the world's "style": atlas-world-art.js draws each)
   // (27 Oct 2026: fantasy is painted in colour by default, as the user asked; parchment stays one choice)
-  const LOOK_OF = { painted: "painted", fantasy: "painted", colour: "painted", color: "painted", parchment: "parchment", medieval: "parchment",
+  const LOOK_OF = { relief: "relief", shaded: "relief", natural: "relief", painted: "painted", fantasy: "relief", colour: "painted", color: "painted", parchment: "parchment", medieval: "parchment",
     engraved: "engraved", old: "engraved", antique: "engraved", industrial: "engraved", historical: "engraved", victorian: "engraved", "1920s": "engraved",
     atlas: "atlas", modern: "atlas", political: "atlas", holo: "holo", survey: "holo", planet: "holo", alien: "holo",
     stars: "stars", star: "stars", scifi: "stars", future: "stars", space: "stars" };
@@ -56,6 +56,13 @@
       land: [[0, hex("#f2e8ca")], [.35, hex("#ecdeb8")], [.6, hex("#e0cc9f")], [.84, hex("#d2b98c")], [.93, hex("#ece4d2")], [1, hex("#f6f1e4")]],
       wet: hex("#d6dbab"), dry: hex("#f3dfaa"), tree: "#c8c48c",
       routes: { road: ["#7a2e1d", 1.9, "7 3"], trail: ["#6e5233", 1.6, "1.6 3.4"], pass: ["#5a3a22", 1.7, "5 2 1.6 2"], river: ["#3e6a86", 1.9, "6 3"], sea: ["#2f4f6f", 1.7, "9 5"], rail: ["#2b2119", 2.2, "10 3"], air: ["#55504a", 1.3, "3 4"], tunnel: ["#5a5048", 1.7, "3 3"], portal: ["#6a3f9e", 1.9, "2 3"], lane: ["#2f4f6f", 1.7, "8 4"], jump: ["#6a3f9e", 1.7, "2 4"] }
+    },
+    // (27 Oct 2026, the user: "do the shaded relief map, it looks way better": the land lit as if by a low sun, its
+    // colour that of what grows there; dark routes and labels over it)
+    relief: {
+      ink: "#2b2a24", paper: "#f3efe4", mk: "#fff8ec", river: "#4f7fa8", label: "#24211c",
+      sea: [[0, hex("#9cc2d8")], [1, hex("#3f6e93")]], land: [[0, hex("#bccb8e")], [1, hex("#ffffff")]], wet: hex("#6f9a5a"), dry: hex("#dcc79a"), tree: "#5f8a4a",
+      routes: { road: ["#7a2e1d", 2, "8 2.5"], trail: ["#4a3a26", 1.5, "2 3"], pass: ["#3a2a1a", 1.7, "5 2 1.6 2"], river: ["#2e5f86", 1.9, "6 3"], sea: ["#24506f", 1.6, "8 5"], rail: ["#2b2a24", 2.2, "10 3"], air: ["#4a4842", 1.3, "3 4"], tunnel: ["#4a4842", 1.7, "3 3"], portal: ["#6a3f9e", 1.9, "2 3"], lane: ["#24506f", 1.6, "8 4"], jump: ["#6a3f9e", 1.7, "2 4"] }
     },
     // (the painted map's routes stand out on green land and dark sea)
     painted: {
@@ -161,6 +168,7 @@
     temple: '<path class="s" d="M-9-2L0-8l9 6Z"/><path class="s" d="M-8 7h16V5.6H-8Z"/><path d="M-6-2v7.5M-2-2v7.5M2-2v7.5M6-2v7.5" fill="none"/>',
     monastery: '<path class="s" d="M-8 7V0h16v7Z"/>' + ROOF("M-9.4.6L0-5l9.4 5.6Z") + '<path class="s" d="M3-5V-10h3v5"/>'
   });
+  ICONS.relief = ICONS.painted;
   const PLANETS = ["#c97b4a", "#5f8fc9", "#8fbf6a", "#c9b36a", "#9b6ac9", "#6ac9c0", "#d9d2c4", "#c96a7e"];
   const iconOf = (look, L) => {
     const set = ICONS[look] || ICONS.parchment, k = String(L.kind || "").toLowerCase();
@@ -187,9 +195,15 @@
           each { m: mode, r: radius, p: [[x, y], ...] }, laid over the land in order (world.js shape:, then the page's
           own); a world with no land yet starts as all sea or all land (shape.base) */
   const BRUSH = { land: "Raise land", sea: "Sea or lake", mountains: "Mountains", hills: "Hills", flat: "Lowland", forest: "Forest", desert: "Desert", swamp: "Swamp", grass: "Grassland" };
+  // (27 Oct 2026: the brush also lays any kind of land of atlas-world-biomes.js: a jungle, a glacier, a volcano, a
+  // glowing lake... kept in the land's cover; "natural" clears what was laid, back to what the climate makes)
+  const coverKind = m => !BRUSH[m] && A.worldBiomes && A.worldBiomes.BY[m] || null;
+  const brushName = m => BRUSH[m] || (coverKind(m) ? coverKind(m).name : m);
   function stroke(G, s) {
     const { cols, rows, cell, sea } = G, r = Math.max(4, Math.min(240, +s.r || 30)), pts = (s.p || []).filter(q => Array.isArray(q));
-    if (!pts.length || !BRUSH[s.m]) return;
+    const bio = coverKind(s.m);
+    if (!pts.length || (!BRUSH[s.m] && !bio)) return;
+    if (bio && !G.C) G.C = new Uint8Array(cols * rows);
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
     const i0 = clamp(Math.floor((x0 - r) / cell), 0, cols - 1), i1 = clamp(Math.ceil((x1 + r) / cell), 0, cols - 1), j0 = clamp(Math.floor((y0 - r) / cell), 0, rows - 1), j1 = clamp(Math.ceil((y1 + r) / cell), 0, rows - 1);
     const line = pts.length > 1 ? pts : [pts[0], pts[0]], Hh = G.H, M = G.M;
@@ -197,6 +211,7 @@
       const x = (i + .5) * cell, y = (j + .5) * cell, d = lineDist(x, y, line); if (d >= r) continue;
       // full strength over the brush's inner half, softening to nothing at its edge
       const t = Math.min(1, (1 - d / r) * 1.8), w = t * t * (3 - 2 * t), n = j * cols + i, h = Hh[n], land = h > sea, toward = (v, tg) => Math.round(v + (tg - v) * w);
+      if (bio) { coverCell(G, bio, n, i, j, w, h, land, d / r, toward); continue; }
       switch (s.m) {
         case "land": if (h < sea + 16) Hh[n] = toward(h, sea + 18); break;
         case "sea": if (h > sea - 40) Hh[n] = toward(h, sea - 42); break;
@@ -210,8 +225,24 @@
       }
     }
   }
+  // one cell under the brush of a kind of land: laid where the brush is strong (its edge ragged), the height changed as
+  // the kind asks (mountains raised, a volcano's cone, lowland for a marsh, water for a lake of any liquid)
+  function coverCell(G, bio, n, i, j, w, h, land, dr, toward) {
+    const { sea } = G, Hh = G.H, C = G.C, lay = w > .3 + hash(i, j, 13) * .35;
+    if (bio.id === "natural") { if (lay) C[n] = 0; return; }
+    if (bio.water) { if (land) { if (lay) { Hh[n] = Math.min(h, bio.id === "reef" ? sea - 6 : sea - 26); C[n] = bio.code; } } else if (lay) C[n] = bio.code; return; }
+    if (!land) return;
+    if (lay) C[n] = bio.code;
+    switch (bio.lift) {
+      case "mtn": { const tg = sea + 80 + Math.round(hash(i, j, 7) * 44) + Math.round(w * 20); if (h < tg) Hh[n] = toward(Math.max(h, sea + 12), tg); break; }
+      case "hill": { const tg = sea + 50 + Math.round(hash(i, j, 9) * 14); if (h < tg) Hh[n] = toward(Math.max(h, sea + 10), tg); break; }
+      case "cone": { const tg = sea + 60 + Math.round((1 - dr) * 70); if (h < tg) Hh[n] = toward(Math.max(h, sea + 12), tg); break; }
+      case "mesa": { const tg = sea + 46 + Math.round(hash(i, j, 11) * 6); if (h < tg) Hh[n] = toward(Math.max(h, sea + 10), tg); break; }
+      case "low": if (h > sea + 10) Hh[n] = toward(h, sea + 6); break;
+    }
+  }
   const shapeOf = (W, OV) => { const a = W && W.shape || {}, b = OV && OV.shape || {}; return { base: b.base || a.base || null, strokes: [...(a.strokes || []), ...(b.strokes || [])] }; };
-  const blankLand = (size, base) => { const cell = 4, cols = Math.ceil(size[0] / cell), rows = Math.ceil(size[1] / cell), N = cols * rows; return { cols, rows, cell, sea: 128, H: new Uint8Array(N).fill(base === "land" ? 146 : 86), M: new Uint8Array(N).fill(128) }; };
+  const blankLand = (size, base) => { const cell = 4, cols = Math.ceil(size[0] / cell), rows = Math.ceil(size[1] / cell), N = cols * rows; return { cols, rows, cell, sea: 128, H: new Uint8Array(N).fill(base === "land" ? 146 : 86), M: new Uint8Array(N).fill(128), C: new Uint8Array(N) }; };
   // rivers, names on the map and realms: each with an id, so the page can change or remove the ones the land came with
   const withIds = (list, pre) => (Array.isArray(list) ? list : []).filter(f => f && typeof f === "object").map((f, i) => Object.assign({}, f, { id: f.id || pre + i }));
   function features(W, T, OV) {
@@ -245,9 +276,16 @@
     if (want && (want === "stars") === starry) look = want;
     const size = Array.isArray(W.size) && W.size[0] > 0 ? W.size.slice(0, 2) : T.w ? [T.w, T.h] : [1000, 700];
     const SH = shapeOf(W, OV);
-    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist) } : null;
+    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist), C: unb64(T.cover), B: unb64(T.biome), Cn: unb64(T.canopy), Tc: unb64(T.tempC) } : null;
     if (!opt.noLand && !G && SH.base && !T.stars && !T.drawing) G = blankLand(size, SH.base);
-    if (G) { if (!G.M) G.M = new Uint8Array(G.cols * G.rows).fill(128); for (const s of SH.strokes) stroke(G, s); }
+    if (G) {
+      if (!G.M) G.M = new Uint8Array(G.cols * G.rows).fill(128); if (!G.C || G.C.length !== G.cols * G.rows) G.C = new Uint8Array(G.cols * G.rows);
+      const H0 = T.heightLo ? Uint8Array.from(G.H) : null;
+      for (const s of SH.strokes) stroke(G, s);
+      // (the land's heights with their fractions, for the slopes of a shaded relief; where the brush changed a cell its
+      // own height is used)
+      if (H0) { const lo = unb64(T.heightLo); G.Hf = new Float32Array(G.H.length); for (let n = 0; n < G.H.length; n++) G.Hf[n] = G.H[n] === H0[n] && lo ? G.H[n] + lo[n] / 256 : G.H[n]; }
+    }
     const F = features(W, T, OV);
     const spots = T.spots || {}, locs = [], byId = {};
     for (const l of W.locations || []) {
@@ -294,7 +332,7 @@
   function sampler(G) {
     const { cols, rows, cell } = G;
     return (x, y, arr) => {
-      arr = arr || G.H; const fx = x / cell - .5, fy = y / cell - .5, i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j;
+      arr = arr || G.Hf || G.H; const fx = x / cell - .5, fy = y / cell - .5, i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j;
       const g = (a, b) => arr[clamp(b, 0, rows - 1) * cols + clamp(a, 0, cols - 1)];
       return (g(i, j) * (1 - tx) + g(i + 1, j) * tx) * (1 - ty) + (g(i, j + 1) * (1 - tx) + g(i + 1, j + 1) * tx) * ty;
     };
@@ -454,7 +492,7 @@
     const share = land / N, ok = share > .05 && share < .985;
     if (share <= .05) sea.fill(0);                      // the coast did not close, or there is none: all of it is land
     const dS = bfs(cols, rows, n => !!sea[n]), dL = bfs(cols, rows, n => !sea[n]), nz = vnoise(11), nm = vnoise(23);
-    const Hh = new Uint8Array(N), M = new Uint8Array(N);
+    const Hh = new Uint8Array(N), M = new Uint8Array(N), Cv = new Uint8Array(N), KB = A.worldBiomes ? A.worldBiomes.BY : {};
     for (let n = 0; n < N; n++) {
       const i = n % cols, j = (n / cols) | 0, f = nz(i / 14, j / 14), g = nm(i / 18, j / 18);
       Hh[n] = sea[n] ? clamp(Math.round(128 - Math.min(118, dL[n] * 7)), 0, 128) : clamp(Math.round(132 + Math.min(26, dS[n] * 1.6) + f * 16), 129, 176);
@@ -477,6 +515,8 @@
           else if (f.kind === "forest") M[n] = 228;
           else if (f.kind === "swamp" || f.kind === "marsh") { M[n] = 250; Hh[n] = Math.min(Hh[n], 136); }
           else if (f.kind === "desert") M[n] = 18;
+          // (any kind of land of atlas-world-biomes.js: a jungle, a glacier, a volcano...)
+          if (KB[f.kind] && f.kind !== "natural") { if (KB[f.kind].water) Hh[n] = 112; Cv[n] = KB[f.kind].code; }
         }
       }
       if (f.name) {
@@ -485,7 +525,7 @@
         if (at) labels.push({ name: f.name, kind, at, angle: f.angle || 0, size: f.size });
       }
     }
-    return { G: { cols, rows, cell, sea: 128, H: Hh, M }, rivers, labels, ok, how, share };
+    return { G: { cols, rows, cell, sea: 128, H: Hh, M, C: Cv }, rivers, labels, ok, how, share };
   }
 
   /* ---- routes: the way a route takes over the land (or the sea), worked out from the map so it follows the valleys
@@ -579,7 +619,7 @@
     const DRAW = WD.T.drawing && A.worldDrawingSrc ? { src: A.worldDrawingSrc, trace: null, mode: ctx.store.get("world-drawn") || "" } : null;
     const drawn = () => DRAW && (DRAW.mode === "drawn" || !DRAW.trace || WD.look === "stars");
     // (the traced land takes the game master's brush strokes too)
-    const traced = () => { if (DRAW && DRAW.trace) { const g = DRAW.trace.G; WD.G = Object.assign({}, g, { H: Uint8Array.from(g.H), M: Uint8Array.from(g.M) }); for (const s of WD.shape.strokes) stroke(WD.G, s); WD.rivers = [...DRAW.trace.rivers, ...WD.rivers]; WD.labels = [...DRAW.trace.labels, ...WD.labels]; } };
+    const traced = () => { if (DRAW && DRAW.trace) { const g = DRAW.trace.G; WD.G = Object.assign({}, g, { H: Uint8Array.from(g.H), M: Uint8Array.from(g.M), C: g.C ? Uint8Array.from(g.C) : new Uint8Array(g.cols * g.rows) }); for (const s of WD.shape.strokes) stroke(WD.G, s); WD.rivers = [...DRAW.trace.rivers, ...WD.rivers]; WD.labels = [...DRAW.trace.labels, ...WD.labels]; } };
     let st = STYLE[WD.look] || STYLE.parchment; const gm = () => ctx.mode() === "gm";
     const [W, H] = WD.size;
     const filt = Object.assign({ kinds: {}, know: "all", only3d: false, routes: {} }, (() => { try { return JSON.parse(ctx.store.get("world-filter") || "{}"); } catch (e) { return {}; } })());
@@ -974,7 +1014,7 @@
         + tb("realm", WD.look === "stars" ? "+ Territory" : "+ Realm", S.tool === "realm", "Draw a kingdom, province or territory, and say who holds it") + tb("label", "+ Name", S.tool === "label", "Write a name on the map: a sea, a range, a forest")
         + `<button type="button" class="wm-btn" data-w="undo"${HIST.length ? "" : " disabled"} title="Undo (Ctrl+Z)">Undo</button><button type="button" class="wm-btn" data-w="redo"${REDO.length ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo</button>`
         + tb("export", "Copy as world.js")
-        + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${opt(Object.entries(BRUSH), S.brush)}</select></label><label><span class="kn">Brush</span> <select data-wb="r">${opt([[14, "Small"], [30, "Medium"], [60, "Large"], [110, "Huge"]], S.size)}</select></label>` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
+        + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
       $('[data-w="edit"]').setAttribute("aria-pressed", S.edit);
       const dw = $('[data-w="drawn"]'); if (dw) { dw.setAttribute("aria-pressed", !!drawn()); dw.hidden = WD.look === "stars" || !DRAW.trace; }
       // how the map is drawn: the game master chooses among the looks this world can wear
@@ -982,7 +1022,7 @@
       if (lk) { lk.hidden = !gm() || opts.length < 2 || drawn(); lk.innerHTML = opts.map(([v, l]) => `<option value="${v}"${v === WD.look ? " selected" : ""}>${esc(l)}</option>`).join(""); }
       const sw = (k) => { const [c, w, d] = st.routes[k] || st.routes.road; return `<svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" stroke="${c}" stroke-width="${w}" stroke-dasharray="${d}" stroke-linecap="round"/></svg>`; };
       const how = S.tool === "loc" ? "Click the map where the new place stands." : S.tool === "route" ? (S.first ? `Now click where the route from ${esc(WD.byId[S.first] ? WD.byId[S.first].name : "")} goes.` : "Click the place the route starts from.")
-        : S.tool === "brush" ? (WD.G ? `Drag over the map with the brush (${esc(BRUSH[S.brush])}). Scroll to zoom; press Shape the land again to stop.` : "Choose how the land begins.")
+        : S.tool === "brush" ? (WD.G ? `Drag over the map with the brush (${esc(brushName(S.brush))}). Scroll to zoom; press Shape the land again to stop.` : "Choose how the land begins.")
         : S.tool === "river" ? (S.draft && S.draft.pts.length > 1 ? `Click to go on, from its source to its mouth. <button type="button" class="wm-btn" data-w="finish">Finish the river</button> (or Enter) · Esc stops` : "Click where the river rises, then along its way to the sea or a lake.")
         : S.tool === "realm" ? (S.draft && S.draft.pts.length > 2 ? `Click round its border. <button type="button" class="wm-btn" data-w="finish">Close the border</button> (or click the first corner, or Enter) · Esc stops` : "Click round the border of the realm, corner by corner.")
         : S.tool === "label" ? "Click where the name goes."
@@ -990,7 +1030,7 @@
       $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
     }
     // what the land is drawn from: when it changes (a stroke of the brush, a river, a realm, a name), it is drawn again
-    const landKey = () => JSON.stringify([WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
+    const landKey = () => JSON.stringify([WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.liquid, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
     let lastLand = landKey();
     function rebuild() {
       const keepSel = S.sel, keepR = S.selRoute, was = WD.look;
@@ -1079,6 +1119,13 @@
     }
     const closeDlg = () => { if (dlg.close) dlg.close(); else dlg.removeAttribute("open"); };
     const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(cur) === String(v) ? " selected" : ""}>${esc(l)}</option>`).join("");
+    // the brush's kinds: the shape of the land, then every kind of land the world's setting may hold, in their groups
+    function brushOptions() {
+      const K2 = A.worldBiomes, sh = [["land", BRUSH.land], ["sea", BRUSH.sea], ["mountains", BRUSH.mountains], ["hills", BRUSH.hills], ["flat", BRUSH.flat]], wet = [["forest", "Wetter (forest grows)"], ["swamp", "Wettest (swamp)"], ["grass", "Middling (grassland)"], ["desert", "Drier (desert)"]];
+      let h = `<optgroup label="The shape of the land">${opt(sh, S.brush)}</optgroup><optgroup label="How wet the land is">${opt(wet, S.brush)}</optgroup>`;
+      if (K2) { h += `<optgroup label="Clear">${opt([["natural", "As the climate makes it (erase what was painted)"]], S.brush)}</optgroup>`; for (const [label, list] of K2.brushKinds(K2.settingOf(WD.look))) h += `<optgroup label="${esc(label)}">${opt(list, S.brush)}</optgroup>`; }
+      return h;
+    }
     function locForm(L, at) {
       const cities = Object.entries(A.cities || {}).map(([id, c]) => [id, (c && c.title) || id]);
       const kinds = Object.entries(KINDS).filter(([k]) => WD.look === "stars" ? !["village", "hamlet", "farm", "manor", "inn", "grove", "stones"].includes(k) : !["star", "planet", "moon", "asteroid", "belt", "gate", "anomaly"].includes(k)).map(([k, v]) => [k, v[1]]);
@@ -1126,7 +1173,8 @@
       const common = `<label><span>What the players may read (optional)</span><textarea name="desc" rows="2" maxlength="1200">${esc(body0.desc || "")}</textarea></label><label><span>For the referee only</span><textarea name="gm" rows="2" maxlength="1500">${esc(body0.gm || "")}</textarea></label>`;
       const html = k === "river" ? `<h3>${f ? "Change the river" : "A new river"}</h3>
           <label><span>Name (optional)</span><input name="name" maxlength="80" value="${esc(body0.name || "")}" placeholder="e.g. The Mere"></label>
-          <label><span>How wide</span><select name="w">${opt([[1.2, "A stream"], [1.8, "A river"], [2.8, "A great river"]], body0.w || 1.8)}</select></label>${common}`
+          <label><span>How wide</span><select name="w">${opt([[.8, "A brook or creek"], [1.2, "A stream"], [1.8, "A river"], [2.8, "A wide river"], [4, "A great river"]], body0.w || 1.8)}</select></label>
+          <label><span>What flows in it</span><select name="liquid">${opt([["", "Water (ice where the land is frozen)"], ["frozen", "Frozen"], ["lava", "Lava"], ["glowing", "Glowing, magical water"], ["cursed", "Cursed, black water"], ["acid", "Acid"], ["methane", "Methane"], ["alien", "An alien liquid"]], body0.liquid || "")}</select></label>${common}`
         : k === "realm" ? `<h3>${f ? "Change " + esc(f.name || "the realm") : WD.look === "stars" ? "A new territory" : "A new realm"}</h3>
           <label><span>Name</span><input name="name" maxlength="80" required value="${esc(body0.name || "")}" placeholder="e.g. The Kingdom of Aldmere"></label>
           <label><span>Kind</span><select name="kind">${opt(REALM_KINDS, body0.kind || (WD.look === "stars" ? "territory" : "kingdom"))}</select></label>
@@ -1139,7 +1187,7 @@
           <label><span>Size</span><select name="size">${opt([[12, "Small"], [18, "Middling"], [26, "Large"], [36, "Very large"]], body0.size || 18)}</select></label>
           <label><span>Slant (degrees, optional)</span><input name="angle" type="number" min="-90" max="90" step="5" value="${body0.angle || ""}"></label>`;
       openDlg(html, v => {
-        const body = k === "river" ? { name: v.name || null, w: +v.w || 1.8, desc: v.desc || null, gm: v.gm || null }
+        const body = k === "river" ? { name: v.name || null, w: +v.w || 1.8, liquid: v.liquid || null, desc: v.desc || null, gm: v.gm || null }
           : k === "realm" ? { name: v.name.slice(0, 80), kind: v.kind, owner: v.owner || null, colour: v.colour || null, hidden: !!v.hidden, desc: v.desc || null, gm: v.gm || null }
           : { name: v.name.slice(0, 60), kind: v.kind, size: +v.size || 18, angle: v.angle === "" ? 0 : clamp(+v.angle || 0, -90, 90) };
         if (f) { save("f-" + f.id, Object.assign(ownOf("f", f.id), body, f.added ? { type: k, pts: f.pts, at: f.at } : {})); return; }
@@ -1354,7 +1402,7 @@
       const t = e.target;
       // the map drawn another way: kept with the world (the players' screen and copy follow)
       if (t.matches(".wm-look")) { if (gm()) save("style", { look: t.value }); return; }
-      if (t.matches("[data-wb]")) { if (t.dataset.wb === "m") S.brush = t.value; else S.size = +t.value || 30; renderBars(); drawFx(); return; }
+      if (t.matches("[data-wb]")) { if (t.dataset.wb === "m") { S.brush = t.value; renderBars(); } else S.size = +t.value || 30; drawFx(); return; }
       if (t.matches("[data-fk]")) filt.kinds[t.dataset.fk] = t.checked;
       else if (t.matches("[data-fr]")) filt.routes[t.dataset.fr] = t.checked;
       else if (t.matches("[data-fknow]")) filt.know = t.value;
@@ -1373,6 +1421,8 @@
     stage.addEventListener("keydown", onKey);
     root.addEventListener("click", onClick);
     root.addEventListener("change", onChange);
+    // (the brush's size follows the slider as it moves: the circle on the map grows and shrinks with it)
+    root.addEventListener("input", e => { const t = e.target; if (!t.matches || !t.matches('[data-wb="r"]')) return; S.size = +t.value || 30; const o = box.querySelector(".wm-bsz"); if (o) o.textContent = S.size; drawFx(); });
     const ro = typeof ResizeObserver === "function" ? new ResizeObserver(() => { if (!started) wake(); else if (size()) { bound(); request(); } }) : null;
     if (ro) ro.observe(stage);
 

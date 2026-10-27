@@ -11,14 +11,23 @@
      grid of coordinates;
    - holo (science fiction, a planet): a survey display: glowing contours, a lettered grid, a frame of readouts;
    - stars (a star chart): stars of many colours, nebulae, a grid, the same frame.
+   What stands on the land (forests of every kind, the marks of the ground, volcanoes, mesas, craters, floating
+   mountains, the rivers' deltas and falls) and the colours of each kind of land come from atlas-world-nature.js and
+   atlas-world-biomes.js (27 Oct 2026, the user's request for far more terrain); this file decides how each look uses them.
    The land is painted at up to 2400 pixels across (it was 500), and drawn things that would crowd the whole map come in
    only as it is brought closer (classes lod1 and lod2: atlas-world.js marks the zoom on the map, the page hides them). */
 (function (A) {
   "use strict";
   const K = A.worldDraw; if (!K) return;
+  // the land's nature (atlas-world-nature.js): absent in an old page, in which case the land is drawn as it was
+  const NT = A.worldNature, BIO = A.worldBiomes, nat = WD => NT && BIO && WD.G ? NT.prep(WD) : null;
+  const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  // the land's colour with each laid-down kind near the point washed over it, as strongly as it shows there (water:
+  // the kinds that lie on water, or those on land)
+  const washed = (look, c, I, x, y, nz, t, water, k) => { if (!I.mix) return c; for (const [q, a] of I.mix) { const b = BIO.BY[BIO.LIST[q][0]]; if (!!b.water !== water) continue; const g = NT.ground(look, b, x, y, I.d, nz, t); if (g) c = mix(c, g, a * (look === "painted" ? (NT.TINT[b.id] == null ? .5 : NT.TINT[b.id]) : k)); } return c; };
   const { sampler, coastRings, chaikin, rdpRing, pathD, hash, ramp, mix, hex, clamp, vnoise } = K;
   const r1 = v => Math.round(v * 10) / 10;
-  const LOOKS = [["painted", "Fantasy: a painted map"], ["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["stars", "Science fiction: a star chart"]];
+  const LOOKS = [["relief", "Shaded relief"], ["painted", "Fantasy: a painted map"], ["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["stars", "Science fiction: a star chart"]];
   // the looks a world may wear: a world with land may wear any but the star chart; a star chart only that
   const looksFor = WD => WD.G && !WD.stars && WD.look !== "stars" ? LOOKS.filter(l => l[0] !== "stars") : LOOKS.filter(l => l[0] === "stars");
 
@@ -27,19 +36,25 @@
     opts = opts || {};
     const [W, H] = WD.size, G = WD.G, S = sampler(G), sea = G.sea, k = Math.min(2, (opts.max || 2000) / Math.max(W, H));
     const cw = Math.round(W * k), ch = Math.round(H * k), N = cw * ch, hv = new Float32Array(N), mv = new Float32Array(N);
-    const nz = vnoise(Math.floor(hash(W, H, 11) * 1e9)), detail = opts.detail == null ? 9 : opts.detail;
+    const nz = vnoise(Math.floor(hash(W, H, 11) * 1e9)), detail = opts.detail == null ? 9 : opts.detail, wf = wetOf(WD);
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
       const x = (px + .5) / k, y = (py + .5) / k, h = S(x, y), i = py * cw + px;
       // fine relief the grid is too coarse to hold, on land only, more on the heights
       hv[i] = h > sea ? h + (nz(x * .09, y * .09) - .5) * detail * (.4 + (h - sea) / (256 - sea)) : h;
-      mv[i] = G.M ? S(x, y, G.M) : 128;
+      mv[i] = (G.M ? S(x, y, G.M) : 128) * wf;
     }
     const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
     const cx = cv.getContext("2d"), img = cx.createImageData(cw, ch), d = img.data, z = (WD.T && WD.T.real ? .55 : 1) * k;
+    // what the colour is told of the land at each point: its laid-down kind (b) and how deep inside it (d), how warm it
+    // is (tm), whether it is a lake, and the kind of its mountains (mk)
+    const NA = nat(WD), I = { b: null, d: 0, tm: .5, lake: false, mk: "rock", N: NA, mix: null };
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
       const i = py * cw + px, l = px > 0 ? hv[i - 1] : hv[i], r = px < cw - 1 ? hv[i + 1] : hv[i], u = py > 0 ? hv[i - cw] : hv[i], b = py < ch - 1 ? hv[i + cw] : hv[i];
       const gx = (r - l) * z, gy = (b - u) * z, x = (px + .5) / k, y = (py + .5) / k;
-      const c = colour(hv[i], mv[i], gx, gy, x, y, nz), o = i * 4;
+      // (mix: each laid-down kind near the point and how strongly it shows there, its edge soft and broken; b: the one
+      // that holds the point, if one does)
+      if (NA) { const bl = NA.blend(x, y); let cc = 0, ca = .5; if (bl) for (const [q, a] of bl) if (a > ca) { ca = a; cc = q; } I.mix = bl; I.b = cc ? BIO.BY[BIO.LIST[cc][0]] : null; I.d = bl ? NA.depth(x, y) : 0; I.tm = NA.temp(x, y); I.lake = hv[i] <= sea && NA.lake(x, y); I.mk = hv[i] > sea + 40 ? NT.mtnKind(NA, x, y) : "rock"; }
+      const c = colour(hv[i], mv[i], gx, gy, x, y, nz, I), o = i * 4;
       d[o] = clamp(c[0], 0, 255); d[o + 1] = clamp(c[1], 0, 255); d[o + 2] = clamp(c[2], 0, 255); d[o + 3] = 255;
     }
     cx.putImageData(img, 0, 0);
@@ -52,7 +67,10 @@
   const ringsAt = (G, level, eps) => coastRings(Object.assign({}, G, { sea: level })).map(r => chaikin(rdpRing(r, eps || .8), 2, true));
   const coastD = (G, eps) => ringsAt(G, G.sea, eps).map(r => pathD(r, true)).join("");
   // where a thing may stand: on land or at sea, and how high
-  const probe = WD => { const S = sampler(WD.G), sea = WD.G.sea; return { S, sea, t: (x, y) => (S(x, y) - sea) / (255 - sea), M: (x, y) => WD.G.M ? S(x, y, WD.G.M) : 128 }; };
+  // (how wet the land is, as its climate makes it: an arid world's land is drier than its grid says, a wet one wetter;
+  // a temperate world's exactly as it always was)
+  const wetOf = WD => BIO && WD.G && !(WD.T && WD.T.rain) ? BIO.CLIMATES[BIO.climateOf((WD.W && WD.W.climate) || (WD.T && WD.T.climate))][2] : 1;
+  const probe = WD => { const S = sampler(WD.G), sea = WD.G.sea, wf = wetOf(WD); return { S, sea, t: (x, y) => (S(x, y) - sea) / (255 - sea), M: (x, y) => (WD.G.M ? S(x, y, WD.G.M) : 128) * wf }; };
   // a jittered lattice: fn(x, y, r, row) at each point, about every dx by dy
   function lattice(W, H, dx, dy, seed, fn) { for (let y = dy * .5, row = 0; y < H; y += dy, row++) for (let x = dx * .5 + (row % 2) * dx * .5; x < W; x += dx) fn(x + (hash(x * 7, y * 3, seed) - .5) * dx * .8, y + (hash(x * 5, y * 11, seed + 1) - .5) * dy * .8, hash(x, y, seed + 2), row); }
   // the corner of the map most of sea, for the compass and the title
@@ -85,6 +103,62 @@
         s += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${r1(w)}" stroke-linecap="round" stroke-linejoin="round"/>`;
       }
     }
+    return s;
+  }
+
+  /* ================================================================ shaded relief (the default since 27 Oct 2026)
+     The user: "instead of the mountains and stuff do the shaded relief map, it looks way better; if a forest is more
+     dense just make it more green". The land lit as if by a low sun from the north-west, in the colours of what covers
+     it (Tom Patterson's natural-colour relief is the model): dense forest deep green, open woodland and grassland paler,
+     dry land tan, tundra grey-green, bare rock brown-grey, snow and ice white; the sea lighter over the shelf and deep
+     blue beyond; rivers and lakes in blue. No drawn mountains or trees: the relief and the colour say it all. */
+  function relief(WD, uid, o) {
+    const [W, H] = WD.size, G = WD.G, pr = probe(WD), sea = G.sea, N = nat(WD);
+    const C = { dry: hex("#ddc99c"), dryCool: hex("#cfc6a2"), grass: hex("#bfcd91"), wood: hex("#86a965"), forest: hex("#5d8a4b"), dense: hex("#3f6f38"), jungle: hex("#356a33"),
+      tundra: hex("#b8bca6"), rock: hex("#b3a690"), rockHi: hex("#d2c9ba"), snow: hex("#f7f8f8"), marsh: hex("#8fa486"), beach: hex("#e3d6b0"), shelf: hex("#a7cde0"), mid: hex("#6f9fc2"), deep: hex("#3d6b92"), lake: hex("#8db7d0") };
+    // (light from the north-west, the slopes exaggerated a little as relief maps are, a soft fill from the north)
+    const ex = 5.5 * Math.min(2, Math.max(.6, 1400 / Math.max(W, H)));
+    // (the user, 27 Oct 2026, after a softer natural-colour try: "the ones before were better": colour by height, from
+    // green lowland through pale upland to white peaks, under a strong light, as the plain relief previews were; and
+    // where a forest is denser, the land greener)
+    const NA = nat(WD), simB = NA && WD.G.B ? WD.G.B : null, DES = BIO ? BIO.CODE.desert : -1, SWP = BIO ? BIO.CODE.swamp : -1;
+    // (where the ecology says desert, the land's own share of it, and of swamp, eased across the cells)
+    const share = code => { if (!simB) return null; const G = WD.G, F = new Float32Array(G.cols * G.rows); for (let n = 0; n < F.length; n++) F[n] = simB[n] === code ? 1 : 0; const t = new Float32Array(F.length); for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s += F[j * G.cols + a]; c++; } } t[j * G.cols + i] = s / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s += t[b * G.cols + i]; c++; } } F[j * G.cols + i] = s / c; } } return (x, y) => NA.S(x, y, F); };
+    const desAt = share(DES), swpAt = share(SWP), snwAt = BIO ? share(BIO.CODE.snow) : null;
+    const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
+      if (h <= sea) {
+        const d = clamp((sea - h) / 128, 0, 1);
+        let c = I.lake ? [40, 112, 178] : [30, 60 + 60 * (1 - d), 110 + 80 * (1 - d)];
+        if (I.mix) c = washed("painted", c, I, x, y, nz, 0, true);
+        return c;
+      }
+      const t = (h - sea) / (255 - sea), wet = m / 255, tm = I.tm;
+      // the two rules (the user, 27 Oct 2026): the taller the land, the whiter, to white at the highest peaks; the denser
+      // a forest, the greener (from the pale green of open land to the deep green of the thickest woods). A simulated
+      // world's tree cover is its own (world-ecology.js); otherwise it is guessed from the wetness
+      const fd = NA && NA.canopy ? NA.canopy(x, y) : clamp((wet - .38) / .4, 0, 1) * (1 - smooth(.4, .65, t)) * smooth(.1, .3, tm);
+      let c = mix([150, 175, 108], [38, 98, 42], fd);
+      // the third rule: the drier the land, the sandier: tan at a desert's edge to warm sand at its driest in the heat,
+      // grey-beige steppe where the dry land is cold
+      const dd = desAt ? desAt(x, y) * (1 - fd) : smooth(.34, .06, wet) * (1 - fd);
+      if (dd > 0) c = mix(c, tm > .42 ? mix([214, 196, 146], [222, 168, 98], smooth(.4, .9, dd)) : [200, 192, 160], dd * .9);
+      c = mix(c, [176, 168, 150], smooth(.2, .5, t) * .55);
+      c = mix(c, [250, 250, 250], smooth(.42, .92, t));
+      // snow and ice where it never melts
+      if (snwAt) { const w = snwAt(x, y); if (w > .02) c = mix(c, [246, 248, 250], w * .9); }
+      // swamp: a dark olive green, wet and low
+      if (swpAt) { const w = swpAt(x, y); if (w > .02) c = mix(c, [88, 112, 76], w * .7); }
+      if (I.mix) c = washed("painted", c, Object.assign({}, I, { mix: I.mix.filter(([q]) => !["glacier", "icesheet", "snowforest", "snow"].includes(BIO.LIST[q][0])) }), x, y, nz, t, false);
+      if ((I.b && (I.b.id === "glacier" || I.b.id === "snow")) || (tm < .08 && t > .3)) c = mix(c, [245, 246, 248], .8);
+      const sh = clamp(1 - (gx + gy) * .24, .35, 1.5);
+      return c.map(v => v * sh);
+    }, { detail: 0, max: 2600 });
+    let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
+    const cd = coastD(G, .6);
+    s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/>`;
+    s += N ? NT.rivers(WD, "relief", N, pr, "#2c5fc6", null, 1.25) : rivers(WD, "#2c5fc6", null, 1.25);
+    const c = seaCorner(WD, pr);
+    s += `<g class="wm-deco"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" fill="none" stroke="#2b2a24" stroke-width="1.4"/>${northArrow(W * c[0], H * c[1], Math.min(W, H) * .045, "#2b2a24", true)}${WD.title ? `<text class="wm-ttl" x="${W / 2}" y="34" text-anchor="middle" fill="#2b2a24">${A.esc ? A.esc(WD.title) : WD.title}</text>` : ""}</g>`;
     return s;
   }
 
@@ -177,7 +251,8 @@
   function painted(WD, uid, o) {
     const [W, H] = WD.size, G = WD.G, pr = probe(WD), sea = G.sea, ink = "#2a2016";
     const SEA = [[0, hex("#5f8f99")], [.1, hex("#457383")], [.32, hex("#376172")], [.65, hex("#2e5468")], [1, hex("#27475b")]], GLOW = hex("#c9dedb");
-    const C = { desert: hex("#d08a42"), dry: hex("#bba75e"), grass: hex("#98a350"), lush: hex("#76903f"), floor: hex("#4b682e"), swamp: hex("#5a6a42"), beach: hex("#cdb67d"), rock: hex("#8f7356"), high: hex("#a68d70"), snow: hex("#eef0ec") };
+    const C = { desert: hex("#d08a42"), dry: hex("#bba75e"), grass: hex("#98a350"), lush: hex("#76903f"), floor: hex("#4b682e"), swamp: hex("#5a6a42"), beach: hex("#cdb67d"), rock: hex("#8f7356"), high: hex("#a68d70"), snow: hex("#eef0ec"),
+      tundra: hex("#a3a88e"), savanna: hex("#c9ad58"), jungle: hex("#3f6e26"), lake: hex("#4f8ea0"), ice: hex("#e4eef2") };
     // how far each stretch of sea is from land: the pale glow along the coasts
     const { cols, rows, cell } = G, N = cols * rows, dL = new Float32Array(N).fill(1e9), q = [];
     for (let n = 0; n < N; n++) if (G.H[n] > sea) { dL[n] = 0; q.push(n); }
@@ -186,11 +261,17 @@
     const S = sampler(G), nz2 = vnoise(Math.floor(hash(W, H, 29) * 1e9)), fz = vnoise(Math.floor(hash(W, H, 31) * 1e9));
     // where the woods are: the wetter lowland, gathered into clumps (the same in the paint and in the trees)
     const forest = (x, y, m, t) => t <= .012 || t > .52 ? 0 : clamp((m - 116) / 46 + (fz(x * .022, y * .022) - .5) * 1.5 - (t > .4 ? (t - .4) * 4 : 0), 0, 1);
-    const img = raster(WD, (h, m, gx, gy, x, y, nz) => {
+    const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
       const grain = (hash(x * 4 | 0, y * 4 | 0, 7) - .5) * .05, mot = (nz2(x * .03, y * .03) - .5) * .15 + (nz(x * .13, y * .13) - .5) * .08;
       if (h <= sea) {
         const dp = clamp((sea - h) / Math.max(1, sea) * 2.4, 0, 1), d = S(x, y, dL) * cell, glow = Math.exp(-d / 9) * .62 + Math.exp(-d / 26) * .16;
-        return mix(ramp(SEA, dp), GLOW, glow).map(v => v * (1 + mot * .6 + grain));
+        let c = mix(ramp(SEA, dp), GLOW, glow);
+        // a lake is lighter and greener than the sea; frozen water white; a laid-down water (a glowing lake, lava, a
+        // methane sea) its own
+        if (I.lake) c = mix(c, C.lake, .4);
+        if (I.mix) c = washed("painted", c, I, x, y, nz, 0, true);
+        if (!(I.b && I.b.water) && I.tm < .08) c = mix(c, C.ice, smooth(.08, .02, I.tm) * (.55 + nz(x * .08, y * .08) * .45));
+        return c.map(v => v * (1 + mot * .6 + grain));
       }
       const t = (h - sea) / (255 - sea);
       let c = m < 48 ? mix(C.desert, C.dry, m / 48) : m < 92 ? mix(C.dry, C.grass, (m - 48) / 44) : mix(C.grass, C.lush, clamp((m - 92) / 80, 0, 1));
@@ -198,10 +279,19 @@
       const fo = forest(x, y, m, t); if (fo > 0) c = mix(c, C.floor, Math.min(.8, fo * 1.1));
       // (the colour wanders a little, as a painter's would)
       const hv = nz2(x * .011 + 40, y * .011); c = mix(c, hv > .5 ? C.lush : C.dry, Math.abs(hv - .5) * .3);
+      // the climate: the cold greys the land to tundra and snow, the dry heat yellows it to savanna, the wet heat
+      // deepens it to jungle (a temperate world, as every world was before there were climates, is left as it was)
+      if (I.tm < .3) c = mix(c, C.tundra, smooth(.3, .12, I.tm) * .7);
+      if (I.tm < .12) c = mix(c, C.snow, smooth(.12, .03, I.tm) * .75);
+      if (I.tm > .64) c = mix(c, m < 140 ? C.savanna : C.jungle, smooth(.64, .86, I.tm) * .5);
       if (t < .025 && m < 200) c = mix(c, C.beach, (1 - t / .025) * .55);
-      if (t > .42) c = mix(c, C.rock, clamp((t - .42) * 3, 0, 1));
-      if (t > .7) c = mix(c, C.high, clamp((t - .7) * 4, 0, 1));
+      // a laid-down kind of land, fading in across its edge
+      if (I.mix) c = washed("painted", c, I, x, y, nz, t, false);
+      const RK = NT ? NT.ROCK[I.mk] || NT.ROCK.rock : [C.rock, C.high], bare = I.b && ["canyon", "mesas", "badlands", "glacier", "volcano", "volcanic", "crater"].includes(I.b.id) ? .35 : 1;
+      if (t > .42) c = mix(c, RK[0], clamp((t - .42) * 3, 0, 1) * bare);
+      if (t > .7) c = mix(c, RK[1], clamp((t - .7) * 4, 0, 1) * bare);
       if (t > .9) c = mix(c, C.snow, clamp((t - .9) * 5, 0, .6));
+      if (t > .4 && I.tm < .22) c = mix(c, C.snow, smooth(.22, .06, I.tm) * .6);
       const sh = clamp(shade(gx, gy, .04), .6, 1.3);
       return c.map(v => v * sh * (1 + mot + grain));
     }, { detail: 10 });
@@ -210,7 +300,7 @@
     // ripples along the coast, fainter further out
     for (const [w, op] of [[34, .16], [24, .24], [15, .34], [7.6, .48]]) s += `<path d="${coarse}" fill="none" stroke="#e2efec" stroke-opacity="${op}" stroke-width="${r1(w + .8)}"/><path d="${coarse}" fill="none" stroke="url(#${uid}-b)" stroke-width="${r1(w - .8)}"/>`;
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#33281c" stroke-width="1.15" stroke-linejoin="round"/>`;
-    s += rivers(WD, "#4d8098", "#2b3a33", 1.15);
+    s += NT ? NT.rivers(WD, "painted", nat(WD), pr, "#4d8098", "#2b3a33", 1.15) : rivers(WD, "#4d8098", "#2b3a33", 1.15);
     s += paintedSymbols(WD, pr, o, forest, uid);
     s += paintedSea(WD, pr);
     s += frame(WD, ink, "painted", o);
@@ -252,36 +342,110 @@
       const last = m.peak2 || m.peak; out.push(["d", [...S.slice(last), ...cl.slice(1).reverse()]]);
       return out;
     }
-    const FILL = { l: `url(#${uid}-ml)`, m: `url(#${uid}-mm)`, d: `url(#${uid}-mr)` };
-    let stamps = "";
+    // (27 Oct 2026: each kind of mountain in its own colours: brown rock, grey snowy peaks, red desert ranges, green old
+    // mountains, black volcanic, blue ice, cursed purple, crystal, metal, alien; "rock" keeps the names it always had)
+    const sfx = pal => pal === "rock" ? "" : "-" + pal;
+    const mtnDefs = pal => {
+      const c = (NT && NT.MTN[pal]) || ["#efdbb2", "#cfae80", "#a7835a", "#b89470", "#806040", "#8d6c4b", "#523a26"], hc = (NT && NT.HILL[pal]) || ["#c2b26c", "#8c8246"], x = sfx(pal);
+      return `<linearGradient id="${uid}-ml${x}" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="${c[0]}"/><stop offset=".55" stop-color="${c[1]}"/><stop offset="1" stop-color="${c[2]}"/></linearGradient><linearGradient id="${uid}-mm${x}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c[3]}"/><stop offset="1" stop-color="${c[4]}"/></linearGradient><linearGradient id="${uid}-mr${x}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c[5]}"/><stop offset="1" stop-color="${c[6]}"/></linearGradient><linearGradient id="${uid}-hl${x}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hc[0]}"/><stop offset="1" stop-color="${hc[1]}"/></linearGradient>` + stampsOf(x);
+    };
+    // hills: soft mounds, one or two humps, shaded on the right, a stroke or two of the pen
+    const HL = [{ f: "M-1 0C-.8-.5-.4-.8 0-.8C.4-.78.75-.5 1 0Z", d: "M0-.8C.4-.78.75-.5 1 0L.15 0C.25-.3.18-.6 0-.8Z", s: "M.32-.5q.12.1.2.3M.16-.3q.1.08.16.24" },
+      { f: "M-1 0C-.85-.45-.55-.62-.3-.6C-.12-.72.15-.74.35-.62C.62-.5.85-.3 1 0Z", d: "M.05-.7C.2-.72.4-.66.5-.56C.7-.42.88-.24 1 0L.25 0C.32-.26.24-.5.05-.7Z", s: "M.5-.4q.1.1.16.26M-.32-.56q.06.12.04.26" },
+      { f: "M-1 0C-.7-.35-.5-.9-.1-.92C.3-.92.6-.5 1 0Z", d: "M-.1-.92C.3-.92.6-.5 1 0L.1 0C.2-.4.1-.7-.1-.92Z", s: "M.3-.56q.1.12.16.3M.1-.2q.08.06.12.18" }];
+    // (redrawn 27 Oct 2026, the user: cold mountains must have "proper snow-covered peaks rather than flat grey shapes")
+    // a snowfield over the top half of a mountain, its lower edge ragged and running down the gullies: white on the lit
+    // face, blue-grey on the shaded, each cut to its face; drawn by the same hand as the rest of the mountain
+    const snowEdge = m => {
+      const top = Math.min(...m.sil.map(p => p[1])), y0 = top * .5, pts = [[-1.3, top - .3]];
+      const gul = m.cr.map(c => { let best = c[0]; for (const p of c) if (Math.abs(p[1] - y0) < Math.abs(best[1] - y0)) best = p; return best[0]; });
+      for (let i = 0; i <= 30; i++) { const xx = -1.05 + i * .07; let yy = y0 + (i % 2 ? .045 : -.035) * -top + Math.sin(i * 1.7 + m.sil.length) * .03 * -top; for (const g of gul) yy += Math.max(0, .1 - Math.abs(xx - g)) * 1.6 * -top; pts.push([Math.round(xx * 1000) / 1000, Math.round(yy * 1000) / 1000]); }
+      pts.push([1.3, top - .3]); return poly(pts);
+    };
+    let clips = "";
+    MT.forEach((m, k) => { const F = faces(m); clips += `<clipPath id="${uid}-cl${k}"><path d="${poly(F[0][1])}"/></clipPath><clipPath id="${uid}-cr${k}"><path d="${F.slice(1).map(f => poly(f[1])).join("")}"/></clipPath>`; });
+    // a volcano drawn as one of the range (by the same pen): a cone cut off at its crater, lit and shaded as the
+    // mountains are, old lava in dark tongues down its sides, a red glow in the crater, smoke drifting east
+    const VO = { sil: [[-1, 0], [-.82, -.16], [-.64, -.36], [-.48, -.56], [-.34, -.72], [-.22, -.84], [-.15, -.9], [-.06, -.87], [.03, -.86], [.11, -.89], [.17, -.9], [.28, -.78], [.42, -.6], [.6, -.4], [.8, -.18], [1, 0]], peak: 10,
+      cr: [[[.17, -.9], [.21, -.66], [.16, -.44], [.24, -.2], [.2, 0]]], spur: [[-.48, -.56], [-.36, -.36], [-.4, -.12]],
+      dk: [[.21, -.66, .34, -.58], [.18, -.48, .42, -.4], [.22, -.3, .52, -.22], [.2, -.14, .62, -.07], [.3, -.76, .38, -.66]], lt: [[-.3, -.7, -.38, -.56], [-.52, -.44, -.58, -.32], [-.72, -.22, -.78, -.12]] };
+    // mesas and buttes: tables of banded rock, a flat cap lit from above, sheer sides, a skirt of scree; the same pen
+    const ME = [
+      { sil: [[-1, 0], [-.86, -.08], [-.72, -.2], [-.66, -.5], [-.6, -.62], [-.3, -.66], [0, -.63], [.3, -.67], [.56, -.62], [.62, -.5], [.7, -.2], [.86, -.08], [1, 0]], peak: 8, cr: [[[.56, -.62], [.6, -.42], [.58, -.2], [.66, 0]]],
+        cap: [[-.6, -.62], [-.3, -.66], [0, -.63], [.3, -.67], [.56, -.62], [.3, -.57], [0, -.58], [-.3, -.57]], band: [[-.65, -.46, .58, -.47], [-.69, -.3, .58, -.31]],
+        dk: [[-.4, -.56, -.42, -.4], [-.1, -.56, -.12, -.36], [.25, -.55, .22, -.38], [.62, -.4, .7, -.3], [.62, -.24, .74, -.16], [-.3, -.26, -.33, -.14]], lt: [[-.63, -.55, -.66, -.4], [-.7, -.24, -.76, -.14]] },
+      { sil: [[-.6, 0], [-.48, -.1], [-.36, -.24], [-.32, -.78], [-.26, -.86], [0, -.88], [.24, -.85], [.3, -.78], [.36, -.24], [.48, -.1], [.6, 0]], peak: 7, cr: [[[.24, -.85], [.28, -.5], [.26, -.24], [.34, 0]]],
+        cap: [[-.26, -.86], [0, -.88], [.24, -.85], [0, -.8]], band: [[-.33, -.62, .26, -.62], [-.34, -.44, .27, -.44]], dk: [[-.1, -.78, -.12, -.56], [.12, -.76, .1, -.5], [.3, -.6, .38, -.52], [.3, -.36, .4, -.28]], lt: [[-.31, -.72, -.33, -.5]] }];
+    const stampsOf = x => { let stamps = "";
+    const FILL = { l: `url(#${uid}-ml${x})`, m: `url(#${uid}-mm${x})`, d: `url(#${uid}-mr${x})` };
     MT.forEach((m, k) => {
       const body = `<ellipse cx=".18" cy=".03" rx="1.18" ry=".13" fill="#26240f" fill-opacity=".22"/>` + faces(m).map(([t, a]) => `<path d="${poly(a)}" fill="${FILL[t]}"/>`).join("");
       const ink = `<path d="${m.dk.map(s => `M${s[0]} ${s[1]}L${s[2]} ${s[3]}`).join("")}" fill="none" stroke="#3f2b1b" stroke-width=".038" stroke-linecap="round" stroke-opacity=".85"/><path d="${m.lt.map(s => `M${s[0]} ${s[1]}L${s[2]} ${s[3]}`).join("")}" fill="none" stroke="#f6e7c4" stroke-width=".045" stroke-linecap="round" stroke-opacity=".85"/>`
         + `<path d="${line(m.sil)}${m.cr.map(line).join("")}${m.spur ? line(m.spur) : ""}${m.spur2 ? line(m.spur2) : ""}" fill="none" stroke="#2c2015" stroke-width=".052" stroke-linejoin="round" stroke-linecap="round"/>`;
       const snow = m.snow.map((a, i) => `<path d="${poly(a)}" fill="${i % 2 ? "#c3cbd2" : "#f7f6f1"}"/>`).join("");
-      stamps += `<g id="${uid}-m${k}">${body}${ink}</g><g id="${uid}-m${k}s">${body}${snow}${ink}</g>`;
+      const field = snowEdge(m), inkS = ink.replace(/#3f2b1b/g, "#6d7782").replace(/stroke-opacity=".85"/, `stroke-opacity=".6"`);
+      stamps += `<g id="${uid}-m${k}${x}">${body}${ink}</g><g id="${uid}-m${k}s${x}">${body}${snow}${ink}</g><g id="${uid}-m${k}S${x}">${body}<path d="${field}" fill="#f6f6f2" clip-path="url(#${uid}-cl${k})"/><path d="${field}" fill="#c2cad2" clip-path="url(#${uid}-cr${k})"/>${inkS}</g>`;
     });
-    // hills: soft mounds, one or two humps, shaded on the right, a stroke or two of the pen
-    const HL = [{ f: "M-1 0C-.8-.5-.4-.8 0-.8C.4-.78.75-.5 1 0Z", d: "M0-.8C.4-.78.75-.5 1 0L.15 0C.25-.3.18-.6 0-.8Z", s: "M.32-.5q.12.1.2.3M.16-.3q.1.08.16.24" },
-      { f: "M-1 0C-.85-.45-.55-.62-.3-.6C-.12-.72.15-.74.35-.62C.62-.5.85-.3 1 0Z", d: "M.05-.7C.2-.72.4-.66.5-.56C.7-.42.88-.24 1 0L.25 0C.32-.26.24-.5.05-.7Z", s: "M.5-.4q.1.1.16.26M-.32-.56q.06.12.04.26" },
-      { f: "M-1 0C-.7-.35-.5-.9-.1-.92C.3-.92.6-.5 1 0Z", d: "M-.1-.92C.3-.92.6-.5 1 0L.1 0C.2-.4.1-.7-.1-.92Z", s: "M.3-.56q.1.12.16.3M.1-.2q.08.06.12.18" }];
-    HL.forEach((h, k) => { stamps += `<g id="${uid}-h${k}"><ellipse cx=".15" cy=".03" rx="1.1" ry=".12" fill="#26240f" fill-opacity=".16"/><path d="${h.f}" fill="url(#${uid}-hl)"/><path d="${h.d}" fill="#5f5730" fill-opacity=".45"/><path d="${h.s}" fill="none" stroke="#3a2e1e" stroke-width=".05" stroke-opacity=".7" stroke-linecap="round"/><path d="${h.f}" fill="none" stroke="#3a2e1e" stroke-width=".05" stroke-opacity=".8"/></g>`; });
-    const defs = `<defs><linearGradient id="${uid}-ml" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="#efdbb2"/><stop offset=".55" stop-color="#cfae80"/><stop offset="1" stop-color="#a7835a"/></linearGradient><linearGradient id="${uid}-mm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b89470"/><stop offset="1" stop-color="#806040"/></linearGradient><linearGradient id="${uid}-mr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8d6c4b"/><stop offset="1" stop-color="#523a26"/></linearGradient><linearGradient id="${uid}-hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c2b26c"/><stop offset="1" stop-color="#8c8246"/></linearGradient>${stamps}</defs>`;
+    // the volcano, the mesas and buttes (made only in the palettes they are drawn in)
+    if (x === "-volcanic") {
+      const m = VO, lavaD = "M-.04-.86q-.08.2-.2.34q-.1.14-.08.34M.04-.86q.04.24.02.4q0 .2.1.38M-.12-.87q-.16.16-.32.3";
+      stamps += `<g id="${uid}-vo${x}"><ellipse cx=".2" cy=".03" rx="1.2" ry=".13" fill="#26240f" fill-opacity=".25"/>${faces(m).map(([t, a]) => `<path d="${poly(a)}" fill="${FILL[t]}"/>`).join("")}`
+        + `<path d="${lavaD}" fill="none" stroke="#2a201c" stroke-width=".07" stroke-linecap="round" stroke-opacity=".75"/><path d="${lavaD}" fill="none" stroke="#a84a24" stroke-width=".028" stroke-linecap="round" stroke-opacity=".9"/>`
+        + `<path d="${m.dk.map(q => `M${q[0]} ${q[1]}L${q[2]} ${q[3]}`).join("")}" fill="none" stroke="#2a201a" stroke-width=".038" stroke-linecap="round" stroke-opacity=".85"/><path d="${m.lt.map(q => `M${q[0]} ${q[1]}L${q[2]} ${q[3]}`).join("")}" fill="none" stroke="#e6d8c6" stroke-width=".04" stroke-linecap="round" stroke-opacity=".7"/>`
+        + `<path d="${line(m.sil)}${m.cr.map(line).join("")}${line(m.spur)}" fill="none" stroke="#2c2015" stroke-width=".052" stroke-linejoin="round" stroke-linecap="round"/>`
+        + `<path d="M-.15-.9Q0-.82.17-.9Q0-.95-.15-.9Z" fill="#2a1e18" stroke="#2c2015" stroke-width=".03"/><path d="M-.09-.895Q0-.86.1-.895" fill="none" stroke="#d0703a" stroke-width=".03" stroke-opacity=".85"/>`
+        + `<g fill="#d8d2c8" stroke="#6a625a" stroke-width=".018" stroke-opacity=".5"><path d="M-.05-.95c-.12-.08-.04-.22.08-.2c0-.14.2-.16.24-.04c.12-.06.24.06.16.16c.1.06.04.2-.08.18c-.04.1-.2.1-.24 0c-.12.04-.2-.06-.16-.1Z" fill-opacity=".7"/><path d="M.22-1.28c-.06-.1.06-.2.16-.14c.06-.1.22-.06.2.06c.12 0 .14.16.02.18c-.02.1-.18.1-.2 0c-.1.02-.18-.06-.18-.1Z" fill-opacity=".5"/><path d="M.5-1.5c0-.08.1-.12.16-.06c.08-.06.18.02.12.1c.04.08-.06.14-.14.08c-.08.04-.16-.04-.14-.12Z" fill-opacity=".32"/></g></g>`;
+    }
+    if (x === "-desert") ME.forEach((m, k) => {
+      stamps += `<g id="${uid}-me${k}${x}"><ellipse cx=".18" cy=".03" rx="1.15" ry=".11" fill="#26240f" fill-opacity=".2"/>${faces(m).map(([t, a]) => `<path d="${poly(a)}" fill="${FILL[t]}"/>`).join("")}`
+        + `<path d="${m.band.map(q => `M${q[0]} ${q[1]}L${q[2]} ${q[3]}`).join("")}" fill="none" stroke="#f0cfa0" stroke-width=".035" stroke-opacity=".55"/><path d="${m.dk.map(q => `M${q[0]} ${q[1]}L${q[2]} ${q[3]}`).join("")}" fill="none" stroke="#3f2b1b" stroke-width=".035" stroke-linecap="round" stroke-opacity=".7"/><path d="${m.lt.map(q => `M${q[0]} ${q[1]}L${q[2]} ${q[3]}`).join("")}" fill="none" stroke="#f6e7c4" stroke-width=".04" stroke-linecap="round" stroke-opacity=".7"/>`
+        + `<path d="${poly(m.cap)}" fill="#e8c898" stroke="#2c2015" stroke-width=".04" stroke-linejoin="round"/><path d="${line(m.sil)}${m.cr.map(line).join("")}" fill="none" stroke="#2c2015" stroke-width=".05" stroke-linejoin="round" stroke-linecap="round"/></g>`;
+    });
+    HL.forEach((h, k) => { stamps += `<g id="${uid}-h${k}${x}"><ellipse cx=".15" cy=".03" rx="1.1" ry=".12" fill="#26240f" fill-opacity=".16"/><path d="${h.f}" fill="url(#${uid}-hl${x})"/><path d="${h.d}" fill="#5f5730" fill-opacity=".45"/><path d="${h.s}" fill="none" stroke="#3a2e1e" stroke-width=".05" stroke-opacity=".7" stroke-linecap="round"/><path d="${h.f}" fill="none" stroke="#3a2e1e" stroke-width=".05" stroke-opacity=".8"/></g>`; });
+    return stamps; };
+    const N = nat(WD), used = new Set(["rock"]), palAt = (x, y) => N ? NT.mtnKind(N, x, y) : "rock";
+    // where a volcano, a mesa, floating mountains, a crater or a canyon stands, no range is drawn over it
+    const own = N ? new Set(["volcano", "mesas", "floating", "crater", "canyon", "stones"].map(k => BIO.CODE[k])) : null, ownAt = (x, y) => own && own.has(N.covAt(x, y));
     const placed = [];
     // (the user, 27 Oct 2026: scattered peaks "look out of place": a range stands shoulder to shoulder, the peaks
     // overlapping, the biggest along its spine and smaller ones at its edges)
     const crowd = (x, y, w) => taken.some(([a, b, rr]) => Math.abs(a - x) < (w + rr) * .36 && Math.abs(b - y) < (w + rr) * .16);
     lattice(W, H, 6.4, 4.4, 21, (x, y, r) => {
-      const t = pr.t(x, y); if (t < .44 || r > (t - .38) * 4.2) return;
+      const t = pr.t(x, y); if (t < .44 || r > (t - .38) * 4.2 || ownAt(x, y)) return;
       const w = 5.2 + (t - .44) * 38 + r * 3, h = w * (1.05 + hash(x, y, 9) * .45); if (crowd(x, y, w)) return; taken.push([x, y, w]); mark(x, y, w * .9, h * .8);
       const hk = hash(x, y, 15), k = t > .68 ? (hk < .4 ? 3 : hk < .75 ? 0 : 1) : t > .56 ? (hk < .4 ? 0 : hk < .75 ? 1 : hk < .9 ? 3 : 2) : (hk < .35 ? 2 : hk < .7 ? 0 : 1);
-      placed.push([y, `<use href="#${uid}-m${k}${t > .66 ? "s" : ""}" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h / 1.1 * 100) / 100})"/>`]);
+      // (snow where it is cold enough: the higher peaks of a temperate land, lower down in the north, only the very
+      // highest in a hot land)
+      const pal = palAt(x, y), tm = N ? N.temp(x, y) : .3, glac = N && N.covAt(x, y) === BIO.CODE.glacier, heavy = glac || (t > .46 && tm < .1), snowy = !heavy && (t > .66 && tm < .3 || t > .5 && tm < .2); used.add(pal);
+      placed.push([y, `<use href="#${uid}-m${k}${heavy ? "S" : snowy ? "s" : ""}${sfx(pal)}" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h / 1.1 * 100) / 100})"/>`]);
     });
     lattice(W, H, 7, 5, 31, (x, y, r) => {
-      const t = pr.t(x, y); if (t < .37 || t >= .45 || r > .55 || near(x, y, 4)) return;
+      const t = pr.t(x, y); if (t < .37 || t >= .45 || r > .55 || near(x, y, 4) || ownAt(x, y)) return;
       const w = 4 + r * 5 + (t - .37) * 30, h = w * (.75 + hash(x, y, 33) * .3); taken.push([x, y, w * .7]); mark(x, y, w, h);
-      placed.push([y, `<use href="#${uid}-h${Math.floor(hash(x, y, 34) * HL.length)}" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h * 100) / 100})"/>`]);
+      const pal = palAt(x, y); used.add(pal);
+      placed.push([y, `<use href="#${uid}-h${Math.floor(hash(x, y, 34) * HL.length)}${sfx(pal)}" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h * 100) / 100})"/>`]);
     });
+    // volcanoes, standing over the range round them; old lava flows down their slopes (drawn on the ground, below)
+    let lava = "";
+    if (N && N.present.has(BIO.CODE.volcano)) for (const p of NT.patchesOf(WD, N, BIO.CODE.volcano)) {
+      const [x, y0] = p.top, w = clamp(p.r * 2.1, 22, 60), h = w * .95, y = y0 + h * .3; mark(x, y, w * .9, h); used.add("volcanic");
+      placed.push([y + 4, `<use href="#${uid}-vo-volcanic" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h * 100) / 100})"/>`]);
+      for (let f = 0; f < 3; f++) {
+        let px = x + (hash(f, x, 3) - .5) * w * .3, py = y - h * .75, d = `M${r1(px)} ${r1(py)}`, n = 0;
+        for (let g = 0; g < 70; g++) { const gx = (pr.S(px + 2, py) - pr.S(px - 2, py)) / 4, gy = (pr.S(px, py + 2) - pr.S(px, py - 2)) / 4, L = Math.hypot(gx, gy) || 1, a = (hash(f, g, 7) - .5) * 1.1; let ux = -gx / L, uy = -gy / L; [ux, uy] = [ux * Math.cos(a) - uy * Math.sin(a), ux * Math.sin(a) + uy * Math.cos(a)]; px += ux * 2.4; py += uy * 2.4 + .4; if (pr.S(px, py) <= pr.sea + 3 || pr.t(px, py) < .05) break; d += `L${r1(px)} ${r1(py)}`; n++; }
+        if (n > 4) lava += d;
+      }
+    }
+    // mesas and buttes standing on their tableland, thickest in its heart; buttes at its broken edge
+    if (N && N.present.has(BIO.CODE.mesas)) { used.add("desert"); const tk = [];
+      lattice(W, H, 14, 9, 141, (x, y, r) => {
+        const [c, a] = N.covW(x, y); if (c !== BIO.CODE.mesas || r > a * .75 || tk.some(([p, q, ww]) => Math.abs(p - x) < (ww + 6) * .9 && Math.abs(q - y) < 6)) return;
+        const butte = a < .78 && r < .55, w = butte ? 4.5 + r * 3 : 7 + a * 5 + r * 3, h = w * (butte ? 1.1 : 1.05); tk.push([x, y, w]); mark(x, y, w, h);
+        placed.push([y, `<use href="#${uid}-me${butte ? 1 : 0}-desert" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h * 100) / 100})"/>`]);
+      }); }
+    // craters, stone pillars, floating mountains, among the mountains
+    if (N) for (const it of NT.relief(WD, "painted", N, pr, uid, mark, { skip: new Set(["volcano", "mesas"]) })) placed.push(it);
+    const defs = `<defs>${clips}${[...used].map(mtnDefs).join("")}</defs>`;
     placed.sort((a, b) => a[0] - b[0]);
     const mtn = placed.map(p => p[1]).join(""), hills = "";
     // farmland round the settlements the viewer may see: patches of fields in the colours of crops
@@ -299,24 +463,30 @@
       }
       byC.forEach((d, k) => { if (d) fields += `<path d="${d}" fill="${FC[k]}" stroke="#5a4d2c" stroke-opacity=".55" stroke-width=".35"/>`; });
     }
-    // forests, tree by tree: broadleaf in the lowland, pines higher up; the core of a wood thick, its edge thinning out
-    const TB = new Map(), tput = (y, k, d) => { const b = Math.floor(y / 4); if (!TB.has(b)) TB.set(b, { c0: "", c1: "", c2: "", hi: "", pine: "", pine2: "" }); TB.get(b)[k] += d; };
-    lattice(W, H, 3.3, 2.8, 41, (x, y, r) => {
-      const t = pr.t(x, y), m = pr.M(x, y); if (t <= .012 || t > .5 || !free(x, y)) return;
-      const fo = forest(x, y, m, t), dens = fo > 0 ? Math.min(1, fo * 1.6) : m > 100 ? .02 : 0; if (r >= dens) return;
-      if (t > .28 || hash(x, y, 77) < .18 || m > 225) { const hh = 4.6 + hash(x, y, 79) * 1.6, ww = 1.8 + hash(x, y, 80) * .5; tput(y, hash(x, y, 81) < .5 ? "pine" : "pine2", `M${r1(x)} ${r1(y - hh)}l${r1(ww)} ${r1(hh * .62)}h${r1(-ww * .45)}l${r1(ww * .7)} ${r1(hh * .38)}h${r1(-ww * 2.5)}l${r1(ww * .7)} ${r1(-hh * .38)}h${r1(-ww * .45)}Z`); return; }
-      const rr = 1.85 + hash(x, y, 78) * .75, k = Math.floor(hash(x, y, 82) * 3);
-      tput(y, "c" + k, `M${r1(x + rr)} ${r1(y - rr)}a${r1(rr)} ${r1(rr)} 0 1 0 ${r1(-2 * rr)} 0a${r1(rr)} ${r1(rr)} 0 1 0 ${r1(2 * rr)} 0`);
-      const hr = rr * .45; tput(y, "hi", `M${r1(x - rr * .3 + hr)} ${r1(y - rr * 1.35)}a${r1(hr)} ${r1(hr)} 0 1 0 ${r1(-2 * hr)} 0a${r1(hr)} ${r1(hr)} 0 1 0 ${r1(2 * hr)} 0`);
-    });
-    let trees = ""; for (const b of [...TB.keys()].sort((a, c) => a - c)) { const v = TB.get(b); trees += (v.c0 ? `<path d="${v.c0}" fill="#5b8a34"/>` : "") + (v.c1 ? `<path d="${v.c1}" fill="#4c7a2c"/>` : "") + (v.c2 ? `<path d="${v.c2}" fill="#6b9a3b"/>` : "") + (v.hi ? `<path class="lod1" d="${v.hi}" fill="#8db956" fill-opacity=".8"/>` : "") + (v.pine ? `<path d="${v.pine}" fill="#3d6834"/>` : "") + (v.pine2 ? `<path d="${v.pine2}" fill="#335c2e"/>` : ""); }
-    // (each wood is outlined once, round its trees: an ink edge on every crown would make it a smudge at this size)
-    trees = `<g stroke="#1e2f16" stroke-width=".42" stroke-opacity=".85" stroke-linejoin="round">${trees}</g>`;
+    // forests, tree by tree (atlas-world-nature.js): each kind of forest its own trees, the woods of the climate where
+    // nothing was laid down; the core of a wood thick, its edge thinning out
+    let trees = "";
+    if (N) trees = NT.trees(WD, "painted", N, pr, o, uid, free, forest);
+    else {
+      // forests, tree by tree: broadleaf in the lowland, pines higher up; the core of a wood thick, its edge thinning out
+      const TB = new Map(), tput = (y, k, d) => { const b = Math.floor(y / 4); if (!TB.has(b)) TB.set(b, { c0: "", c1: "", c2: "", hi: "", pine: "", pine2: "" }); TB.get(b)[k] += d; };
+      lattice(W, H, 3.3, 2.8, 41, (x, y, r) => {
+        const t = pr.t(x, y), m = pr.M(x, y); if (t <= .012 || t > .5 || !free(x, y)) return;
+        const fo = forest(x, y, m, t), dens = fo > 0 ? Math.min(1, fo * 1.6) : m > 100 ? .02 : 0; if (r >= dens) return;
+        if (t > .28 || hash(x, y, 77) < .18 || m > 225) { const hh = 4.6 + hash(x, y, 79) * 1.6, ww = 1.8 + hash(x, y, 80) * .5; tput(y, hash(x, y, 81) < .5 ? "pine" : "pine2", `M${r1(x)} ${r1(y - hh)}l${r1(ww)} ${r1(hh * .62)}h${r1(-ww * .45)}l${r1(ww * .7)} ${r1(hh * .38)}h${r1(-ww * 2.5)}l${r1(ww * .7)} ${r1(-hh * .38)}h${r1(-ww * .45)}Z`); return; }
+        const rr = 1.85 + hash(x, y, 78) * .75, k = Math.floor(hash(x, y, 82) * 3);
+        tput(y, "c" + k, `M${r1(x + rr)} ${r1(y - rr)}a${r1(rr)} ${r1(rr)} 0 1 0 ${r1(-2 * rr)} 0a${r1(rr)} ${r1(rr)} 0 1 0 ${r1(2 * rr)} 0`);
+        const hr = rr * .45; tput(y, "hi", `M${r1(x - rr * .3 + hr)} ${r1(y - rr * 1.35)}a${r1(hr)} ${r1(hr)} 0 1 0 ${r1(-2 * hr)} 0a${r1(hr)} ${r1(hr)} 0 1 0 ${r1(2 * hr)} 0`);
+      });
+      for (const b of [...TB.keys()].sort((a, c) => a - c)) { const v = TB.get(b); trees += (v.c0 ? `<path d="${v.c0}" fill="#5b8a34"/>` : "") + (v.c1 ? `<path d="${v.c1}" fill="#4c7a2c"/>` : "") + (v.c2 ? `<path d="${v.c2}" fill="#6b9a3b"/>` : "") + (v.hi ? `<path class="lod1" d="${v.hi}" fill="#8db956" fill-opacity=".8"/>` : "") + (v.pine ? `<path d="${v.pine}" fill="#3d6834"/>` : "") + (v.pine2 ? `<path d="${v.pine2}" fill="#335c2e"/>` : ""); }
+      // (each wood is outlined once, round its trees: an ink edge on every crown would make it a smudge at this size)
+      trees = `<g stroke="#1e2f16" stroke-width=".42" stroke-opacity=".85" stroke-linejoin="round">${trees}</g>`;
+    }
     // dunes, marsh, tufts of grass
     let dune = "", duneHi = "", marsh = "", pools = "", grass = "", bush = "";
     lattice(W, H, 6.5, 5, 51, (x, y, r, row) => {
-      const t = pr.t(x, y), m = pr.M(x, y); if (t <= .01 || t > .45 || !free(x, y)) return;
-      if (m < 70 && r < (70 - m) / 70 * 1.3) { const w = 2.8 + r * 2.5; dune += `M${r1(x - w)} ${r1(y)}q${r1(w)} ${r1(-w * .7)} ${r1(w * 2)} 0`; duneHi += `M${r1(x - w * .9)} ${r1(y - .5)}q${r1(w * .6)} ${r1(-w * .55)} ${r1(w)} ${r1(-w * .35)}`; return; }
+      const t = pr.t(x, y), m = pr.M(x, y); if (t <= .01 || t > .45 || !free(x, y) || (N && N.covAt(x, y))) return;
+      if (m < 70 && r < Math.min(.32, (70 - m) / 70 * 1.3)) { const w = 2.8 + r * 2.5; dune += `M${r1(x - w)} ${r1(y)}q${r1(w)} ${r1(-w * .7)} ${r1(w * 2)} 0`; duneHi += `M${r1(x - w * .9)} ${r1(y - .5)}q${r1(w * .6)} ${r1(-w * .55)} ${r1(w)} ${r1(-w * .35)}`; return; }
       if (m > 212 && t < .14 && r < .55) { marsh += `M${r1(x - 1.8)} ${r1(y)}l.6-2.4M${r1(x)} ${r1(y)}v-3M${r1(x + 1.8)} ${r1(y)}l-.6-2.4`; if (r < .2) pools += `M${r1(x + 4)} ${r1(y + 1)}a2.2 .9 0 1 0 -4.4 0a2.2 .9 0 1 0 4.4 0`; return; }
       if (m > 75 && t < .4 && forest(x, y, m, t) < .2) {
         if (r < .16) grass += `M${r1(x - 1.4)} ${r1(y)}l.7-1.7l.7 1.7l.7-1.7l.7 1.7`;
@@ -324,7 +494,9 @@
       }
     });
     const p = (d, a, cls) => d ? `<path${cls ? ` class="${cls}"` : ""} d="${d}" ${a}/>` : "";
-    return defs + fields + p(pools, `fill="#4f7f88" stroke="#2e4a44" stroke-width=".4"`) + p(dune, `fill="none" stroke="#9a5a26" stroke-opacity=".6" stroke-width=".8" stroke-linecap="round"`) + p(duneHi, `fill="none" stroke="#f0c27a" stroke-opacity=".55" stroke-width=".6" stroke-linecap="round"`)
+    // what marks the ground of each laid-down kind of land, the frozen seas and the cliffs of the coast
+    const ground = (N ? NT.marks(WD, "painted", N, pr, o, free) : "") + (lava ? `<path d="${lava}" fill="none" stroke="#2c221e" stroke-opacity=".55" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="${lava}" fill="none" stroke="#9c4a28" stroke-opacity=".8" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/><path class="lod1" d="${lava}" fill="none" stroke="#e08a4a" stroke-opacity=".7" stroke-width=".35" stroke-linecap="round"/>` : "");
+    return defs + fields + ground + p(pools, `fill="#4f7f88" stroke="#2e4a44" stroke-width=".4"`) + p(dune, `fill="none" stroke="#9a5a26" stroke-opacity=".6" stroke-width=".8" stroke-linecap="round"`) + p(duneHi, `fill="none" stroke="#f0c27a" stroke-opacity=".55" stroke-width=".6" stroke-linecap="round"`)
       + p(marsh, `fill="none" stroke="#33442a" stroke-width=".55" stroke-linecap="round"`) + p(grass, `fill="none" stroke="#5c6a2c" stroke-width=".5"`) + p(bush, `fill="#5d7f33" stroke="#2c3d1c" stroke-width=".35"`) + hills + trees + mtn;
   }
   // the open sea: a few waves, and ships under sail where it is widest
@@ -384,10 +556,23 @@
     const [W, H] = WD.size, G = WD.G, pr = probe(WD), sea = G.sea;
     const HYPS = [[0, hex("#a9cf8d")], [.12, hex("#c6dc9a")], [.28, hex("#e7e3a6")], [.45, hex("#e2c792")], [.62, hex("#c9a074")], [.8, hex("#a88a74")], [.92, hex("#e2ded8")], [1, hex("#fbfbfb")]];
     const DEEP = [[0, hex("#cfe6f3")], [.25, hex("#a9d1ea")], [.6, hex("#7fb2d8")], [1, hex("#5d93c2")]], forest = hex("#8fbf74");
-    const img = raster(WD, (h, m, gx, gy) => {
-      if (h <= sea) return ramp(DEEP, clamp((sea - h) / Math.max(1, sea) * 1.8, 0, 1));
+    // (27 Oct 2026: the land's cover as an atlas shows it, realistic and quiet: deserts sand-coloured, tundra grey,
+    // rainforest deep green, ice white, where the climate makes them (a temperate world stays as it always was), and
+    // every laid-down kind in its own colour)
+    const N = nat(WD), NG = N && N.climate !== "temperate" ? NT.natGrid(WD, N, "atlas") : null;
+    const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
+      if (h <= sea) {
+        let c = ramp(DEEP, clamp((sea - h) / Math.max(1, sea) * 1.8, 0, 1));
+        if (I.lake) c = mix(c, hex("#b4dcf0"), .3);
+        if (I.mix) c = washed("atlas", c, I, x, y, nz, 0, true, .85);
+        if (!(I.b && I.b.water) && I.tm < .08) c = mix(c, [247, 250, 252], smooth(.08, .02, I.tm) * .9);
+        return c;
+      }
       const t = (h - sea) / (255 - sea); let c = ramp(HYPS, t);
       if (m > 150 && t < .55) c = mix(c, forest, clamp((m - 150) / 105, 0, 1) * .55);
+      if (NG && t < .6) c = mix(c, NG(x, y), .5 * (1 - smooth(.4, .6, t)));
+      if (I.mix) c = washed("atlas", c, I, x, y, nz, t, false, .75);
+      if (N && t > .3 && I.tm < .12) c = mix(c, [251, 251, 251], smooth(.12, .03, I.tm) * .8);
       const sh = clamp(shade(gx, gy, .045), .55, 1.25); return c.map(v => v * sh);
     }, { detail: 11 });
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
@@ -397,7 +582,9 @@
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#5f8db3" stroke-width=".8" stroke-linejoin="round"/>`;
     // height lines, faint, closer up
     for (let lv = sea + 40; lv < 250; lv += 40) { const d = ringsAt(G, lv, 1.2).map(r => pathD(r, true)).join(""); if (d) s += `<path class="lod1" d="${d}" fill="none" stroke="#7a5a3c" stroke-opacity=".28" stroke-width=".45"/>`; }
-    s += rivers(WD, "#4f8fc6", null, 1);
+    s += N ? NT.rivers(WD, "atlas", N, pr, "#4f8fc6", null, 1) : rivers(WD, "#4f8fc6", null, 1);
+    let key = [];
+    if (N) { const z = NT.zones(WD, "atlas", N, uid); key = z.key; s += z.svg + NT.marks(WD, "atlas", N, pr, { ink: "#2b3440" }, () => true); for (const it of NT.relief(WD, "atlas", N, pr, uid, () => {}, {}).sort((a, b) => a[0] - b[0])) s += it[1]; }
     // built-up areas round the towns and cities the viewer may see
     let urb = "", urb1 = "";
     for (const L of WD.locs) {
@@ -410,6 +597,7 @@
     if (urb) s += `<path d="${urb}" fill="#ecd3c0" fill-opacity=".9" stroke="#c49a80" stroke-width=".6"/>`;
     if (urb1) s += `<path class="lod1" d="${urb1}" fill="#ecd3c0" fill-opacity=".8" stroke="#c49a80" stroke-width=".5"/>`;
     s += frame(WD, "#2b3440", "atlas", o);
+    if (key.length) s += NT.keyBox(WD, "atlas", key, seaCorner(WD, pr), "#2b3440");
     return s;
   }
 
@@ -417,18 +605,25 @@
   function holo(WD, uid, o) {
     const [W, H] = WD.size, G = WD.G, sea = G.sea, alien = o.palette === "alien";
     const C = alien ? { bg: hex("#12061a"), lo: hex("#2a0f2e"), hi: hex("#7a2d5a"), line: "#ff9a5a", glow: "#ff6a3a", sea: hex("#0a0414") } : { bg: hex("#020d16"), lo: hex("#05242f"), hi: hex("#0f5a63"), line: "#5ae2f0", glow: "#2fd0e8", sea: hex("#010811") };
-    const img = raster(WD, (h, m, gx, gy, x, y) => {
-      if (h <= sea) { const scan = (Math.floor(y * 1.6) % 3 === 0) ? 1.25 : 1; return C.sea.map(v => v * scan); }
-      const t = (h - sea) / (255 - sea), sh = clamp(shade(gx, gy, .03), .6, 1.4); return mix(C.lo, C.hi, Math.pow(t, .8)).map(v => v * sh);
+    const N = nat(WD), pr = probe(WD);
+    const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
+      if (h <= sea) { const scan = (Math.floor(y * 1.6) % 3 === 0) ? 1.25 : 1; let c = C.sea; if (I.mix) c = washed("holo", c, I, x, y, nz, 0, true, .45); return c.map(v => v * scan); }
+      const t = (h - sea) / (255 - sea), sh = clamp(shade(gx, gy, .03), .6, 1.4); let c = mix(C.lo, C.hi, Math.pow(t, .8));
+      // (each zone of the survey tinted in its own colour, faintly: the hatching and the outline say the rest)
+      if (I.mix) c = mix(c, washed("holo", c, I, x, y, nz, t, false, .55), .7);
+      return c.map(v => v * sh);
     }, { detail: 8 });
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     // contour lines, a brighter one every fourth
     let n = 0; for (let lv = sea + 14; lv < 252; lv += 14, n++) { const d = ringsAt(G, lv, 1.1).map(r => pathD(r, true)).join(""); if (!d) continue; const major = n % 4 === 3; s += `<path${major ? "" : ` class="lod1"`} d="${d}" fill="none" stroke="${C.line}" stroke-opacity="${major ? .55 : .26}" stroke-width="${major ? .7 : .45}"/>`; }
     const cd = coastD(G, .6);
     s += `<path d="${cd}" fill="none" stroke="${C.glow}" stroke-opacity=".22" stroke-width="5"/><path d="${cd}" fill="none" stroke="${C.line}" stroke-width="1.1"/>`;
-    s += rivers(WD, C.line, null, .7).replace(/stroke="[^"]+"/g, `stroke="${C.line}" stroke-opacity=".7"`);
+    s += N ? NT.rivers(WD, "holo", N, pr, C.line, null, .7) : rivers(WD, C.line, null, .7).replace(/stroke="[^"]+"/g, `stroke="${C.line}" stroke-opacity=".7"`);
+    let key = [];
+    if (N) { const z = NT.zones(WD, "holo", N, uid); key = z.key; s += z.svg + NT.marks(WD, "holo", N, pr, { ink: C.line }, () => true); for (const it of NT.relief(WD, "holo", N, pr, uid, () => {}, {}).sort((a, b) => a[0] - b[0])) s += it[1]; }
     s += grid(WD, C.line, true);
     s += frame(WD, C.line, "holo", o);
+    if (key.length) s += NT.keyBox(WD, "holo", key, seaCorner(WD, pr), C.line);
     return s;
   }
   function stars(WD, uid, o) {
@@ -534,7 +729,7 @@
   function draw(WD, look, uid, o) {
     o = o || {};
     if (look === "stars" || !WD.G) return stars(WD, uid, o);
-    return ({ painted, parchment, engraved, atlas, holo })[look](WD, uid, o);
+    return ({ relief, painted, parchment, engraved, atlas, holo })[look](WD, uid, o);
   }
   A.worldArt = { LOOKS, looksFor, draw };
 })(ATLAS);

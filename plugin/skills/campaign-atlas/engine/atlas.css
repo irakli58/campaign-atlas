@@ -803,6 +803,7 @@ details.ci[open] > summary.cn { margin-bottom: 4px; }
 .wm-btn:disabled { opacity: .4; cursor: default; }
 .wm-brushbar { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12.5px; padding-left: 4px; }
 .wm-brushbar select { font: inherit; padding: 2px 6px; }
+.wm-bsize input[type="range"] { width: 140px; vertical-align: middle; } .wm-bsz { display: inline-block; min-width: 2.4em; font-variant-numeric: tabular-nums; }
 .wm[data-tool="brush"] .wm-stage, .wm[data-tool="river"] .wm-stage, .wm[data-tool="realm"] .wm-stage, .wm[data-tool="label"] .wm-stage, .wm[data-tool="loc"] .wm-stage { cursor: crosshair; }
 .wm-fx .wf-hit { fill: none; stroke: transparent; stroke-width: 12px; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: move; }
 .wm-fx .wf-hit:hover, .wm-fx .wf-hit.sel { stroke: rgba(201, 162, 39, .5); }
@@ -1840,6 +1841,13 @@ button.ho-b:hover { color: var(--ink); }
    27 Oct 2026 (the past's engraved plate, science fiction's survey); the titles, grids and compass letters it draws */
 .wm[data-z="0"] .wm-land .lod1, .wm[data-z="0"] .wm-land .lod2, .wm[data-z="1"] .wm-land .lod2, .wm:not([data-z]) .wm-land .lod1, .wm:not([data-z]) .wm-land .lod2 { display: none; }
 /* the painted fantasy map: cream names with dark halos over the colours, red roofs, grey stone */
+.wm-relief { --wm-ink: #2b2a24; --wm-mk: #fff8ec; --wm-bg: #5d8fb3; --wm-label: #24211c; --wm-halo: rgba(255, 251, 240, .9); }
+.wm-relief .wm-rl { font-family: var(--f-sc); fill: #3a3328; fill-opacity: .9; stroke: #fbf6ea; stroke-width: 2.6px; stroke-opacity: .7; paint-order: stroke; letter-spacing: .24em; }
+.wm-relief .wm-rl.w { font-family: var(--f-display); font-style: italic; fill: #2a5677; stroke: #dceaf2; letter-spacing: .2em; }
+.wm-relief .wl .wi .r { fill: #a8432c; }
+.wm-relief .wl .wi .s { fill: #b9b3a3; }
+.wm-relief .wl-t { font-family: var(--f-sc); font-style: normal; font-weight: 600; letter-spacing: .04em; }
+.wm-relief .wm-ttl { fill: #2b2a24; }
 .wm-painted { --wm-ink: #2a2016; --wm-mk: #efe4c9; --wm-bg: #2e5468; --wm-label: #f6eedb; --wm-halo: #1f1810; }
 .wm-painted .wm-rl { font-family: var(--f-sc); fill: #f4ecd6; fill-opacity: .95; stroke: #241b12; stroke-width: 3.2px; stroke-opacity: .75; letter-spacing: .26em; }
 .wm-painted .wm-rl.w { font-family: var(--f-display); font-style: italic; fill: #dbe9ea; stroke: #1c3440; letter-spacing: .2em; }
