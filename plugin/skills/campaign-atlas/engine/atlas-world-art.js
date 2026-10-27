@@ -172,7 +172,7 @@
     s += streams(WD, "#4f7c95");
     s += N ? NT.rivers(WD, "relief", N, pr, "#3f6f8c", null, .9) : rivers(WD, "#3f6f8c", null, .9);
     const c = seaCorner(WD, pr), tx = W * c[0], ty = H * c[1];
-    s += `<g class="wm-deco">${northArrow(W * (c[0] < .5 ? .94 : .06), H * .9, Math.min(W, H) * .035, ink, true)}${WD.title ? `<text x="${tx}" y="${ty - 14}" text-anchor="middle" fill="${ink}" font-family="Georgia, 'Times New Roman', serif" font-size="${(Math.min(W, H) * .011).toFixed(1)}" letter-spacing=".3em">HYDROGRAPHIC MAP OF</text><text class="wm-ttl" x="${tx}" y="${ty + 14}" text-anchor="middle" fill="${ink}" font-family="Georgia, 'Times New Roman', serif" font-size="${(Math.min(W, H) * .028).toFixed(1)}" letter-spacing=".12em">${String(A.esc ? A.esc(WD.title) : WD.title).toUpperCase()}</text>` : ""}</g>`;
+    s += `<g class="wm-deco">${northArrow(W * (c[0] < .5 ? .94 : .06), H * .9, Math.min(W, H) * .035, ink, true)}${WD.title ? `<text x="${tx}" y="${(ty - Math.min(W, H) * .022).toFixed(1)}" text-anchor="middle" fill="${ink}" font-family="Georgia, 'Times New Roman', serif" font-size="${(Math.min(W, H) * .011).toFixed(1)}" letter-spacing=".3em">HYDROGRAPHIC MAP OF</text><text class="wm-ttl" x="${tx}" y="${(ty + Math.min(W, H) * .012).toFixed(1)}" text-anchor="middle" fill="${ink}" font-family="Georgia, 'Times New Roman', serif" font-size="${(Math.min(W, H) * .028).toFixed(1)}" letter-spacing=".12em">${String(A.esc ? A.esc(WD.title) : WD.title).toUpperCase()}</text>` : ""}</g>`;
     return s;
   }
   // every stream, as a hydrographic map draws them: the water's way down the land's own grid (each cell to its lowest

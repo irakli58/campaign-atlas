@@ -28,7 +28,7 @@ const MEDIAN_MM = { temperate: 760, varied: 620, cold: 460, polar: 260, warm: 56
 // height), want (the rain's median as calibrated) }; o: { cols, rows, km, climate, tempShift }; U: tools
 function ecology(L, o, U) {
   const earth = o.model === "earth", { cols, rows } = o, N = cols * rows, cellKm = (o.km || 3200) / cols, B = BIO.CODE, E = L.E;
-  const [la, lb] = LAT[o.climate] || LAT.temperate, lat = j => la + (lb - la) * (j + .5) / rows;
+  const [la, lb] = o.lat || LAT[o.climate] || LAT.temperate, lat = j => la + (lb - la) * (j + .5) / rows;
   const I = n => n % cols, J = n => (n / cols) | 0, land = n => E[n] > 0 && !L.lake[n];
   const ocean = new Uint8Array(N), st = [];
   for (let n = 0; n < N; n++) { const i = I(n), j = J(n); if (E[n] <= 0 && !L.lake[n] && (!i || !j || i === cols - 1 || j === rows - 1)) { ocean[n] = 1; st.push(n); } }
@@ -58,7 +58,7 @@ function ecology(L, o, U) {
     // the warmest and the coldest month, each from the Earth's own averages by latitude (July about 21 °C at 45°, 14 °C
     // at 60°, 8 °C at 70°); winters far colder inland than on the coast, where the sea keeps them mild, summers a little
     // warmer inland; both 6.5 °C colder for every km of height. The year's mean lies between them
-    const cont = 1 - Math.exp(-dOcean[n] * cellKm / 550), lapse = e * .0065 - (o.tempShift || 0) * 40;
+    const cont = 1 - Math.exp(-dOcean[n] * cellKm / 550), lapse = e * .0065 - (o.tempShift || 0) * 40 - (o.warmC || 0);
     // (a cold current keeps its coast cool and grey in summer: Lima, Walvis Bay, San Diego)
     const fg = earth && L.fog ? L.fog[n] : 0;
     const tw = 30 - .0045 * a * a + 2 * cont - lapse - 6 * fg, tc = 27 - .0085 * a * a - .35 * a * cont - lapse - fg, t = (tw + tc) / 2;

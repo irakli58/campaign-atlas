@@ -30,8 +30,11 @@ function geology(o, U) {
   const PL = o.planet || {}, grav = PL.gravity || 1, air = PL.air || 1, water = PL.water;
   const share = water != null ? 1 - water : o.landShare;
   // the land is shaped on a coarser grid (each cell some 10 to 20 km), then refined on the map's own
-  const f = Math.max(1, Math.round(Math.sqrt(cols * rows / 60000))), cc = Math.ceil(cols / f), cr = Math.ceil(rows / f), CN = cc * cr, ckm = cellKm * f;
+  const f = Math.max(1, Math.round(Math.sqrt(cols * rows / (o.coarse || 60000)))), cc = Math.ceil(cols / f), cr = Math.ceil(rows / f), CN = cc * cr, ckm = cellKm * f;
   const nA = U.noiseFn(seed + 511), nB = U.noiseFn(seed + 512), nC = U.noiseFn(seed + 513), nD = U.noiseFn(seed + 514);
+  // (zs: the noise sized to the land in km rather than to the sheet: 1 for a regional map, as it always was; a whole
+  // planet's coasts and plate borders then wander at the scale the Earth's do, not in lines thousands of km long)
+  const zs = o.noiseZoom || 1;
   const ci = n => n % cc, cj = n => (n / cc) | 0, X = n => (ci(n) + .5) / cr, Y = n => (cj(n) + .5) / cr, asp = cc / cr;
   const edgeD = n => Math.min(X(n) / asp, 1 - X(n) / asp, Y(n), 1 - Y(n));
 
@@ -52,17 +55,19 @@ function geology(o, U) {
   const nP = o.plates || Math.round(6 + rnd() * 3 + cols / 260), plates = [];
   for (let k = 0; k < nP; k++) { const a = rnd() * Math.PI * 2, s = .35 + rnd() * .65; plates.push({ vx: Math.cos(a) * s, vy: Math.sin(a) * s, seed: cell(rnd() * asp, rnd()) }); }
   // (a strongly varying cost bends the plates' borders into arcs, as real ones are, so the ranges along them curve)
-  const plate = grow(plates.map(p => p.seed), m => .15 + 6 * Math.pow(U.fbm(nA, X(m) * 2.2 + 11, Y(m) * 2.2, 4), 3));
+  const plate = grow(plates.map(p => p.seed), m => .15 + 6 * Math.pow(U.fbm(nA, X(m) * 2.2 * zs + 11, Y(m) * 2.2 * zs, 4), 3) + (zs > 1 ? 2.5 * Math.pow(U.fbm(nC, X(m) * 7 * zs + 5, Y(m) * 7 * zs, 3), 2) : 0));
   const crust = new Uint8Array(CN);   // 1 continent, 2 an island arc or a hotspot's island
-  const target = Math.round(CN * Math.min(.97, share * 1.1)), edgeCost = (m, sides) => { const d = sides ? Math.min(...sides.map(s => [X(m) / asp, 1 - X(m) / asp, Y(m), 1 - Y(m)][s])) : edgeD(m); return 30 * Math.max(0, 1 - d / .1) ** 2; };
+  const target = Math.round(CN * Math.min(.97, share * 1.1)), edgeCost = (m, sides) => { const d = sides ? Math.min(...sides.map(s => [X(m) / asp, 1 - X(m) / asp, Y(m), 1 - Y(m)][s])) : edgeD(m); return 30 * Math.max(0, 1 - d / (o.edgeMargin || .1)) ** 2; };
   // (the cost has strong contrasts at several scales, so a continent reaches out in lobes and peninsulas and leaves gulfs)
-  const landCost = sides => m => .12 + 5 * Math.pow(U.fbm(nB, X(m) * 2.2, Y(m) * 2.2, 5), 3) + .6 * Math.pow(U.fbm(nA, X(m) * 5 + 3, Y(m) * 5, 3), 2) + edgeCost(m, sides);
+  const landCost = sides => m => .12 + 5 * Math.pow(U.fbm(nB, X(m) * 2.2 * zs, Y(m) * 2.2 * zs, 5), 3) + .6 * Math.pow(U.fbm(nA, X(m) * 5 * zs + 3, Y(m) * 5 * zs, 3), 2) + edgeCost(m, sides);
   const side = Math.floor(rnd() * 4), others = [0, 1, 2, 3].filter(s => s !== side);
   let seedsC;
   if (land === "inland") crust.fill(1);
   else {
     if (land === "coast") { seedsC = []; for (let k = 0; k < 4; k++) { const t = .15 + k * .23; seedsC.push(side === 0 ? cell(.02, t) : side === 1 ? cell(asp - .02, t) : side === 2 ? cell(t * asp, .02) : cell(t * asp, .98)); } }
     else if (land === "islands") { seedsC = []; for (let k = 0; k < 5 + Math.floor(rnd() * 4); k++) seedsC.push(cell((.15 + rnd() * .7) * asp, .15 + rnd() * .7)); }
+    // (a whole planet: several continents of every size spread over its oceans, some joined, as the Earth's are)
+    else if (land === "continents") { seedsC = []; for (let k = 0; k < 6 + Math.floor(rnd() * 4); k++) seedsC.push(cell((.06 + rnd() * .88) * asp, .14 + rnd() * .72)); }
     else if (land === "archipelago") { seedsC = []; for (let k = 0; k < 14 + Math.floor(rnd() * 8); k++) seedsC.push(cell((.1 + rnd() * .8) * asp, .1 + rnd() * .8)); }
     else { seedsC = [cell((.42 + rnd() * .16) * asp, .42 + rnd() * .16)]; for (let k = 0; k < 2 + Math.floor(rnd() * 3); k++) seedsC.push(cell((.22 + rnd() * .56) * asp, .22 + rnd() * .56)); }
     const lab = grow(seedsC, landCost(land === "coast" ? others : null), land === "archipelago" ? Math.round(target * .4) : land === "islands" ? Math.round(target * .7) : target);
@@ -87,11 +92,11 @@ function geology(o, U) {
   for (let n = 0; n < CN; n++) {
     // a slow broad warping of every continent: basins and swells
     // (most of a continent is an old shield barely rising: its plains; here and there a slow swell of upland)
-    if (crust[n]) up[n] += .015 + .22 * Math.max(0, U.fbm(nC, X(n) * 1.6, Y(n) * 1.6, 3) - .56);
+    if (crust[n]) up[n] += .015 + .22 * Math.max(0, U.fbm(nC, X(n) * 1.6 * zs, Y(n) * 1.6 * zs, 3) - .56);
     const b = near[n] >= 0 ? bInfo[near[n]] : null; if (!b) continue;
     const d = dist[n] * ckm, here = plate[n], mine = here === b.pa, cHere = !!crust[n], cOver = !!(mine ? b.cb : b.ca);
     // (a belt rises the whole length of its border, higher here and lower there along it)
-    const along = .7 + .6 * U.fbm(nD, X(n) * 1.4, Y(n) * 1.4, 2);
+    const along = .7 + .6 * U.fbm(nD, X(n) * 1.4 * zs, Y(n) * 1.4 * zs, 2);
     if (b.conv > .1) {
       const c = Math.min(1.5, b.conv) * along;
       if (cHere && cOver) up[n] += c * (2.2 * bump(d, 40, 95) + .55 * bump(d, 190, 150));
@@ -99,7 +104,7 @@ function geology(o, U) {
       else if (cOver) trench[n] += c * gauss(d / 60);
       else if (here > (mine ? b.pb : b.pa)) {
         // an island arc: a broken line of volcanic islands over the sinking plate
-        if (d > 70 && d < 130 && U.fbm(nA, X(n) * 9, Y(n) * 9, 2) > .5) { crust[n] = 2; up[n] += c * 1.4; if (rnd() < .06) volc.push(n); }
+        if (d > 70 && d < 130 && U.fbm(nA, X(n) * 9 * zs, Y(n) * 9 * zs, 2) > .5) { crust[n] = 2; up[n] += c * 1.4; if (rnd() < .06) volc.push(n); }
       } else trench[n] += c * gauss(d / 60);
     } else if (b.conv < -.1) {
       const c = Math.min(1.4, -b.conv) * along;
@@ -133,7 +138,7 @@ function geology(o, U) {
   const h = new Float32Array(CN);
   // (the first land is not quite flat: a gentle unevenness of a few cells' breadth, from which the drainage organises
   // itself into branching networks, rather than running in parallel lines down a smooth slope)
-  for (let n = 0; n < CN; n++) h[n] = crust[n] ? 5 + U.fbm(nD, X(n) * 22, Y(n) * 22, 3) * 6 + rnd() * .5 : -1;
+  for (let n = 0; n < CN; n++) h[n] = crust[n] ? 5 + U.fbm(nD, X(n) * 22 * zs, Y(n) * 22 * zs, 3) * 6 + rnd() * .5 : -1;
   let rain = new Float32Array(CN).fill(1);
   const K = .06 * Math.min(1.5, air), mExp = .45, kd = .05, steps = 220, dt = 1;
   const isBase = n => !crust[n];
@@ -176,7 +181,7 @@ function geology(o, U) {
     if (isLand[n]) continue; const d = dLand[n] * cellKm;
     let z = d < 80 ? -40 - d * 1.6 : d < 260 ? -170 - (d - 80) / 180 * 3300 : -3470 - Math.min(800, (d - 260) * 1.5);
     if (Cf[n]) z = Math.max(z, -(seaLvl - Hf[n]) * 30 - 15);
-    E[n] = z + ridgeF[n] * 1800 * Math.min(1, d / 300) - trenchF[n] * 2600 + (U.fbm(nC, (n % cols) / cols * 12, ((n / cols) | 0) / cols * 12, 3) - .5) * 260;
+    E[n] = z + ridgeF[n] * 1800 * Math.min(1, d / 300) - trenchF[n] * 2600 + (U.fbm(nC, (n % cols) / cols * 12 * zs, ((n / cols) | 0) / cols * 12 * zs, 3) - .5) * 260;
     if (E[n] > -5) E[n] = -5;
   }
 
@@ -189,7 +194,7 @@ function geology(o, U) {
   // on the classic rain)
   let C = o.climateModel === "earth" ? climateEarth(E, cols, rows, o, nD, U, air) : climate(E, cols, rows, o, nD, U, air);
   if (C.mm) C.mm = Float32Array.from(C.rain);
-  if (process.env.ATLAS_DUMP && C.mm) require("fs").writeFileSync(process.env.ATLAS_DUMP, JSON.stringify({ cols, rows, la: (LAT[o.climate] || LAT.temperate), E: Array.from(E, v => Math.round(v)), mm: Array.from(C.mm, Math.round), sst: Array.from(C.sst, v => Math.round(v * 10) / 10), fog: Array.from(C.fog, v => Math.round(v * 100) / 100) }));
+  if (process.env.ATLAS_DUMP && C.mm) require("fs").writeFileSync(process.env.ATLAS_DUMP, JSON.stringify({ cols, rows, la: (o.lat || LAT[o.climate] || LAT.temperate), E: Array.from(E, v => Math.round(v)), mm: Array.from(C.mm, Math.round), sst: Array.from(C.sst, v => Math.round(v * 10) / 10), fog: Array.from(C.fog, v => Math.round(v * 100) / 100) }));
   { const r = []; for (let n = 0; n < N; n++) if (E[n] > 0) r.push(C.rain[n]); r.sort((a, b) => a - b);
     const med = r[Math.floor(r.length / 2)] || 1, want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
     for (let n = 0; n < N; n++) C.rain[n] *= want / med; }
@@ -208,7 +213,7 @@ function geology(o, U) {
 
   /* 8. what lives on it: climate classes, biomes and tree cover, from all of the above (world-ecology.js) */
   const want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
-  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel }, U);
+  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC }, U);
 
   /* to the grid the maps are drawn from */
   // (and each height's fraction, kept apart: a shaded relief map needs the land's slopes finer than 255 steps)
@@ -275,9 +280,9 @@ function fill(E, cols, rows, U) {
 // raining it out as they rise over the land
 const LAT = { temperate: [52, 38], varied: [68, 4], cold: [70, 52], polar: [84, 66], warm: [36, 22], tropical: [16, -6], arid: [33, 17], wet: [56, 42] };
 function climate(E, cols, rows, o, nz, U, air) {
-  const N = cols * rows, [la, lb] = LAT[o.climate] || LAT.temperate, cellKm = (o.km || 3200) / cols;
+  const N = cols * rows, [la, lb] = o.lat || LAT[o.climate] || LAT.temperate, cellKm = (o.km || 3200) / cols;
   const lat = j => la + (lb - la) * (j + .5) / rows, temp = new Float32Array(N), rain = new Float32Array(N);
-  for (let n = 0; n < N; n++) { const j = (n / cols) | 0, L = Math.abs(lat(j)) * Math.PI / 180; temp[n] = -22 + 49 * Math.pow(Math.cos(L), 1.25) - Math.max(0, E[n]) * .0065 + (o.tempShift || 0); }
+  for (let n = 0; n < N; n++) { const j = (n / cols) | 0, L = Math.abs(lat(j)) * Math.PI / 180; temp[n] = -22 + 49 * Math.pow(Math.cos(L), 1.25) - Math.max(0, E[n]) * .0065 + (o.tempShift || 0) + (o.warmC || 0); }
   // the share of moisture the air sheds as it crosses a cell of land, and what it gives up climbing
   const sweep = (dirx, tilt, weight) => {
     for (let j0 = 0; j0 < rows; j0++) {
@@ -322,9 +327,9 @@ function climate(E, cols, rows, o, nz, U, air) {
 //     poleward from an equatorward coast into the desert (West Africa: forest, savanna, the Sahel, the Sahara).
 // The rain comes out in mm a year, not scaled to the climate's median, so a dry world is dry because of where it lies.
 function climateEarth(E, cols, rows, o, nz, U, air) {
-  const N = cols * rows, [la, lb] = LAT[o.climate] || LAT.temperate, cellKm = (o.km || 3200) / cols;
+  const N = cols * rows, [la, lb] = o.lat || LAT[o.climate] || LAT.temperate, cellKm = (o.km || 3200) / cols;
   const lat = j => la + (lb - la) * (j + .5) / rows, temp = new Float32Array(N), rain = new Float32Array(N), fog = new Float32Array(N);
-  for (let n = 0; n < N; n++) { const j = (n / cols) | 0, L = Math.abs(lat(j)) * Math.PI / 180; temp[n] = -22 + 49 * Math.pow(Math.cos(L), 1.25) - Math.max(0, E[n]) * .0065 + (o.tempShift || 0); }
+  for (let n = 0; n < N; n++) { const j = (n / cols) | 0, L = Math.abs(lat(j)) * Math.PI / 180; temp[n] = -22 + 49 * Math.pow(Math.cos(L), 1.25) - Math.max(0, E[n]) * .0065 + (o.tempShift || 0) + (o.warmC || 0); }
   // the sea's surface warmth, and the currents along its coasts: for each sea cell, how far the coast lies to its east
   // (it is then on an ocean's eastern side, off a west coast) and to its west
   const dE = new Float32Array(N), dW = new Float32Array(N), wideE = new Float32Array(N), sst = new Float32Array(N), cold = new Float32Array(N);
@@ -369,8 +374,12 @@ function climateEarth(E, cols, rows, o, nz, U, air) {
   // the belt winds: from the east in the trades and the polar easterlies, from the west in the westerlies
   const sweep = (dirx, tilt, w) => {
     for (let j0 = 0; j0 < rows; j0++) {
-      const a0 = Math.abs(lat(j0)), dx = (a0 < 30 || a0 > 62 ? -1 : 1) * dirx; let jj = j0, st = null;
-      for (let s = 0; s < cols; s++) { const i = dx > 0 ? s : cols - 1 - s, j = Math.max(0, Math.min(rows - 1, Math.round(jj))); jj += tilt; const n = j * cols + i; if (!st) st = start(n); cross(n, st, w, false); }
+      // (the westerlies' share of the row, the rest the easterlies': they meet over several degrees, not on a line)
+      const a0 = Math.abs(lat(j0)), ws = o.lat ? smooth(26, 34, a0) * (1 - smooth(58, 66, a0)) : (a0 < 30 || a0 > 62 ? 0 : 1);  // (a whole planet's belts blended; a region's as they always were)
+      for (const [dir, share] of [[1, ws], [-1, 1 - ws]]) {
+        if (share < .02) continue; const dx = dir * dirx; let jj = j0, st = null;
+        for (let s = 0; s < cols; s++) { const i = dx > 0 ? s : cols - 1 - s, j = Math.max(0, Math.min(rows - 1, Math.round(jj))); jj += tilt; const n = j * cols + i; if (!st) st = start(n); cross(n, st, w * share, false); }
+      }
     }
   };
   sweep(1, 0, .25); sweep(1, .12, .15); sweep(1, -.12, .15); sweep(1, .05, .1); sweep(1, -.05, .1); sweep(-1, .07, .08); sweep(-1, -.07, .08);
