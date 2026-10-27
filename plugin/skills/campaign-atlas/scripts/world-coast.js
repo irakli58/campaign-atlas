@@ -108,9 +108,9 @@ function coasts(H, cols, rows, o) {
   const ref = pct(Array.from(D), .9) || 1, code = new Uint8Array(N), raise = [];
   const W = new Float32Array(K);
   for (let k = 0; k < K; k++) {
-    // (a beach only where more sand stays than most of the coast keeps: about a third of the world's coasts are sandy,
-    // the rest rock, cliff, gravel, marsh and mangrove, as the Earth's are)
-    const n = C[k], T = o.T ? o.T[n] : 12, wn = D[k] / ref, w = wn < .55 || (steep[k] > .55 && E[k] > .8 && wn < .9) ? 0 : R(1, 15, Math.round((wn - .4) * 12 * (.5 + .5 * shelf[k]))); W[k] = w;
+    // (a beach only where clearly more sand stays than most of the coast keeps: about a fifth of the shore (the user,
+    // 28 Oct 2026: "not all the coasts should have sand"); the rest rock, cliff, gravel, marsh and mangrove)
+    const n = C[k], T = o.T ? o.T[n] : 12, wn = D[k] / ref, w = wn < .78 || (steep[k] > .45 && E[k] > .7 && wn < 1.1) ? 0 : R(1, 15, Math.round((wn - .6) * 12 * (.5 + .5 * shelf[k]))); W[k] = w;
     let kind;
     if (w >= 1) kind = kindOf[k] === KIND.gravel || (E[k] > 1 && steep[k] > .55 && kindOf[k] === KIND.sand) ? KIND.gravel : kindOf[k];
     else if (E[k] < .22 && steep[k] < .3 && src.river[k] + (down[k] < 0 ? .2 : 0) > .05) kind = T > 20 ? KIND.mangrove : T > 2 ? KIND.marsh : KIND.rock;
