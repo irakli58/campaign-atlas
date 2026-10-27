@@ -268,15 +268,18 @@
     HL.forEach((h, k) => { stamps += `<g id="${uid}-h${k}"><ellipse cx=".15" cy=".03" rx="1.1" ry=".12" fill="#26240f" fill-opacity=".16"/><path d="${h.f}" fill="url(#${uid}-hl)"/><path d="${h.d}" fill="#5f5730" fill-opacity=".45"/><path d="${h.s}" fill="none" stroke="#3a2e1e" stroke-width=".05" stroke-opacity=".7" stroke-linecap="round"/><path d="${h.f}" fill="none" stroke="#3a2e1e" stroke-width=".05" stroke-opacity=".8"/></g>`; });
     const defs = `<defs><linearGradient id="${uid}-ml" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="#efdbb2"/><stop offset=".55" stop-color="#cfae80"/><stop offset="1" stop-color="#a7835a"/></linearGradient><linearGradient id="${uid}-mm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b89470"/><stop offset="1" stop-color="#806040"/></linearGradient><linearGradient id="${uid}-mr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8d6c4b"/><stop offset="1" stop-color="#523a26"/></linearGradient><linearGradient id="${uid}-hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c2b26c"/><stop offset="1" stop-color="#8c8246"/></linearGradient>${stamps}</defs>`;
     const placed = [];
-    lattice(W, H, 8, 6.2, 21, (x, y, r) => {
-      const t = pr.t(x, y); if (t < .46 || r > (t - .42) * 2.8) return;
-      const w = 6.5 + (t - .46) * 30 + r * 3.5, h = w * (1.05 + hash(x, y, 9) * .45); if (near(x, y, w)) return; taken.push([x, y, w]); mark(x, y, w * .9, h * .8);
+    // (the user, 27 Oct 2026: scattered peaks "look out of place": a range stands shoulder to shoulder, the peaks
+    // overlapping, the biggest along its spine and smaller ones at its edges)
+    const crowd = (x, y, w) => taken.some(([a, b, rr]) => Math.abs(a - x) < (w + rr) * .36 && Math.abs(b - y) < (w + rr) * .16);
+    lattice(W, H, 6.4, 4.4, 21, (x, y, r) => {
+      const t = pr.t(x, y); if (t < .44 || r > (t - .38) * 4.2) return;
+      const w = 5.2 + (t - .44) * 38 + r * 3, h = w * (1.05 + hash(x, y, 9) * .45); if (crowd(x, y, w)) return; taken.push([x, y, w]); mark(x, y, w * .9, h * .8);
       const hk = hash(x, y, 15), k = t > .68 ? (hk < .4 ? 3 : hk < .75 ? 0 : 1) : t > .56 ? (hk < .4 ? 0 : hk < .75 ? 1 : hk < .9 ? 3 : 2) : (hk < .35 ? 2 : hk < .7 ? 0 : 1);
       placed.push([y, `<use href="#${uid}-m${k}${t > .66 ? "s" : ""}" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h / 1.1 * 100) / 100})"/>`]);
     });
-    lattice(W, H, 9, 6.6, 31, (x, y, r) => {
-      const t = pr.t(x, y); if (t < .32 || t >= .47 || r > .3 || near(x, y, 5)) return;
-      const w = 5 + r * 8, h = w * (.75 + hash(x, y, 33) * .3); taken.push([x, y, w * .7]); mark(x, y, w, h);
+    lattice(W, H, 7, 5, 31, (x, y, r) => {
+      const t = pr.t(x, y); if (t < .37 || t >= .45 || r > .55 || near(x, y, 4)) return;
+      const w = 4 + r * 5 + (t - .37) * 30, h = w * (.75 + hash(x, y, 33) * .3); taken.push([x, y, w * .7]); mark(x, y, w, h);
       placed.push([y, `<use href="#${uid}-h${Math.floor(hash(x, y, 34) * HL.length)}" transform="translate(${r1(x)} ${r1(y)}) scale(${r1(w * 100) / 100} ${r1(h * 100) / 100})"/>`]);
     });
     placed.sort((a, b) => a[0] - b[0]);
