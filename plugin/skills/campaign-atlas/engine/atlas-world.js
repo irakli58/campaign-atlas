@@ -1109,15 +1109,22 @@
     function newWorldDlg() {
       const g = OV.gen || {}, SK = A.worldSketch, nk = v => Math.round(v / 100) * 100, fmt = v => v.toLocaleString("en"), km = k => k === "planet" ? "40,000 km around, 20,000 km from pole to pole" : `${fmt(nk(GEN_KM[k] || GEN_SIZES[k][0] * 2.3))} km by ${fmt(nk((GEN_KM[k] || GEN_SIZES[k][0] * 2.3) * GEN_SIZES[k][1] / GEN_SIZES[k][0]))} km`;
       const sizes = [["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"], ["vast", "Vast"], ["world", "A great continent"], ["supercontinent", "A supercontinent"], ["hemisphere", "Half a planet"], ["planet", "A whole planet"]].map(([k, l]) => [k, `${l}: ${km(k)}${GEN_SECS[k] >= 60 ? ` (takes about ${Math.round(GEN_SECS[k] / 60)} min)` : ""}`]);
-      const lands = [["continent", "One continent"], ["continents", "Several continents"], ["islands", "Islands"], ["archipelago", "An archipelago"], ["coast", "A coast (the sea on one side)"], ["inland", "All land"], ["paint", "Paint it myself"], ["sketch", "From a picture of my own"]];
+      const lands = [["masses", "Made for me: a preset, or how many landmasses"], ["coast", "A coast (the sea on one side)"], ["inland", "All land"], ["paint", "Paint it myself"], ["sketch", "From a picture of my own"]];
+      // (the presets: how many landmasses, and how much of the world is land)
+      const PRESETS = [["One big continent", 1, .4], ["A Pangaea: one vast land", 1, .62], ["Two continents", 2, .35], ["Several continents, like the Earth", 6, .29], ["Many islands", 15, .2], ["An archipelago", 35, .12]];
       const looks = (A.worldArt ? A.worldArt.looksFor(WD) : []).map(([v, l]) => [v, l]);
       const clim = Object.entries(A.worldBiomes ? A.worldBiomes.CLIMATES : { varied: [0, 0, 0, "Varied"] }).map(([k, v]) => [k, v[3]]);
       let pic = null;
       dlg.innerHTML = `<form method="dialog" class="ke wm-newworld"><h3>Make a new world</h3>
         <p class="kn">A whole new land, made the way the Earth makes one: plates raise its mountains, rivers carve them, the winds bring its rain. Your places are set on it again; Undo brings back the old land.</p>
         <label>How big <span class="wm-lsl"><span class="kn">Small</span><input type="range" name="sizeR" min="0" max="${sizes.length - 1}" step="1" value="${Math.max(0, sizes.findIndex(s2 => s2[0] === (g.size || "planet")))}" aria-label="How big the world is"><span class="kn">A whole planet</span></span><span class="kn wm-sval"></span><input type="hidden" name="size" value="${esc(g.size || "planet")}"></label>
-        <label>Its shape <select name="land">${opt(lands, g.paint ? "paint" : g.sketch ? "sketch" : g.land || "continent")}</select></label>
+        <label>Its shape <select name="land">${opt(lands, g.paint ? "paint" : g.sketch ? "sketch" : ["coast", "inland"].includes(g.land) ? g.land : "masses")}</select></label>
         <div class="wm-nw-pic" hidden><label>Your drawing <input type="file" name="pic" accept="image/*"></label><p class="kn">A drawing on paper or a coloured map: the land you outlined (or did not colour blue) becomes the land, and the mountains you drew (peaks, hatching, or brown and grey) become ranges. A photo of a sketch works.</p><p class="kn wm-nw-read"></p></div>
+        <div class="wm-nw-masses" hidden>
+          <div class="wm-pal">${PRESETS.map(([l, m, sh], i) => `<button type="button" class="wm-pc" data-preset="${i}">${esc(l)}</button>`).join("")}</div>
+          <label>How many landmasses <span class="wm-lsl"><span class="kn">1</span><input type="range" name="masses" min="1" max="40" step="1" value="${g.masses || 1}"><span class="kn">40</span></span><span class="kn wm-mval"></span></label>
+          <label>How much of the world is land <span class="wm-lsl"><span class="kn">10%</span><input type="range" name="share" min="0.1" max="0.9" step="0.01" value="${g.share || .4}"><span class="kn">90%</span></span><span class="kn wm-shval"></span></label>
+        </div>
         <div class="wm-nw-paint" hidden>
           <div class="wm-pal" role="radiogroup" aria-label="What to paint">${[["water", "Sea, lakes, rivers", SK ? SK.WATER : "#4f8fcf"], ...(SK ? SK.KINDS.map(k => [k[0], k[1], k[2]]) : [])].map(([k, l, c], i) => `<button type="button" class="wm-pc" data-pc="${c}" aria-pressed="${i === 1}" title="${esc(l)}"><i style="background:${c}"></i>${esc(l)}</button>`).join("")}</div>
           <div class="wm-pbar"><label>Brush <input type="range" name="pbrush" min="2" max="60" value="14"></label><button type="button" class="wm-btn" data-nw="fromMap">Start from this map</button><button type="button" class="wm-btn" data-nw="blank">Start from the sea</button><label class="wm-btn wm-pload">Load a picture<input type="file" accept="image/*" hidden data-nw="load"></label><button type="button" class="wm-btn" data-nw="pundo">Undo stroke</button></div>
@@ -1150,13 +1157,17 @@
         pg.putImageData(img, 0, 0); pInit = true; pUndo.length = 0;
       };
       const blank = () => { pSize(); pg.fillStyle = SK.WATER; pg.fillRect(0, 0, pcv.width, pcv.height); pInit = true; pUndo.length = 0; };
-      const showPic = () => { const v = f.elements.land.value; picBox.hidden = v !== "sketch"; pBox.hidden = v !== "paint"; f.querySelector(".wm-nw-loose").hidden = v !== "sketch" && v !== "paint";  if (v === "paint" && !pInit && SK) { if (g.paint) { const im = new Image(); im.onload = () => { pSize(); pg.drawImage(im, 0, 0, pcv.width, pcv.height); pInit = true; }; im.src = g.paint; } else fromMap(); } };
+      const showPic = () => { const v = f.elements.land.value; picBox.hidden = v !== "sketch"; pBox.hidden = v !== "paint"; f.querySelector(".wm-nw-loose").hidden = v !== "sketch" && v !== "paint"; f.querySelector(".wm-nw-masses").hidden = v !== "masses";  if (v === "paint" && !pInit && SK) { if (g.paint) { const im = new Image(); im.onload = () => { pSize(); pg.drawImage(im, 0, 0, pcv.width, pcv.height); pInit = true; }; im.src = g.paint; } else fromMap(); } };
       showPic(); f.elements.land.addEventListener("change", showPic);
       // (the size slider: its step names the size, and how big and how long it is)
       const sv = () => { const k = sizes[+f.elements.sizeR.value]; f.elements.size.value = k[0]; f.querySelector(".wm-sval").textContent = k[1]; f.elements.size.dispatchEvent(new Event("change")); };
       sv(); f.elements.sizeR.addEventListener("input", sv);
       const lv = () => { const x = +f.elements.loose.value; f.querySelector(".wm-lval").textContent = x < .1 ? "Your drawing exactly: only the coast's grain added." : x < .35 ? "Close to your drawing, a little natural." : x < .7 ? "Natural: your shapes, with bays, headlands, peaks and passes as nature would make them (recommended)." : "Loosely: the coasts and ranges much freer, still where you drew them."; };
       lv(); f.elements.loose.addEventListener("input", lv);
+      const mv = () => { const m = +f.elements.masses.value, sh = +f.elements.share.value; f.querySelector(".wm-mval").textContent = m === 1 ? "One landmass, with a few small islands off its coasts." : m <= 3 ? `${m} landmasses, great and small.` : m <= 10 ? `${m} landmasses, some great, more small.` : `${m} landmasses: islands of every size.`; f.querySelector(".wm-shval").textContent = `${Math.round(sh * 100)}% land, ${100 - Math.round(sh * 100)}% sea${Math.abs(sh - .29) < .03 ? " (as on the Earth)" : ""}.`;
+        for (const b of f.querySelectorAll("[data-preset]")) { const P = PRESETS[+b.dataset.preset]; b.setAttribute("aria-pressed", P[1] === m && Math.abs(P[2] - sh) < .005); } };
+      mv(); f.elements.masses.addEventListener("input", mv); f.elements.share.addEventListener("input", mv);
+      for (const b of f.querySelectorAll("[data-preset]")) b.addEventListener("click", () => { const P = PRESETS[+b.dataset.preset]; f.elements.masses.value = P[1]; f.elements.share.value = P[2]; mv(); });
       f.elements.size.addEventListener("change", () => { if (pInit) pSize(); });
       for (const b of f.querySelectorAll(".wm-pc")) b.addEventListener("click", () => { pCol = b.dataset.pc; for (const o of f.querySelectorAll(".wm-pc")) o.setAttribute("aria-pressed", o === b); });
       f.querySelector('[data-nw="fromMap"]').addEventListener("click", fromMap);
@@ -1207,7 +1218,7 @@
           const [sw, sh] = GEN_SIZES[v.size], a = whole ? 2 : pic ? Math.max(.4, Math.min(3, pic.iw / pic.ih)) : (g.dims ? g.dims[0] / g.dims[1] : sw / sh);
           v.land = whole ? "continents" : "continent"; v.dims = whole ? [sw, sh] : [Math.round(Math.sqrt(sw * sh * a)), Math.round(Math.sqrt(sw * sh / a))];
           v.sketch = pic ? SK.encode(SK.read(pic.px, pic.iw, pic.ih, ...SK.gridFor(pic.iw, pic.ih, a))) : g.sketch;
-        } else { v.land = f.elements.land.value; if (whole && v.land === "continent") v.land = "continents"; if (!whole && v.land === "continents") v.land = "islands"; }
+        } else { v.land = f.elements.land.value; if (v.land === "masses") { v.masses = +f.elements.masses.value; v.share = +f.elements.share.value; } }
         closeDlg();
         if (OV.shape && (OV.shape.strokes || []).length) save("shape", null);
         if (v.look !== WD.look) save("style", Object.assign({}, OV.style || {}, { look: v.look }));
@@ -1219,7 +1230,7 @@
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
       const W0 = JSON.parse(JSON.stringify(A.worldData || {})); delete W0.size;
       const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
-      flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.loose != null) flags.loose = g.loose; if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
+      flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
       const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
       return new Promise((ok, no) => {
         let w; try { w = new Worker(URL.createObjectURL(new Blob([A.worldGenSrc], { type: "text/javascript" }))); } catch (e) { no(e); return; }

@@ -39,13 +39,14 @@ function geology(o, U) {
   const edgeD = n => Math.min(X(n) / asp, 1 - X(n) / asp, Y(n), 1 - Y(n));
 
   // growth from seed cells over a cost field, cheapest first: the shapes of plates and continents
-  function grow(seeds, cost, limit) {
+  // (mul: each seed's own cost, so some grow far and some stay small)
+  function grow(seeds, cost, limit, mul) {
     const lab = new Int16Array(CN).fill(-1), dist = new Float32Array(CN).fill(1e9), hp = new U.Heap(); let k = 0;
     seeds.forEach((s, q) => { dist[s] = 0; hp.push(s * 64 + q, 0); });
     while (hp.size && (!limit || k < limit)) {
       const v = hp.pop(), n = Math.floor(v / 64), q = v % 64; if (lab[n] >= 0) continue; lab[n] = q; k++;
       const i = ci(n), j = cj(n);
-      for (const [di, dj] of NB8) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a; if (lab[m] >= 0) continue; const d = dist[n] + cost(m) * Math.hypot(di, dj); if (d < dist[m]) { dist[m] = d; hp.push(m * 64 + q, d); } }
+      for (const [di, dj] of NB8) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a; if (lab[m] >= 0) continue; const d = dist[n] + cost(m) * Math.hypot(di, dj) * (mul ? mul[q] : 1); if (d < dist[m]) { dist[m] = d; hp.push(m * 64 + q, d); } }
     }
     return lab;
   }
@@ -71,12 +72,22 @@ function geology(o, U) {
     if (land === "coast") { seedsC = []; for (let k = 0; k < 4; k++) { const t = .15 + k * .23; seedsC.push(side === 0 ? cell(.02, t) : side === 1 ? cell(asp - .02, t) : side === 2 ? cell(t * asp, .02) : cell(t * asp, .98)); } }
     else if (land === "islands") { seedsC = []; for (let k = 0; k < 5 + Math.floor(rnd() * 4); k++) seedsC.push(cell((.15 + rnd() * .7) * asp, .15 + rnd() * .7)); }
     // (a whole planet: several continents of every size spread over its oceans, some joined, as the Earth's are)
+    // (as many landmasses as asked (the user, 27 Oct 2026: "how many landmasses does the person want"): their seeds
+    // spread over the sheet, each the farthest of a few tries from those before, so they lie apart)
+    else if (land === "masses") { seedsC = []; const nM = Math.max(1, Math.min(60, Math.round(o.landmasses || 1)));
+      for (let k = 0; k < nM; k++) { let best = null, bd = -1; for (let t = 0; t < (k ? 24 : 1); t++) { const x = nM === 1 ? (.4 + rnd() * .2) * asp : (.07 + rnd() * .86) * asp, y = nM === 1 ? .4 + rnd() * .2 : .1 + rnd() * .8, d = Math.min(9, ...seedsC.map(c => Math.hypot(X(c) - x, Y(c) - y))) * (.85 + rnd() * .3); if (d > bd) { bd = d; best = cell(x, y); } } seedsC.push(best); } }
     else if (land === "continents") { seedsC = []; for (let k = 0; k < 6 + Math.floor(rnd() * 4); k++) seedsC.push(cell((.06 + rnd() * .88) * asp, .14 + rnd() * .72)); }
     else if (land === "archipelago") { seedsC = []; for (let k = 0; k < 14 + Math.floor(rnd() * 8); k++) seedsC.push(cell((.1 + rnd() * .8) * asp, .1 + rnd() * .8)); }
     else { seedsC = [cell((.42 + rnd() * .16) * asp, .42 + rnd() * .16)]; for (let k = 0; k < 2 + Math.floor(rnd() * 3); k++) seedsC.push(cell((.22 + rnd() * .56) * asp, .22 + rnd() * .56)); }
-    const lab = grow(seedsC, landCost(land === "coast" ? others : null), land === "archipelago" ? Math.round(target * .4) : land === "islands" ? Math.round(target * .7) : target);
+    // (many landmasses: sizes from great to small, a few big and more little, as the Earth's are; their coasts as lobed
+    // as a continent's at their own scale)
+    const MUL = land === "masses" && seedsC.length > 1 ? seedsC.map(() => Math.exp((rnd() + rnd() + rnd() - 1.5) * 1.3)) : null;
+    const zm = land === "masses" ? Math.sqrt(seedsC.length) : 1, lc0 = landCost(land === "coast" ? others : null), lcM = m => .12 + 5 * Math.pow(U.fbm(nB, X(m) * 2.2 * zm * zs, Y(m) * 2.2 * zm * zs, 5), 3) + .9 * Math.pow(U.fbm(nA, X(m) * 6 * zm * zs + 3, Y(m) * 6 * zm * zs, 3), 2) + edgeCost(m);
+    const lab = grow(seedsC, land === "masses" ? lcM : lc0, land === "archipelago" ? Math.round(target * .4) : land === "islands" ? Math.round(target * .7) : target, MUL);
     // (the growth stops on a ragged front: eased into a coastline's curves, the lobes and gulfs kept, the spikes gone)
     const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = lab[n] >= 0 ? 1 : 0;
+    // (separate landmasses stay separate: where two meet, a strait of sea between them)
+    if (land === "masses" && seedsC.length > 1) { const r = Math.max(1, Math.round(cc * .008)); for (let n = 0; n < CN; n++) { if (lab[n] < 0) continue; const i = ci(n), j = cj(n); let other = false; for (let dj = -r; dj <= r && !other; dj++) for (let di = -r; di <= r; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a; if (lab[m] >= 0 && lab[m] !== lab[n]) { other = true; break; } } if (other) F[n] = 0; } }
     boxBlur(F, cc, cr, 3, 3); for (let n = 0; n < CN; n++) crust[n] = F[n] > .5 ? 1 : 0;
   }
 

@@ -38,6 +38,9 @@ What was asked, what was done, and what is waiting, so the next session can carr
   the size, its width and height in km and about how long it takes. "There is a big jump from 8300 to 40000" → two
   sizes between: a supercontinent (13,000 km) and half a planet (20,000 km), given in km (SIZE_KM), spanning the
   latitudes their km do, eroded at full detail (about 2 min each).
+- "A preset for how it should look: islandy, one big continent ... how many landmasses" → `--land masses` with
+  `--landmasses N` and `--landshare`, landmasses of varied sizes kept apart by straits; in the page, presets (one
+  big continent, Pangaea, two continents, several like the Earth, many islands, an archipelago) set two sliders.
 
 ## Known rough spots
 - A painted swamp shows only faintly in the hydro look.

@@ -23,7 +23,7 @@ const SIZE_KM = { supercontinent: 13000, hemisphere: 20000, planet: 40030 };
 // (planet: the whole globe as a world map, pole to pole and 40,000 km around (the user, 27 Oct 2026: "way way way way
 // bigger, like for scale the map of the whole earth"); on trial with --size planet, not yet the default: the user liked
 // the regional maps' detail better)
-const SEA_SHARE = { continents: .71, continent: .5, islands: .66, archipelago: .8, coast: .47, inland: .025 };
+const SEA_SHARE = { masses: .6, continents: .71, continent: .5, islands: .66, archipelago: .8, coast: .47, inland: .025 };
 
 function noiseFn(seed) {
   const P = new Float32Array(4096), rnd = mulberry32(seed); for (let i = 0; i < 4096; i++) P[i] = rnd();
@@ -444,7 +444,7 @@ function invent(A, flags, log) {
   // (dims: the map's own width and height, as a sketch's shape asks, the size's area kept)
   const [w, h] = Array.isArray(flags.dims) ? flags.dims.map(v => Math.round(v / 4) * 4) : Array.isArray(W0.size) ? W0.size : SIZES[sizeWord] || SIZES.medium;
   const land = flags.land && flags.land !== true ? String(flags.land) : old.land || (whole ? "continents" : "continent");
-  if (look !== "stars" && !SEA_SHARE[land]) throw new Error(`unknown land "${land}": continents (a whole planet's), continent, islands, archipelago, coast or inland`);
+  if (look !== "stars" && !SEA_SHARE[land]) throw new Error(`unknown land "${land}": masses (with --landmasses N and --landshare 0.1..0.9), continents (a whole planet's), continent, islands, archipelago, coast or inland`);
   const seed = flags.seed != null && flags.seed !== true ? parseInt(flags.seed, 10) : old.seed || 1000 + Math.floor(Math.random() * 9000);
   const cell = 4, cols = Math.round(w / cell), rows = Math.round(h / cell), N = cols * rows, rnd = mulberry32(seed + 77);
   const autoNames = flags.names !== "none", name = namer(mulberry32(seed + 5), W0.regions);
@@ -466,6 +466,7 @@ function invent(A, flags, log) {
   if (!["realistic", "fantasy", "alien"].includes(realism)) throw new Error(`unknown realism "${realism}": realistic, fantasy or alien`);
   const geoWord = flags.geology && flags.geology !== true ? String(flags.geology) : old.geology || (before ? "classic" : "plates");
   if (!["plates", "classic"].includes(geoWord)) throw new Error(`unknown geology "${geoWord}": plates (tectonics, erosion and climate) or classic`);
+  if (land === "masses" && geoWord !== "plates") throw new Error("--land masses is made by plate tectonics: leave out --geology classic");
   if (flags.sketch && geoWord !== "plates") throw new Error("a world from a sketch is made by plate tectonics: leave out --geology classic");
   if (whole && geoWord !== "plates") throw new Error("a whole planet (--size planet) is made by plate tectonics: leave out --geology classic, or choose a smaller --size");
   // the climate's rules (the user approved the Earth's, 27 Oct 2026): a new world by the Earth's; a world made before
@@ -500,7 +501,7 @@ function invent(A, flags, log) {
       // its climate's middle; a whole planet from pole to pole)
       const kmA = SIZE_KM[sizeWord] || num("km", Math.round(w * 2.3)), LATS = require("./world-ecology.js").LAT[climate] || [52, 38], midL = (LATS[0] + LATS[1]) / 2, spanL = h / w * kmA / 111;
       const latA = whole ? [90, -90] : SIZE_KM[sizeWord] ? [Math.min(88, midL + spanL / 2), Math.max(-88, midL - spanL / 2)] : undefined;
-      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: 1 - (SEA_SHARE[land] || .5), planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
+      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)
