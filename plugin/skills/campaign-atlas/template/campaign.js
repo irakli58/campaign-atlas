@@ -5,6 +5,8 @@ ATLAS.configure({
   subtitle: "",                         // one sentence under the title
   system: "",                           // e.g. "Call of Cthulhu 7e"
   setting: "",                          // e.g. "London, 1888"
+  genre: "",                            // fantasy | scifi | modern (the modern world, or any period): the world, and so the council
+  kind: "",                             // detective | sandbox | hybrid: a structured mystery, a living world, or a world with mysteries in it
   gm: "Keeper",                         // what this game calls its referee: Keeper, GM, DM, Warden, Referee
   grid: { unit: 5, name: "ft" },        // one square on the maps
   paper: "parchment",                   // parchment (period, fantasy) | blueprint (modern, sci-fi) | chalk (neutral)

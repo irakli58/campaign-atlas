@@ -97,7 +97,9 @@
   const ready = e => [].concat(e.after || []).every(holds);
   const offBy = e => [].concat(e.unless || []).find(holds) || null;
   const dueAt = e => whenOf(e.when);
-  const needs = e => rank(e) >= ((ASK.find(a => a[0] === opts().ask) || ASK[2])[2]);
+  // (the line the game master set here, else the campaign's own (campaign.js approve, from the app's form), else major)
+  const askNow = () => opts().ask || A.config.approve || "major";
+  const needs = e => rank(e) >= ((ASK.find(a => a[0] === askNow()) || ASK[2])[2]);
   const tellable = e => !!(e.players || e.news);
 
   // it happens: recorded, the clock it moves moved, and the players told if the game master said so
@@ -263,7 +265,7 @@
     const evRow = e => `<div class="tw-ev"><div class="tw-h">${imp(e)}<b>${esc(e.title)}</b><span class="kn">${dueAt(e) != null ? esc(whenText(e)) + ([].concat(e.after || []).length ? " · if " + esc(condsText(e.after)) : "") : "when " + esc(condsText(e.after))}</span>${e.own ? `<span class="tw-tag">yours</span>` : e.edited ? `<span class="tw-tag">changed</span>` : ""}<button type="button" class="t-link" data-tw="edit" data-id="${esc(e.id)}">change</button></div>${e.what ? `<p class="t-small">${esc(e.what)}</p>` : ""}${[].concat(e.unless || []).length ? `<p class="t-small kn">Called off if ${esc(condsText(e.unless))}.</p>` : ""}</div>`;
     return `<div class="t-grid t-g2w"><div>
       <section class="t-card"><h3>${T.icon("time")} The world's time</h3>${nowHTML()}<p class="t-small">Move time on as the story does: a conversation, a night's rest, a journey. What comes due happens by itself if it is background or notable, and waits for you if it matters more; anything whose reason is gone is called off.</p>
-        <label class="t-small tw-ask">Wait for me before <select class="t-in tw-sel" data-tw="ask">${ASK.map(([k, l]) => `<option value="${k}"${(o.ask || "major") === k ? " selected" : ""}>${l}</option>`).join("")}</select></label></section>
+        <label class="t-small tw-ask">Wait for me before <select class="t-in tw-sel" data-tw="ask">${ASK.map(([k, l]) => `<option value="${k}"${askNow() === k ? " selected" : ""}>${l}</option>`).join("")}</select></label></section>
       ${P.length ? `<section class="t-card"><h3>Waiting for you <span class="kn">${P.length}</span></h3>${P.map(x => pendingCard(x)).join("")}</section>` : ""}
       ${UI.edit ? editHTML() : ""}
       <section class="t-card"><div class="tw-hh"><h3>Coming</h3><button type="button" class="t-btn" data-tw="new">Plan an event</button></div>${C.length ? C.slice(0, 16).map(evRow).join("") : `<p class="kn">Nothing set for an hour.</p>`}

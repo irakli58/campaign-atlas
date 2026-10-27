@@ -742,6 +742,8 @@ var ATLAS = (function () {
   function leads(level) {
     const out = [];
     for (const id of A.order) {
+      // a living world's hooks (kind: "sandbox" or "hybrid"): ways into adventure, which lead on as clues do, mapped or not
+      for (const h of (A.meta[id].hooks || [])) if (h) for (const t of toList(h.to)) out.push({ from: id, via: "hook", to: t, text: h.t || "" });
       if (!A.maps[id] || A.maps[id].alias) { for (const l of (A.meta[id].leads || [])) out.push({ from: id, via: "", to: l.to, text: l.why || "" }); continue; }
       const M = get(id, level == null ? 99 : level);
       for (const [k, c] of Object.entries(M.clues || {})) for (const t of toList(c.to)) out.push({ from: id, via: k, to: t, text: c.t || "" });

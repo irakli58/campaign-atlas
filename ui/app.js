@@ -44,6 +44,74 @@
   }
   const copyBtn = text => `<button type="button" class="btn ghost" data-copy="${esc(text)}">Copy</button>`;
 
+  /* ---- the world, the kind of campaign, and the council that sits on it (the skill's scripts/councils.js, from the
+          app's state). The council is the one for the world chosen, unless the game master changes it: writers taken
+          off or swapped, another judge, guest specialists; their own councils can be kept as presets. */
+  const genreNow = () => (form.querySelector("input[name=genre]:checked") || {}).value || "auto";
+  const kindNow = () => (form.querySelector("input[name=kind]:checked") || {}).value || "auto";
+  let COUNCIL = null;     // the game master's changes: { roster, list: [{ id, on }], judge, guests: [ids], own: [{ name, brings }] }
+  const CO = () => S.councils;
+  const rosterFor = (g, sub) => g === "fantasy" ? "fantasy" : g === "scifi" ? "scifi" : (CO().modernSub[sub] || "mystery");
+  function councilNow() {
+    const g = genreNow(); if (g === "auto" || !CO()) return null;
+    if (COUNCIL) return COUNCIL;
+    const rid = rosterFor(g, form.subgenre.value), R = CO().rosters[rid];
+    return { roster: rid, list: R.members.map(id => ({ id, on: true })), judge: R.judge, guests: [], own: [], dflt: true };
+  }
+  const lastName = id => ({ leguin: "Le Guin", lecarre: "le Carré" })[id] || CO().members[id].name.split(" ").pop();
+  function paintWorld() {
+    if (!S || !S.councils) { $("#council").hidden = true; return; }
+    const g = genreNow(), K = CO().kinds, kinds = $("#kinds");
+    if (!kinds.children.length) { const last = store.get("kind") || "auto"; kinds.innerHTML = [["auto", { label: "From my story.", says: "The council decides: a mystery if the story is one, a living world if it is open." }]].concat(Object.entries(K)).map(([k, x]) => `<label class="bopt"><input type="radio" name="kind" value="${k}"${k === last ? " checked" : ""}><span><b>${esc(x.label.replace(/\.$/, ""))}.</b> ${esc(x.says)}</span></label>`).join(""); }
+    const sub = $("#f-sub"), sel = form.subgenre, G = CO().genres[g];
+    sub.hidden = !G;
+    if (G && sel.dataset.for !== g) { sel.dataset.for = g; sel.innerHTML = `<option value="">To suit the story</option>` + G.subs.map(s => `<option>${esc(s)}</option>`).join(""); }
+    form.period.closest("label").classList.toggle("dim", g !== "modern");
+    $$("#more [data-for]").forEach(l => { l.hidden = l.dataset.for !== g; });
+    paintCouncil();
+  }
+  function paintCouncil() {
+    const c = councilNow(), body = $("#councilbody"), sum = $("#councilsum");
+    if (!c) { sum.textContent = "· chosen to fit your story's world"; body.innerHTML = `<p class="hint">Choose the world above to see the council that sits for it, and to change it or add specialists. Left to your story, the council is the one for its world: Doyle, Christie, Poe and Lovecraft for a mystery or horror (Tolkien judging); Martin, Le Guin, Howard and Pratchett for fantasy (Tolkien judging); Asimov, Clarke, Herbert and Dick for science fiction (Lem judging).</p>`; return; }
+    const M = CO().members, on = c.list.filter(x => x.on), guests = c.guests.map(id => CO().guests[id].name).concat(c.own.map(o => o.name));
+    sum.textContent = `· ${on.map(x => lastName(x.id)).join(", ")}; ${lastName(c.judge)} judges${guests.length ? ` · ${guests.length} guest${guests.length > 1 ? "s" : ""}` : ""}${c.dflt ? "" : " · yours"}`;
+    const others = id => Object.entries(CO().rosters).map(([rid, R]) => `<optgroup label="${esc(R.label)}">${R.members.concat(R.judge).filter((m, i, a) => a.indexOf(m) === i && m !== id).map(m => `<option value="${m}">${esc(M[m].name)}</option>`).join("")}</optgroup>`).join("");
+    const presets = JSON.parse(store.get("council-presets") || "{}");
+    body.innerHTML = `<p class="hint">One council, the same sitting for every campaign: these writers debate and build your story, the judge grades it strictly, and nothing is finished until all of them agree. Each is a creative profile drawn from what that writer gave to literature, not the writer.</p>
+      <label class="crow"><span>Council</span> <select data-c="roster">${Object.entries(CO().rosters).map(([rid, R]) => `<option value="${rid}"${rid === c.roster ? " selected" : ""}>${esc(R.label)}${rid === rosterFor(genreNow(), form.subgenre.value) ? " (for this world)" : ""}</option>`).join("")}</select></label>
+      <ul class="cmembers">${c.list.map((x, i) => `<li class="${x.on ? "" : "off"}"><label><input type="checkbox" data-c="on" data-i="${i}"${x.on ? " checked" : ""}> <b>${esc(M[x.id].name)}</b></label> <span class="cd">${esc(M[x.id].brings)}</span> <select data-c="swap" data-i="${i}" aria-label="Put another writer in ${esc(M[x.id].name)}'s place"><option value="">Swap for…</option>${others(x.id)}</select></li>`).join("")}</ul>
+      <label class="crow"><span>Judge</span> <select data-c="judge">${Object.keys(M).map(m => `<option value="${m}"${m === c.judge ? " selected" : ""}>${esc(M[m].name)}</option>`).join("")}</select> <span class="cd">${esc(M[c.judge].brings)}</span></label>
+      <fieldset class="cguests"><legend>Guest specialists <small>they advise on their speciality and replace no one</small></legend>${Object.entries(CO().guests).map(([id, x]) => `<label title="${esc(x.brings)}"><input type="checkbox" data-c="guest" value="${id}"${c.guests.includes(id) ? " checked" : ""}> ${esc(x.name.replace(/^An? /, "").replace(/ specialist$/, ""))}</label>`).join("")}
+        ${c.own.map((o, i) => `<span class="cown">${esc(o.name)} <button type="button" class="linkbtn" data-c="ownx" data-i="${i}" aria-label="Remove ${esc(o.name)}">×</button></span>`).join("")}
+        <span class="crow"><input data-c="ownname" maxlength="80" placeholder="A specialist of your own: a falconer, a naval officer"> <button type="button" class="btn ghost" data-c="ownadd">Add</button></span></fieldset>
+      <div class="crow"><select data-c="preset" aria-label="Your councils"><option value="">Your councils…</option>${Object.keys(presets).map(n => `<option>${esc(n)}</option>`).join("")}</select> <input data-c="pname" maxlength="40" placeholder="Name this council"> <button type="button" class="btn ghost" data-c="save">Keep it</button>${c.dflt ? "" : ` <button type="button" class="btn ghost" data-c="reset">Back to the council for this world</button>`}</div>`;
+  }
+  const mine = () => { if (!COUNCIL) { const c = councilNow(); COUNCIL = c && Object.assign({}, c, { list: c.list.map(x => Object.assign({}, x)), guests: c.guests.slice(), own: c.own.slice(), dflt: false }); } return COUNCIL; };
+  $("#council").addEventListener("change", e => {
+    const t = e.target, k = t.dataset.c; if (!k || k === "ownname" || k === "pname") return;
+    if (k === "roster") { const R = CO().rosters[t.value], c = mine(); c.roster = t.value; c.list = R.members.map(id => ({ id, on: true })); c.judge = R.judge; }
+    else if (k === "on") { const c = mine(); if (!t.checked && c.list.filter(x => x.on).length <= 2) $("#newerr").textContent = "A council needs two writers at least to debate."; else { c.list[+t.dataset.i].on = t.checked; $("#newerr").textContent = ""; } }
+    else if (k === "swap") { if (t.value) { const c = mine(); if (!c.list.some(x => x.id === t.value)) c.list[+t.dataset.i] = { id: t.value, on: true }; } }
+    else if (k === "judge") mine().judge = t.value;
+    else if (k === "guest") { const c = mine(); c.guests = t.checked ? c.guests.concat(t.value) : c.guests.filter(x => x !== t.value); }
+    else if (k === "preset") { const p = JSON.parse(store.get("council-presets") || "{}")[t.value]; if (p) COUNCIL = Object.assign({}, p, { dflt: false }); }
+    paintCouncil();
+  });
+  $("#council").addEventListener("click", e => {
+    const t = e.target.closest("[data-c]"); if (!t || t.tagName !== "BUTTON") return; const k = t.dataset.c;
+    if (k === "ownadd") { const inp = $("#council [data-c=ownname]"), n = inp.value.trim(); if (n) { mine().own.push({ name: n.slice(0, 80), brings: "" }); } }
+    else if (k === "ownx") mine().own.splice(+t.dataset.i, 1);
+    else if (k === "reset") COUNCIL = null;
+    else if (k === "save") { const n = ($("#council [data-c=pname]").value || "").trim(); if (!n) { $("#council [data-c=pname]").focus(); return; } const p = JSON.parse(store.get("council-presets") || "{}"); p[n.slice(0, 40)] = Object.assign({}, mine(), { dflt: false }); store.set("council-presets", JSON.stringify(p)); }
+    paintCouncil();
+  });
+  // what goes with the campaign: the council as chosen (written to story/council.json), only when it was changed
+  function councilOut() {
+    const c = councilNow(); if (!c || c.dflt) return null;
+    return { roster: c.roster, members: c.list.filter(x => x.on).map(x => x.id), judge: c.judge, guests: c.guests.concat(c.own.map(o => ({ name: o.name, brings: o.brings || "" }))) };
+  }
+  const moreOut = () => { const o = {}; for (const el of $$("#more [name^=m_]")) if (el.value && !(el.closest("[data-for]") && el.closest("[data-for]").hidden)) o[el.name.slice(2)] = String(el.value).trim(); return o; };
+
   /* ---------------------------------------------------------------- views */
   function route() {
     if (!S) return;
@@ -129,6 +197,9 @@
     paintSliders();
     paintChoices();
     paintConnect();
+    // the world and the kind, as last chosen
+    if (!form.dataset.world) { form.dataset.world = 1; const g = store.get("genre"), gi = g && form.querySelector(`input[name=genre][value="${g}"]`); if (gi) gi.checked = true; }
+    paintWorld();
     // a draft survives a reload
     for (const n of DRAFT) { const v = store.get("draft-" + n); if (v && !form[n].value) form[n].value = v; }
     words();
@@ -199,6 +270,7 @@
     if (e.target.name === "provider") { store.set("provider", e.target.value); paintChoices(); paintConnect(); }
     if (e.target.name === "size") { store.set("size", e.target.value); paintChoices(); }
     if (e.target.name === "model") paintChoices();
+    if (e.target.name === "genre" || e.target.name === "subgenre" || e.target.name === "kind") { if (e.target.name !== "subgenre") store.set(e.target.name, e.target.value); if (e.target.name !== "kind") COUNCIL = null; paintWorld(); }
     if (e.target.name === "freedom" || e.target.name === "storylen") { store.set(e.target.name, e.target.value); paintSliders(); }
     // choosing from the lists of sets means choosing a set
     if (e.target.name === "bset" || e.target.name === "bregion") form.querySelector("input[name=buildings][value=set]").checked = true;
@@ -247,6 +319,7 @@
     if (e.target.name === "freedom" || e.target.name === "storylen") paintSliders();
     if (e.target.name === "places") paintPlaces();
     if (e.target.name === "worldplace" && e.target.value.trim()) form.querySelector("input[name=world][value=real]").checked = true;
+    if (e.target.name === "period" && e.target.value.trim() && genreNow() !== "modern") { form.querySelector("input[name=genre][value=modern]").checked = true; store.set("genre", "modern"); COUNCIL = null; paintWorld(); }
     if (DRAFT.includes(e.target.name)) { store.set("draft-" + e.target.name, e.target.value); if (e.target.name === "story") words(); }
   });
   $("#storyfile").addEventListener("change", e => {
@@ -265,6 +338,7 @@
     const o = { provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value, story: form.story.value, size: sizeNow(), places: sizeNow() === "unlimited" ? form.places.value : undefined, freedom: +form.freedom.value, length: +form.storylen.value, buildings: (form.querySelector("input[name=buildings]:checked") || {}).value || "auto", bset: form.bset.value, bregion: form.bregion.value, system: form.system.value, core: form.core.value, pcs: form.pcs.value, placewish: form.placewish.value, plans: PLANS, notes: form.notes.value, model: form.model.value, budget: +form.budget.value };
     o.world = (form.querySelector("input[name=world]:checked") || {}).value || "auto";
     o.maps = (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d";
+    o.genre = genreNow(); o.kind = kindNow(); o.subgenre = form.subgenre.value; o.period = genreNow() === "modern" ? form.period.value.trim() : ""; o.council = councilOut(); o.more = moreOut();
     if (o.world === "drawing") { if (!DRAWING) { err.textContent = "Choose the picture of your map (World map, From my own map)."; return; } o.drawing = DRAWING; }
     if (o.world === "real") { o.worldplace = form.worldplace.value.trim(); if (!o.worldplace) { err.textContent = "Say which part of the real world the map should show."; form.worldplace.focus(); return; } }
     const btn = $("#gobtn"); btn.disabled = true;

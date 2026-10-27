@@ -71,10 +71,12 @@ async function findTools(fresh) {
   if (fresh || !tools || Date.now() - toolsAt > 15000) { tools = await launcher.detect(); toolsAt = Date.now(); for (const k in tools) { tools[k].install = launcher.INSTALL[k]; delete tools[k].path; } }
   return tools;
 }
+// the councils that may sit on a campaign, for the form (the skill's scripts/councils.js: what each writer brings, not how they read)
+const COUNCILS = (() => { try { const C = require(path.join(SHIPPED, "scripts", "councils.js")); return { members: Object.fromEntries(Object.entries(C.MEMBERS).map(([k, v]) => [k, { name: v.name, brings: v.brings }])), rosters: C.ROSTERS, guests: C.GUESTS, genres: C.GENRES, kinds: C.KINDS, modernSub: C.MODERN_SUB }; } catch (e) { return null; } })();
 async function state(fresh) {
   const s = settings.get(), conn = {};
   for (const p of ["claude", "openai"]) conn[p] = { connected: !!(s[p] && s[p].key), hint: s[p] ? hint(s[p].key) : "", model: s[p] && s[p].model, name: s[p] && s[p].name, installed: deps.installed(p), size: deps.CONNECTORS[p].size, ready: runners[p].READY !== false };
-  return { version: VERSION, tools: await findTools(fresh), platform: process.platform, connectors: conn, models: { claude: runners.claude.MODELS, openai: runners.openai.MODELS }, defaults: { claude: runners.claude.DEFAULT_MODEL, openai: runners.openai.DEFAULT_MODEL }, sizes: Jobs.SIZES, freedom: Jobs.FREEDOM, lengths: Jobs.LENGTHS, defaults2: { freedom: Jobs.DEFAULT_FREEDOM, length: Jobs.DEFAULT_LENGTH }, campaigns: jobs.list(), workspace: WORK };
+  return { version: VERSION, tools: await findTools(fresh), platform: process.platform, connectors: conn, models: { claude: runners.claude.MODELS, openai: runners.openai.MODELS }, defaults: { claude: runners.claude.DEFAULT_MODEL, openai: runners.openai.DEFAULT_MODEL }, councils: COUNCILS, sizes: Jobs.SIZES, freedom: Jobs.FREEDOM, lengths: Jobs.LENGTHS, defaults2: { freedom: Jobs.DEFAULT_FREEDOM, length: Jobs.DEFAULT_LENGTH }, campaigns: jobs.list(), workspace: WORK };
 }
 
 /* ---- http */

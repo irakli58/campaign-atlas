@@ -79,6 +79,9 @@
     const m = A.meta[p.id] || {}, out = [];
     const pcs = pcsHere(p.id);
     if (pcs.length) out.push(`<section class="sec keeper t-pcs"><h3>For the players' characters</h3>${pcs.map(([, pc]) => `<div class="t-pcclue"><b>${esc(pc.n)}</b>${pc.player ? ` <span class="kn">(${esc(pc.player)})</span>` : ""}${pc.clue && pc.clue.at === p.id ? `<p><span class="kl">Theirs to find</span>${esc(pc.clue.t || "")}${pc.clue.d ? ": " + esc(pc.clue.d) : ""}</p>` : ""}${pc.hook && toList(pc.places).includes(p.id) ? `<p><span class="kl">Why it matters to them</span>${esc(pc.hook)}</p>` : ""}</div>`).join("")}</section>`);
+    // a living world's hooks: ways into adventure from here, for the players to take up or leave (kind: sandbox, hybrid)
+    const hooks = (m.hooks || []).filter(h => h && h.t);
+    if (hooks.length) out.push(`<section class="sec keeper t-hooks"><h3>Hooks</h3><p class="kn">Ways into adventure from here, for the players to take up or leave.</p><ul class="t-hooklist">${hooks.map(h => `<li><b>${esc(h.t)}</b>${h.d ? " " + esc(h.d) : ""}${h.who ? ` <span class="kn">(${esc(h.who)})</span>` : ""}${toList(h.to).filter(t => A.meta[t]).length ? ` <span class="t-small">It leads to ${toList(h.to).filter(t => A.meta[t]).map(goBtn).join(", ")}</span>` : ""}</li>`).join("")}</ul></section>`);
     const tabs = Object.entries(m.tables || {}).filter(([, l]) => Array.isArray(l) && l.length);
     if (tabs.length) out.push(`<section class="sec keeper t-rt"><h3>Random tables</h3>${tabs.map(([name, list]) => tableRow("p:" + p.id + ":" + name, name, list)).join("")}</section>`);
     return out.join("");

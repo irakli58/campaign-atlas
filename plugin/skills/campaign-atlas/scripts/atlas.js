@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /* Campaign Atlas command line. No dependencies; needs Node 18 or newer.
 
-   node atlas.js init <dir> [--title "Name"] [--maps 3d]   start a campaign folder from the template (--maps 3d: rooms in 3D)
+   node atlas.js init <dir> [--title "Name"] [--maps 3d] [--genre fantasy|scifi|modern] [--kind detective|sandbox|hybrid]
+                                                 start a campaign folder from the template (--maps 3d: rooms in 3D)
+   node atlas.js council <dir>                   who sits on this campaign's council, and what its kind asks it to make
    node atlas.js check <dir> [place ...]         check maps, guides, player safety and the clue trail
    node atlas.js ascii <dir> <place> [floor] [--level N]   draw a floor as text
    node atlas.js dump <dir> <place ...>          print a place's rooms, clues, people (for writing guides)
@@ -561,6 +563,19 @@ function checkTable(A) {
       if (c.clock && !ids.has([].concat(c.clock)[0])) P(`the event "${nm}" waits on the clock "${[].concat(c.clock)[0]}", which does not exist`);
     }
   }
+  // the world it is set in, the kind of campaign, and the council the game master chose (scripts/councils.js)
+  const CO = require("./councils.js");
+  if (A.config.genre && !CO.GENRES[A.config.genre]) P(`genre is "${A.config.genre}": it is fantasy, scifi or modern`);
+  if (A.config.kind && !CO.KINDS[A.config.kind]) P(`kind is "${A.config.kind}": it is detective, sandbox or hybrid`);
+  if (A.config.approve && !["all", "notable", "major", "critical"].includes(A.config.approve)) P(`approve is "${A.config.approve}": all, notable, major or critical (which world events wait for the referee)`);
+  const chosen = A.__dir ? councilChosen(A.__dir) : null;
+  if (chosen && chosen.bad) P(`story/council.json does not read: ${chosen.bad}`);
+  else if (chosen) {
+    if (chosen.roster && !CO.ROSTERS[chosen.roster]) P(`story/council.json: no council "${chosen.roster}" (${Object.keys(CO.ROSTERS).join(", ")})`);
+    for (const m of [].concat(chosen.members || [], chosen.judge || [])) if (!CO.MEMBERS[m]) P(`story/council.json: no member "${m}" (atlas.js council lists them)`);
+    if (Array.isArray(chosen.members) && chosen.members.length && chosen.members.length < 2) P(`story/council.json: a council needs two writers at least to debate`);
+  }
+  if (["sandbox", "hybrid"].includes(A.config.kind) && evs.length < 3) P(`a living world needs events in motion: at least three (ATLAS.events in table.js), its people and factions acting on their own`);
   for (const e of evs) for (const c of [].concat(e.after || [], e.unless || [])) if (c.event && !evIds.has(c.event)) P(`the event "${e.title || e.id}" waits on the event "${c.event}", which does not exist`);
   if (!evs.length && ses.length) N(`no world events: what happens in the world whether or not the party acts, on a date or when something happens (ATLAS.calendar and ATLAS.events in table.js)`);
   // the players' characters
@@ -623,17 +638,29 @@ function cmdCheck(dir, want) {
     problems += prob.size; notes += note.size;
   }
   if (!want.length) {
-    // the clue trail across the whole campaign
+    // the clue trail across the whole campaign; in a living world (kind sandbox or hybrid) the ways in: clues, the
+    // places' hooks, and the road (a place on the world map can be travelled to). No trail is forced on a sandbox.
     const leads = A.leads(), inb = {}; for (const l of leads) if (A.meta[l.to] && l.to !== l.from) (inb[l.to] = inb[l.to] || new Set()).add(l.from + "/" + l.via);
-    const out = [];
+    const living = ["sandbox", "hybrid"].includes(A.config.kind), out = [];
     for (const id of A.order) {
       const m = A.meta[id], k = (inb[id] || new Set()).size, need = standardFor(A, m.tier).inbound; if (m.start) continue;
+      const road = living && !!m.location && !!A.worldData;
+      if (living) {
+        if (!k && !road) { out.push(`   ! ${id}: no way in: no clue or hook leads here and it is not on the world map (a hook with to: "${id}", a location on the world map, or start: true)`); problems++; }
+        else if (!road && k < 2 && (m.tier || 3) <= 2) { out.push(`   - ${id}: only one way in; give the players a second (a hook elsewhere, a rumour, a road)`); notes++; }
+        continue;
+      }
       if (!k) { out.push(`   ! ${id}: nothing leads here (add a clue with to: "${id}", or mark the place start: true)`); problems++; }
       else if (k < need && m.tier === 1) { out.push(`   ! ${id}: a tier 1 place needs ${need} separate leads in and has ${k}: one missed clue would stall the story`); problems++; }
       else if (k < need) { out.push(`   - ${id}: only ${k} lead${k > 1 ? "s" : ""} in; give the players a second way to find it`); notes++; }
     }
     if (!A.order.some(id => A.meta[id].start)) { out.push(`   ! no starting place: mark where the story opens with start: true`); problems++; }
-    console.log(`clue trail: ${leads.length} lead${leads.length === 1 ? "" : "s"} between ${A.order.length} places${out.length ? "" : "  OK"}`); out.forEach(l => console.log(l));
+    if (living) {
+      for (const id of A.order) { const m = A.meta[id]; if ((m.tier || 3) <= 2 && A.maps[id] && (m.hooks || []).filter(h => h && h.t).length < 2) { out.push(`   - ${id}: a living world's important place has two hooks at least, ways into adventure from it (hooks: [{ t, d, to }])`); notes++; } }
+      if (A.config.kind === "hybrid" && !leads.some(l => l.via && l.via !== "hook")) { out.push(`   - a hybrid campaign has investigations in its world: give their clues a to: where they lead`); notes++; }
+    }
+    const hooks = leads.filter(l => l.via === "hook").length;
+    console.log(`${living ? "ways in" : "clue trail"}: ${leads.length - hooks} lead${leads.length - hooks === 1 ? "" : "s"}${living ? ` and ${hooks} hook${hooks === 1 ? "" : "s"}` : ""} between ${A.order.length} places${out.length ? "" : "  OK"}`); out.forEach(l => console.log(l));
     if (A.config.music !== false) { const c = checkMusic(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
     if (A.castData) { const c = checkCast(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
     { const c = checkTable(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
@@ -742,7 +769,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-art.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-copilot.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-consistency.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-worldtime.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-art.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir, A), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-copilot.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-consistency.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-worldtime.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw, link, style: css + "\n" + over, world, drawingJS };
@@ -772,7 +799,7 @@ function playersPage(parts, dir) {
 }
 // The story as the council wrote it (story/bible/*.md, or story/bible.md), then the council's debate and the story as
 // it was given. The page shows them on its Story tab, to the referee only, so the whole story can be read in one place.
-function storyJS(dir) {
+function storyJS(dir, A) {
   const st = path.join(dir, "story"), bd = path.join(st, "bible"), out = [];
   const add = (f, group, title) => {
     if (!fs.existsSync(f)) return; const md = fs.readFileSync(f, "utf8").replace(/\r\n/g, "\n"); if (!md.trim()) return;
@@ -784,7 +811,9 @@ function storyJS(dir) {
     add(path.join(st, "council.md"), "How it was made", "The council's debate");
     // Tolkien's judgement, once it is written (not the empty form a new campaign starts with)
     const jf = path.join(st, "judgement.md");
-    if (fs.existsSync(jf) && !fs.readFileSync(jf, "utf8").includes("(chapter name)")) add(jf, "How it was made", "Tolkien's judgement");
+    // (the judge of this campaign's council: Tolkien, Lem for science fiction, or whoever the game master chose)
+    let judge = "Tolkien"; try { const ch = councilChosen(dir); judge = require("./councils.js").councilOf((A && A.config) || {}, ch && !ch.bad ? ch : null).judge.name.split(" ").pop(); } catch (e) {}
+    if (fs.existsSync(jf) && !fs.readFileSync(jf, "utf8").includes("(chapter name)")) add(jf, "How it was made", judge + "'s judgement");
     add(path.join(st, "source.md"), "How it was made", "The story as it was given");
   }
   return "ATLAS.storyData = " + JSON.stringify(out).split(String.fromCharCode(0x2028)).join(" ").split(String.fromCharCode(0x2029)).join(" ") + ";";
@@ -841,11 +870,42 @@ function cmdInit(dir) {
   if (flags.title && flags.title !== true) { const c = path.join(dir, "campaign.js"); fs.writeFileSync(c, fs.readFileSync(c, "utf8").replace("Untitled campaign", String(flags.title).replace(/"/g, '\\"')).replace('storageKey: "atlas"', `storageKey: "atlas-${slug(flags.title)}"`)); }
   // the game master chose rooms in 3D (references/data-format.md, "Campaign settings")
   if (flags.maps === "3d") { const c = path.join(dir, "campaign.js"), s = fs.readFileSync(c, "utf8"), out = s.replace(/(storageKey: "[^"]*"),?/, `$1,\n  maps: "3d"                          // the rooms are shown and edited in 3D, from one fixed angle`); if (out === s) die("could not set maps: \"3d\" in campaign.js"); fs.writeFileSync(c, out); }
+  // the world it is set in and the kind of campaign (scripts/councils.js): they choose the council and what it makes
+  const C = require("./councils.js");
+  for (const [k, list] of [["genre", C.GENRES], ["kind", C.KINDS]]) if (flags[k] && flags[k] !== true) {
+    if (!list[flags[k]]) die(`--${k} is one of ${Object.keys(list).join(", ")}`);
+    const c = path.join(dir, "campaign.js"); fs.writeFileSync(c, fs.readFileSync(c, "utf8").replace(`  ${k}: "",`, `  ${k}: "${flags[k]}",`));
+  }
   console.log(`started ${dir}
   1. save the story, untouched, as story/source.md
-  2. convene the council (references/council.md): story/council.md, then story/bible/
+  2. convene the council (references/council.md; who sits: atlas.js council ${dir}): story/council.md, then story/bible/
   3. canon.md and the cast and places in campaign.js; the map of the whole with: atlas.js city
   4. one file per place in places/   (the whole route: references/playbook.md)`);
+}
+
+// The council that sits on this campaign (references/council.md): the game master's choice in story/council.json, or
+// the council for the world it is set in (campaign.js genre, and the kind of story); and what its kind asks it to make
+function councilChosen(dir) {
+  const f = path.join(dir, "story", "council.json"); if (!fs.existsSync(f)) return null;
+  try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch (e) { return { bad: e.message }; }
+}
+function cmdCouncil(dir) {
+  if (!dir || !fs.existsSync(path.join(dir, "campaign.js"))) die("Which campaign folder? node atlas.js council <dir>");
+  const A = load(dir), C = require("./councils.js"), chosen = councilChosen(dir);
+  if (chosen && chosen.bad) die("story/council.json does not read: " + chosen.bad);
+  const c = C.councilOf(A.config, chosen), g = C.GENRES[A.config.genre], k = C.KINDS[A.config.kind];
+  const wrap = s => s.replace(/(.{1,110})(\s|$)/g, "      $1\n").replace(/\n$/, "");
+  console.log(`THE COUNCIL OF ${A.config.title || dir}
+  world: ${g ? g.label : "not set (genre in campaign.js: fantasy, scifi or modern)"}${A.config.subgenre ? " · " + A.config.subgenre : ""}
+  kind:  ${k ? k.label + ": " + k.says : "not set (kind in campaign.js: detective, sandbox or hybrid): a detective campaign"}
+  ${chosen ? "chosen by the game master (story/council.json)" : "the council for this world"}: ${c.label}
+`);
+  console.log("THE WRITERS, who debate and build (references/council.md, section 2):");
+  for (const m of c.members) console.log(`  ${m.name}: ${m.brings}\n${wrap(m.reads)}`);
+  console.log(`\nTHE JUDGE (section 3): ${c.judge.name}: ${c.judge.brings}\n${wrap(c.judge.reads)}`);
+  if (c.guests.length) { console.log("\nGUESTS, who advise on their speciality and sign the agreement (section 2):"); for (const x of c.guests) console.log(`  ${x.name}${x.brings ? ": " + x.brings : ""}`); }
+  if (!g) console.log(`\nWith no genre set, the mystery-and-horror council sits. If the story is plainly fantasy or science fiction, set genre in campaign.js and run this again.`);
+  console.log(`\nWhat this kind of campaign makes: references/council.md, section 6${A.config.kind === "sandbox" ? " (a living world: 6b)" : A.config.kind === "hybrid" ? " (the living world, 6b, with its investigations, 6)" : ""}.`);
 }
 
 // the city map: fetch a real city, invent one, or find where a real spot falls on a fetched city's sheet
@@ -956,6 +1016,7 @@ switch (cmd) {
   case "city": cmdCity(pos[0], pos[1]); break;
   case "locate": cmdLocate(pos[0], pos.slice(1).join(" ")); break;
   case "init": cmdInit(pos[0]); break;
+  case "council": cmdCouncil(pos[0]); break;
   case "check": cmdCheck(pos[0], pos.slice(1)); break;
   case "ascii": cmdAscii(pos[0], pos[1], pos[2]); break;
   case "dump": cmdDump(pos[0], pos.slice(1)); break;

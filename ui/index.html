@@ -63,6 +63,25 @@
 
       <div class="step">
         <h2><span class="num">3</span> Your choices</h2>
+        <div class="field buildings">
+          <span>The world it is set in</span>
+          <div class="bopts" role="radiogroup" aria-label="The world it is set in">
+            <label class="bopt"><input type="radio" name="genre" value="auto" checked><span><b>From my story.</b> The council reads it from the story, and chooses its writers to fit.</span></label>
+            <label class="bopt"><input type="radio" name="genre" value="fantasy"><span><b>Fantasy.</b> Kingdoms and magic, high or dark, sword and sorcery, monsters and ruins, guilds and noble houses.</span></label>
+            <label class="bopt"><input type="radio" name="genre" value="scifi"><span><b>Science fiction.</b> Space opera, exploration, space horror, corporations, alien worlds, stations and starships.</span></label>
+            <label class="bopt"><input type="radio" name="genre" value="modern"><span><b>Our world, in any period.</b> From the ancient world to tomorrow, real or alternate history.
+              <input name="period" maxlength="120" placeholder="When and where: 1923, New England; Rome, 44 BC; London today" aria-label="When and where"></span></label>
+          </div>
+          <label class="subgenre" id="f-sub" hidden><span>What kind of story</span> <select name="subgenre"></select></label>
+        </div>
+        <div class="field buildings">
+          <span>The kind of campaign</span>
+          <div class="bopts" role="radiogroup" aria-label="The kind of campaign" id="kinds"></div>
+        </div>
+        <details class="council" id="council">
+          <summary><b>The council</b> <span id="councilsum"></span></summary>
+          <div id="councilbody"></div>
+        </details>
         <div class="sizes" role="radiogroup" aria-label="How big"></div>
         <label class="field places" id="f-places" hidden><span>Your places <small id="nplaces">one per line; a few words after a dash if you like</small></span>
           <textarea name="places" rows="9" maxlength="40000" placeholder="Write each place on its own line. You can add a few words after a dash, for example:&#10;&#10;The lighthouse - where the keeper vanished&#10;The keeper's cottage&#10;The village church and its crypt"></textarea></label>
@@ -127,6 +146,24 @@
         <label class="field"><span>The players' characters <small>optional</small></span><textarea name="pcs" rows="4" maxlength="20000" placeholder="Who your players are playing, if you know: a name, who plays them, and a few lines of their story each. The council weaves each one in: a reason to care, a secret, and a clue of their own somewhere in the story.&#10;&#10;Lena Sato (Mariam): station security, two weeks from transfer; her sister lives on Deck 4."></textarea></label>
         <label class="field"><span>Wishes for particular places <small>optional</small></span><textarea name="placewish" rows="3" maxlength="12000" placeholder="One place to a line, as you want it. For example:&#10;Blackwood Manor: four floors and a cellar, about sixty rooms, a ballroom, servants' stairs behind the kitchen, a hidden chapel under the east wing."></textarea></label>
         <div class="field"><span>Your own floor plans <small>optional</small></span><label class="planpick"><input type="file" name="plans" accept="image/png,image/jpeg,image/webp,image/gif" multiple aria-label="Floor plans or sketches of places"><span>A floor plan or a sketch for any place, drawn or found: name each picture after its place (for example, <i>Blackwood Manor.jpg</i>), and that place is drawn from it, room by room.</span></label><small class="dnote" id="pnote"></small></div>
+        <details class="more" id="more">
+          <summary><b>More choices</b> <small>optional: each is chosen to suit the story unless you set it</small></summary>
+          <div class="morebody">
+            <label class="field"><span>Tone</span><input name="m_tone" maxlength="160" placeholder="grim and grounded, hopeful, comic, melancholy"></label>
+            <label class="field"><span>Horror</span><select name="m_horror"><option value="">To suit the story</option><option>none</option><option>a little</option><option>a good deal</option><option>as much as it can bear</option></select></label>
+            <label class="field" data-for="fantasy"><span>Magic</span><select name="m_magic"><option value="">To suit the story</option><option>none</option><option>rare and feared</option><option>uncommon</option><option>common</option><option>everywhere</option></select></label>
+            <label class="field" data-for="scifi"><span>Technology</span><select name="m_tech"><option value="">To suit the story</option><option>near future</option><option>across one star system</option><option>between the stars</option><option>far future</option></select></label>
+            <label class="field"><span>Fighting</span><select name="m_combat"><option value="">To suit the story</option><option>rare</option><option>now and then</option><option>often</option></select></label>
+            <label class="field"><span>The mystery</span><select name="m_mystery"><option value="">To suit the story</option><option>simple</option><option>layered</option><option>a labyrinth</option></select></label>
+            <label class="field"><span>How big a world</span><select name="m_size"><option value="">To suit the story</option><option>one town or station</option><option>a region</option><option>a kingdom, or a sector of space</option><option>a continent, or many star systems</option></select></label>
+            <label class="field"><span>Settlements <small>or star systems</small></span><input name="m_settle" type="number" min="1" max="500" placeholder="to suit"></label>
+            <label class="field"><span>People</span><select name="m_npcs"><option value="">To suit the story</option><option>few</option><option>a usual number</option><option>crowded</option></select></label>
+            <label class="field"><span>Factions</span><select name="m_factions"><option value="">To suit the story</option><option>one or two</option><option>several</option><option>many, tangled</option></select></label>
+            <label class="field"><span>Events in the world</span><select name="m_events"><option value="">To suit the story</option><option>few</option><option>some</option><option>many</option></select></label>
+            <label class="field"><span>What waits for your yes</span><select name="m_approve"><option value="">Major and critical events</option><option value="all">Everything that happens</option><option value="notable">Notable events and up</option><option value="critical">Only critical events</option></select></label>
+            <label class="field wide"><span>When it begins</span><input name="m_start" maxlength="120" placeholder="a date and hour (1923-10-31 21:00), or the world's own (the first day of Frostmoon, year 1203)"></label>
+          </div>
+        </details>
         <label class="field"><span>Anything else for the council <small>optional</small></span><textarea name="notes" rows="3" maxlength="6000" placeholder="Anything the council should know: the tone you want, who your players are, a real city to set it in, what you want more of."></textarea></label>
         <label class="field narrow" id="f-cap"><span>Spending cap</span><span class="money"><span>$</span><input name="budget" type="number" min="1" max="5000" step="1" value="40"></span>
           <small class="hint">The work stops if it reaches this. You can raise it and carry on.</small></label>
