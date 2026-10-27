@@ -28,6 +28,18 @@ What was asked, what was done, and what is waiting, so the next session can carr
    the line, from the lake it touches to the sea, joined across lakes, its bed cut downhill, drawn as the main river;
    the generator's own rivers stay too. No generator lakes are dug on a drawn river.
 
+## In progress when these notes were last written
+- Scientifically accurate sandy beaches (full request: docs/requests/2026-10-27-beaches.md): sediment from rivers
+  (stream power), cliffs, reefs, volcanoes; waves from the wind belts with fetch and exposure; longshore drift
+  (capacity ~ sin 2θ) depositing where it slows; beaches, gravel, rocky cliffs, dunes, barrier islands with lagoons and
+  inlets, spits, salt marsh and mangroves. Behind `--coast natural` until the user approves.
+- Realistic ocean currents (full request: docs/requests/2026-10-27-ocean-currents.md): wind-driven gyres with
+  western intensification from the actual basins, equatorial currents, circumpolar current where a latitude band is
+  open, Ekman upwelling on eastern boundaries; sea temperature carried by the currents feeding the climate (fog, rain,
+  coastal deserts, sea ice); a toggleable currents layer (warm red/orange, cold blue arrows, gyres, equator and
+  latitude lines, names and strengths). Behind an opt-in until approved.
+- The user will continue in a local session after this one: keep this file and HANDOFF.md current.
+
 ## Decided (the user: "okay I like everything now")
 - The Earth climate model is the default for new worlds (a plates world made before keeps the classic rules when made
   again with the same seed; `--climate-model classic|earth` overrides; T.climateModel is written when earth).
