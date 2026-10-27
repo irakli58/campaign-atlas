@@ -1,0 +1,131 @@
+/* The tutorials' content (the user asked, 27 Oct 2026, for an animated, interactive way to learn all of Atlas, which
+   grows with it). One list serves the guided tour on a campaign's page (atlas-tutorial.js: "Show me" and "Let me
+   try"), the tutorial video (dev/tutorial-video.js plays the same lessons and records them) and the help library's
+   search. Each lesson: id, title, summary, the features it teaches (FEATURES below: the library's index, and what
+   dev/tutorial-coverage.js checks every feature of the page against), needs (what the page must have for it, else it
+   is left out), and its steps:
+     { say: what is said (shown, and read aloud when asked), sel: where (a CSS selector, or a list of them: the first
+       there), act: "look" | "click" | "type" (value) | "hover", try: what the person is asked to do in "Let me try",
+       auto: true (done for them in both modes: a way into the next part), sim: true (in "Show me" the click is shown,
+       not made: it would change their campaign), wait: ms after }
+   A new feature gets its lesson, or its steps in a lesson, here; its entry in FEATURES; and the coverage check passes.
+   The look, the timing and the words follow the lessons already here. */
+(function (A) {
+  "use strict";
+  const has = s => () => !!document.querySelector(s);
+  const chapters = [
+    { id: "start", title: "Welcome to Atlas", lessons: [
+      { id: "tour", title: "Finding your way", summary: "The page your campaign lives on: its book of places, the tools for game night, and where help is.", features: ["gazetteer", "search", "views", "help"], steps: [
+        { say: "This is your campaign's page: everything the council wrote, every place mapped, and the tools to run it. Let's look around.", sel: "header, .mast, h1", act: "look" },
+        { say: "These are the page's views. The Gazetteer is the campaign's book: its places, people and clues.", sel: "#v-gaz", act: "click", try: "Click Gazetteer." },
+        { say: "Every place of the campaign is listed here. Click one to open its page.", sel: "#list", act: "look" },
+        { say: "Search finds any place, person or clue by a word. Type a name...", sel: "#q", act: "type", value: "the", try: "Type a word into the search box." },
+        { say: "...and clear it to see everything again.", sel: "#q", act: "type", value: "", auto: true },
+        { say: "At the table holds everything for game night: the players' screen, handouts, clocks, the copilot and more.", sel: "#v-table", act: "look" },
+        { say: "And this button opens Help and tutorials whenever you want them: every lesson, a search, and where you left off.", sel: ".tu-helpbtn", act: "look" }
+      ] },
+      { id: "safe", title: "What only you see", summary: "Your view holds every secret; the Player-safe view shows what the players may see.", features: ["playersafe"], needs: has("#m-player"), steps: [
+        { say: "You are reading your own view: secrets, the room-by-room guide, who knows what.", sel: "#m-keeper", act: "look" },
+        { say: "Player-safe hides every secret, so you can show the page itself to the table if you like.", sel: "#m-player", act: "click", try: "Click Player-safe." },
+        { say: "And back to your own view.", sel: "#m-keeper", act: "click", try: "Click your own view again." }
+      ] }
+    ] },
+    { id: "places", title: "Places and their maps", lessons: [
+      { id: "place", title: "Reading a place", summary: "A place's page: what it is, its maps floor by floor, its people and clues.", features: ["dossier", "floors", "mapviews"], needs: has("#list li button[data-go]"), steps: [
+        { say: "Open a place from the list.", sel: "#list li button[data-go]", act: "click", try: "Click a place in the list." },
+        { say: "Its page tells you what it is, what is really going on, the people here and the clues to find.", sel: "#dossier", act: "look", wait: 600 },
+        { say: "Its maps come floor by floor. Each floor has its own button.", sel: ".lmap-sec .lm-floors", act: "look" },
+        { say: "Player view shows the map as the players may see it: no secret rooms, no markers.", sel: ".lmap-sec [data-lmv='player']", act: "click", try: "Click Player view." },
+        { say: "Your view again, with every marker: clues, people, secrets and dangers.", sel: ".lmap-sec [data-lmv='gm']", act: "click", try: "Click your view." },
+        { say: "Below the map, its guide: every room, what is there, who is there, what can be found.", sel: ".lmap-sec .lm-ref", act: "look" }
+      ] },
+      { id: "map3d", title: "Big maps and 3D", summary: "A map at full size, and the room in 3D from its one fixed angle.", features: ["fullsize", "room3d"], needs: has(".lmap-sec"), steps: [
+        { say: "Full size opens the map as large as your screen allows.", sel: ".lmap-sec [data-lmfull]", act: "click", try: "Click Full size." },
+        { say: "Close it again when you have looked.", sel: "dialog[open] [data-x], dialog[open] .lm-close, dialog[open] button[aria-label='Close']", act: "click", auto: true },
+        { say: "And here the floor in 3D, seen from one fixed angle so you never lose your way. Slide and zoom; it never turns.", sel: ".lmap-sec [data-m3d], .lmap-sec [data-lm3d]", act: "look" }
+      ] },
+      { id: "editor", title: "Editing a map", summary: "Redraw any map: rooms, doors, stairs, furniture and models, in 2D or 3D.", features: ["mapeditor", "furnish", "models"], needs: has(".lmap-sec [data-medit]"), steps: [
+        { say: "Edit this map opens the map editor. Nothing is kept until you save.", sel: ".lmap-sec [data-medit]", act: "click", try: "Click Edit this map." },
+        { say: "Its tools: draw rooms, doors and stairs; furnish with models from the library; place clues.", sel: "#meDlg .me-tools", act: "look", wait: 600 },
+        { say: "Switch between the flat map and 3D: it is the same map.", sel: "#meDlg [data-r3v]", act: "look" },
+        { say: "Close it without saving: your map stays as it was.", sel: "#meDlg [data-me='close']", act: "click", auto: true }
+      ] },
+      { id: "caves", title: "Caves, riddles and traps", summary: "Generate a cave, mend it, and the riddles and traps it holds.", features: ["caves", "riddles", "traps"], needs: () => !!(window.ATLAS && Object.values(ATLAS.maps || {}).some(M => (M.floors || []).some(F => F.cave))), steps: [
+        { say: "A cave's page has its traps and riddles in its guide: how they are set off, the signs, how to disarm them, and the riddle's answer folded away.", sel: ".lm-ref", act: "look" },
+        { say: "In the map editor, Generate a cave makes one from your settings: chambers, water, chasms, secrets, every chamber reachable. Check and Mend keep it so.", sel: ".lmap-sec [data-medit]", act: "look" }
+      ] }
+    ] },
+    { id: "world", title: "The world", lessons: [
+      { id: "worldmap", title: "The world map", summary: "The lands between your places, drawn in a style fitting your setting; each city opens in 3D.", features: ["worldmap", "maplook", "worldedit"], needs: has("#v-world"), steps: [
+        { say: "The world map shows the land between your places.", sel: "#v-world", act: "click", try: "Click World map.", wait: 1600 },
+        { say: "Choose how it is drawn: fantasy parchment, an engraved atlas, a modern atlas or a science-fiction survey. The players see the same.", sel: ".wm-look", act: "look" },
+        { say: "Zoom in: finer things appear as you come closer.", sel: ".wm-ctl [data-z='in']", act: "click", try: "Click + to zoom in.", wait: 700 },
+        { say: "And back to the whole world.", sel: ".wm-ctl [data-z='home']", act: "click", auto: true },
+        { say: "Click a place for what is there; a place with a 3D map opens it with Enter.", sel: ".wl", act: "look" },
+        { say: "Edit map moves places, adds places and routes, and marks the party's journey.", sel: "[data-w='edit']", act: "look" },
+        { say: "Back to the Gazetteer.", sel: "#v-gaz", act: "click", auto: true }
+      ] }
+    ] },
+    { id: "table", title: "Game night", lessons: [
+      { id: "screen", title: "The players' screen", summary: "A window for the players: maps a room at a time, handouts, faces, the fog of war.", features: ["players-screen", "fog", "fog3d", "players-copy", "phones"], needs: has("#v-table"), steps: [
+        { say: "At the table holds the tools for game night.", sel: "#v-table", act: "click", try: "Click At the table.", wait: 500 },
+        { say: "The players' screen is a window of its own for the television or a second screen, with nothing of yours on it.", sel: "[data-t='tab'][data-tab='screen']", act: "click", try: "Click Players' screen.", wait: 500 },
+        { say: "Open it, drag it onto the television, and choose what they see from here.", sel: "[data-t='openscreen']", act: "look" },
+        { say: "Maps go to them a room at a time. In caves you brush the fog away as they explore, flat or in 3D.", sel: ".t-fog, .t-fog3d", act: "look" },
+        { say: "With the Atlas app, players can also follow on their own phones: switch it on and show them the QR code.", sel: ".t-lan", act: "look" }
+      ] },
+      { id: "dock", title: "The quick tools", summary: "Dice, a person on the spot, ideas when they're stuck, questions, the copilot: always at the bottom right.", features: ["dock", "dice", "person", "stuck", "ask"], needs: has("#tDock"), steps: [
+        { say: "These quick tools are on every page, at the bottom right.", sel: "#tDock", act: "look" },
+        { say: "Dice for any roll.", sel: "#tDock [data-dock='dice']", act: "click", try: "Click Dice.", wait: 500 },
+        { say: "A person made up on the spot: a name for the story's age, a look, a want, a secret.", sel: "#tDock [data-dock='person']", act: "click", try: "Click A person.", wait: 500 },
+        { say: "When the table goes quiet: ways back into the story, from what is still open.", sel: "#tDock [data-dock='stuck']", act: "click", try: "Click Stuck?", wait: 500 },
+        { say: "A question about the campaign, answered from its own words.", sel: "#tDock [data-dock='ask']", act: "click", try: "Click Ask.", wait: 500 },
+        { say: "Close the panel with the toolbar button again, or Escape.", sel: "#tDock [data-dock='ask']", act: "click", auto: true }
+      ] },
+      { id: "copilot", title: "The copilot", summary: "A person's answer to what a player said, in their voice and from only what they know.", features: ["copilot", "talk", "improvise", "memory"], needs: has("#tDock [data-dock='talk']"), steps: [
+        { say: "Talk is the copilot, for when a player says something you did not plan for.", sel: "#tDock [data-dock='talk']", act: "click", try: "Click Talk.", wait: 500 },
+        { say: "Choose who they are talking to.", sel: "#tPop select[data-cp='who']", act: "look" },
+        { say: "Type what the player said. The answer comes in that person's voice, from only what they know: they may lie, dodge or bargain. Change it, ask for another or a different tone, and keep it in their memory only if you say so.", sel: "#tPop .cp-ask, #tPop .cp-talk", act: "look" },
+        { say: "Improvise helps with the rest: a place to describe, a reaction, what follows, what happens next, and whether something fits.", sel: "#tPop [data-cp='mode'][data-m='imp']", act: "click", try: "Click Improvise.", wait: 400 },
+        { say: "Close it from the toolbar.", sel: "#tDock [data-dock='talk']", act: "click", auto: true }
+      ] },
+      { id: "tonight", title: "Tonight, clocks and handouts", summary: "The session sheet, the villains' clocks, and handouts drawn as the real thing.", features: ["tonight", "clocks", "handouts"], needs: has("#v-table"), steps: [
+        { say: "Tonight: the session's plan, your notes, and a read-aloud Previously on.", sel: "[data-t='tab'][data-tab='tonight']", act: "click", try: "Click Tonight.", wait: 500 },
+        { say: "Clocks: what each villain is doing while the party investigates. Tick them as the world moves.", sel: "[data-t='tab'][data-tab='clocks']", act: "click", try: "Click Clocks and stuck.", wait: 500 },
+        { say: "Handouts, drawn as the letters and newspapers they are, go to the players' screen with one click.", sel: "[data-t='tab'][data-tab='screen']", act: "click", auto: true }
+      ] }
+    ] },
+    { id: "story", title: "The story", lessons: [
+      { id: "investigation", title: "The investigation", summary: "Clues on the map, what joins them, who knows what.", features: ["investigation", "clues", "knowledge", "autoconnect"], needs: has("[data-t='tab'][data-tab='clues']"), steps: [
+        { say: "The investigation: every clue, what joins it to the story, and who knows what.", sel: "[data-t='tab'][data-tab='clues']", act: "click", try: "Click Investigation.", wait: 600 },
+        { say: "Each person's page records what they know and how they learned it, and Speak as them answers from only that.", sel: "#tvBody", act: "look" }
+      ] },
+      { id: "consistency", title: "Is it consistent?", summary: "What does not fit together, with its evidence and how to mend it.", features: ["consistency"], needs: has("[data-t='tab'][data-tab='consistency']"), steps: [
+        { say: "Consistency checks the campaign for what does not fit together: clues that lead nowhere, rooms nobody can reach, someone who knows what they were never told.", sel: "[data-t='tab'][data-tab='consistency']", act: "click", try: "Click Consistency.", wait: 600 },
+        { say: "Each finding has its evidence. Mend it, ask Claude for a fix, or mark it intentional: a lie or a mystery on purpose.", sel: "#tvBody", act: "look" }
+      ] },
+      { id: "bible", title: "The story and its music", summary: "The council's story bible, and the music made for every place.", features: ["bible", "music"], steps: [
+        { say: "The story: the council's bible, Tolkien's judgement, and the story as you gave it.", sel: "#v-story", act: "look" },
+        { say: "Every place has its own music, made by the page itself. Play it from here.", sel: ".musicbar, #v-music", act: "look" },
+        { say: "That is Atlas. Help and tutorials is always here for any lesson again.", sel: ".tu-helpbtn", act: "look" }
+      ] }
+    ] }
+  ];
+  // the features of the page, each taught by a lesson (the library's index; the coverage check's list)
+  const FEATURES = {
+    gazetteer: ["The Gazetteer", "views places list book"], search: ["Search", "find word name"], views: ["The views", "gazetteer table world story music"], help: ["Help and tutorials", "tutorial lesson help"],
+    playersafe: ["Player-safe view", "secrets players safe"], dossier: ["A place's page", "dossier place page people clues"], floors: ["Floors", "floor level storey"], mapviews: ["Player view and your view of a map", "player view markers"],
+    fullsize: ["Full size", "big map"], room3d: ["Rooms in 3D", "3d room view"], mapeditor: ["The map editor", "edit map rooms doors stairs"], furnish: ["Furnishing rooms", "furniture models furnish"], models: ["The model library", "models 3d library glb"],
+    caves: ["Caves", "cave generator dungeon mine"], riddles: ["Riddles and puzzles", "riddle puzzle answer"], traps: ["Traps", "trap disarm"],
+    worldmap: ["The world map", "world map realm travel"], maplook: ["How the world map is drawn", "style parchment atlas survey engraved"], worldedit: ["Editing the world map", "places routes journey"],
+    "players-screen": ["The players' screen", "television second screen players window"], fog: ["Fog of war", "fog brush reveal"], fog3d: ["Fog of war in 3D", "3d fog"], "players-copy": ["The players' copy", "players copy secrets"], phones: ["Players' phones", "phone qr wifi"],
+    dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
+    copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
+    tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    investigation: ["The investigation", "clues connections"], clues: ["Clues", "clue evidence"], knowledge: ["Who knows what", "knowledge"], autoconnect: ["Auto-Connect", "connect suggest"],
+    consistency: ["Consistency", "contradiction check fits"], bible: ["The story bible", "story council tolkien"], music: ["Music", "music theme sound"]
+  };
+  // where in the page each feature lives, for the little ? beside it (contextual help): [selector, feature]
+  const ANCHORS = [[".lmap-sec .lm-bar", "mapviews"], ["#meDlg .me-tools", "mapeditor"], [".wm-bar", "worldmap"], ["#tablev .tv-acts", "players-screen"], [".cp-host", "copilot"], [".cc-top", "consistency"]];
+  A.tutorialData = { version: 1, chapters, FEATURES, ANCHORS };
+})(window.ATLAS || (window.ATLAS = {}));
