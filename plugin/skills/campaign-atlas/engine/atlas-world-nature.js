@@ -556,13 +556,16 @@
       // what flows in it: its own word, the world's, ice where most of it lies in the cold
       let liq = rv.liquid && rv.liquid !== "water" ? rv.liquid : world;
       if (!liq && N && !rv.liquid) { let cold = 0; for (let i = 0; i < n; i += 3) if (N.temp(p[i][0], p[i][1]) < .1) cold++; if (cold > n / 3 * .6) liq = "frozen"; }
+      // (a small river through dry land runs only after rain: a dry bed, a wadi, drawn thin and broken; a great river fed
+      // from wetter mountains flows on, as the Nile does)
+      let eph = false; if (N && N.wet && !liq && wd * 1.29 < 2.6) { let dry = 0, k = 0; for (let i = 0; i < n; i += 3) { k++; if (N.wet(p[i][0], p[i][1]) < .17) dry++; } eph = dry > k * .6; }
       const L = liq && LIQUID[liq], c = L ? (f === 1 && look !== "parchment" && look !== "relief" ? inkCol || col : L[f === 1 ? 2 : f]) : col;
       for (let q = 0; q < 4; q++) {
         const a = Math.floor(q * (n - 1) / 4), b = Math.min(n - 1, Math.ceil((q + 1) * (n - 1) / 4)); if (b <= a) continue;
         const d = pathD(p.slice(a, b + 1)), w = wd * (.45 + q * .28);
         if (L && (liq === "lava" || liq === "glowing" || liq === "alien")) glow += `<path d="${d}" fill="none" stroke="${L[1]}" stroke-opacity=".35" stroke-width="${r1(w * 3.2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
         if (inkCol) s += `<path d="${d}" fill="none" stroke="${inkCol}" stroke-width="${r1(w + 1.1)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-        s += `<path d="${d}" fill="none" stroke="${c}" stroke-width="${r1(w)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+        s += eph ? `<path d="${d}" fill="none" stroke="${c}" stroke-opacity=".75" stroke-width="${r1(Math.max(.5, w * .6))}" stroke-dasharray="3 2" stroke-linecap="round" stroke-linejoin="round"/>` : `<path d="${d}" fill="none" stroke="${c}" stroke-width="${r1(w)}" stroke-linecap="round" stroke-linejoin="round"/>`;
       }
       if (!pr) continue;
       // a delta, where a great river meets the sea over flat land: it breaks into arms fanning to the coast
@@ -595,7 +598,7 @@
         else if (drop > 1.1 && !liq) { lastFall = dist - 12; deco += `<path class="lod1" d="M${r1(b[0] - uy * w * .7)} ${r1(b[1] + ux * w * .7)}l${r1(uy * w * 1.4)} ${r1(-ux * w * 1.4)}M${r1(b[0] + ux * 2 - uy * w * .6)} ${r1(b[1] + uy * 2 + ux * w * .6)}l${r1(uy * w * 1.2)} ${r1(-ux * w * 1.2)}" stroke="${f === 1 ? inkCol || "#3b2a1a" : "#eaf6fa"}" stroke-width=".45" stroke-linecap="round"/>`; }
       }
       // its spring
-      if (f !== 3) deco += `<circle class="lod2" cx="${r1(p[0][0])}" cy="${r1(p[0][1])}" r="${r1(wd * .7 + .4)}" fill="${c}" stroke="${inkCol || "none"}" stroke-width=".35"/>`;
+      if (f !== 3 && !eph) deco += `<circle class="lod2" cx="${r1(p[0][0])}" cy="${r1(p[0][1])}" r="${r1(wd * .7 + .4)}" fill="${c}" stroke="${inkCol || "none"}" stroke-width=".35"/>`;
     }
     return glow + s + deco;
   }

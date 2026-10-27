@@ -442,7 +442,7 @@ function invent(A, flags, log) {
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco }; geo = G.info; T.rain = 1;
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)
-      if (G.eco && flags.biomes !== "classic") { T.biome = Buffer.from(G.eco.biome).toString("base64"); T.canopy = Buffer.from(G.eco.canopy).toString("base64"); T.tempC = Buffer.from(Uint8Array.from(G.eco.T, v => Math.max(0, Math.min(255, Math.round(v + 60))))).toString("base64"); }
+      if (G.eco && flags.biomes !== "classic") { T.biome = Buffer.from(G.eco.biome).toString("base64"); T.canopy = Buffer.from(G.eco.canopy).toString("base64"); T.tempC = Buffer.from(Uint8Array.from(G.eco.T, v => Math.max(0, Math.min(255, Math.round(v + 60))))).toString("base64"); if (G.eco.ground.some(v => v)) T.ground = Buffer.from(G.eco.ground).toString("base64"); }
       // (the land was made to a size, so the map knows its scale: miles for fantasy and the past, km otherwise)
       const kmAcross = num("km", Math.round(w * 2.3)), miles = ["relief", "painted", "parchment", "engraved"].includes(look);
       T.scale = { unit: miles ? "mile" : "km", per: Math.round((miles ? kmAcross * .6214 : kmAcross) / w * 1000) / 1000 };
@@ -646,7 +646,7 @@ function fromDrawing(dir, A, src, flags, log) {
 }
 // the terrain file: written by the command, never by hand
 function writeTerrain(dir, T, title) {
-  const big = ["height", "heightLo", "moist", "cover", "biome", "canopy", "tempC"], lines = [];
+  const big = ["height", "heightLo", "moist", "cover", "biome", "canopy", "tempC", "ground"], lines = [];
   for (const [k, v] of Object.entries(T)) if (v !== undefined && !big.includes(k) && !["rivers", "labels", "routes", "spots"].includes(k)) lines.push(`  ${k}: ${JSON.stringify(v)}`);
   lines.push(`  spots: {\n${Object.entries(T.spots).map(([k, v]) => `    ${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(",\n")}\n  }`);
   for (const k of ["labels", "routes", "rivers"]) lines.push(`  ${k}: [\n${(T[k] || []).map(x => "    " + JSON.stringify(x)).join(",\n")}\n  ]`);

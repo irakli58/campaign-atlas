@@ -127,7 +127,34 @@ function ecology(L, o, U) {
     if (!land(n)) continue; const b = biome[n];
     simple[n] = b === B.icesheet ? B.snow : WET.has(b) ? B.swamp : (b === B.alpine || b === B.rock || E[n] > 1800) ? B.mountains : DES.has(b) ? B.desert : canopy[n] > 90 || b === B.gallery && canopy[n] > 60 ? B.forest : B.plains;
   }
-  return { T, Tw, Tc, P, sf, AI, kop, biome: o.detailed ? biome : simple, detail: biome, canopy, acc };
+  // the bare ground of dry land, where little grows over it (the user, 27 Oct 2026: the desert "looks kinda
+  // unnatural"): a desert is not one sand but a mosaic, each by its place in the land: bare rock on the uplands and
+  // steep slopes (hamada), sand seas (ergs) filling the wide low basins where the wind drops its sand, gravel plains
+  // (reg) between them and on the fans below the mountains, salt pans in the basins that cannot drain.
+  // 0 not dry, 1 sand, 2 gravel, 3 rock, 4 salt
+  const ground = new Uint8Array(N), mean = Float32Array.from(E, v => Math.max(0, v)); blur(mean, cols, rows, 18, 2);
+  const sandF = new Float32Array(N);
+  for (let n = 0; n < N; n++) { if (!land(n) || AI[n] > .55) continue; const rel = E[n] - mean[n]; sandF[n] = AI[n] < .22 && rel < -60 && slope(n) < .01 ? 1 : 0; }
+  blur(sandF, cols, rows, 3, 2);
+  for (let n = 0; n < N; n++) {
+    if (!land(n) || AI[n] > .55) continue; const rel = E[n] - mean[n], sl = slope(n);
+    ground[n] = sl > .03 || rel > 160 || E[n] > 1600 ? 3 : sandF[n] > .5 ? 1 : 2;
+  }
+  for (const n of L.playa || []) if (land(n) && AI[n] < .35) ground[n] = 4;
+  // and on the lowest, flattest floors of the driest basins, where what little water comes down dries to a crust (the
+  // Sahara's chotts, the Lut's kavirs): a few pans, no more than about 2% of the dry land
+  { const salt = new Float32Array(N); let dry = 0;
+    for (let n = 0; n < N; n++) { if (!ground[n]) continue; dry++; if (AI[n] < .2 && slope(n) < .006 && E[n] - mean[n] < -110) salt[n] = 1; }
+    blur(salt, cols, rows, 2, 1); const c = []; for (let n = 0; n < N; n++) if (salt[n] > .55 && ground[n] && ground[n] !== 3) c.push(n);
+    c.sort((a, b) => (E[a] - mean[a]) - (E[b] - mean[b])); for (const n of c.slice(0, Math.round(dry * .02))) ground[n] = 4; }
+  return { T, Tw, Tc, P, sf, AI, kop, biome: o.detailed ? biome : simple, detail: biome, canopy, acc, ground };
+}
+function blur(F, cols, rows, r, passes) {
+  const tmp = new Float32Array(F.length);
+  for (let p = 0; p < passes; p++) {
+    for (let j = 0; j < rows; j++) { let acc = 0, cnt = 0; const o = j * cols; for (let i = -r; i < cols + r; i++) { if (i + r >= 0 && i + r < cols) { acc += F[o + i + r]; cnt++; } if (i - r - 1 >= 0 && i - r - 1 < cols) { acc -= F[o + i - r - 1]; cnt--; } if (i >= 0 && i < cols) tmp[o + i] = acc / cnt; } }
+    for (let i = 0; i < cols; i++) { let acc = 0, cnt = 0; for (let j = -r; j < rows + r; j++) { if (j + r >= 0 && j + r < rows) { acc += tmp[(j + r) * cols + i]; cnt++; } if (j - r - 1 >= 0 && j - r - 1 < rows) { acc -= tmp[(j - r - 1) * cols + i]; cnt--; } if (j >= 0 && j < rows) F[j * cols + i] = acc / cnt; } }
+  }
 }
 function smooth(a, b, v) { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); }
 // the flow of water over the land: each cell's share of the rain gathered from above it (the priority flood fills the

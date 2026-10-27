@@ -203,7 +203,7 @@ function geology(o, U) {
 
   /* 8. what lives on it: climate classes, biomes and tree cover, from all of the above (world-ecology.js) */
   const want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
-  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes }, U);
+  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes }, U);
 
   /* to the grid the maps are drawn from */
   // (and each height's fraction, kept apart: a shaded relief map needs the land's slopes finer than 255 steps)
