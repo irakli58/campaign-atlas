@@ -781,6 +781,27 @@ details.ci[open] > summary.cn { margin-bottom: 4px; }
 .wm-ck { display: flex !important; gap: 8px; align-items: center; }
 .wm-ck > input { width: auto; }
 .wm-hint .credit { flex-basis: 100%; }
+/* the world builder: the land's brush, rivers, realms and names drawn on the page */
+.wm-btn:disabled { opacity: .4; cursor: default; }
+.wm-brushbar { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12.5px; padding-left: 4px; }
+.wm-brushbar select { font: inherit; padding: 2px 6px; }
+.wm[data-tool="brush"] .wm-stage, .wm[data-tool="river"] .wm-stage, .wm[data-tool="realm"] .wm-stage, .wm[data-tool="label"] .wm-stage, .wm[data-tool="loc"] .wm-stage { cursor: crosshair; }
+.wm-fx .wf-hit { fill: none; stroke: transparent; stroke-width: 12px; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: move; }
+.wm-fx .wf-hit:hover, .wm-fx .wf-hit.sel { stroke: rgba(201, 162, 39, .5); }
+.wm-fx rect.wf-lab { fill: transparent; stroke: none; pointer-events: all; }
+.wm-fx rect.wf-lab:hover, .wm-fx rect.wf-lab.sel { fill: rgba(201, 162, 39, .18); stroke: rgba(201, 162, 39, .7); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.wf-draft { fill: none; stroke: #c0392b; stroke-width: 2px; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.wf-draft.realm { fill: rgba(192, 57, 43, .08); }
+.wf-brush { fill: rgba(255, 255, 255, .08); stroke: #1b1b1b; stroke-width: 1.5px; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.wf-stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: .4; pointer-events: none; stroke: #b58b4c; }
+.wf-stroke.m-sea { stroke: #3e6a86; } .wf-stroke.m-mountains { stroke: #6e5233; } .wf-stroke.m-hills { stroke: #9a7a4a; } .wf-stroke.m-flat { stroke: #c9b77d; }
+.wf-stroke.m-forest { stroke: #3f7a3a; } .wf-stroke.m-desert { stroke: #e0b860; } .wf-stroke.m-swamp { stroke: #5a7a5a; } .wf-stroke.m-grass { stroke: #8fbf6a; }
+.wm-hdl .wf-vx { fill: #fff; stroke: #c0392b; stroke-width: 2px; cursor: grab; }
+.wm-hdl .wf-vx.dr { fill: #c0392b; stroke: #fff; cursor: default; }
+.wm-hdl .wf-vx.close { fill: #fff; stroke: #c0392b; stroke-width: 3px; cursor: pointer; }
+.wm-rl.wm-rk { pointer-events: auto; cursor: pointer; fill-opacity: .8; font-weight: 600; }
+.wm-realm.hid path { stroke-dasharray: 3 5; }
+.wm-rlink { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .tag.wtag { cursor: pointer; background: transparent; color: inherit; }
 .tag.wtag:hover { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 640px) {

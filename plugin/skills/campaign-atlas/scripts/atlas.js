@@ -399,7 +399,7 @@ function checkWorld(A) {
   });
   const D = K.prepareWorld(W0, A.worldTerrainData, null), [w, h] = D.size;
   for (const l of D.locs) {
-    if (l.unplaced) P(TD.drawing ? `${l.id} has no place on the drawing: give it at: [x, y], read off the picture (the map is ${w} across, ${h} down)` : `${l.id} has no place on the map: run atlas.js world (it stands each location where its kind belongs), or give it at: [x, y]`);
+    if (l.unplaced) P((A.worldTerrainData || {}).drawing ? `${l.id} has no place on the drawing: give it at: [x, y], read off the picture (the map is ${w} across, ${h} down)` : `${l.id} has no place on the map: run atlas.js world (it stands each location where its kind belongs), or give it at: [x, y]`);
     else if (l.at[0] < 0 || l.at[1] < 0 || l.at[0] > w || l.at[1] > h) P(`${l.id} stands at ${l.at.map(Math.round).join(", ")}, off the map (0 to ${w} by 0 to ${h})`);
   }
   const own = W0.routes || [];
@@ -424,6 +424,17 @@ function checkWorld(A) {
     if (!f || !FK.includes(f.kind)) P(`feature ${i + 1}: kind must be one of ${FK.join(", ")}`);
     else if (!(Array.isArray(f.pts) && f.pts.length > 2) && !(Array.isArray(f.line) && f.line.length > 1) && !(Array.isArray(f.at) && (f.r || f.kind === "sea"))) P(`feature ${i + 1} (${f.kind}${f.name ? " " + f.name : ""}) needs pts: [[x, y], ...] (an area), line: [[x, y], ...] (a river, or a range with width:), or at: [x, y] with r:`);
   });
+  // what the world map's editor gives back (references/world.md, "Editing the world on the page"): realms, rivers, the
+  // reshaped land; a realm or place held by a faction names one of the campaign's factions
+  const pt = p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite), facs = A.factionsData || {};
+  (W0.realms || []).forEach((g, i) => {
+    if (!g || !g.name) P(`realm ${i + 1} needs a name`);
+    else if (!(Array.isArray(g.pts) && g.pts.length > 2 && g.pts.every(pt))) P(`realm ${g.name} needs pts: its border, three corners or more as [x, y]`);
+    if (g && g.owner && !facs[g.owner]) P(`realm ${g.name || i + 1} is held by "${g.owner}", which is not one of the factions (table.js, ATLAS.factions)`);
+  });
+  (W0.locations || []).forEach(l => { if (l && l.owner && !facs[l.owner]) P(`${l.id} is held by "${l.owner}", which is not one of the factions (table.js, ATLAS.factions)`); });
+  (W0.rivers || []).forEach((r, i) => { if (!r || !(Array.isArray(r.pts) && r.pts.length > 1 && r.pts.every(pt))) P(`river ${i + 1}${r && r.name ? " (" + r.name + ")" : ""} needs pts: [[x, y], ...], from its source to its mouth`); });
+  if (W0.shape) { const SB = ["land", "sea", "mountains", "hills", "flat", "forest", "desert", "swamp", "grass"]; if (W0.shape.base && !["sea", "land"].includes(W0.shape.base)) P(`shape.base is "sea" or "land"`); (W0.shape.strokes || []).forEach((s, i) => { if (!s || !SB.includes(s.m) || !Array.isArray(s.p) || !s.p.every(pt)) P(`shape stroke ${i + 1} needs m: (${SB.join(", ")}), r: and p: [[x, y], ...]`); }); }
   const routes = D.routes, c3 = D.locs.filter(l => l.city && (A.cities || {})[l.city]).length;
   if (!routes.length && D.locs.length > 1) N("no routes between the locations: add routes: in world.js, or run atlas.js world to have them suggested");
   const line = `world map: ${D.look} · ${D.locs.length} location${D.locs.length === 1 ? "" : "s"} (${c3} with a 3D map) · ${routes.length} route${routes.length === 1 ? "" : "s"}${own.length ? "" : routes.length ? " (suggested)" : ""}${D.scale ? ` · 1 unit = ${D.scale.per} ${D.scale.unit || ""}` : " · no scale"}${D.party.at ? ` · the party at ${D.party.at}` : ""}`;

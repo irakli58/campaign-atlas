@@ -64,7 +64,21 @@
         { say: "Zoom in: finer things appear as you come closer.", sel: ".wm-ctl [data-z='in']", act: "click", try: "Click + to zoom in.", wait: 700 },
         { say: "And back to the whole world.", sel: ".wm-ctl [data-z='home']", act: "click", auto: true },
         { say: "Click a place for what is there; a place with a 3D map opens it with Enter.", sel: ".wl", act: "look" },
-        { say: "Edit map moves places, adds places and routes, and marks the party's journey.", sel: "[data-w='edit']", act: "look" },
+        { say: "Edit map moves places, adds places and routes, shapes the land itself, and marks the party's journey.", sel: "[data-w='edit']", act: "look" },
+        { say: "Back to the Gazetteer.", sel: "#v-gaz", act: "click", auto: true }
+      ] },
+      { id: "worldbuild", title: "Shaping the world", summary: "Paint the land, draw rivers, kingdoms and territories, write names on the map; undo any of it.", features: ["worldbuild", "worldedit"], needs: has("#v-world"), steps: [
+        { say: "The world map can be changed as much as you like, or made from nothing.", sel: "#v-world", act: "click", try: "Click World map.", wait: 1600 },
+        { say: "Edit map opens the tools.", sel: "[data-w='edit']", act: "click", try: "Click Edit map.", wait: 500 },
+        { say: "Shape the land paints the land itself: raise land from the sea, carve out a sea or a lake, raise mountains and hills, plant forest, dry it to desert or wet it to swamp.", sel: "[data-w='brush']", act: "click", try: "Click Shape the land.", wait: 500 },
+        { say: "Choose what to paint and how big the brush is, then drag over the map. A map with no land yet starts as all sea or all land.", sel: ".wm-brushbar", act: "look", optional: true },
+        { say: "+ River: click where it rises and along its way to the sea, then Finish the river.", sel: "[data-w='river']", act: "look", optional: true },
+        { say: "+ Realm draws a kingdom, a province or a territory round its border, and says which faction holds it. A hidden one only you see; the factions' tab lists what each one holds.", sel: "[data-w='realm']", act: "look" },
+        { say: "+ Name writes a name on the map: a sea, a mountain range, a forest.", sel: "[data-w='label']", act: "look" },
+        { say: "Click a river, a realm or a name to change, duplicate or delete it. Drag it to move it, or drag a corner to reshape it. A place can be duplicated too.", sel: ".wm-stage", act: "look" },
+        { say: "Undo and Redo take back any change and do it again (Ctrl+Z and Ctrl+Y).", sel: "[data-w='undo']", act: "look" },
+        { say: "Copy as world.js gives it all back to the campaign: the land as you shaped it, the rivers, realms and names with it.", sel: "[data-w='export']", act: "look" },
+        { say: "Edit map again puts the tools away.", sel: "[data-w='edit']", act: "click", auto: true, wait: 400 },
         { say: "Back to the Gazetteer.", sel: "#v-gaz", act: "click", auto: true }
       ] },
       { id: "galaxy", title: "The star chart", summary: "A galaxy of hundreds of systems: open a system and its worlds, plot a course, keep the players' charts.", features: ["galaxy", "systems", "starship", "charts"], needs: has("#v-galaxy"), steps: [
@@ -156,7 +170,7 @@
     playersafe: ["Player-safe view", "secrets players safe"], dossier: ["A place's page", "dossier place page people clues"], floors: ["Floors", "floor level storey"], mapviews: ["Player view and your view of a map", "player view markers"],
     fullsize: ["Full size", "big map"], room3d: ["Rooms in 3D", "3d room view"], mapeditor: ["The map editor", "edit map rooms doors stairs"], mapmarks: ["People, dangers and secrets on the map", "npc marker person encounter danger secret place map editor"], furnish: ["Furnishing rooms", "furniture models furnish"], models: ["The model library", "models 3d library glb"],
     caves: ["Caves", "cave generator dungeon mine"], riddles: ["Riddles and puzzles", "riddle puzzle answer"], traps: ["Traps", "trap disarm"],
-    worldmap: ["The world map", "world map realm travel"], galaxy: ["The star chart", "galaxy stars sectors space map"], systems: ["Star systems and worlds", "system planet world star moon gravity atmosphere habitable"], starship: ["The ship, courses and fuel", "ship fuel jump warp course travel refuel"], charts: ["The players' star charts", "charts charted explored scanned rumoured"], maplook: ["How the world map is drawn", "style parchment atlas survey engraved"], worldedit: ["Editing the world map", "places routes journey"],
+    worldmap: ["The world map", "world map realm travel"], galaxy: ["The star chart", "galaxy stars sectors space map"], systems: ["Star systems and worlds", "system planet world star moon gravity atmosphere habitable"], starship: ["The ship, courses and fuel", "ship fuel jump warp course travel refuel"], charts: ["The players' star charts", "charts charted explored scanned rumoured"], maplook: ["How the world map is drawn", "style parchment atlas survey engraved"], worldedit: ["Editing the world map", "places routes journey duplicate"], worldbuild: ["Shaping the world", "land brush sea lake mountains forest desert swamp river realm kingdom territory province faction name label undo redo"],
     "players-screen": ["The players' screen", "television second screen players window"], fog: ["Fog of war", "fog brush reveal"], fog3d: ["Fog of war in 3D", "3d fog"], "players-copy": ["The players' copy", "players copy secrets"], phones: ["Players' phones", "phone qr wifi"],
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
@@ -177,7 +191,7 @@
     dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
     view: { gaz: "gazetteer", table: "views", world: "worldmap", galaxy: "galaxy", story: "bible", music: "music" },
     tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues", marks: "mapmarks" },
-    world: { edit: "worldedit", addloc: "worldedit", addroute: "worldedit", export: "worldedit", copy: "worldedit", editloc: "worldedit", editroute: "worldedit", delloc: "worldedit", delroute: "worldedit", resetloc: "worldedit", resetroute: "worldedit", plan: "worldedit", setoff: "worldedit", arrive: "worldedit", cancel: "worldedit", partyhere: "worldedit", enter: "worldmap", make: "worldmap", drawn: "maplook", close: "worldmap", dlgclose: "worldmap" }
+    world: { brush: "worldbuild", base: "worldbuild", river: "worldbuild", realm: "worldbuild", label: "worldbuild", finish: "worldbuild", undo: "worldbuild", redo: "worldbuild", editfeat: "worldbuild", dupfeat: "worldbuild", delfeat: "worldbuild", resetfeat: "worldbuild", duploc: "worldedit", edit: "worldedit", addloc: "worldedit", addroute: "worldedit", export: "worldedit", copy: "worldedit", editloc: "worldedit", editroute: "worldedit", delloc: "worldedit", delroute: "worldedit", resetloc: "worldedit", resetroute: "worldedit", plan: "worldedit", setoff: "worldedit", arrive: "worldedit", cancel: "worldedit", partyhere: "worldedit", enter: "worldmap", make: "worldmap", drawn: "maplook", close: "worldmap", dlgclose: "worldmap" }
   };
   // where in the page each feature lives, for the little ? beside it (contextual help): [selector, feature]
   const ANCHORS = [[".lmap-sec .lm-bar", "mapviews"], ["#meDlg .me-tools", "mapeditor"], [".wm-bar", "worldmap"], ["#tablev .tv-acts", "players-screen"], [".cp-host", "copilot"], [".cc-top", "consistency"], ["#tvBody .tw-now", "worldtime"]];

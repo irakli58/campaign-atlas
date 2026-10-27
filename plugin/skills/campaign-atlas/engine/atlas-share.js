@@ -64,16 +64,19 @@
   // the world map's places and roads the players know of, where they stand, and where the party is
   function worldShare(S, prefs) {
     if (!A.worldData || !A.worldPrepare) return null;
-    const OV = { loc: {}, route: {}, party: null };
     let docs = Object.entries(S.get("world") || {});
     if (!docs.length && prefs) { try { docs = Object.entries(JSON.parse(prefs.get("world-edits") || "{}") || {}); } catch (e) { docs = []; } }
-    for (const [k, d] of docs) { if (k.startsWith("l-")) OV.loc[k.slice(2)] = d; else if (k.startsWith("r-")) OV.route[k.slice(2)] = d; else if (k === "party") OV.party = d; else if (k === "style") OV.style = d; }
-    const WD = A.worldPrepare(A.worldData, A.worldTerrainData, OV), seen = id => WD.byId[id] && WD.byId[id].state !== "unknown";
+    const OV = A.worldOV(docs), WD = A.worldPrepare(A.worldData, A.worldTerrainData, OV, { noLand: true }), seen = id => WD.byId[id] && WD.byId[id].state !== "unknown";
     const keep = (o, ks) => { const x = {}; for (const k of ks) if (o[k] != null && o[k] !== "") x[k] = Array.isArray(o[k]) ? o[k].slice() : o[k]; return x; };
     const locations = WD.locs.filter(l => l.state !== "unknown").map(l => keep(l, ["id", "name", "kind", "at", "state", "region"]));
     const routes = WD.routes.filter(r => !r.hidden && seen(r.from) && seen(r.to)).map(r => keep(r, ["id", "from", "to", "kind", "name", "path"]));
     const party = WD.party && seen(WD.party.at) ? { at: WD.party.at, plan: [], trail: (WD.party.trail || []).filter(seen) } : null;
-    return { title: WD.W.title || "", look: WD.look || WD.W.look || "", palette: WD.W.palette || "", size: WD.size, scale: WD.W.scale || null, speeds: WD.W.speeds || null, labels: (WD.W.labels || []).slice(), locations, routes, party };
+    // the land as the game master reshaped it, its rivers and names, and the realms that are not secret (who holds one
+    // and what only the referee knows of it stay behind); final: the land's own rivers and names are already in these
+    const facCol = id => id && A.lives && A.lives.fac(id) ? A.lives.fac(id).color : null;
+    const realms = WD.realms.filter(g => !g.hidden).map(g => keep(Object.assign({}, g, { colour: g.colour || facCol(g.owner) }), ["id", "name", "kind", "pts", "colour", "at", "desc"]));
+    return { title: WD.W.title || "", look: WD.look || WD.W.look || "", palette: WD.W.palette || "", size: WD.size, scale: WD.W.scale || null, speeds: WD.W.speeds || null, final: true,
+      labels: WD.labels.map(l => keep(l, ["id", "name", "kind", "at", "angle", "size"])), rivers: WD.rivers.map(r => keep(r, ["id", "name", "pts", "w"])), realms, shape: WD.shape, locations, routes, party };
   }
   // their board, as their own window draws it: what they have found, and the strings the game master pinned up (laid out
   // again only when what is on it changes)

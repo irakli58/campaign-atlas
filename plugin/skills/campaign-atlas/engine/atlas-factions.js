@@ -155,8 +155,10 @@
   function card(f) {
     const others = ids().filter(o => o !== f.id), plan = [].concat(f.plan || []);
     const row = (k, v) => v ? `<div class="tw-f"><span class="kn">${k}</span> ${v}</div>` : "";
+    // the realms and places the world map says it holds (atlas-world.js: "Held by" on a realm or a place)
+    let lands = []; try { lands = A.worldHeld ? A.worldHeld(Object.entries((S() && S().get("world")) || {}), f.id) : []; } catch (e) { lands = []; }
     return `<article class="t-card fa-card" style="--fa:${esc(f.color)}"><div class="fa-h"><i class="fa-dot"></i><h3>${esc(f.n || f.id)}</h3>${f.kind ? `<span class="kn">${esc(f.kind)}</span>` : ""}</div>
-      ${row("Led by", esc(personName(f.leader)))}${[].concat(f.members || []).length ? row("Members", esc([].concat(f.members).map(personName).join(", "))) : ""}${row("Seat", f.hq ? go(f.hq) : "")}${f.territory.length ? row("Holds", f.territory.map(go).join(", ")) : ""}
+      ${row("Led by", esc(personName(f.leader)))}${[].concat(f.members || []).length ? row("Members", esc([].concat(f.members).map(personName).join(", "))) : ""}${row("Seat", f.hq ? go(f.hq) : "")}${f.territory.length ? row("Holds", f.territory.map(go).join(", ")) : ""}${lands.length ? row("On the world map", esc(lands.join(", "))) : ""}
       ${bars(f)}${f.lacks ? row("Lacks", esc(f.lacks)) : ""}${row("Wants", esc(f.wants || ""))}
       ${plan.length ? `<div class="fa-plan"><span class="kn">Their plan</span><ol>${plan.map((p, i) => `<li class="${i < f.step ? "done" : i === f.step ? "now" : ""}">${esc(p)}</li>`).join("")}</ol><div class="t-row"><button type="button" class="t-mini" data-fa="step" data-id="${esc(f.id)}" data-d="-1">Back a step</button><button type="button" class="t-mini" data-fa="step" data-id="${esc(f.id)}" data-d="1">Next step</button>${f.clock ? `<span class="kn">and its clock: ${esc(((A.clocksData || []).find(c => c.id === f.clock) || {}).name || f.clock)}</span>` : ""}</div></div>` : ""}
       ${row("Doing now", esc(f.doing || ""))}
@@ -219,7 +221,7 @@
 
   TU.addTab({ key: "factions", label: "Factions and people", icon: "board", group: "play", after: "time", desc: "Who holds power, what they have and want, how they stand; where everyone is now",
     html, status: () => { const n = ids().length, p = lived().length; return n || p ? [n && `${n} faction${n > 1 ? "s" : ""}`, p && `${p} ${p > 1 ? "people" : "person"}`].filter(Boolean).join(" · ") : "None in this campaign"; },
-    init(store) { for (const c of ["factions", "npcstate", "clock"]) store.watch(c, () => paint()); } });
+    init(store) { for (const c of ["factions", "npcstate", "clock", "world"]) store.watch(c, () => paint()); } });
 
   // the copilot: where someone is now and what they belong to; the investigation: the factions as things to join to
   A.lives = { whereNow, factionsOf, about, fac, ids };

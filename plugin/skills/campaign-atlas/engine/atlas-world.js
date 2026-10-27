@@ -155,15 +155,72 @@
     for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
     return u;
   };
+  /* ---- the land as the game master reshaped it (27 Oct 2026, the master plan's world builder): strokes of a brush,
+          each { m: mode, r: radius, p: [[x, y], ...] }, laid over the land in order (world.js shape:, then the page's
+          own); a world with no land yet starts as all sea or all land (shape.base) */
+  const BRUSH = { land: "Raise land", sea: "Sea or lake", mountains: "Mountains", hills: "Hills", flat: "Lowland", forest: "Forest", desert: "Desert", swamp: "Swamp", grass: "Grassland" };
+  function stroke(G, s) {
+    const { cols, rows, cell, sea } = G, r = Math.max(4, Math.min(240, +s.r || 30)), pts = (s.p || []).filter(q => Array.isArray(q));
+    if (!pts.length || !BRUSH[s.m]) return;
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    const i0 = clamp(Math.floor((x0 - r) / cell), 0, cols - 1), i1 = clamp(Math.ceil((x1 + r) / cell), 0, cols - 1), j0 = clamp(Math.floor((y0 - r) / cell), 0, rows - 1), j1 = clamp(Math.ceil((y1 + r) / cell), 0, rows - 1);
+    const line = pts.length > 1 ? pts : [pts[0], pts[0]], Hh = G.H, M = G.M;
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const x = (i + .5) * cell, y = (j + .5) * cell, d = lineDist(x, y, line); if (d >= r) continue;
+      // full strength over the brush's inner half, softening to nothing at its edge
+      const t = Math.min(1, (1 - d / r) * 1.8), w = t * t * (3 - 2 * t), n = j * cols + i, h = Hh[n], land = h > sea, toward = (v, tg) => Math.round(v + (tg - v) * w);
+      switch (s.m) {
+        case "land": if (h < sea + 16) Hh[n] = toward(h, sea + 18); break;
+        case "sea": if (h > sea - 40) Hh[n] = toward(h, sea - 42); break;
+        case "mountains": { const tg = sea + 78 + Math.round(hash(i, j, 7) * 46) + Math.round(w * 20); if (h < tg) Hh[n] = toward(Math.max(h, sea + 12), tg); break; }
+        case "hills": { const tg = sea + 56 + Math.round(hash(i, j, 9) * 12); if (h < tg) Hh[n] = toward(Math.max(h, sea + 10), tg); break; }
+        case "flat": if (land) Hh[n] = toward(h, sea + 20); break;
+        case "forest": M[n] = toward(M[n], 232); break;
+        case "desert": M[n] = toward(M[n], 16); break;
+        case "swamp": M[n] = toward(M[n], 252); if (land && h > sea + 10) Hh[n] = toward(h, sea + 8); break;
+        case "grass": M[n] = toward(M[n], 128); break;
+      }
+    }
+  }
+  const shapeOf = (W, OV) => { const a = W && W.shape || {}, b = OV && OV.shape || {}; return { base: b.base || a.base || null, strokes: [...(a.strokes || []), ...(b.strokes || [])] }; };
+  const blankLand = (size, base) => { const cell = 4, cols = Math.ceil(size[0] / cell), rows = Math.ceil(size[1] / cell), N = cols * rows; return { cols, rows, cell, sea: 128, H: new Uint8Array(N).fill(base === "land" ? 146 : 86), M: new Uint8Array(N).fill(128) }; };
+  // rivers, names on the map and realms: each with an id, so the page can change or remove the ones the land came with
+  const withIds = (list, pre) => (Array.isArray(list) ? list : []).filter(f => f && typeof f === "object").map((f, i) => Object.assign({}, f, { id: f.id || pre + i }));
+  function features(W, T, OV) {
+    const hide = new Set([].concat(W.hide || []));
+    const L = { river: W.final ? withIds(W.rivers, "w") : [...withIds(T.rivers, "t"), ...withIds(W.rivers, "w")], label: W.final ? withIds(W.labels, "wl") : [...withIds(T.labels, "tl"), ...withIds(W.labels, "wl")], realm: withIds(W.realms, "wr") };
+    for (const k in L) L[k] = L[k].filter(f => !hide.has(f.id));
+    for (const [id, d] of Object.entries(OV.feat || {})) {
+      if (!d || typeof d !== "object") continue;
+      let hit = null; for (const k in L) { const i = L[k].findIndex(f => f.id === id); if (i >= 0) { hit = [k, i]; break; } }
+      if (hit) { if (d.gone) L[hit[0]].splice(hit[1], 1); else L[hit[0]][hit[1]] = Object.assign({}, L[hit[0]][hit[1]], d, { id, edited: true }); }
+      else if (!d.gone && L[d.type]) L[d.type].push(Object.assign({}, d, { id, added: true }));
+    }
+    return L;
+  }
+  const centroid = P => { let a = 0, x = 0, y = 0; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const c = P[j][0] * P[i][1] - P[i][0] * P[j][1]; a += c; x += (P[j][0] + P[i][0]) * c; y += (P[j][1] + P[i][1]) * c; } return Math.abs(a) > 1e-6 ? [x / (3 * a), y / (3 * a)] : [P.reduce((s, p) => s + p[0], 0) / P.length, P.reduce((s, p) => s + p[1], 0) / P.length]; };
+  // the referee's changes as the page keeps them (docs of the collection "world"): l- a location, r- a route, f- a river,
+  // name or realm, and the reshaped land, the party, the look
+  function ovFrom(docs) {
+    const OV = { loc: {}, route: {}, feat: {}, party: null, style: null, shape: null };
+    for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id.startsWith("f-")) OV.feat[id.slice(2)] = d; else if (id === "party") OV.party = d; else if (id === "style") OV.style = d; else if (id === "shape") OV.shape = d; }
+    return OV;
+  }
+  A.worldOV = ovFrom;
   // the world as the page draws it: the campaign's world.js, its terrain, and the referee's changes (OV) laid over them
-  function prepareWorld(W, T, OV) {
-    W = W || {}; T = T || {}; OV = OV || {};
+  // (opt.noLand: the places and realms only, without working out the land)
+  function prepareWorld(W, T, OV, opt) {
+    W = W || {}; T = T || {}; OV = OV || {}; opt = opt || {};
     let look = LOOK_OF[String(W.look || T.look || "parchment").toLowerCase()] || "parchment";
     // the game master's choice (OV.style), where the world can wear it: a star chart stays one, a world with land any other
     const want = OV.style && LOOK_OF[String(OV.style.look || "").toLowerCase()], starry = !!T.stars || look === "stars";
     if (want && (want === "stars") === starry) look = want;
     const size = Array.isArray(W.size) && W.size[0] > 0 ? W.size.slice(0, 2) : T.w ? [T.w, T.h] : [1000, 700];
-    const G = T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist) } : null;
+    const SH = shapeOf(W, OV);
+    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist) } : null;
+    if (!opt.noLand && !G && SH.base && !T.stars && !T.drawing) G = blankLand(size, SH.base);
+    if (G) { if (!G.M) G.M = new Uint8Array(G.cols * G.rows).fill(128); for (const s of SH.strokes) stroke(G, s); }
+    const F = features(W, T, OV);
     const spots = T.spots || {}, locs = [], byId = {};
     for (const l of W.locations || []) {
       if (!l || !l.id || byId[l.id]) continue;
@@ -192,9 +249,18 @@
     const party = Object.assign({ at: null, plan: [], trail: [] }, W.party || {}, OV.party || {});
     party.plan = (party.plan || []).filter(ok); party.trail = (party.trail || []).filter(ok); if (!ok(party.at)) party.at = null;
     // a real map knows its own scale (the terrain says it); world.js may still give another
-    return { look, title: W.title || "", size, scale: W.scale && W.scale.per > 0 ? W.scale : T.scale && T.scale.per > 0 ? T.scale : null, speeds: W.speeds || null, G, rivers: T.rivers || [], stars: T.stars || null,
-      labels: [...(T.labels || []), ...(W.labels || [])], locs: live, byId, routes: routes.filter(r => !r.gone && ok(r.from) && ok(r.to)), rById, party, W, T };
+    const realms = F.realm.filter(g => Array.isArray(g.pts) && g.pts.length > 2).map(g => Object.assign(g, { mid: Array.isArray(g.at) ? g.at : centroid(g.pts) }));
+    return { look, title: W.title || "", size, scale: W.scale && W.scale.per > 0 ? W.scale : T.scale && T.scale.per > 0 ? T.scale : null, speeds: W.speeds || null, G, rivers: F.river.filter(rv => Array.isArray(rv.pts) && rv.pts.length > 1), stars: T.stars || null,
+      labels: F.label.filter(l => l.name && Array.isArray(l.at)), realms, shape: SH, locs: live, byId, routes: routes.filter(r => !r.gone && ok(r.from) && ok(r.to)), rById, party, W, T };
   }
+  // the realm a point lies in (the smallest, where realms lie one in another)
+  const realmAt = (WD, at) => { let best = null, ba = Infinity; for (const g of WD.realms || []) if (pip(at[0], at[1], g.pts)) { let a = 0; for (let i = 0, j = g.pts.length - 1; i < g.pts.length; j = i++) a += g.pts[j][0] * g.pts[i][1] - g.pts[i][0] * g.pts[j][1]; a = Math.abs(a); if (a < ba) { ba = a; best = g; } } return best; };
+  // what a faction holds on the world map (the factions' tab shows it): realms and places whose owner it is
+  A.worldHeld = (docs, fid) => {
+    if (!A.worldData) return [];
+    const WD = prepareWorld(A.worldData, A.worldTerrainData, ovFrom(docs || []), { noLand: true });
+    return [...WD.realms.filter(g => g.owner === fid).map(g => g.name || "A realm"), ...WD.locs.filter(l => l.owner === fid).map(l => l.name)];
+  };
 
   /* ---- the land: heights and wetness on a grid of cells (world-terrain.js) */
   function sampler(G) {
@@ -479,16 +545,19 @@
           the page can make a city itself (the Atlas app). Returns { wake(), select(id), sync(), search(q), dispose() }. */
   A.worldMount = function (box, ctx) {
     const uid = "w" + Math.floor(Math.random() * 1e6).toString(36);
-    const OV = { loc: {}, route: {}, party: null };
+    const OV = ovFrom([]);
     let WD = prepareWorld(A.worldData, A.worldTerrainData, OV);
     // the game master's own drawing, shown as drawn, or redrawn from its traced coasts (the choice is kept)
     const DRAW = WD.T.drawing && A.worldDrawingSrc ? { src: A.worldDrawingSrc, trace: null, mode: ctx.store.get("world-drawn") || "" } : null;
     const drawn = () => DRAW && (DRAW.mode === "drawn" || !DRAW.trace || WD.look === "stars");
-    const traced = () => { if (DRAW && DRAW.trace) { WD.G = DRAW.trace.G; WD.rivers = DRAW.trace.rivers; WD.labels = [...DRAW.trace.labels, ...WD.labels]; } };
+    // (the traced land takes the game master's brush strokes too)
+    const traced = () => { if (DRAW && DRAW.trace) { const g = DRAW.trace.G; WD.G = Object.assign({}, g, { H: Uint8Array.from(g.H), M: Uint8Array.from(g.M) }); for (const s of WD.shape.strokes) stroke(WD.G, s); WD.rivers = [...DRAW.trace.rivers, ...WD.rivers]; WD.labels = [...DRAW.trace.labels, ...WD.labels]; } };
     let st = STYLE[WD.look] || STYLE.parchment; const gm = () => ctx.mode() === "gm";
     const [W, H] = WD.size;
     const filt = Object.assign({ kinds: {}, know: "all", only3d: false, routes: {} }, (() => { try { return JSON.parse(ctx.store.get("world-filter") || "{}"); } catch (e) { return {}; } })());
-    const S = { sel: null, selRoute: null, hover: null, edit: false, tool: null, first: null, q: "", hits: null, journey: null, drag: null, note: "" };
+    // tool: loc, route (the places and their ways), brush (the land), river, realm, label; selFeat: a river, name or realm
+    const S = { sel: null, selRoute: null, selFeat: null, hover: null, edit: false, tool: null, first: null, q: "", hits: null, journey: null, drag: null, note: "", brush: "land", size: 30, draft: null, cur: null, fdrag: null };
+    const HIST = [], REDO = [];   // what the referee changed, to undo and do again (this visit to the page)
     const ways = new Map();      // route id -> its way, worked out once for where its ends stand
     let PG = null;               // the grid routes are found on
     box.innerHTML = `<div class="wm wm-${WD.look}">
@@ -502,7 +571,7 @@
         <button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-routes"></g><g class="wm-jour"></g></g><g class="wm-over"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -527,6 +596,7 @@
       // the look's own art (atlas-world-art.js), with the region names over it
       if (A.worldArt) {
         try { s += A.worldArt.draw(WD, WD.look, uid, { seen: L => seen(L), palette: WD.W.palette || WD.T.palette }); } catch (e) { console.warn("world map: the art could not be drawn", e); }
+        s += realmsSVG();
         for (const L of WD.labels) if (L && L.name && Array.isArray(L.at)) {
           const water = /sea|ocean|lake|bay|gulf|strait|sound|river/.test(L.kind || ""), fs = (L.size || (L.kind === "river" ? 10 : water ? 20 : L.kind === "region" ? 24 : 15)) * 1.15;
           s += `<text class="wm-rl${water ? " w" : ""}" x="${r1(L.at[0])}" y="${r1(L.at[1])}" font-size="${fs}" text-anchor="middle"${L.angle ? ` transform="rotate(${r1(L.angle)} ${r1(L.at[0])} ${r1(L.at[1])})"` : ""}>${esc(L.name)}</text>`;
@@ -552,6 +622,7 @@
         s += `</g>`;
       }
       if (WD.look === "stars") s += starfield();
+      s += realmsSVG();
       for (const L of WD.labels) if (L && L.name && Array.isArray(L.at)) {
         const water = /sea|ocean|lake|bay|gulf|strait|sound|river/.test(L.kind || ""), fs = (L.size || (L.kind === "river" ? 10 : water ? 20 : L.kind === "region" ? 24 : 15)) * 1.15;
         s += `<text class="wm-rl${water ? " w" : ""}" x="${r1(L.at[0])}" y="${r1(L.at[1])}" font-size="${fs}" text-anchor="middle"${L.angle ? ` transform="rotate(${r1(L.angle)} ${r1(L.at[0])} ${r1(L.at[1])})"` : ""}>${esc(L.name)}</text>`;
@@ -578,6 +649,52 @@
       for (let i = 0; i < n; i++) { const x = hash(i, 1, seed) * W, y = hash(i, 2, seed) * H, r = hash(i, 3, seed); if (r > .97) big += `<circle cx="${r1(x)}" cy="${r1(y)}" r="1.5"/>`; else s += `M${r1(x)} ${r1(y)}h.01`; }
       let grid = ""; for (let x = 100; x < W; x += 100) grid += `M${x} 0V${H}`; for (let y = 100; y < H; y += 100) grid += `M0 ${y}H${W}`;
       return `<path d="${s}" stroke="#dfe9ff" stroke-width="1.1" stroke-linecap="round" stroke-opacity=".75"/><g fill="#fff6dc">${big}</g><path d="${grid}" stroke="#5ad1e6" stroke-opacity=".09" stroke-width="1"/>`;
+    }
+    // the realms: kingdoms, provinces, territories, a tint inside a border, the name across them (a hidden one only for
+    // the referee); the name is what is clicked
+    const REALM_COLS = ["#8a2432", "#2f6b3a", "#2b5d8a", "#9a6a12", "#6b3a8a", "#2f7a7a", "#8a4b24", "#555f6b"];
+    const realmCol = g => g.colour || (g.owner && A.lives && A.lives.fac(g.owner) ? A.lives.fac(g.owner).color : REALM_COLS[Math.floor(strHash(g.id) * REALM_COLS.length)]);
+    function realmsSVG() {
+      let s = "";
+      const dark = WD.look === "stars" || WD.look === "holo";
+      for (const g of WD.realms) {
+        if (g.hidden && !gm()) continue;
+        const col = realmCol(g), d = pathD(chaikin(g.pts, 1, true), true);
+        let x0 = 1e9, x1 = -1e9; for (const p of g.pts) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); }
+        const fs = clamp((x1 - x0) / Math.max(6, (g.name || "").length + 2) * 1.5, 12, 34);
+        s += `<g class="wm-realm${g.hidden ? " hid" : ""}"><path d="${d}" fill="${col}" fill-opacity="${dark ? .1 : .14}" stroke="none"/><path d="${d}" fill="none" stroke="${col}" stroke-opacity="${dark ? .9 : .7}" stroke-width="2.6" stroke-dasharray="10 4 2 4" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`
+          + (g.name ? `<text class="wm-rl wm-rk" data-feat="${esc(g.id)}" x="${r1(g.mid[0])}" y="${r1(g.mid[1])}" font-size="${r1(fs)}" text-anchor="middle" style="fill:${col}">${esc(g.name)}${g.hidden ? " ·" : ""}</text>` : "") + `</g>`;
+      }
+      return s;
+    }
+    // what the editor draws over the map: the rivers, names and realm borders to pick up, a river or realm being drawn,
+    // the brush; the handles of the chosen one stand over the camera at one size (drawHandles)
+    const featOf = id => { for (const k of ["river", "label", "realm"]) { const f = (k === "river" ? WD.rivers : k === "label" ? WD.labels : WD.realms).find(x => x.id === id); if (f) return [k, f]; } return [null, null]; };
+    function drawFx() {
+      const fx = $(".wm-fx"); let s = "";
+      if (S.edit && gm()) {
+        const moving = S.fdrag && S.fdrag.f;
+        for (const rv of WD.rivers) if (rv.id) { const p = moving && S.fdrag.id === rv.id ? moving.pts : rv.pts; s += `<path class="wf-hit${S.selFeat === rv.id ? " sel" : ""}" data-feat="${esc(rv.id)}" d="${pathD(p)}"/>`; }
+        for (const g of WD.realms) { const p = moving && S.fdrag.id === g.id ? moving.pts : g.pts; s += `<path class="wf-hit wf-realm${S.selFeat === g.id ? " sel" : ""}" data-feat="${esc(g.id)}" d="${pathD(p, true)}"/>`; }
+        for (const L of WD.labels) if (L.id) {
+          const at = moving && S.fdrag.id === L.id ? moving.at : L.at, fs = (L.size || 18) * 1.15, w = L.name.length * fs * .9 + fs;
+          s += `<rect class="wf-hit wf-lab${S.selFeat === L.id ? " sel" : ""}" data-feat="${esc(L.id)}" x="${r1(at[0] - w / 2)}" y="${r1(at[1] - fs)}" width="${r1(w)}" height="${r1(fs * 1.3)}"${L.angle ? ` transform="rotate(${r1(L.angle)} ${r1(at[0])} ${r1(at[1])})"` : ""}/>`;
+        }
+        if (S.draft && S.draft.pts.length) { const p = S.cur ? [...S.draft.pts, S.cur] : S.draft.pts; s += `<path class="wf-draft${S.draft.type === "realm" ? " realm" : ""}" d="${pathD(p, S.draft.type === "realm" && p.length > 2)}"/>`; }
+        if (S.tool === "brush" && S.cur) s += `<circle class="wf-brush" cx="${r1(S.cur[0])}" cy="${r1(S.cur[1])}" r="${S.size}"/>`;
+        if (S.stroke && S.stroke.p.length) s += `<path class="wf-stroke m-${S.stroke.m}" d="${pathD(S.stroke.p.length > 1 ? S.stroke.p : [S.stroke.p[0], [S.stroke.p[0][0] + .1, S.stroke.p[0][1]]])}" stroke-width="${S.size * 2}"/>`;
+      }
+      fx.innerHTML = s;
+      drawHandles();
+    }
+    function drawHandles() {
+      const hd = $(".wm-hdl"); let s = "";
+      if (S.edit && gm() && S.selFeat && !S.tool) {
+        const [k, f] = featOf(S.selFeat), m = S.fdrag && S.fdrag.f && S.fdrag.id === S.selFeat ? S.fdrag.f : f;
+        if (m && (k === "river" || k === "realm")) m.pts.forEach((p, i) => { s += `<circle class="wf-vx" data-vx="${i}" r="6" cx="${r1(p[0] * V.k + V.tx)}" cy="${r1(p[1] * V.k + V.ty)}"/>`; });
+      }
+      if (S.draft) S.draft.pts.forEach((p, i) => { s += `<circle class="wf-vx dr${i === 0 && S.draft.type === "realm" && S.draft.pts.length > 2 ? " close" : ""}" data-dv="${i}" r="${i === 0 ? 7 : 4.5}" cx="${r1(p[0] * V.k + V.tx)}" cy="${r1(p[1] * V.k + V.ty)}"/>`; });
+      hd.innerHTML = s;
     }
 
     /* ---- what the viewer may see */
@@ -678,6 +795,7 @@
         g.setAttribute("transform", `translate(${r1(m[0] * k + V.tx)} ${r1(m[1] * k + V.ty)})`);
       }
       cam.setAttribute("transform", `matrix(${k} 0 0 ${k} ${r1(V.tx)} ${r1(V.ty)})`);
+      if (S.draft || (S.edit && S.selFeat) || $(".wm-hdl").firstChild) drawHandles();
       for (const t of cam.querySelectorAll(".wm-rl")) t.style.opacity = z > 5 ? 0 : z > 3 ? (5 - z) / 2 : 1;
       const sc = $(".wm-scale");
       if (WD.scale) {
@@ -723,7 +841,7 @@
       const people = keeper && ctx.peopleAt ? ctx.peopleAt(L, places) : [], leads = keeper && ctx.leadsInto ? ctx.leadsInto(L, places) : [];
       const routes = WD.routes.filter(r => (r.from === L.id || r.to === L.id) && routeSeen(r) && seen(WD.byId[r.from === L.id ? r.to : r.from]));
       const P = WD.party, here = P.at === L.id, acts = [...new Set(places.flatMap(p => p.acts || []))].sort((a, b) => a - b);
-      const stName = (STATES.find(s => s[0] === L.state) || [0, L.state])[1];
+      const stName = (STATES.find(s => s[0] === L.state) || [0, L.state])[1], realm = realmAt(WD, L.at);
       let enter = "";
       if (has3d) enter = `<button type="button" class="prim wm-enter" data-w="enter">Enter ${esc(L.name)} · 3D map</button>`;
       else if (keeper && (settled || L.city)) {
@@ -733,8 +851,9 @@
       } else if (L.city && !has3d) enter = `<p class="kn">This place has no map to enter.</p>`;
       const ev = keeper ? (L.events || []).filter(e => e && (e.t || e.d)) : [];
       return `<button type="button" class="wm-x" data-w="close" aria-label="Close">×</button>
-        <div class="eyebrow"><span>${esc((KINDS[L.kind] || [0, L.kind])[1])}</span>${L.region ? `<span>${esc(L.region)}</span>` : ""}${here ? `<span class="wm-here">The party is here</span>` : ""}</div>
+        <div class="eyebrow"><span>${esc((KINDS[L.kind] || [0, L.kind])[1])}</span>${L.region ? `<span>${esc(L.region)}</span>` : ""}${realm && (keeper || !realm.hidden) && realm.name !== L.region ? `<button type="button" class="wm-rlink" data-wfeat="${esc(realm.id)}">${esc(realm.name || "A realm")}</button>` : ""}${here ? `<span class="wm-here">The party is here</span>` : ""}</div>
         <h3>${esc(L.name)}</h3>
+        ${L.owner && keeper ? `<p class="kn">Held by ${esc(facName(L.owner))}</p>` : ""}
         ${keeper ? `<div class="wm-stseg" role="group" aria-label="What the party knows">${STATES.map(([v, l]) => `<button type="button" data-wstate="${v}" aria-pressed="${L.state === v}" title="${esc(l)}"><span class="sd st-w-${v}"></span>${esc(l.split(" ")[0])}</button>`).join("")}</div>` : L.state !== "known" ? `<p class="kn">${esc(stName)}</p>` : ""}
         ${acts.length ? `<div class="meta">${acts.map(a => `<span class="tag">Act ${a}</span>`).join("")}</div>` : ""}
         ${L.desc ? `<p class="wm-desc">${esc(L.desc)}</p>` : ""}
@@ -747,7 +866,7 @@
         ${ev.length ? `<h4 class="keeper">Scenes here</h4><ul class="hks keeper">${ev.map(e => `<li><details class="hk"><summary>${esc(e.t || "A scene")}</summary><p>${esc(e.d || "")}</p></details></li>`).join("")}</ul>` : ""}
         <h4>Routes from here</h4>${routes.length ? `<ul class="wm-rl2">${routes.map(r => routeRow(r, L.id)).join("")}</ul>` : `<p class="kn">No routes${keeper ? " yet (Edit map, then + Route)" : ""}.</p>`}
         ${keeper ? journeyBox(L) : ""}
-        ${keeper && S.edit ? `<div class="wm-eb"><button type="button" data-w="editloc">Edit details</button><button type="button" data-w="delloc">Delete</button>${L.edited && !L.added ? `<button type="button" data-w="resetloc">Undo my changes</button>` : ""}</div>` : ""}`;
+        ${keeper && S.edit ? `<div class="wm-eb"><button type="button" data-w="editloc">Edit details</button><button type="button" data-w="duploc">Duplicate</button><button type="button" data-w="delloc">Delete</button>${L.edited && !L.added ? `<button type="button" data-w="resetloc">Undo my changes</button>` : ""}</div>` : ""}`;
     }
     function journeyBox(L) {
       const P = WD.party;
@@ -786,10 +905,28 @@
         <div class="wm-eb"><button type="button" data-wloc="${esc(a.id)}">${esc(a.name)}</button><button type="button" data-wloc="${esc(b.id)}">${esc(b.name)}</button></div>
         ${keeper && S.edit ? `<div class="wm-eb"><button type="button" data-w="editroute">Edit route</button><button type="button" data-w="delroute">Delete</button>${r.edited && !r.added ? `<button type="button" data-w="resetroute">Undo my changes</button>` : ""}</div>` : ""}`;
     }
+    const REALM_KINDS = [["kingdom", "Kingdom"], ["empire", "Empire"], ["duchy", "Duchy or province"], ["republic", "Republic or city state"], ["territory", "Territory"], ["claim", "Contested claim"], ["wilds", "The wilds"], ["district", "District or zone"], ["sector", "Sector"]];
+    const LABEL_KINDS = [["region", "A region"], ["range", "Mountains"], ["forest", "A forest"], ["desert", "A desert"], ["sea", "A sea or ocean"], ["lake", "A lake"], ["bay", "A bay"], ["river", "A river"]];
+    const facName = id => { const f = id && A.lives && A.lives.fac(id); return f ? f.n || id : id || ""; };
+    // a river, a name on the map, or a realm
+    function featPanel(k, f) {
+      const keeper = gm(), edit = keeper && S.edit;
+      const inside = k === "realm" ? WD.locs.filter(L => pip(L.at[0], L.at[1], f.pts) && seen(L)) : [];
+      const title = k === "realm" ? f.name || "A realm" : k === "river" ? f.name || "A river" : f.name;
+      return `<button type="button" class="wm-x" data-w="close" aria-label="Close">×</button>
+        <div class="eyebrow"><span>${esc(k === "realm" ? (REALM_KINDS.find(x => x[0] === f.kind) || [0, "Realm"])[1] : k === "river" ? "River" : "A name on the map")}</span>${f.hidden ? `<span>Hidden from the players</span>` : ""}</div>
+        <h3>${esc(title)}</h3>
+        ${k === "realm" && f.owner ? `<p><span class="kn">Held by</span> ${esc(facName(f.owner))}</p>` : ""}
+        ${f.desc ? `<p class="wm-desc">${esc(f.desc)}</p>` : ""}
+        ${keeper && f.gm ? `<div class="sec secret"><p>${esc(f.gm)}</p></div>` : ""}
+        ${inside.length ? `<h4>Places in it</h4><ul class="wm-rl2">${inside.slice(0, 40).map(L => `<li><button type="button" class="wm-rt" data-wloc="${esc(L.id)}"><span class="wm-rn">${esc(L.name)}</span><span class="wm-rf">${esc((KINDS[L.kind] || [0, L.kind])[1])}</span></button></li>`).join("")}</ul>` : ""}
+        ${edit ? `<div class="wm-eb"><button type="button" data-w="editfeat">Edit details</button>${k !== "label" ? `<button type="button" data-w="dupfeat">Duplicate</button>` : ""}<button type="button" data-w="delfeat">Delete</button>${f.edited && !f.added ? `<button type="button" data-w="resetfeat">Undo my changes</button>` : ""}</div><p class="kn">${k === "label" ? "Drag the name to move it." : "Drag it to move it; drag a corner to reshape it."}</p>` : ""}`;
+    }
     function renderPanel() {
-      const L = S.sel && WD.byId[S.sel], r = S.selRoute && WD.rById[S.selRoute];
+      const L = S.sel && WD.byId[S.sel], r = S.selRoute && WD.rById[S.selRoute], [fk, f] = S.selFeat ? featOf(S.selFeat) : [null, null];
       if (L && seen(L)) { panel.hidden = false; panel.innerHTML = locPanel(L); }
       else if (r && routeSeen(r)) { panel.hidden = false; panel.innerHTML = routePanel(r); }
+      else if (f && (gm() || !f.hidden)) { panel.hidden = false; panel.innerHTML = featPanel(fk, f); }
       else { panel.hidden = true; panel.innerHTML = ""; }
     }
 
@@ -802,41 +939,68 @@
         ${rk.length ? `<fieldset><legend>Routes</legend>${rk.map(k => `<label><input type="checkbox" data-fr="${esc(k)}"${filt.routes[k] === false ? "" : " checked"}> ${esc(ROUTES[k] || k)}</label>`).join("")}</fieldset>` : ""}
         <label class="wm-f3"><input type="checkbox" data-f3${filt.only3d ? " checked" : ""}> Only places with a 3D map</label>`;
       const eb = $(".wm-editbar");
-      eb.innerHTML = S.edit && gm() ? `<button type="button" class="wm-btn" data-w="addloc" aria-pressed="${S.tool === "loc"}">+ Place</button><button type="button" class="wm-btn" data-w="addroute" aria-pressed="${S.tool === "route"}">+ Route</button><button type="button" class="wm-btn" data-w="export">Copy as world.js</button>` : "";
+      root.dataset.tool = S.edit && gm() && S.tool || "";
+      const tb = (w, l, on, title) => `<button type="button" class="wm-btn" data-w="${w}" aria-pressed="${!!on}"${title ? ` title="${esc(title)}"` : ""}>${l}</button>`, landy = WD.look !== "stars" && !drawn();
+      eb.innerHTML = S.edit && gm() ? tb("addloc", "+ Place", S.tool === "loc") + tb("addroute", "+ Route", S.tool === "route")
+        + (landy ? tb("brush", "Shape the land", S.tool === "brush", "Paint land, sea, mountains, forests, deserts and swamps") + tb("river", "+ River", S.tool === "river") : "")
+        + tb("realm", WD.look === "stars" ? "+ Territory" : "+ Realm", S.tool === "realm", "Draw a kingdom, province or territory, and say who holds it") + tb("label", "+ Name", S.tool === "label", "Write a name on the map: a sea, a range, a forest")
+        + `<button type="button" class="wm-btn" data-w="undo"${HIST.length ? "" : " disabled"} title="Undo (Ctrl+Z)">Undo</button><button type="button" class="wm-btn" data-w="redo"${REDO.length ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo</button>`
+        + tb("export", "Copy as world.js")
+        + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${opt(Object.entries(BRUSH), S.brush)}</select></label><label><span class="kn">Brush</span> <select data-wb="r">${opt([[14, "Small"], [30, "Medium"], [60, "Large"], [110, "Huge"]], S.size)}</select></label>` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
       $('[data-w="edit"]').setAttribute("aria-pressed", S.edit);
       const dw = $('[data-w="drawn"]'); if (dw) { dw.setAttribute("aria-pressed", !!drawn()); dw.hidden = WD.look === "stars" || !DRAW.trace; }
       // how the map is drawn: the game master chooses among the looks this world can wear
       const lk = $(".wm-look"), opts = A.worldArt ? A.worldArt.looksFor(WD) : [];
       if (lk) { lk.hidden = !gm() || opts.length < 2 || drawn(); lk.innerHTML = opts.map(([v, l]) => `<option value="${v}"${v === WD.look ? " selected" : ""}>${esc(l)}</option>`).join(""); }
       const sw = (k) => { const [c, w, d] = st.routes[k] || st.routes.road; return `<svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" stroke="${c}" stroke-width="${w}" stroke-dasharray="${d}" stroke-linecap="round"/></svg>`; };
-      const how = S.tool === "loc" ? "Click the map where the new place stands." : S.tool === "route" ? (S.first ? `Now click where the route from ${esc(WD.byId[S.first] ? WD.byId[S.first].name : "")} goes.` : "Click the place the route starts from.") : S.edit ? "Drag a place to move it. Click a place or a route to change it." : `Drag to pan · scroll or pinch to zoom · click a place for what is there${Object.keys(A.cities || {}).length ? " and to enter its 3D map" : ""}.`;
+      const how = S.tool === "loc" ? "Click the map where the new place stands." : S.tool === "route" ? (S.first ? `Now click where the route from ${esc(WD.byId[S.first] ? WD.byId[S.first].name : "")} goes.` : "Click the place the route starts from.")
+        : S.tool === "brush" ? (WD.G ? `Drag over the map with the brush (${esc(BRUSH[S.brush])}). Scroll to zoom; press Shape the land again to stop.` : "Choose how the land begins.")
+        : S.tool === "river" ? (S.draft && S.draft.pts.length > 1 ? `Click to go on, from its source to its mouth. <button type="button" class="wm-btn" data-w="finish">Finish the river</button> (or Enter) · Esc stops` : "Click where the river rises, then along its way to the sea or a lake.")
+        : S.tool === "realm" ? (S.draft && S.draft.pts.length > 2 ? `Click round its border. <button type="button" class="wm-btn" data-w="finish">Close the border</button> (or click the first corner, or Enter) · Esc stops` : "Click round the border of the realm, corner by corner.")
+        : S.tool === "label" ? "Click where the name goes."
+        : S.edit ? "Drag a place, a river, a realm's border or a name to move it. Click one to change it." : `Drag to pan · scroll or pinch to zoom · click a place for what is there${Object.keys(A.cities || {}).length ? " and to enter its 3D map" : ""}.`;
       $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
     }
+    // what the land is drawn from: when it changes (a stroke of the brush, a river, a realm, a name), it is drawn again
+    const landKey = () => JSON.stringify([WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
+    let lastLand = landKey();
     function rebuild() {
       const keepSel = S.sel, keepR = S.selRoute, was = WD.look;
       WD = prepareWorld(A.worldData, A.worldTerrainData, OV); traced();
       // a new look: its colours, its icons, its land
-      if (WD.look !== was) { st = STYLE[WD.look] || STYLE.parchment; root.classList.remove("wm-" + was); root.classList.add("wm-" + WD.look); drawLand(); }
-      if (keepSel && !WD.byId[keepSel]) S.sel = null; if (keepR && !WD.rById[keepR]) S.selRoute = null;
-      drawRoutes(); drawMarkers(); renderPanel(); renderBars();
+      const lk = landKey();
+      if (WD.look !== was) { st = STYLE[WD.look] || STYLE.parchment; root.classList.remove("wm-" + was); root.classList.add("wm-" + WD.look); }
+      if (WD.look !== was || lk !== lastLand) { lastLand = lk; PG = null; ways.clear(); drawLand(); }
+      if (keepSel && !WD.byId[keepSel]) S.sel = null; if (keepR && !WD.rById[keepR]) S.selRoute = null; if (S.selFeat && !featOf(S.selFeat)[1]) S.selFeat = null;
+      drawRoutes(); drawMarkers(); drawFx(); renderPanel(); renderBars();
     }
     function note(t) { const n = $(".wm-note"); n.textContent = t; n.hidden = !t; clearTimeout(note.t); if (t) note.t = setTimeout(() => { n.hidden = true; }, 5000); }
 
     /* ---- what the referee changes, kept in the page's database (or this browser), laid over the campaign's world */
     let DB = null;
-    function fromDocs(docs) { OV.loc = {}; OV.route = {}; OV.party = null; OV.style = null; for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id === "party") OV.party = d; else if (id === "style") OV.style = d; } }
+    function fromDocs(docs) { Object.assign(OV, ovFrom(docs)); }
     const localAll = () => { try { return JSON.parse(ctx.store.get("world-edits") || "{}") || {}; } catch (e) { return {}; } };
-    function save(doc, data) {
+    const docNow = doc => { const v = doc === "party" ? OV.party : doc === "style" ? OV.style : doc === "shape" ? OV.shape : doc.startsWith("l-") ? OV.loc[doc.slice(2)] : doc.startsWith("r-") ? OV.route[doc.slice(2)] : doc.startsWith("f-") ? OV.feat[doc.slice(2)] : null; return v == null ? null : JSON.parse(JSON.stringify(v)); };
+    // undo and redo: every change but where the party is (that is play, not the map) can be taken back, and done again
+    function save(doc, data, how) {
+      if (doc !== "party" && how !== "hist") { HIST.push({ doc, before: docNow(doc), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; }
       // the change shows at once; the database follows
       const all = DB ? null : localAll();
-      if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; }
+      if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc === "shape") OV.shape = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; } else if (doc.startsWith("f-")) { if (data) OV.feat[doc.slice(2)] = data; else delete OV.feat[doc.slice(2)]; }
       rebuild();
       if (DB) { const ref = DB.collection("world").doc(doc); return Promise.resolve(data ? ref.set(data) : ref.delete()).catch(e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); }); }
       if (data) all[doc] = data; else delete all[doc];
       ctx.store.set("world-edits", JSON.stringify(all));
       return Promise.resolve();
     }
-    const ownOf = (kind, id) => Object.assign({}, (kind === "l" ? OV.loc : OV.route)[id] || {});
+    function undo(back) {
+      const from = back ? HIST : REDO, to = back ? REDO : HIST, h = from.pop(); if (!h) return;
+      to.push(h); save(h.doc, back ? h.before : h.after, "hist");
+      note(back ? "Undone." : "Done again.");
+    }
+    const ownOf = (kind, id) => Object.assign({}, (kind === "l" ? OV.loc : kind === "f" ? OV.feat : OV.route)[id] || {});
+    // the land's strokes the page added: a stroke more
+    function addStroke(s) { const sh = OV.shape || {}; save("shape", { base: sh.base || null, strokes: [...(sh.strokes || []), s] }); }
     (async function connect() {
       let db = null; try { db = ctx.db ? await ctx.db : null; } catch (e) { db = null; }
       if (gone) return;
@@ -846,7 +1010,7 @@
 
     /* ---- choosing */
     function select(id, flyTo) {
-      S.sel = id && WD.byId[id] ? id : null; S.selRoute = null; S.journey = null;
+      S.sel = id && WD.byId[id] ? id : null; S.selRoute = null; S.selFeat = null; S.journey = null; if (S.edit) drawFx();
       try { ctx.store.set("world-sel", S.sel || ""); } catch (e) {}
       drawMarkers(); drawRoutes(); renderPanel();
       if (S.sel && flyTo) { const L = WD.byId[S.sel]; fly(L.at, Math.max(V.k, V.k0 * 2.2)); }
@@ -861,7 +1025,7 @@
       else if (y > top - 36) dy = top / 2 - y;
       if (dx || dy) fly([(V.sw / 2 - V.tx - dx) / V.k, (V.sh / 2 - V.ty - dy) / V.k], V.k);
     }
-    function selectRoute(id) { S.selRoute = WD.rById[id] ? id : null; S.sel = null; S.journey = null; drawMarkers(); drawRoutes(); renderPanel(); if (S.selRoute) reveal(midOf(wayFor(WD.rById[id]))); }
+    function selectRoute(id) { S.selRoute = WD.rById[id] ? id : null; S.sel = null; S.selFeat = null; S.journey = null; if (S.edit) drawFx(); drawMarkers(); drawRoutes(); renderPanel(); if (S.selRoute) reveal(midOf(wayFor(WD.rById[id]))); }
     // the shortest way by the routes (by days where every route has them, else by distance on the map), around blocked ones
     function plan(to) {
       const from = WD.party.at, R = WD.routes.filter(r => !r.blocked && routeSeen(r));
@@ -897,8 +1061,10 @@
         <label><span>Region (optional)</span><input name="region" maxlength="60" value="${esc(L && L.region || "")}"></label>
         <label><span>What it is (the players may read this)</span><textarea name="desc" rows="3" maxlength="1200">${esc(L && L.desc || "")}</textarea></label>
         <label><span>For the referee only</span><textarea name="gm" rows="3" maxlength="2000">${esc(L && L.gm || "")}</textarea></label>
-        <label><span>Its 3D map</span><select name="city">${opt([["", "None"], ...cities], L && L.city || "")}</select></label>`, v => {
+        <label><span>Its 3D map</span><select name="city">${opt([["", "None"], ...cities], L && L.city || "")}</select></label>
+        ${facList().length ? `<label><span>Held by</span><select name="owner">${opt([["", "No one in particular"], ...facList()], L && L.owner || "")}</select></label>` : ""}`, v => {
         const body = { name: v.name.slice(0, 80), kind: v.kind, state: v.state, region: v.region, desc: v.desc, gm: v.gm, city: v.city || undefined };
+        if (v.owner != null) body.owner = v.owner || null;
         if (L) save("l-" + L.id, Object.assign(ownOf("l", L.id), body, L.added ? { at: L.at } : {}));
         else {
           let id = String(v.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "place"; while (WD.byId[id] || OV.loc[id]) id += "-" + Math.floor(Math.random() * 90 + 10);
@@ -923,14 +1089,63 @@
         else { const id = "x" + Date.now().toString(36); S.selRoute = id; S.sel = null; save("r-" + id, Object.assign({ from, to }, JSON.parse(JSON.stringify(body)))); }
       });
     }
+    // the factions a realm or a place may be held by (atlas-factions.js)
+    const facList = () => A.lives ? A.lives.ids().map(id => [id, facName(id)]) : [];
+    const newFid = pre => pre + Date.now().toString(36) + Math.floor(Math.random() * 90 + 10);
+    // a river: its name; a realm: its name, kind, who holds it, colour, secrecy; a name on the map: its words and look
+    function featForm(k, f, pts, at) {
+      const body0 = f || {};
+      const common = `<label><span>What the players may read (optional)</span><textarea name="desc" rows="2" maxlength="1200">${esc(body0.desc || "")}</textarea></label><label><span>For the referee only</span><textarea name="gm" rows="2" maxlength="1500">${esc(body0.gm || "")}</textarea></label>`;
+      const html = k === "river" ? `<h3>${f ? "Change the river" : "A new river"}</h3>
+          <label><span>Name (optional)</span><input name="name" maxlength="80" value="${esc(body0.name || "")}" placeholder="e.g. The Mere"></label>
+          <label><span>How wide</span><select name="w">${opt([[1.2, "A stream"], [1.8, "A river"], [2.8, "A great river"]], body0.w || 1.8)}</select></label>${common}`
+        : k === "realm" ? `<h3>${f ? "Change " + esc(f.name || "the realm") : WD.look === "stars" ? "A new territory" : "A new realm"}</h3>
+          <label><span>Name</span><input name="name" maxlength="80" required value="${esc(body0.name || "")}" placeholder="e.g. The Kingdom of Aldmere"></label>
+          <label><span>Kind</span><select name="kind">${opt(REALM_KINDS, body0.kind || (WD.look === "stars" ? "territory" : "kingdom"))}</select></label>
+          ${facList().length ? `<label><span>Held by</span><select name="owner">${opt([["", "No faction of the campaign"], ...facList()], body0.owner || "")}</select></label>` : ""}
+          <label><span>Colour</span><select name="colour">${opt([["", "Its own (or its faction's)"], ["#8a2432", "Crimson"], ["#2f6b3a", "Green"], ["#2b5d8a", "Blue"], ["#9a6a12", "Gold"], ["#6b3a8a", "Purple"], ["#2f7a7a", "Teal"], ["#8a4b24", "Rust"], ["#555f6b", "Slate"]], body0.colour || "")}</select></label>
+          <label class="wm-ck"><input type="checkbox" name="hidden"${body0.hidden ? " checked" : ""}> Hidden from the players (a secret claim, a hidden domain)</label>${common}`
+        : `<h3>${f ? "Change the name" : "A name on the map"}</h3>
+          <label><span>The words</span><input name="name" maxlength="60" required value="${esc(body0.name || "")}" placeholder="e.g. The Sundering Sea"></label>
+          <label><span>What it names</span><select name="kind">${opt(LABEL_KINDS, body0.kind || "region")}</select></label>
+          <label><span>Size</span><select name="size">${opt([[12, "Small"], [18, "Middling"], [26, "Large"], [36, "Very large"]], body0.size || 18)}</select></label>
+          <label><span>Slant (degrees, optional)</span><input name="angle" type="number" min="-90" max="90" step="5" value="${body0.angle || ""}"></label>`;
+      openDlg(html, v => {
+        const body = k === "river" ? { name: v.name || null, w: +v.w || 1.8, desc: v.desc || null, gm: v.gm || null }
+          : k === "realm" ? { name: v.name.slice(0, 80), kind: v.kind, owner: v.owner || null, colour: v.colour || null, hidden: !!v.hidden, desc: v.desc || null, gm: v.gm || null }
+          : { name: v.name.slice(0, 60), kind: v.kind, size: +v.size || 18, angle: v.angle === "" ? 0 : clamp(+v.angle || 0, -90, 90) };
+        if (f) { save("f-" + f.id, Object.assign(ownOf("f", f.id), body, f.added ? { type: k, pts: f.pts, at: f.at } : {})); return; }
+        const id = newFid(k === "river" ? "v" : k === "realm" ? "g" : "n"); S.selFeat = id; S.sel = null; S.selRoute = null;
+        save("f-" + id, JSON.parse(JSON.stringify(Object.assign({ type: k }, body, pts ? { pts } : {}, at ? { at } : {}))));
+      });
+    }
+    // a river or realm drawn corner by corner: done
+    function finishDraft() {
+      const D = S.draft; if (!D) return;
+      // (a double click gives the last corner twice)
+      D.pts = D.pts.filter((q, i) => !i || Math.hypot(q[0] - D.pts[i - 1][0], q[1] - D.pts[i - 1][1]) > 1.5);
+      const need = D.type === "realm" ? 3 : 2;
+      if (D.pts.length < need) { note(D.type === "realm" ? "A realm needs three corners at least." : "A river needs two points at least."); return; }
+      S.draft = null; S.cur = null; S.tool = null; renderBars(); drawFx();
+      featForm(D.type, null, D.pts.map(p => [r1(p[0]), r1(p[1])]));
+    }
     // the world as the referee has left it, written as world.js, to give back to the campaign
     function exportJS() {
       const W0 = A.worldData || {}, keep = (o, ks) => { const x = {}; for (const k of ks) if (o[k] != null && o[k] !== "") x[k] = o[k]; return x; };
-      const out = Object.assign(keep(W0, ["title", "look", "size", "scale", "speeds", "labels"]), {
-        locations: WD.locs.map(l => keep(Object.assign({}, l, { at: [r1(l.at[0]), r1(l.at[1])] }), ["id", "name", "kind", "at", "city", "state", "region", "desc", "gm", "people", "events", "tags"])),
+      const out = Object.assign(keep(W0, ["title", "look", "size", "scale", "speeds"]), {
+        locations: WD.locs.map(l => keep(Object.assign({}, l, { at: [r1(l.at[0]), r1(l.at[1])] }), ["id", "name", "kind", "at", "city", "state", "region", "owner", "desc", "gm", "people", "events", "tags"])),
         routes: WD.routes.map(r => keep(r, ["id", "from", "to", "kind", "name", "via", "days", "danger", "blocked", "hidden", "desc", "gm", "enc"])),
         party: WD.party
       });
+      // the land as reshaped, and the rivers and names: those the land came with (world-terrain.js) stay there, so the
+      // ones removed or changed on the page are named in hide: and the changed ones written here as the campaign's own
+      const fromLand = f => /^t/.test(f.id) && !f.added, hide = [...new Set([].concat(W0.hide || []))];
+      const T0 = A.worldTerrainData || {};
+      for (const [k, list] of [["t", T0.rivers], ["tl", T0.labels]]) (list || []).forEach((f, i) => { const id = (f && f.id) || k + i, now = (k === "t" ? WD.rivers : WD.labels).find(x => x.id === id); if ((!now || now.edited) && !hide.includes(id)) hide.push(id); });
+      const own = (list, ks) => list.filter(f => f.id && (!fromLand(f) || f.edited)).map(f => keep(Object.assign({}, f, fromLand(f) ? { id: "w-" + f.id } : {}), ks));
+      const rivers = own(WD.rivers, ["id", "name", "pts", "w", "desc", "gm"]), labels = own(WD.labels, ["id", "name", "kind", "at", "angle", "size"]), realms = WD.realms.map(g => keep(g, ["id", "name", "kind", "pts", "owner", "colour", "hidden", "at", "desc", "gm"]));
+      if (rivers.length) out.rivers = rivers; if (labels.length) out.labels = labels; if (realms.length) out.realms = realms; if (hide.length) out.hide = hide;
+      if (WD.shape.base || WD.shape.strokes.length) out.shape = { base: WD.shape.base || undefined, strokes: WD.shape.strokes };
       const js = `// world.js, as the referee left it on the page on ${new Date().toISOString().slice(0, 10)}. Put it in the campaign folder in place of\n// the old one, then: node atlas.js world <campaign> (keeps the land), check and build.\nATLAS.world(${JSON.stringify(out, null, 2)});\n`;
       dlg.innerHTML = `<div class="ke"><h3>Copy as world.js</h3><p class="kn">Everything on this map, with your changes, as the campaign's world.js.</p><textarea rows="14" readonly class="wm-js">${esc(js)}</textarea><div class="ka"><button type="button" data-w="dlgclose">Close</button><button type="button" class="prim" data-w="copy">Copy</button></div></div>`;
       if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
@@ -954,15 +1169,28 @@
       stage.focus({ preventScroll: true });
       const p = local(e); ptr.set(e.pointerId, p); moved = false; if (ptr.size === 1) downAt = e.target;
       const m = e.target.closest(".wl");
-      if (ptr.size === 1) gest = { p0: p, t0: [V.tx, V.ty], loc: S.edit && gm() && !S.tool && m ? m.dataset.loc : null };
-      else if (ptr.size === 2) { const [a, b] = [...ptr.values()]; gest = { pinch: Math.hypot(a[0] - b[0], a[1] - b[1]), k: V.k, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], t0: [V.tx, V.ty] }; }
+      if (ptr.size === 1) {
+        gest = { p0: p, t0: [V.tx, V.ty], loc: S.edit && gm() && !S.tool && m ? m.dataset.loc : null };
+        // the brush paints from the first touch; a river, a realm or a name is picked up to be moved, or by a corner
+        if (S.edit && gm() && S.tool === "brush" && WD.G) { S.stroke = { m: S.brush, r: S.size, p: [world(p[0], p[1]).map(Math.round)] }; gest.brush = true; drawFx(); }
+        else if (S.edit && gm() && !S.tool && !m) {
+          const vx = e.target.closest("[data-vx]"), fe = e.target.closest(".wm-fx [data-feat], .wm-rk");
+          const id = vx ? S.selFeat : fe ? fe.dataset.feat : null, [k, f] = id ? featOf(id) : [null, null];
+          if (f && f.id) gest.feat = { id, k, f, w0: world(p[0], p[1]), vx: vx ? +vx.dataset.vx : null };
+        }
+      } else if (ptr.size === 2) { const [a, b] = [...ptr.values()]; gest = { pinch: Math.hypot(a[0] - b[0], a[1] - b[1]), k: V.k, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], t0: [V.tx, V.ty] }; }
       try { stage.setPointerCapture(e.pointerId); } catch (_) {}
     }
     function onMove(e) {
       const p = local(e);
-      if (!ptr.has(e.pointerId)) { hover(e, p); return; }
+      if (!ptr.has(e.pointerId)) { if (S.edit && (S.tool === "brush" || S.draft)) { S.cur = world(p[0], p[1]); drawFx(); } hover(e, p); return; }
       ptr.set(e.pointerId, p);
       if (!gest) return;
+      if (gest.brush && S.stroke) {
+        const w = world(p[0], p[1]), last = S.stroke.p[S.stroke.p.length - 1]; S.cur = w; moved = true;
+        if (Math.hypot(w[0] - last[0], w[1] - last[1]) > S.size / 4) S.stroke.p.push([Math.round(w[0]), Math.round(w[1])]);
+        drawFx(); return;
+      }
       if (gest.pinch && ptr.size >= 2) {
         const [a, b] = [...ptr.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
         const k = clamp(gest.k * d / gest.pinch, V.k0 * .6, V.k0 * 16), wx = (gest.mid[0] - gest.t0[0]) / gest.k, wy = (gest.mid[1] - gest.t0[1]) / gest.k;
@@ -971,6 +1199,12 @@
       const dx = p[0] - gest.p0[0], dy = p[1] - gest.p0[1];
       if (!moved && Math.hypot(dx, dy) < 4) return;
       moved = true; tip.hidden = true;
+      if (gest.feat) {
+        const G0 = gest.feat, w = world(p[0], p[1]), dx = w[0] - G0.w0[0], dy = w[1] - G0.w0[1], f = G0.f, mv = q => [r1(clamp(q[0] + dx, 0, W)), r1(clamp(q[1] + dy, 0, H))], n = {};
+        if (G0.vx != null) n.pts = f.pts.map((q, i) => i === G0.vx ? mv(q) : q);
+        else { if (f.pts) n.pts = f.pts.map(mv); if (f.at) n.at = mv(f.at); }
+        S.fdrag = { id: G0.id, f: Object.assign({}, f, n), patch: n }; drawFx(); return;
+      }
       if (gest.loc) { const L = WD.byId[gest.loc], w = world(p[0], p[1]); L.at = [clamp(w[0], 0, W), clamp(w[1], 0, H)]; S.drag = gest.loc; ways.clear(); drawRoutes(); place(); return; }
       anim = null; V.tx = gest.t0[0] + dx; V.ty = gest.t0[1] + dy; bound(); request();
     }
@@ -980,6 +1214,8 @@
       if (ptr.size === 1 && gest && gest.pinch) { const [q] = [...ptr.values()]; gest = { p0: q, t0: [V.tx, V.ty] }; return; }
       if (ptr.size) return;
       const g = gest; gest = null;
+      if (g && g.brush) { const s = S.stroke; S.stroke = null; if (s && s.p.length) addStroke(s); else drawFx(); return; }
+      if (g && g.feat && moved && S.fdrag) { const d = S.fdrag; S.fdrag = null; S.selFeat = d.id; save("f-" + d.id, Object.assign(ownOf("f", d.id), d.patch)); return; }
       if (g && g.loc && moved) { const L = WD.byId[g.loc]; S.drag = null; save("l-" + L.id, Object.assign(ownOf("l", L.id), { at: [r1(L.at[0]), r1(L.at[1])] }, L.added ? { name: L.name, kind: L.kind, state: L.state } : {})); return; }
       if (moved) return;
       click(downAt, local(e));
@@ -988,6 +1224,14 @@
     function click(target, p) {
       const m = target && target.closest ? target.closest(".wl") : null, r = target && target.closest ? target.closest("[data-route]") : null;
       if (S.tool === "loc") { S.tool = null; renderBars(); locForm(null, world(p[0], p[1])); return; }
+      if (S.tool === "brush") return;
+      if (S.tool === "label") { S.tool = null; renderBars(); featForm("label", null, null, world(p[0], p[1]).map(r1)); return; }
+      if (S.tool === "river" || S.tool === "realm") {
+        if (!S.draft || S.draft.type !== S.tool) S.draft = { type: S.tool, pts: [] };
+        const dv = target && target.closest ? target.closest("[data-dv]") : null;
+        if (dv && +dv.dataset.dv === 0 && S.tool === "realm" && S.draft.pts.length > 2) { finishDraft(); return; }
+        S.draft.pts.push(world(p[0], p[1]).map(r1)); renderBars(); drawFx(); return;
+      }
       if (S.tool === "route") {
         if (!m) return;
         if (!S.first) { S.first = m.dataset.loc; renderBars(); select(S.first); return; }
@@ -996,8 +1240,11 @@
       }
       if (m) { select(m.dataset.loc); return; }
       if (r) { selectRoute(r.dataset.route); return; }
-      if (S.sel || S.selRoute) { S.sel = null; S.selRoute = null; S.journey = null; drawMarkers(); drawRoutes(); renderPanel(); }
+      const fe = target && target.closest ? target.closest("[data-feat]") : null;
+      if (fe) { selectFeat(fe.dataset.feat); return; }
+      if (S.sel || S.selRoute || S.selFeat) { S.sel = null; S.selRoute = null; S.selFeat = null; S.journey = null; drawMarkers(); drawRoutes(); drawFx(); renderPanel(); }
     }
+    function selectFeat(id) { S.selFeat = featOf(id)[1] ? id : null; S.sel = null; S.selRoute = null; S.journey = null; drawMarkers(); drawRoutes(); drawFx(); renderPanel(); }
     function hover(e, p) {
       const m = e.target.closest && e.target.closest(".wl"), r = !m && e.target.closest && e.target.closest("[data-route]");
       const id = m ? m.dataset.loc : null;
@@ -1017,30 +1264,45 @@
     function onWheel(e) { if (e.target.closest(".wm-panel, .wm-results, .wm-journey")) return; e.preventDefault(); const p = local(e); zoomAt(Math.exp(-(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) * .0016), p[0], p[1]); }
     function onKey(e) {
       if (e.target.closest && e.target.closest("input, textarea, select, .wm-panel")) return;
+      if ((e.ctrlKey || e.metaKey) && S.edit && gm() && /^[zy]$/i.test(e.key)) { e.preventDefault(); undo(!(e.key.toLowerCase() === "y" || e.shiftKey)); return; }
+      if (S.draft && e.key === "Enter") { e.preventDefault(); finishDraft(); return; }
+      if (S.draft && e.key === "Backspace") { e.preventDefault(); S.draft.pts.pop(); renderBars(); drawFx(); return; }
       const step = 60;
       if (e.key === "ArrowLeft") V.tx += step; else if (e.key === "ArrowRight") V.tx -= step; else if (e.key === "ArrowUp") V.ty += step; else if (e.key === "ArrowDown") V.ty -= step;
       else if (e.key === "+" || e.key === "=") { zoomAt(1.4, V.sw / 2, V.sh / 2); e.preventDefault(); return; }
       else if (e.key === "-") { zoomAt(1 / 1.4, V.sw / 2, V.sh / 2); e.preventDefault(); return; }
-      else if (e.key === "Escape") { if (S.tool) { S.tool = null; S.first = null; renderBars(); } else { S.sel = null; S.selRoute = null; drawMarkers(); drawRoutes(); renderPanel(); } return; }
+      else if (e.key === "Escape") { if (S.tool) { S.tool = null; S.first = null; S.draft = null; S.cur = null; renderBars(); drawFx(); } else { S.sel = null; S.selRoute = null; S.selFeat = null; drawMarkers(); drawRoutes(); drawFx(); renderPanel(); } return; }
       else if (e.key === "Enter" && e.target.closest && e.target.closest(".wl")) { select(e.target.closest(".wl").dataset.loc); return; }
       else return;
       e.preventDefault(); anim = null; bound(); request();
     }
     function onClick(e) {
       const t = e.target; if (!t.closest) return;
-      const z = t.closest("[data-z]");
+      // (the zoom buttons only: the map itself carries data-z, how close it is, for its art)
+      const z = t.closest(".wm-ctl [data-z]");
       if (z) { const d = z.dataset.z; if (d === "in") zoomAt(1.6, V.sw / 2, V.sh / 2); else if (d === "out") zoomAt(1 / 1.6, V.sw / 2, V.sh / 2); else if (d === "home") home(); else if (document.fullscreenElement) document.exitFullscreen(); else if (root.requestFullscreen) root.requestFullscreen().catch(() => {}); return; }
       const o = t.closest("[data-wopen]"); if (o) { ctx.open(o.dataset.wopen); return; }
       const wl = t.closest("[data-wloc]"); if (wl) { select(wl.dataset.wloc, true); return; }
+      const wf = t.closest("[data-wfeat]"); if (wf) { selectFeat(wf.dataset.wfeat); return; }
       const wr = t.closest("[data-wroute]"); if (wr) { selectRoute(wr.dataset.wroute); const m = midOf(wayFor(WD.rById[wr.dataset.wroute])); fly(m, V.k); return; }
       const ws = t.closest("[data-wstate]"); if (ws && S.sel) { const L = WD.byId[S.sel]; save("l-" + L.id, Object.assign(ownOf("l", L.id), { state: ws.dataset.wstate }, L.added ? { name: L.name, kind: L.kind, at: L.at } : {})); return; }
       const b = t.closest("[data-w]"); if (!b) return;
       const L = S.sel && WD.byId[S.sel], R = S.selRoute && WD.rById[S.selRoute], P = WD.party;
       switch (b.dataset.w) {
-        case "close": S.sel = null; S.selRoute = null; S.journey = null; drawMarkers(); drawRoutes(); renderPanel(); break;
+        case "close": S.sel = null; S.selRoute = null; S.selFeat = null; S.journey = null; drawMarkers(); drawRoutes(); drawFx(); renderPanel(); break;
+        case "brush": case "river": case "realm": case "label": { const w = b.dataset.w; S.tool = S.tool === w ? null : w; S.first = null; S.draft = null; S.cur = null; if (S.tool) { S.sel = null; S.selRoute = null; S.selFeat = null; renderPanel(); } renderBars(); drawFx(); break; }
+        case "base": save("shape", { base: b.dataset.base, strokes: (OV.shape && OV.shape.strokes) || [] }); break;
+        case "finish": finishDraft(); break;
+        case "undo": undo(true); break;
+        case "redo": undo(false); break;
+        case "editfeat": { const [k, f] = featOf(S.selFeat); if (f) featForm(k, f); break; }
+        case "dupfeat": { const [k, f] = featOf(S.selFeat); if (!f) break; const id = newFid(k === "river" ? "v" : "g"), sh = q => [r1(clamp(q[0] + 24, 0, W)), r1(clamp(q[1] + 24, 0, H))]; const c = JSON.parse(JSON.stringify(Object.assign({}, f, { type: k, pts: f.pts.map(sh) }, f.at ? { at: sh(f.at) } : {}))); delete c.id; delete c.added; delete c.edited; delete c.mid; S.selFeat = id; save("f-" + id, c); break; }
+        case "delfeat": { const [, f] = featOf(S.selFeat); if (f) twice(b, () => { S.selFeat = null; save("f-" + f.id, f.added ? null : { gone: true }); }); break; }
+        case "resetfeat": if (S.selFeat) save("f-" + S.selFeat, null); break;
+        case "duploc": if (L) { let id = L.id + "-2"; while (WD.byId[id] || OV.loc[id]) id = L.id + "-" + Math.floor(Math.random() * 900 + 100); const c = {}; for (const k of ["name", "kind", "state", "region", "owner", "desc", "gm"]) if (L[k] != null) c[k] = L[k]; c.name = L.name + " (copy)"; c.at = [r1(clamp(L.at[0] + 22, 0, W)), r1(clamp(L.at[1] + 16, 0, H))]; S.sel = id; save("l-" + id, c); } break;
         case "enter": if (L && L.city) ctx.enter(L.city, L.id); break;
         case "make": if (L && ctx.makeCity) { b.disabled = true; b.textContent = "Making the map…"; Promise.resolve(ctx.makeCity(L, WD)).catch(err => { b.disabled = false; b.textContent = "Make its 3D map now"; note("The map could not be made: " + ((err && err.message) || err)); }); } break;
-        case "edit": S.edit = !S.edit; S.tool = null; S.first = null; root.classList.toggle("editing", S.edit); renderBars(); renderPanel(); break;
+        case "edit": S.edit = !S.edit; S.tool = null; S.first = null; S.draft = null; S.cur = null; root.classList.toggle("editing", S.edit); renderBars(); renderPanel(); drawFx(); break;
         case "addloc": S.tool = S.tool === "loc" ? null : "loc"; S.first = null; renderBars(); break;
         case "addroute": S.tool = S.tool === "route" ? null : "route"; S.first = null; renderBars(); break;
         case "export": exportJS(); break;
@@ -1064,6 +1326,7 @@
       const t = e.target;
       // the map drawn another way: kept with the world (the players' screen and copy follow)
       if (t.matches(".wm-look")) { if (gm()) save("style", { look: t.value }); return; }
+      if (t.matches("[data-wb]")) { if (t.dataset.wb === "m") S.brush = t.value; else S.size = +t.value || 30; renderBars(); drawFx(); return; }
       if (t.matches("[data-fk]")) filt.kinds[t.dataset.fk] = t.checked;
       else if (t.matches("[data-fr]")) filt.routes[t.dataset.fr] = t.checked;
       else if (t.matches("[data-fknow]")) filt.know = t.value;
@@ -1078,7 +1341,7 @@
     stage.addEventListener("pointercancel", onUp);
     stage.addEventListener("pointerleave", () => { if (!ptr.size) { tip.hidden = true; if (S.hover) { S.hover = null; place(); } } });
     stage.addEventListener("wheel", onWheel, { passive: false });
-    stage.addEventListener("dblclick", e => { if (e.target.closest(".wm-panel, .wm-ctl")) return; const p = local(e); zoomAt(1.8, p[0], p[1]); });
+    stage.addEventListener("dblclick", e => { if (e.target.closest(".wm-panel, .wm-ctl")) return; if (S.draft) { finishDraft(); return; } if (S.tool === "brush") return; const p = local(e); zoomAt(1.8, p[0], p[1]); });
     stage.addEventListener("keydown", onKey);
     root.addEventListener("click", onClick);
     root.addEventListener("change", onChange);
@@ -1135,7 +1398,8 @@
       // already the chosen one; otherwise it is chosen and brought into view at the same zoom
       select(id) { wake(); if (!WD.byId[id] || S.sel === id) return; select(id); const L = WD.byId[id], x = L.at[0] * V.k + V.tx, y = L.at[1] * V.k + V.ty; if (x < 30 || y < 30 || x > V.sw - 30 || y > V.sh - 30) fly(L.at, V.k); else reveal(L.at); },
       // what the page changed (the referee/player switch, a place's status): draw again
-      sync() { if (!gm()) { S.edit = false; S.tool = null; root.classList.remove("editing"); } drawRoutes(); drawMarkers(); renderPanel(); renderBars(); },
+      // (and the world laid out again: the players' copy gets a new world from the game master's page)
+      sync() { if (!gm()) { S.edit = false; S.tool = null; S.draft = null; root.classList.remove("editing"); } rebuild(); },
       locationOf(cityId) { const L = WD.locs.find(l => l.city === cityId); return L ? L.id : null; },
       name(id) { return WD.byId[id] ? WD.byId[id].name : ""; },
       dispose() { gone = true; if (ro) ro.disconnect(); if (raf) cancelAnimationFrame(raf); box.innerHTML = ""; }

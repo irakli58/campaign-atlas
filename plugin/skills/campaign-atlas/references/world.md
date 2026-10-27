@@ -112,6 +112,36 @@ ATLAS.world({
   - never invented: no scale means no distances.
 - **The party:** `party.at` is where it is. The referee plans the journey on the page, which finds the shortest way by the routes and around blocked ones.
 
+## Editing the world on the page
+
+The user asked (26 Oct 2026, the world builder) to generate a world, make one from nothing, or generate it and change what they like, without rebuilding what they are happy with. **Edit map** on the page does it. What is changed is kept in the page's database (collection `world`) and laid over the campaign's own world; nothing in the campaign folder changes until **Copy as world.js** gives it back.
+
+- **Places and routes:** add, move (drag), change, duplicate and delete; a place may be **held by** one of the campaign's factions (`owner:`).
+- **Shape the land:** a brush that raises land from the sea, makes sea or a lake, raises mountains or hills, flattens to lowland, plants forest, dries to desert, wets to swamp, or makes grassland. Each stroke is kept, so the land can be put back stroke by stroke. A world with no land under it (no `world-terrain.js`, no drawing) starts as all sea or all land and is painted from there. Routes find their way over the new land.
+- **Rivers:** drawn point by point from the source to the mouth.
+- **Realms:** kingdoms, empires, provinces, territories, claims, districts or sectors, drawn round their border, with who holds them (a faction: its colour is theirs), and hidden from the players if secret. The factions' tab lists what each faction holds on the world map. A place shows the realm it stands in.
+- **Names:** a sea, a range, a forest, written where the referee puts them.
+- Rivers, realms and names are moved by dragging, reshaped by their corners, changed, duplicated and deleted. The land's own rivers and names (from `world-terrain.js`) can be changed or removed too.
+- **Undo and Redo** (Ctrl+Z, Ctrl+Y) take back every change of the visit and do it again.
+- **The players' copy** gets the reshaped land, the rivers and names, and the realms that are not hidden, never who holds them or what only the referee knows of them.
+
+What **Copy as world.js** writes, and what may be written by hand the same way:
+
+```js
+ATLAS.world({
+  // ...
+  shape: { base: "sea", strokes: [{ m: "land", r: 60, p: [[420, 300], [610, 330]] }, { m: "mountains", r: 30, p: [[500, 320]] }] },
+  realms: [{ id: "aldmere", name: "The Kingdom of Aldmere", kind: "kingdom", pts: [[400, 260], [640, 250], [660, 420], [410, 430]], owner: "crown", hidden: false, desc: "...", gm: "..." }],
+  rivers: [{ id: "mere", name: "The Mere", pts: [[520, 300], [560, 380], [610, 470]], w: 1.8 }],
+  labels: [{ id: "downs", name: "The Grey Downs", kind: "region", at: [300, 470], size: 18, angle: 0 }],
+  hide: ["t3", "tl1"]          // rivers (t0, t1...) and names (tl0, tl1...) of world-terrain.js taken away or written again here
+});
+```
+
+- **shape:** `base` is `"sea"` or `"land"` (only for a world with no land of its own); a stroke is `m` (land, sea, mountains, hills, flat, forest, desert, swamp, grass), `r` (its radius, in the map's units) and `p` (the points it passed through), laid over the land in order.
+- **realms** need a name and three corners or more; `owner` names one of the factions (`table.js`, `ATLAS.factions`); `at` places the name (else it stands in the middle).
+- `check` checks them all.
+
 ## Cities and places
 
 - A location with `city: "id"` has a 3D map: `city.js` is `"main"`, and other cities are `cities/<id>.js`, made with `atlas.js city <dir> ... --id <id>` (a real city or an invented one, any of the usual options).
