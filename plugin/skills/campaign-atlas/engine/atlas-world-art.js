@@ -168,6 +168,25 @@
      it (Tom Patterson's natural-colour relief is the model): dense forest deep green, open woodland and grassland paler,
      dry land tan, tundra grey-green, bare rock brown-grey, snow and ice white; the sea lighter over the shelf and deep
      blue beyond; rivers and lakes in blue. No drawn mountains or trees: the relief and the colour say it all. */
+  // sandy shores (the user, 27 Oct 2026: "sandy shores on some of the islands"): a strip of sand along the coast
+  // where it is low and gentle, in stretches, more in the warm and none where the sea freezes; steep, high coasts stay
+  // rocky. Drawn along the coastline itself, clipped to the land, so it is one clean beach, not specks
+  function beaches(WD, pr, clip) {
+    const G = WD.G, NA = nat(WD), nz = vnoise(Math.floor(hash(G.cols, G.rows, 89) * 1e9)), r = G.cell * 2.2, wd = Math.max(1.2, G.cell * .55);
+    // (the open sea only: water that reaches the sheet's edge; a lagoon's or a lake's shore is no beach)
+    const H0 = G.Hf || G.H, oc = new Uint8Array(G.cols * G.rows), st = [];
+    for (let n = 0; n < oc.length; n++) { const i = n % G.cols, j = (n / G.cols) | 0; if (H0[n] <= G.sea && (!i || !j || i === G.cols - 1 || j === G.rows - 1)) { oc[n] = 1; st.push(n); } }
+    while (st.length) { const n = st.pop(), i = n % G.cols, j = (n / G.cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < G.cols - 1 ? n + 1 : -1, j > 0 ? n - G.cols : -1, j < G.rows - 1 ? n + G.cols : -1]) if (m >= 0 && !oc[m] && H0[m] <= G.sea) { oc[m] = 1; st.push(m); } }
+    const atSea = (x, y) => { const i0 = Math.floor(x / G.cell), j0 = Math.floor(y / G.cell); for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const a = i0 + di, b = j0 + dj; if (a >= 0 && b >= 0 && a < G.cols && b < G.rows && oc[b * G.cols + a]) return true; } return false; };
+    const ok = (x, y) => { if (!atSea(x, y)) return 0; let hi = 0; for (const [dx, dy] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r], [r * .7, r * .7], [-r * .7, r * .7], [r * .7, -r * .7], [-r * .7, -r * .7]]) hi = Math.max(hi, pr.t(x + dx, y + dy)); const tm = NA ? NA.temp(x, y) : .5, warm = smooth(.18, .5, tm); return hi < .055 && warm > .05 && nz(x * .02 + 71, y * .02 - 13) > .66 - .24 * warm ? (tm > .55 ? 2 : 1) : 0; };
+    const by = { 1: "", 2: "" };
+    // (the coast eased a little more than the coastline is, so the beach runs smooth along it; small rings, a lagoon's
+    // or a rock's, have none)
+    for (const ring0 of ringsAt(G, G.sea, G.cell * .5)) { if (ring0.length < 24 || ring0.filter(p => atSea(p[0], p[1])).length < ring0.length * .5) continue; const ring = chaikin(ring0, 1, true); let cur = [], k = 0;
+      const flush = () => { if (cur.length > 2) by[k] += pathD(cur, false); cur = []; };
+      for (const p of ring.concat([ring[0]])) { const v = ok(p[0], p[1]); if (v && (!cur.length || v === k)) { k = v; cur.push(p); } else { flush(); if (v) { k = v; cur.push(p); } } } flush(); }
+    return (by[2] ? `<path d="${by[2]}" fill="none" stroke="#efe1b8" stroke-width="${wd * 2}" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#${clip})"/>` : "") + (by[1] ? `<path d="${by[1]}" fill="none" stroke="#e2d9bd" stroke-width="${wd * 2}" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#${clip})"/>` : "");
+  }
   function hydroSvg(WD, uid, img, pr, N) {
     const [W, H] = WD.size, G = WD.G, off = Math.min(Math.max(W, H) * .005, 12), ink = "#3b3328";  // (the slab no thicker than on a continent-sized map, however big the world)
     // (the slab is the land and its lakes together: the lakes lie on it, painted, not cut through it to the paper)
@@ -185,6 +204,7 @@
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#5a4d3c" stroke-opacity=".5" stroke-width=".5" stroke-linejoin="round"/>`;
     // (where the page lays a sharper picture of the land when the map is zoomed in, within the land's own outline)
     s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath><g class="wm-detail" clip-path="url(#${uid}-land)"></g>`;
+    s += beaches(WD, pr, uid + "-land");
     s += `<path d="${shore}" fill="none" stroke="#3f6f8c" stroke-opacity=".55" stroke-width=".45"/>`;
     s += streams(WD, "#4f7c95");
     s += N ? NT.rivers(WD, "relief", N, pr, "#3f6f8c", null, .9) : rivers(WD, "#3f6f8c", null, .9);
@@ -312,9 +332,9 @@
     const NA = nat(WD), simB = NA && WD.G.B ? WD.G.B : null, DES = BIO ? BIO.CODE.desert : -1, SWP = BIO ? BIO.CODE.swamp : -1;
     // (where the ecology says desert, the land's own share of it, and of swamp, eased across the cells)
     // (what the colours read from, made once for a world and kept: a zoomed-in window is drawn many times)
-    let desAt = null, swpAt = null, snwAt = null, canopyAt = null, bare = null, sandAt = null, badAt = null;
+    let desAt = null, swpAt = null, snwAt = null, canopyAt = null, bare = null, sandAt = null, badAt = null, shoreAt = null;
     const kept = RPREP.get(WD.G);
-    if (kept && kept.NA === NA) ({ desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt } = kept);
+    if (kept && kept.NA === NA) ({ desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt, shoreAt } = kept);
     else {
       const share = code => { if (!simB) return null; const G = WD.G, F = new Float32Array(G.cols * G.rows); for (let n = 0; n < F.length; n++) F[n] = simB[n] === code ? 1 : 0; const t = new Float32Array(F.length); for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s += F[j * G.cols + a]; c++; } } t[j * G.cols + i] = s / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s += t[b * G.cols + i]; c++; } } F[j * G.cols + i] = s / c; } } return (x, y) => NA.S(x, y, F); };
         desAt = share(DES); swpAt = share(SWP); snwAt = BIO ? share(BIO.CODE.snow) : null;
@@ -335,7 +355,12 @@
         bl(R); bl(Gc); bl(Bc); bl(SD); bl(BD);
         bare = (x, y) => [NA.S(x, y, R), NA.S(x, y, Gc), NA.S(x, y, Bc)]; sandAt = (x, y) => NA.S(x, y, SD); badAt = (x, y) => NA.S(x, y, BD);
       }
-      RPREP.set(WD.G, { NA, desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt });
+      // how far each cell lies from the water (in cells), for the beaches
+      { const G = WD.G, n0 = G.cols * G.rows, H0 = G.Hf || G.H, D = new Float32Array(n0).fill(99), q = [];
+        for (let n = 0; n < n0; n++) if (H0[n] <= G.sea) { D[n] = 0; q.push(n); }
+        for (let h = 0; h < q.length; h++) { const n = q[h], i = n % G.cols, j = (n / G.cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < G.cols - 1 ? n + 1 : -1, j > 0 ? n - G.cols : -1, j < G.rows - 1 ? n + G.cols : -1]) if (m >= 0 && D[m] > D[n] + 1) { D[m] = D[n] + 1; q.push(m); } }
+        shoreAt = NA ? (x, y) => NA.S(x, y, D) : null; }
+      RPREP.set(WD.G, { NA, desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt, shoreAt });
     }
     const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
       if (h <= sea && P) return I.lake ? [128, 170, 192] : P.paper;
@@ -400,6 +425,7 @@
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     const cd = coastD(G, .6);
     s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/><g class="wm-detail"></g>`;
+    s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath>` + beaches(WD, pr, uid + "-land");
     s += N ? NT.rivers(WD, "relief", N, pr, "#2c5fc6", null, 1.25) : rivers(WD, "#2c5fc6", null, 1.25);
     const c = seaCorner(WD, pr);
     s += `<g class="wm-deco"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" fill="none" stroke="#2b2a24" stroke-width="1.4"/>${northArrow(W * c[0], H * c[1], Math.min(W, H) * .045, "#2b2a24", true)}${WD.title ? `<text class="wm-ttl" x="${W / 2}" y="34" text-anchor="middle" fill="#2b2a24">${A.esc ? A.esc(WD.title) : WD.title}</text>` : ""}</g>`;

@@ -41,6 +41,9 @@ What was asked, what was done, and what is waiting, so the next session can carr
 - "A preset for how it should look: islandy, one big continent ... how many landmasses" → `--land masses` with
   `--landmasses N` and `--landshare`, landmasses of varied sizes kept apart by straits; in the page, presets (one
   big continent, Pangaea, two continents, several like the Earth, many islands, an archipelago) set two sliders.
+- "Sandy shores on some of the islands?" → beaches drawn as a strip along the open-sea coast where it is low and
+  gentle, in stretches, warm more than cool, none where the sea freezes (drawing only; `beaches` in atlas-world-art.js).
+- "What are these?" (a ring with a dark middle): a volcano as the hydro look draws it; offered to draw it as a peak.
 
 ## Known rough spots
 - A painted swamp shows only faintly in the hydro look.
