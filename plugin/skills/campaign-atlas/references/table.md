@@ -23,6 +23,7 @@ A campaign is played, not only read. Every page Atlas builds has an **At the tab
 17. Checking the campaign for consistency
 18. The world's time: the calendar, events, news
 19. Factions and people's lives
+20. The players' journal
 
 ## 1. What the page does by itself
 
@@ -65,7 +66,8 @@ Its menu along the bottom (fading on The table until the mouse moves):
 - **Our board**: their corkboard of what they have found.
 - **Places**: the places they know of, the first impressions, what they found there, and the maps with only the rooms they have seen.
 - **News**: what the referee has let them hear of the world (section 18), newest first, with a count of what is new; the world's date stands in a corner of The table.
-- **Our notes**: the notes the party keeps, which the referee can read and add to.
+- **Journal**: what the referee gives them to keep, by the journal's settings (section 20): their quests, the people they have met, hints and next steps, "Previously on", and in full mode a timeline.
+- **Our notes**: the notes the party keeps, which the referee can read and add to; each a note, a theory or a question. Atlas never says whether a theory is right.
 - **Stop**: the X-card.
 
 A face shows a person's name, the plain part of their role (what follows a semicolon or a dash is left off, being often the secret) and their look. The window follows the referee's page at once.
@@ -340,3 +342,16 @@ okafor: { …, home: "med-lab", work: "med-lab", factions: ["medical"],
 **What events change** (section 18): an event's `effects`, done when it happens and undone with it: `{ faction, rel: [other, stance] }` (both ways), `{ faction, party: stance }`, `{ faction, step: 1 }`, `{ faction, has: { arms: -1 } }`, `{ faction, gains: place }` and `{ faction, loses: place }`, `{ person, at: place, doing, hours }` (they go there, for so many hours or until moved back), `{ person, status: "missing" }` (missing, hiding, arrested, hurt, gone, dead, or "" for as usual), `{ person, joins: faction }`, `{ person, leaves: faction }`, `{ person, learns: "what", how: "rumour" }` (a knowledge record of the investigation, with the event as its source). The referee adds and changes them in the event form under Time.
 
 **At the table.** Each faction's card: its leader and members, seat and holdings, what it has (raised or lowered with a click), what it lacks and wants, its plan with the step it is on (on and back), what it is doing, how it stands toward each other faction and the party (changed with a choice; both ways), and folded, what only the referee knows and every change since, dated in the world's time. Beside them, the web of how they stand, and **the people, now**: where each is at this hour of the world's time, by their day and week or where they were moved, with how they are (missing, hurt, dead…) and **move them**. The copilot is told where someone is now, their factions, and what they fear, believe and suspect; the investigation can join a clue or a person to a faction. **Where it is kept**: collections `factions` (what has changed of each, with its log) and `npcstate` (where each was moved, how they are, the factions joined or left). The consistency check finds a faction holding or naming what is not there, two factions that see each other very differently (mark it intentional if it is a deception), a person's day naming a place that is not there or putting them in two places at once, and a person in a faction that does not exist; `check` asks the same of the files, and notes a living world with no factions.
+
+## 20. The players' journal
+
+The user asked (26 Oct 2026, the master plan, part 9) for a journal for the players under the game master's complete control: some tables want to solve a mystery with no help at all, so every kind of help can be switched off. It needs nothing written for it. A card on **The players' screen** tab (atlas-journal.js) sets it, and both the players' window and what their copy is sent obey it (atlas-table.js, atlas-share.js): what is switched off is not sent to the copy at all.
+
+- **Manual**: their own notes only. No clues recorded for them, no people, places or connections, no hints or summaries.
+- **Assisted** (the default, as the players' window always was): what they have actually found, as they found it: the clues found (their titles and what they were told), the places they know, the people whose faces were shown to them, and the connections the referee pinned up. Nothing is solved for them.
+- **Full**: all of that, and their quests, hints and next steps, "Previously on", and a timeline of what has happened (news, handouts, people met, recaps, hints, in order).
+- **Each part on its own**: the clues they found, the places they know, the people they met, the connections pinned up, their quests, hints, next steps, "Previously on", their own notes. A mix that is not one of the three modes is the referee's own.
+
+What fills it beyond what they found is what the referee gives, from the card: a quest (and when it is done), a hint or a next step, "Previously on…" from Tonight. The people they met are kept when the referee shows someone's face on their screen: the name, the plain part of the role (never what follows a semicolon or a dash) and the look the screen showed. Their notes may be a note, a theory or a question; a theory is never marked right or wrong. Nothing undiscovered, no secret, no faction's plan, no event the referee has not let happen, and none of the referee's notes is ever in it.
+
+**Where it is kept**: collections `jcfg` (the settings), `pquests`, `hints`, `recaps`, `met`, and `journal` (their notes, with `kind` "theory" or "question"). On the players' phones (the app), these are read with the rest of what the players' window reads.

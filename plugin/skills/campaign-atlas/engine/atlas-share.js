@@ -53,7 +53,7 @@
     const floors = Mp ? Mp.floors.map((F, fi) => floorShare(pk, F, fi, fogD, traps, fi === onScreen)) : [];
     const seen = floors.some(F => !F.dark && !F.gm);
     if (status === "unknown" && !seen && onScreen < 0) return null;
-    const done = (S.get("clues", id) || {}).done || [], clues = {};
+    const done = journal(S).clues ? (S.get("clues", id) || {}).done || [] : [], clues = {};
     if (Mp) for (const k of done) { const c = (Mp.clues || {})[k]; if (c && !c.arch) clues[k] = c.pd ? { t: plainTitle(c.t), pd: c.pd } : { t: plainTitle(c.t) }; }
     const tr = {}; if (Mp) for (const [mid, t] of Object.entries(traps)) if (t && t.area && shownTrap(pk, mid)) tr[mid] = { area: t.area.slice() };
     const out = { name: m.name || id, region: m.region || "", status, floors, clues, traps: tr, start: Mp ? Math.max(0, Mp.floors.findIndex(F => !A.isGmFloor(F))) : 0 };
@@ -78,10 +78,12 @@
   // their board, as their own window draws it: what they have found, and the strings the game master pinned up (laid out
   // again only when what is on it changes)
   let boardMemo = { k: "", v: null };
+  // (only what the players' journal keeps: the game master's settings hold here, in what is sent, not only on their screen)
+  const journal = S => T.journalCfg ? T.journalCfg(S) : { clues: true, people: true, places: true, links: true };
   function boardShare(S) {
-    const found = T.foundIn(S), all = T.boardModel(), keep = new Set(all.nodes.filter(nd => found(nd.id)).map(nd => nd.id));
+    const J = journal(S), found = T.foundIn(S), all = T.boardModel(), keep = new Set(all.nodes.filter(nd => found(nd.id) && (nd.kind === "clue" ? J.clues : nd.kind === "person" ? J.people : nd.kind === "place" ? J.places : true)).map(nd => nd.id));
     const nodes = all.nodes.filter(nd => keep.has(nd.id)).map(nd => ({ id: nd.id, kind: nd.kind, title: nd.title, sub: nd.kind === "person" ? T.plainRole(nd.sub) : nd.kind === "place" ? nd.sub || "" : "" }));
-    const edges = all.edges.filter(e => keep.has(e.a) && keep.has(e.b) && (e.kind !== "story" || e.shown)).map(e => ({ a: e.a, b: e.b, kind: e.kind }));
+    const edges = J.links ? all.edges.filter(e => keep.has(e.a) && keep.has(e.b) && (e.kind !== "story" || e.shown)).map(e => ({ a: e.a, b: e.b, kind: e.kind })) : [];
     const k = JSON.stringify([nodes, edges]); if (boardMemo.k === k) return boardMemo.v;
     const [W, H] = T.boardSize(Math.max(6, nodes.length)), model = { nodes, edges };
     boardMemo = { k, v: { nodes, edges, W, H, pos: T.boardLayout(model, W, H) } };
@@ -105,7 +107,7 @@
       for (const k of Object.keys(have)) if (!(k in all)) { delete last[k]; S.set("share", k, null); }
     };
     const soon = () => { clearTimeout(t); t = setTimeout(run, 400); };
-    for (const c of ["share", "fog", "status", "clues", "screen", "board", "devstate", "world", "mapedits", "fly"]) S.watch(c, soon);
+    for (const c of ["share", "fog", "status", "clues", "screen", "board", "devstate", "world", "mapedits", "fly", "jcfg"]) S.watch(c, soon);
     if (typeof document !== "undefined") document.addEventListener("atlas-story", soon);
     S.ready.then(soon);
     return { now: run };

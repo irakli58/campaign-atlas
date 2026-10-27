@@ -425,6 +425,8 @@
   // tools other files add (atlas-clueui.js: the investigation): { key, label, icon, group, desc, after, html(), bind(),
   // status(), watch: [collections] }
   const TPLUGS = [];
+  // a card another file adds to one of the tabs (atlas-journal.js: the players' journal, on The players' screen)
+  const CARDS = {}, addCard = (tab, html) => { (CARDS[tab] = CARDS[tab] || []).push(html); }, cardsFor = tab => (CARDS[tab] || []).map(f => { try { return f(); } catch (e) { console.warn("atlas", e); return ""; } }).join("");
   function addTab(p) { TPLUGS.push(p); const at = p.after ? TABS.findIndex(t => t[0] === p.after) + 1 : TABS.length; TABS.splice(at > 0 ? at : TABS.length, 0, [p.key, p.label, p.icon, p.group, p.desc]); }
   const navBtn = ([k, l, ic, , desc]) => `<button type="button" role="tab" data-t="tab" data-tab="${k}" aria-selected="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>`;
   function view() {
@@ -675,6 +677,7 @@
         <div class="t-scr-r"><div class="kl">What they see now</div><div class="t-prev" role="img" aria-label="${esc(cap(nowText(d)))}">${previewHTML(d)}</div><div class="t-small">${esc(cap(nowText(d)))}</div></div>
       </section>
       ${lanAvail() ? `<section class="t-card t-lan"><h3>${T.icon("party")} On the players' own phones and laptops</h3><div id="tLan"><p class="t-small">…</p></div></section>` : ""}
+      ${cardsFor("screen")}
       <section class="t-card"><h3>Show them</h3><div class="t-tiles">${tile("title", "The title", "play")}${A.worldData && A.worldMount ? tile("world", "The world map", "map") : ""}${tile("board", "Their board", "board")}${tile("safety", "Lines and veils", "safety")}${tile("blank", "A dark screen", "close")}</div></section>
       <div class="t-grid t-g2"><div>
         <section class="t-card"><h3>${T.icon("map")} A map, a room at a time</h3>${fogEditor()}</section></div>
@@ -1075,7 +1078,7 @@
 
   /* ================================================================ connecting it to the page */
   A.tableUI = {
-    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab, addDock,
+    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab, addDock, addCard,
     // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
     api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s) => askRaw(p, f || (() => {}), s), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
     init(ctx) {

@@ -1923,3 +1923,31 @@ button.ho-b:hover { color: var(--ink); }
 .fa-moveform { align-items: center; }
 .fa-moveform .t-in { width: auto; margin: 0; }
 .tw-fx select, .tw-fx input { width: auto; flex: 1 1 120px; margin: 0; min-width: 0; }
+/* the players' journal: the game master's card (atlas-journal.js), and the players' Journal and notes (atlas-table.js) */
+.tj-modes [aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tj-keys { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 6px 0 10px; }
+.tj-keys .t-fogck { margin-left: 0; min-width: 210px; }
+.tj-list { margin: 4px 0 8px; padding-left: 20px; }
+.tj-list li { margin: 0 0 3px; }
+.tj-list li.done { color: var(--muted); text-decoration: line-through; }
+.tj-add { margin: 0 0 8px; }
+.tj-add .t-in { flex: 1 1 220px; width: auto; margin: 0; }
+.ps-jsec { border-top: 1px solid #2c2f31; padding: 16px 0 6px; }
+.ps-jsec h3 { font-family: var(--f-display); font-weight: 400; font-size: 26px; margin: 0 0 10px; color: #fff; }
+.ps-quests { margin: 0; padding-left: 22px; font-size: 18px; }
+.ps-quests li { margin: 0 0 6px; }
+.ps-quests li.done { color: #8a857c; text-decoration: line-through; }
+.ps-met, .ps-hintx { margin: 0 0 14px; }
+.ps-met b { font-size: 19px; color: #fff; }
+.ps-met p, .ps-hintx p { margin: 4px 0; font-size: 17px; color: #d6d0c4; }
+.ps-met .ps-when, .ps-hintx .ps-when, .ps-recap .ps-when, .ps-timeline .ps-when { text-align: left; margin: 0; display: inline-block; }
+.ps-kind { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; border: 1px solid #4a4640; border-radius: 999px; padding: 1px 8px; color: #cfc9be; }
+.ps-recap p { font-size: 17px; line-height: 1.55; color: #d6d0c4; }
+.ps-timeline { margin: 0; padding-left: 0; list-style: none; font-size: 16px; }
+.ps-timeline li { margin: 0 0 8px; color: #d6d0c4; }
+.ps-timeline b { color: #fff; font-weight: 600; }
+.ps-addrow { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+.ps-addrow select { background: #121416; color: #e8e4da; border: 1px solid #3a3d41; border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 15px; }
+.ps-entry.theory { border-left: 3px solid #6b8acb; }
+.ps-entry.question { border-left: 3px solid #a07c10; }
+.ps-entry .ps-kind { display: inline-block; margin-bottom: 4px; }

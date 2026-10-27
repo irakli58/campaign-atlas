@@ -490,6 +490,19 @@
           know (with only the rooms they have seen), their notes, and the Stop card. Nothing of the referee's is on it:
           the user asked (21 Oct 2026) for the referee's tools and the players' to be in separate windows. On a
           television it stays on The table, and its menu fades until the mouse moves. */
+  /* ---- the players' journal (the user's master plan, part 9): how much Atlas keeps for the players, every part of it the
+          game master's to switch on or off. Manual: their own notes only. Assisted: what they have actually found, as they
+          found it. Full: quests, people met, hints and next steps, "Previously on", a timeline. Nothing undiscovered, and
+          nothing of the game master's, is ever in it; their theories are never marked right or wrong. */
+  const JOURNAL = {
+    keys: [["clues", "The clues they found"], ["places", "The places they know"], ["people", "The people they met"], ["links", "The connections you pin up"], ["quests", "Their quests"], ["hints", "Hints you give"], ["next", "Next steps you suggest"], ["summaries", "\"Previously on\" you give them"], ["notes", "Their own notes and theories"]],
+    modes: {
+      manual: { clues: false, places: false, people: false, links: false, quests: false, hints: false, next: false, summaries: false, notes: true },
+      assisted: { clues: true, places: true, people: true, links: true, quests: false, hints: false, next: false, summaries: false, notes: true },
+      full: { clues: true, places: true, people: true, links: true, quests: true, hints: true, next: true, summaries: true, notes: true }
+    }
+  };
+  const journalCfg = st => { const c = (st && st.get("jcfg", "now")) || {}; return Object.assign({ mode: "assisted" }, JOURNAL.modes.assisted, JOURNAL.modes[c.mode] || {}, c); };
   const STATUS_WORDS = { rumoured: "Heard of", known: "Known", open: "Open to us", resolved: "Finished", closed: "Closed" };
   A.playersScreen = function (ctx) {
     const app = document.getElementById("app"), cfg = A.config, st = ctx.store;
@@ -498,7 +511,7 @@
     // a window opened for the players has no way back to the referee's page; only the referee's own window, made into
     // theirs with "Make this window the players' screen", has one (and asks twice)
     const mine = !A.playersCopy && (() => { try { return sessionStorage.getItem(cfg.storageKey + "-players") === "1"; } catch (e) { return false; } })();
-    const TABS = [["table", "The table", "screen"], ["handouts", "Handouts", "handout"], ["news", "News", "news"], ["board", "Our board", "board"], ["places", "Places", "map"], ["notes", "Our notes", "tonight"]];
+    const TABS = [["table", "The table", "screen"], ["handouts", "Handouts", "handout"], ["news", "News", "news"], ["journal", "Journal", "tonight"], ["board", "Our board", "board"], ["places", "Places", "map"], ["notes", "Our notes", "handout"]];
     app.innerHTML = `<div class="ps" data-tab="table">
       <div class="ps-stage" id="psStage"></div><div class="ps-date" hidden></div>
       <main class="ps-page" id="psPage" hidden></main>
@@ -556,9 +569,9 @@
     function theirBoard() {
       // (in the players' copy, the board as the game master's page shared it: atlas-share.js)
       if (A.playersCopy) { const b = A.shareBoard || { nodes: [], edges: [], W: 1000, H: 620, pos: {} }; return [{ nodes: b.nodes, edges: b.edges }, b.pos, b.W, b.H]; }
-      const all = boardModel(), keep = new Set(all.nodes.filter(nd => ctx.found(nd.id)).map(nd => nd.id));
+      const J = journalCfg(st), all = boardModel(), keep = new Set(all.nodes.filter(nd => ctx.found(nd.id) && (nd.kind === "clue" ? J.clues : nd.kind === "person" ? J.people : nd.kind === "place" ? J.places : true)).map(nd => nd.id));
       // a connection the referee saved shows only once they pin it up: finding two clues does not tell the players how they join
-      const model = { nodes: all.nodes.filter(nd => keep.has(nd.id)), edges: all.edges.filter(e => keep.has(e.a) && keep.has(e.b) && (e.kind !== "story" || e.shown)) }, [W, H] = boardSize(Math.max(6, model.nodes.length));
+      const model = { nodes: all.nodes.filter(nd => keep.has(nd.id)), edges: J.links ? all.edges.filter(e => keep.has(e.a) && keep.has(e.b) && (e.kind !== "story" || e.shown)) : [] }, [W, H] = boardSize(Math.max(6, model.nodes.length));
       return [model, boardLayout(model, W, H), W, H];
     }
     function safetyHTML() {
@@ -592,7 +605,7 @@
         case "places": {
           const l = known();
           return `<h2>Places</h2><p class="ps-hint">The places you know of, what you found there, and the rooms you have seen.</p>${l.length ? l.map(({ id, m, s, fog, fogD, seen }) => {
-            const M = A.maps[id] ? A.get(id, 99) : null, done = (st.get("clues", id) || {}).done || [];
+            const M = A.maps[id] ? A.get(id, 99) : null, done = journalCfg(st).clues ? (st.get("clues", id) || {}).done || [] : [];
             // what they found: its name, and what the referee wrote for the players to see (never what only the referee knows)
             const found = M ? done.map(k => (M.clues || {})[k]).filter(c => c && !c.arch).map(c => `<li>${esc(String(c.t || "").replace(/\s*\(.*\)\s*$/, ""))}${c.pd ? `<span class="ps-pd">${esc(c.pd)}</span>` : ""}</li>`).join("") : "";
             const floors = M ? M.floors.map((F, fi) => [F, fi]).filter(([F, fi]) => !A.isGmFloor(F) && (fogD.off || fogSeen(fogD, fi, F))) : [];
@@ -607,15 +620,16 @@
           const l = news();
           return `<h2>News</h2><p class="ps-hint">What you hear of the world: word in the street, the papers, a message. The newest first.</p>${l.length ? l.map(n => `<article class="ps-news"><div class="ps-when">${esc(n.when || when(n.t))}${n.paper ? ` · ${esc(n.paper)}` : ""}</div><h3>${esc(n.headline || "")}</h3>${n.text ? paras(n.text) : ""}</article>`).join("") : `<p class="ps-empty">No news yet.</p>`}`;
         }
+        case "journal": return journalHTML();
         case "notes":
-          return `<h2>Our notes</h2><p class="ps-hint">What the party knows and suspects: names, theories, things to check. The game master can read these, and may add to them.</p><form class="ps-add"><textarea maxlength="2000" rows="3" placeholder="A note, a theory, a name to remember"></textarea><button type="submit">Add</button></form><div class="ps-entries"></div>`;
+          return `<h2>Our notes</h2><p class="ps-hint">What the party knows and suspects: names, theories, things to check. The game master can read these, and may add to them.</p><form class="ps-add"><textarea maxlength="2000" rows="3" placeholder="A note, a theory, a name to remember"></textarea><div class="ps-addrow"><select name="kind" aria-label="What it is"><option value="">A note</option><option value="theory">A theory</option><option value="question">A question</option></select><button type="submit">Add</button></div></form><p class="ps-hint">A theory is yours: Atlas never says whether it is right.</p><div class="ps-entries"></div>`;
       }
       return "";
     }
     function paintNotes() {
       const box = page.querySelector(".ps-entries"); if (!box) return;
       const list = Object.entries(st.get("journal") || {}).sort((a, b) => (b[1].t || 0) - (a[1].t || 0));
-      box.innerHTML = list.map(([id, e]) => `<div class="ps-entry${e.gm ? " gm" : ""}"><p>${esc(e.text)}</p><time>${e.gm ? "From the game master · " : ""}${esc(when(e.t))}</time><button type="button" data-jdel="${esc(id)}" aria-label="Remove this note">×</button></div>`).join("") || `<p class="ps-hint">Nothing written yet.</p>`;
+      box.innerHTML = list.map(([id, e]) => `<div class="ps-entry${e.gm ? " gm" : ""}${e.kind ? " " + esc(e.kind) : ""}">${e.kind ? `<span class="ps-kind">${e.kind === "theory" ? "Theory" : "Question"}</span>` : ""}<p>${esc(e.text)}</p><time>${e.gm ? "From the game master · " : ""}${esc(when(e.t))}</time><button type="button" data-jdel="${esc(id)}" aria-label="Remove this note">×</button></div>`).join("") || `<p class="ps-hint">Nothing written yet.</p>`;
     }
     function fitBoard() {
       const w = page.querySelector(".ps-bwrap"); if (!w) return;
@@ -638,7 +652,28 @@
       else { page.scrollTop = 0; renderPage(); }
       if (k === "handouts") { pref.set("seen", String(Date.now())); badges(); }
       if (k === "news") { pref.set("seennews", String(Date.now())); badges(); }
+      if (k === "journal") { pref.set("seenj", String(Date.now())); badges(); }
       app.querySelector(".ps-toast").hidden = true;
+    }
+    // the journal: what the game master gave them for it, each part only when it is switched on
+    function journalHTML() {
+      const J = journalCfg(st), all = c => Object.values(st.get(c) || {}).filter(Boolean).sort((a, b) => (b.t || 0) - (a.t || 0)), out = [];
+      if (J.quests) { const q = all("pquests"); out.push(`<section class="ps-jsec"><h3>Our quests</h3>${q.length ? `<ul class="ps-quests">${q.map(x => `<li class="${x.done ? "done" : ""}">${esc(x.text)}${x.done ? " <span class=\"ps-when\">done</span>" : ""}</li>`).join("")}</ul>` : `<p class="ps-empty">No quests yet.</p>`}</section>`); }
+      if (J.people) { const m = all("met"); out.push(`<section class="ps-jsec"><h3>People we have met</h3>${m.length ? m.map(x => `<div class="ps-met"><b>${esc(x.name)}</b>${x.role ? ` <span class="ps-role">${esc(x.role)}</span>` : ""}${x.look ? `<p>${esc(x.look)}</p>` : ""}${x.when ? `<div class="ps-when">${esc(x.when)}</div>` : ""}</div>`).join("") : `<p class="ps-empty">Nobody yet.</p>`}</section>`); }
+      const hs = all("hints").filter(h => (h.kind === "next" ? J.next : J.hints));
+      if (J.hints || J.next) out.push(`<section class="ps-jsec"><h3>${J.hints && J.next ? "Hints and next steps" : J.hints ? "Hints" : "Next steps"}</h3>${hs.length ? hs.map(h => `<div class="ps-hintx"><span class="ps-kind">${h.kind === "next" ? "Next step" : "Hint"}</span><p>${esc(h.text)}</p>${h.when ? `<div class="ps-when">${esc(h.when)}</div>` : ""}</div>`).join("") : `<p class="ps-empty">Nothing yet.</p>`}</section>`);
+      if (J.summaries) { const r = all("recaps"); out.push(`<section class="ps-jsec"><h3>Previously on…</h3>${r.length ? r.map(x => `<article class="ps-recap"><div class="ps-when">${x.n ? "After session " + esc(x.n) : ""}</div>${paras(x.text)}</article>`).join("") : `<p class="ps-empty">Nothing yet.</p>`}</section>`); }
+      if (J.mode === "full") {
+        const t = [].concat(all("news").map(x => [x.t, x.when, "News", x.headline]), given().map(x => [x.t, "", "A handout", x.h.title || x.h.headline || ""]), J.people ? all("met").map(x => [x.t, x.when, "Met", x.name]) : [], J.summaries ? all("recaps").map(x => [x.t, "", "Previously on", "session " + (x.n || "")]) : [], hs.map(x => [x.t, x.when, x.kind === "next" ? "Next step" : "Hint", x.text])).filter(x => x[0]).sort((a, b) => b[0] - a[0]);
+        out.push(`<section class="ps-jsec"><h3>What has happened, in order</h3>${t.length ? `<ol class="ps-timeline">${t.map(([tt, w, k, x]) => `<li><span class="ps-when">${esc(w || when(tt))}</span> <b>${esc(k)}</b> ${esc(String(x || "").slice(0, 140))}</li>`).join("")}</ol>` : `<p class="ps-empty">Nothing yet.</p>`}</section>`);
+      }
+      return `<h2>Journal</h2><p class="ps-hint">What the game master has given you to keep: it never holds what you have not found.</p>${out.join("") || `<p class="ps-empty">The game master keeps the journal to your own notes.</p>`}`;
+    }
+    // the menu: only what the journal keeps (the game master's choice), and the table, handouts and news always
+    function menu() {
+      const J = journalCfg(st), on = { journal: J.quests || J.people || J.hints || J.next || J.summaries || J.mode === "full", board: J.clues || J.people || J.places, places: J.places, notes: J.notes };
+      root.querySelectorAll(".ps-tab").forEach(b => { if (b.dataset.ptab in on) b.hidden = !on[b.dataset.ptab]; });
+      if (tab in on && !on[tab]) setTab("table");
     }
     // a count on Handouts of what has come since they last looked
     function badges() {
@@ -646,6 +681,8 @@
       b.hidden = !n || tab === "handouts"; b.textContent = n;
       const sn = +pref.get("seennews") || 0, nn = news().filter(x => (x.t || 0) > sn).length, bn = root.querySelector('[data-ptab="news"] .ps-badge');
       bn.hidden = !nn || tab === "news"; bn.textContent = nn;
+      const sj = +pref.get("seenj") || 0, J = journalCfg(st), nj = [].concat(J.quests ? Object.values(st.get("pquests") || {}) : [], J.people ? Object.values(st.get("met") || {}) : [], J.hints || J.next ? Object.values(st.get("hints") || {}) : [], J.summaries ? Object.values(st.get("recaps") || {}) : []).filter(x => x && (x.t || 0) > sj).length, bj = root.querySelector('[data-ptab="journal"] .ps-badge');
+      bj.hidden = !nj || tab === "journal"; bj.textContent = nj;
     }
     // the world's date, as the game master's clock last wrote it
     function dateLine() { const d = st.get("clock", "now") || {}, el = root.querySelector(".ps-date"); el.hidden = !d.date; el.innerHTML = d.date ? `<b>${esc(d.date)}</b>${d.time ? `<span>${esc(d.time)}</span>` : ""}` : ""; }
@@ -671,6 +708,9 @@
       l.forEach(n => newsSeen.add(n.t)); badges(); if (tab === "news") renderPage();
     });
     st.watch("clock", () => dateLine());
+    // the journal: its settings and what the game master gave for it
+    st.watch("jcfg", () => { menu(); badges(); if (now.kind === "board") render(); if (tab !== "table") renderPage(); });
+    for (const c of ["pquests", "met", "hints", "recaps"]) st.watch(c, () => { badges(); if (tab === "journal") renderPage(); });
     st.watch("mapedits", d => { if (applyMapEdits(d)) { if (now.kind === "map") render(); if (tab === "places") renderPage(); } });
     // the furnishings' pictures come as they are drawn (atlas-models.js), and models the game master brought in
     document.addEventListener("atlas-models", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
@@ -703,7 +743,7 @@
     app.addEventListener("submit", e => {
       if (!e.target.matches(".ps-add")) return;
       e.preventDefault(); const ta = e.target.querySelector("textarea"), v = ta.value.trim().slice(0, 2000); if (!v) return;
-      st.set("journal", "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), { text: v, t: Date.now() }); ta.value = "";
+      const kind = (e.target.querySelector("select[name=kind]") || {}).value || ""; st.set("journal", "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), Object.assign({ text: v, t: Date.now() }, kind ? { kind } : {})); ta.value = "";
     });
     // so the referee's page can say the players' window is open and following
     const beat = () => st.set("presence", "players", { t: Date.now() });
@@ -743,5 +783,5 @@
   const icon = (k, cls) => `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${IC[k] || ""}</svg>`;
 
   // for the referee's tools (atlas-table-gm.js), the checker and the build
-  A.table = { fogCells, fogSeen, fogVis, fog3d, applyMapEdits, plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
+  A.table = { JOURNAL, journalCfg, fogCells, fogSeen, fogVis, fog3d, applyMapEdits, plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
 })(ATLAS);
