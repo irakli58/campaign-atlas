@@ -867,6 +867,8 @@ function drawPlan(C, ppu, view) {
 
   // paved squares, and the town walls (the streets drawn after them cut the gates)
   for (const p of C.plazas) { g.fillStyle = ROADF; g.strokeStyle = INK; g.lineWidth = .16; path(p.pts, true); g.fill(); g.stroke(); }
+  // districts the game master marked (atlas-cityedit.js), each tinted in the colour of whoever holds it
+  for (const z of C.zones || []) { g.globalAlpha = .16; g.fillStyle = z.col || "#8a2432"; path(z.pts, true); g.fill(); g.globalAlpha = .8; g.strokeStyle = z.col || "#8a2432"; g.lineWidth = .45; g.setLineDash([2.2, 1, .5, 1]); g.stroke(); g.setLineDash([]); g.globalAlpha = 1; }
   g.lineCap = "butt";
   for (const w of C.walls) {
     if (w.kind === "tube") { g.strokeStyle = INK; g.lineWidth = 1.5; path(w.pts); g.stroke(); g.strokeStyle = ROADF; g.lineWidth = 1.05; g.stroke(); continue; }
@@ -1020,6 +1022,7 @@ function drawPlan(C, ppu, view) {
     for (const p of C.parks) if (p.name) { const [x, y] = mid(p.pts), big = areaOf(p.pts) > 900; label(x, y, big ? p.name.toUpperCase() : p.name, big ? 1.8 : 1.15, big ? "" : "italic", "rgba(46,52,30,.9)", big ? { family: F2, spacing: .4, halo: PARKC } : { halo: PARKC }); }
   }
   for (const p of C.plazas) if (p.name) { const [x, y] = mid(p.pts); label(x, y, p.name, 1.05, "italic", INK, { halo: ROADF }); }
+  for (const z of C.zones || []) if (z.name) { const [x, y] = mid(z.pts); label(x, y, z.name.toUpperCase(), 1.7, "", z.col || INK, { family: F2, spacing: .4, force: true }); }
   if (!D.real) for (const b of C.basins) if (b.name) { let x = 0, y = 0; b.pts.forEach(p => { x += p[0]; y += p[1]; }); label(x / b.pts.length, y / b.pts.length, b.name.toUpperCase(), 1.25, "", "rgba(40,58,56,.9)", { family: F2, spacing: .25, force: true, rot: b.name.length > 14 ? 0 : -Math.PI / 2 * (b.pts[2][1] - b.pts[0][1] > 24 ? 1 : 0) }); }
   if (!D.real) for (const p of C.parks) if (p.name) { let x = 0, y = 0; p.pts.forEach(q => { x += q[0]; y += q[1]; }); label(x / p.pts.length, y / p.pts.length, p.name.toUpperCase(), 2, "", "rgba(46,52,30,.85)", { family: F2, spacing: .5, force: true, halo: PARKC }); }
   for (const s of C.squares) if (s.name) label(s.x, s.y, s.name, Math.min(1.2, s.r * .38), "italic", "rgba(46,52,30,.9)", { halo: PARKC });
@@ -1123,13 +1126,18 @@ function drawPlan(C, ppu, view) {
 function createMap3D(host, C, planCanvas, hooks) {
   const T = THREE;
   const SW = CD.sheet.w, SH = CD.sheet.h, wx = x => x - SW / 2, wz = y => y - SH / 2, SPAN = PLAN.X1 - PLAN.X0;
-  const renderer = new T.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  // (the city editor draws the city again in the same renderer, hooks.renderer: a browser allows only a few 3D views,
+  // and a new one at every change soon runs out of graphics memory)
+  const renderer = hooks.renderer || new T.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   let gone = false;                              // set when the map is taken down (another city mounted in its place)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
-  renderer.domElement.setAttribute("role", "img");
+  const evs = [], on = (el, type, fn) => { el.addEventListener(type, fn); evs.push([el, type, fn]); };
+  if (!hooks.renderer) {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
+    renderer.domElement.setAttribute("role", "img");
+    host.insertBefore(renderer.domElement, host.firstChild);
+  }
   renderer.domElement.setAttribute("aria-label", "3D street plan" + (CD.title ? ": " + CD.title : "") + ", with the campaign's places numbered");
-  host.insertBefore(renderer.domElement, host.firstChild);
   const scene = new T.Scene();
   const camera = new T.PerspectiveCamera(32, 1, 1, Math.max(4000, SPAN * 5.5));
   const fog = new T.Fog(LOOK.table, 300, 1200); scene.fog = fog;
@@ -1236,17 +1244,23 @@ function createMap3D(host, C, planCanvas, hooks) {
   const lod = [];
   // ---- ordinary buildings
   const walls = [], roofs = [], chim = [], spires = [], stacks = [], lampPosts = [], lampHeads = [], dressDomes = [], DRESS = (LOOK.dress || []).concat(KIT.dress);
-  for (const b of C.buildings) {
+  // (which building each wall and roof belongs to, for the city editor's clicks: atlas-cityedit.js)
+  const wOwn = [], rOwn = [];
+  for (let ib = 0; ib < C.buildings.length; ib++) {
+    const b = C.buildings[ib];
     // a house cleared for a building of the game master's own (setCustom) takes its turn, and leaves nothing standing
     const keep0 = b.gone ? [walls.length, roofs.length, chim.length, spires.length, stacks.length, dressDomes.length] : null;
-    const wall = b.type === "ware" ? pick(WARE) : b.type === "church" || b.type === "chapel" || b.type === "school" ? mixHex(pick(STONE), "#9a8f7c", .3) : mixHex(pick(BRICK), pick(STONE), b.west * .85);
+    // (a house the game master moved or changed in the editor keeps the colours and height it had: wallC, roofC, H, pitch)
+    const wall0 = b.type === "ware" ? pick(WARE) : b.type === "church" || b.type === "chapel" || b.type === "school" ? mixHex(pick(STONE), "#9a8f7c", .3) : mixHex(pick(BRICK), pick(STONE), b.west * .85), wall = b.wallC || wall0;
     const ry = -b.a, x = wx(b.x), z = wz(b.y);
     // ruin: 0 to 1, the share of houses that stand roofless and broken (a town that has been fought over)
-    const ruined = CD.ruin > 0 && h01(bi * 7 + 2) < CD.ruin, H = b.h * LOOK.tall(bi, b) * (ruined ? .25 + h01(bi + 9) * .35 : 1), pitched = !ruined && !!b.roof && LOOK.pitched(bi, b); bi++;
+    const ruined = !b.H && CD.ruin > 0 && h01(bi * 7 + 2) < CD.ruin, H = b.H || b.h * LOOK.tall(bi, b) * (ruined ? .25 + h01(bi + 9) * .35 : 1), pitched = b.pitch != null ? !!b.pitch : !ruined && !!b.roof && LOOK.pitched(bi, b); bi++;
     const roofH = pitched ? Math.min(LOOK.roofMax || 1.1, b.d * (LOOK.roofK || .36)) : 0;
-    walls.push({ x, z, sx: b.w, sy: H, sz: b.d, ry, c: ruined ? mixHex(wall, "#4a4540", .5) : b.type === "pub" ? LOOK.pub : wall });
-    if (pitched) roofs.push({ x, y: H, z, sx: b.w + .12, sy: roofH, sz: b.d + .12, ry, c: b.type === "pub" ? "#3f3a35" : rnd() < .2 ? pick(TILE) : pick(SLATE) });
-    else if (!ruined) walls.push({ x, y: H, z, sx: b.w + .1, sy: .12, sz: b.d + .1, ry, c: LOOK.flats ? LOOK.flats[bi % LOOK.flats.length] : LOOK.flat });
+    walls.push({ x, z, sx: b.w, sy: H, sz: b.d, ry, c: ruined ? mixHex(wall, "#4a4540", .5) : b.type === "pub" && !b.wallC ? LOOK.pub : wall }); wOwn[walls.length - 1] = ib;
+    const roofC = pitched ? (b.type === "pub" ? "#3f3a35" : rnd() < .2 ? pick(TILE) : pick(SLATE)) : null;
+    b._wall = wall; b._H = H; b._pitch = pitched; if (roofC) b._roof = b.roofC || roofC;
+    if (pitched) { roofs.push({ x, y: H, z, sx: b.w + .12, sy: roofH, sz: b.d + .12, ry, c: b.roofC || roofC }); rOwn[roofs.length - 1] = ib; }
+    else if (!ruined) { walls.push({ x, y: H, z, sx: b.w + .1, sy: .12, sz: b.d + .1, ry, c: LOOK.flats ? LOOK.flats[bi % LOOK.flats.length] : LOOK.flat }); wOwn[walls.length - 1] = ib; }
     // the look's and a kit's dress on a share of the ordinary houses: wooden balconies on both long faces, a small dome on
     // the roof, a round turret at a corner
     if (!ruined && DRESS.length && b.w > 1.8) DRESS.forEach((dr, di) => {
@@ -1278,7 +1292,7 @@ function createMap3D(host, C, planCanvas, hooks) {
       walls.push({ x: tx, z: tz, sx: tw, sy: H * 2.1, sz: tw, ry, c: "#b5a98f" });
       spires.push({ x: tx, y: H * 2.1, z: tz, sx: tw * 1.15, sy: H * 1.9, sz: tw * 1.15, ry, c: "#5e5a52" });
     }
-    if (keep0) { walls.length = keep0[0]; roofs.length = keep0[1]; chim.length = keep0[2]; spires.length = keep0[3]; stacks.length = keep0[4]; dressDomes.length = keep0[5]; }
+    if (keep0) { walls.length = keep0[0]; roofs.length = keep0[1]; chim.length = keep0[2]; spires.length = keep0[3]; stacks.length = keep0[4]; dressDomes.length = keep0[5]; wOwn.length = keep0[0]; rOwn.length = keep0[1]; }
   }
   // rows of huts and tents the site gives outright
   const barrels = [], modules = [];
@@ -1295,8 +1309,8 @@ function createMap3D(host, C, planCanvas, hooks) {
   if (LOOK.stacks !== false) for (const s of C.specials.stacks) stacks.push({ x: wx(s.x), z: wz(s.y), sx: .9, sy: s.h, sz: .9, c: "#6e4d3c" });
   for (const gsh of C.specials.gas) { stacks.push({ x: wx(gsh.x), z: wz(gsh.y), sx: gsh.r * 2, sy: 2.6, sz: gsh.r * 2, c: "#7d7a70" }); }
   const wallMat = new T.MeshLambertMaterial({ color: 0xffffff });
-  instanced(boxG, walls, wallMat);
-  instanced(roofG, roofs, new T.MeshLambertMaterial({ color: 0xffffff, side: T.DoubleSide }));
+  const wallMesh = instanced(boxG, walls, wallMat);
+  const roofMesh = instanced(roofG, roofs, new T.MeshLambertMaterial({ color: 0xffffff, side: T.DoubleSide }));
   lod.push([instanced(boxG, chim, wallMat), 380]);
   instanced(coneG, spires, new T.MeshLambertMaterial({ color: 0xffffff }));
   instanced(cylG, stacks, new T.MeshLambertMaterial({ color: 0xffffff }));
@@ -1338,6 +1352,8 @@ function createMap3D(host, C, planCanvas, hooks) {
     }
     instanced(tubeG, tubes, new T.MeshLambertMaterial({ color: 0xffffff }));
     for (const w of C.walls) { let run = 99; if (w.kind === "tube") continue; if (w.kind === "fence" || w.kind === "hesco") { for (let i = 1; i < w.pts.length; i++) { const [ax, ay] = w.pts[i - 1], [bx, by] = w.pts[i], l = Math.hypot(bx - ax, by - ay), ry = -Math.atan2(by - ay, bx - ax); if (w.kind === "hesco") tw.push({ x: wx((ax + bx) / 2), z: wz((ay + by) / 2), sx: l + .1, sy: 1.15, sz: 1.2, ry, c: "#b9a57e" }); else tw.push({ x: wx((ax + bx) / 2), z: wz((ay + by) / 2), sx: l, sy: 1.2, sz: .05, ry, c: "#8a8a80" }, { x: wx(ax), z: wz(ay), sx: .12, sy: 1.4, sz: .12, ry, c: "#4d4a44" }); } continue; } for (let i = 1; i < w.pts.length; i++) { const [ax, ay] = w.pts[i - 1], [bx, by] = w.pts[i], l = Math.hypot(bx - ax, by - ay), ry = -Math.atan2(by - ay, bx - ax); tw.push({ x: wx((ax + bx) / 2), z: wz((ay + by) / 2), sx: l + .1, sy: 1.7, sz: .7, ry, c: "#b9ad93" }); run += l; if (run > 15) { run = 0; tw.push({ x: wx(ax), z: wz(ay), sx: 1.35, sy: 2.6, sz: 1.35, ry, c: "#b2a68c" }); } } }
+    // gates the game master put in a wall (atlas-cityedit.js): a tower on each side of the gap
+    for (const [gx, gy, ga, gap] of C.gates || []) { const c = Math.cos(ga), s = Math.sin(ga), o = (gap || 3.6) / 2 + .7; for (const k of [-1, 1]) tw.push({ x: wx(gx + c * o * k), z: wz(gy + s * o * k), sx: 1.5, sy: 3, sz: 1.5, ry: -ga, c: "#b2a68c" }); tw.push({ x: wx(gx), y: 2.2, z: wz(gy), sx: (gap || 3.6) + 1.4, sy: .8, sz: 1, ry: -ga, c: "#a99d84" }); }
     instanced(boxG, tw, wallMat);
   }
 
@@ -1862,13 +1878,13 @@ function createMap3D(host, C, planCanvas, hooks) {
   const ray = new T.Raycaster(), ndc = new T.Vector2();
   const hit = ev => { const r = renderer.domElement.getBoundingClientRect(); ndc.set((ev.clientX - r.left) / r.width * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera); const h = ray.intersectObjects(pickables, false)[0]; return h ? h.object.userData.id : null; };
   let down = null, hoverId = null, hoverRaf = 0;
-  renderer.domElement.addEventListener("pointerdown", ev => { down = { x: ev.clientX, y: ev.clientY, t: performance.now() }; anim = null; });
-  renderer.domElement.addEventListener("pointerup", ev => {
+  on(renderer.domElement, "pointerdown", ev => { down = { x: ev.clientX, y: ev.clientY, t: performance.now() }; anim = null; });
+  on(renderer.domElement, "pointerup", ev => {
     if (!down) return;
     const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y), dt = performance.now() - down.t; down = null;
     if (moved < 6 && dt < 600 && ev.button === 0) { const id = hit(ev); if (id) hooks.onPick(id); }
   });
-  renderer.domElement.addEventListener("pointermove", ev => {
+  on(renderer.domElement, "pointermove", ev => {
     if (ev.pointerType !== "mouse" || ev.buttons) return;
     cancelAnimationFrame(hoverRaf);
     hoverRaf = requestAnimationFrame(() => {
@@ -1877,7 +1893,7 @@ function createMap3D(host, C, planCanvas, hooks) {
       hooks.onHover(id, ev);
     });
   });
-  renderer.domElement.addEventListener("pointerleave", () => { hoverId = null; hooks.onHover(null); });
+  on(renderer.domElement, "pointerleave", () => { hoverId = null; hooks.onHover(null); });
 
   // ---- public
   function flyTo(id) {
@@ -1915,16 +1931,20 @@ function createMap3D(host, C, planCanvas, hooks) {
     for (const id in LM) LM[id].mats.glow.color.set(on ? 0xffc06a : 0xd98a3a);
     renderer.shadowMap.needsUpdate = true; request();
   }
-  renderer.domElement.addEventListener("webglcontextlost", ev => { ev.preventDefault(); if (hooks.onLost) hooks.onLost(); });
+  on(renderer.domElement, "webglcontextlost", ev => { ev.preventDefault(); if (hooks.onLost) hooks.onLost(); });
   renderer.shadowMap.needsUpdate = true;
   size();
   setTimeout(() => sharpen(hooks.sharp), 700);
   // take the map down: free the graphics card's memory, so another city can be mounted in its place (a browser allows
   // only a few live 3D views at once)
-  function dispose() {
-    if (gone) return; gone = true; anim = null; ro.disconnect(); if (controls.dispose) controls.dispose();
+  // (keep: the renderer stays for the same city drawn again, its scene and every listener taken away; it is returned)
+  function dispose(keep) {
+    if (gone) return null; gone = true; anim = null; ro.disconnect(); if (controls.dispose) controls.dispose();
+    for (const [el, type, fn] of evs) el.removeEventListener(type, fn);
     scene.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) { if (m.map) m.map.dispose(); m.dispose(); } });
+    if (keep) { renderer.renderLists.dispose(); return renderer; }
     renderer.dispose(); if (renderer.forceContextLoss) renderer.forceContextLoss(); renderer.domElement.remove();
+    return null;
   }
   // putting a building down by hand (atlas-locations.js): the ground under the pointer, in plan units, and a ghost of the
   // building where it would stand: green where it may, amber where it may with a warning, red where it may not
@@ -1943,7 +1963,26 @@ function createMap3D(host, C, planCanvas, hooks) {
     }
     request();
   }
-  return { flyTo, zoom, home, sync, setNight, request, pins, dispose, planAt, ghost, dbg: { renderer, scene, camera, controls, frame, groundMats } };
+  // the city editor (atlas-cityedit.js): the house under the pointer, a box round the chosen one, a line on the ground
+  // while a road, a wall or a district is drawn, and the view kept while the city is drawn again
+  function pickBuilding(cx, cy) {
+    const r = renderer.domElement.getBoundingClientRect(); ndc.set((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
+    for (const h of ray.intersectObjects([wallMesh, roofMesh].filter(Boolean), false)) { const ib = (h.object === wallMesh ? wOwn : rOwn)[h.instanceId]; if (ib != null) return ib; if (h.object === wallMesh) return null; }
+    return null;
+  }
+  let markG = null, guideL = null;
+  function mark(b) {
+    if (markG) { scene.remove(markG); markG.geometry.dispose(); markG.material.dispose(); markG = null; }
+    if (b) { markG = new T.LineSegments(new T.EdgesGeometry(boxG), new T.LineBasicMaterial({ color: 0xffd23f, depthTest: false })); markG.renderOrder = 9; markG.scale.set(b.w + .3, (b._H || 2) + (b._pitch ? 1 : .2), b.d + .3); markG.position.set(wx(b.x), 0, wz(b.y)); markG.rotation.y = -b.a; scene.add(markG); }
+    request();
+  }
+  function guide(pts, closed) {
+    if (guideL) { scene.remove(guideL); guideL.geometry.dispose(); guideL.material.dispose(); guideL = null; }
+    if (pts && pts.length) { const P = (closed && pts.length > 2 ? pts.concat([pts[0]]) : pts).map(([x, y]) => new T.Vector3(wx(x), .35, wz(y))); if (P.length === 1) P.push(P[0].clone().add(new T.Vector3(.01, 0, 0))); guideL = new T.Line(new T.BufferGeometry().setFromPoints(P), new T.LineBasicMaterial({ color: 0xe0402a, depthTest: false })); guideL.renderOrder = 9; scene.add(guideL); }
+    request();
+  }
+  const view = v => { if (v) { controls.target.copy(v.t); camera.position.copy(v.p); controls.update(); request(); return null; } return { t: controls.target.clone(), p: camera.position.clone() }; };
+  return { flyTo, zoom, home, sync, setNight, request, pins, dispose, planAt, ghost, pickBuilding, mark, guide, view, dbg: { renderer, scene, camera, controls, frame, groundMats } };
 }
 
   /* ---- the flat map: what a device without 3D gets instead. Places, water, main roads, district names. */
@@ -1972,7 +2011,7 @@ function createMap3D(host, C, planCanvas, hooks) {
     const hex = n => "#" + n.toString(16).padStart(6, "0");
     const sw = (fill, hgt) => `<svg width="26" height="10" aria-hidden="true"><rect x=".5" y="${(10 - hgt) / 2}" width="25" height="${hgt}" fill="${fill}" stroke="${P.INK}"/></svg>`;
     box.innerHTML = `<div class="map3d" style="background:${hex(LOOK.table)}"><div class="loading" style="background:${hex(LOOK.table)}">Surveying the streets, one by one…</div><div class="pins"></div><div class="tip" hidden></div>
-      <div class="mctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Reset view" title="Reset view">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>${hooks.addLocation ? `<button type="button" class="addloc gm-only" data-addloc title="Make a place of your own in this city: name it, put it where you want, build inside it">+ Add location</button><div class="placebar" hidden role="status" aria-live="polite"></div>` : ""}</div>
+      <div class="mctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Reset view" title="Reset view">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>${hooks.addLocation ? `<button type="button" class="addloc gm-only" data-addloc title="Make a place of your own in this city: name it, put it where you want, build inside it">+ Add location</button><div class="placebar" hidden role="status" aria-live="polite"></div>` : ""}${A.cityEditor && !D.real ? `<button type="button" class="addloc editcity gm-only" data-editcity title="Move, remove or change the buildings; add roads, walls and gates, parks, squares and districts">Edit the city</button><div class="cebar" hidden></div>` : ""}</div>
       <div class="cityflatbox" hidden></div>
       <div class="maphint">${LOOK.future
         // the future's key: its tubes, and its tracks only where it has any
@@ -1996,6 +2035,7 @@ function createMap3D(host, C, planCanvas, hooks) {
     flat.addEventListener("click", e => { const t = e.target.closest("[data-go]"); if (t && hooks.onPick && !ctl.placing) hooks.onPick(t.dataset.go); });
     flat.addEventListener("keydown", e => { if (e.key !== "Enter" && e.key !== " ") return; const t = e.target.closest("[data-go]"); if (t && hooks.onPick) { e.preventDefault(); hooks.onPick(t.dataset.go); } });
     const addBtn = box.querySelector("[data-addloc]"); if (addBtn) addBtn.addEventListener("click", () => hooks.addLocation(ctl));
+    const editBtn = box.querySelector("[data-editcity]"); if (editBtn) editBtn.addEventListener("click", () => { if (ctl.map) A.cityEditor.open(ctl, box); });
     (async function start() {
       try {
         if (!window.THREE || !THREE.MapControls) throw new Error("three");
@@ -2007,6 +2047,8 @@ function createMap3D(host, C, planCanvas, hooks) {
         use(D);
         const city = buildCity(D, placed);
         setCustom(city, customs);
+        // the game master's changes to the city (atlas-cityedit.js), laid over it as it was built: never built again
+        if (A.cityEditor && !D.real) A.cityEditor.attach(ctl, city);
         ctl.city3 = city; ctl.judge = g => judge(city, g); ctl.footprint = (g, k) => footprint(g, k);
         const span = PLAN.X1 - PLAN.X0, area = span * (PLAN.Y1 - PLAN.Y0), maxTex = gl.getParameter(0x0D33) || 4096;
         const ppu = Math.max(3, Math.min(7, Math.floor(Math.min(maxTex, 5600) / span)));
@@ -2015,7 +2057,7 @@ function createMap3D(host, C, planCanvas, hooks) {
         const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches, mem = navigator.deviceMemory || 8;
         const budget = coarse ? 0 : mem >= 8 ? 34e6 : mem >= 4 ? 22.5e6 : 0, sharp = budget ? Math.min(16, Math.floor(Math.sqrt(budget / area))) : 0;
         const plan = drawPlan(city, ppu);
-        ctl.map = createMap3D(host, city, plan, {
+        const mapHooks = {
           pinsEl: box.querySelector(".pins"),
           detail: (view, k) => drawPlan(city, k, view),
           sharp: sharp > ppu ? sharp : 0,
@@ -2028,7 +2070,15 @@ function createMap3D(host, C, planCanvas, hooks) {
             tip.textContent = `${String(e.p.n).padStart(2, "0")} · ${e.p.name}${e.p.dist ? " — " + e.p.dist : ""}`;
             tip.hidden = false; tip.style.transform = `translate(${ev.clientX - r.left + 14}px, ${ev.clientY - r.top + 14}px)`;
           }
-        });
+        };
+        ctl.map = createMap3D(host, city, plan, mapHooks);
+        // drawn again after a change in the city editor: the same city with the change in it, its plan printed again,
+        // the view where it was
+        ctl.redraw = () => {
+          if (dead || !ctl.map) return;
+          use(D); const v = ctl.map.view(), rd = ctl.map.dispose(true); mapHooks.pinsEl.innerHTML = "";
+          ctl.map = createMap3D(host, city, drawPlan(city, ppu), Object.assign({}, mapHooks, { renderer: rd })); ctl.map.view(v); theme(); ctl.map.sync(last);
+        };
         const dark = window.matchMedia("(prefers-color-scheme: dark)");
         const theme = () => { const t = document.documentElement.getAttribute("data-theme"); if (ctl.map) ctl.map.setNight(t === "dark" || (t !== "light" && dark.matches)); };
         theme(); if (dark.addEventListener) { dark.addEventListener("change", theme); undo.push(() => dark.removeEventListener("change", theme)); }
@@ -2103,5 +2153,8 @@ function createMap3D(host, C, planCanvas, hooks) {
   // a campaign's own changes to a city that was fetched or generated for it (city.js is rewritten whenever the city is
   // fetched again, so changes made there would be lost): ATLAS.cityEdit(c => { c.title = "..."; c.landmarks.push({...}); })
   A.cityEdit = (fn, id) => { (A.cityEdits = A.cityEdits || []).push(id ? { fn, id } : fn); return A; };
+  // the game master's changes made in the city editor and given back to the campaign (atlas-cityedit.js): steps laid
+  // over the city once it is built, never building it again: ATLAS.cityChanges("main", [{ op: "remove", at: [x, y] }, ...])
+  A.cityChanges = (id, steps) => { (A.cityChangeData = A.cityChangeData || {})[id || "main"] = (steps || []).slice(); return A; };
   A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, FANTASY_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN, kit: () => KIT, KIT_SHAPES: ["box", "roof", "cylinder", "cone", "tube", "dome", "ball", "pyramid", "spire", "obelisk", "frustum", "ring", "arch"], KIT_MATS: ["wall", "roof", "dark", "glow", "green", "glass", "gold", "copper", "stone", "brick", "wood", "white", "black", "water"], KIT_DRESS: ["balcony", "dome", "turret"] };
 })(ATLAS);

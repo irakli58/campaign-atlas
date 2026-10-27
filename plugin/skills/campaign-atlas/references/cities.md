@@ -194,6 +194,32 @@ ATLAS.cityEdit(c => {
 });
 ```
 
+### 7a. The game master's own changes, on the page
+
+The user asked (26 Oct 2026, the world builder; 27 Oct: "editing the city however I want") to change a generated city without building it again. **Edit the city** on the 3D map (the game master's view; an invented city, a camp, a base, never a real city, whose real streets stay as they are) opens a bar of tools:
+
+- **Choose a building**: click a house to **Move** it (then click where it should stand), turn it (⟲ ⟳), change its **kind** (a house, a shop, a tavern or inn, a church, a chapel, a school or hall, a warehouse, a shed), its **floors** and its **roof** (pitched or flat), or **Remove** it.
+- **+ Building**: a new house of a chosen kind, floors and roof where the map is clicked.
+- **+ Road** (a main road, a street, a lane or an alley), **+ Wall** and **+ Gate** (a gap in the nearest wall with a tower each side), **+ Park** (trees come with it), **+ Square**, and **+ District** (named, tinted in the colour of the faction that holds it): click along the line or round the edge, then **Finish** (or Enter).
+- **Undo** and **Redo** (Ctrl+Z, Ctrl+Y). **Copy the changes** gives them to the campaign.
+
+Each change is a step laid over the city as it was built, in order; the city is never built again. A house moved or changed is cleared where it stood (it keeps its turn in the city's sequence, so no other house changes colour) and set down again with the colours and height it had; a house added, a road, a wall, a park or a square clears what stood under it. The 3D view is drawn again in the same renderer after each step (a new one at each change soon runs out of graphics memory). The steps are kept in the page's database (collection `cityedits`, a document per city), and given back as:
+
+```js
+ATLAS.cityChanges("main", [
+  { op: "remove", at: [120.4, 88.1] },
+  { op: "move", at: [101, 77.5], to: [104.2, 80], ang: .26, look: { wallC: "#8a5a44", roofC: "#4a4a52", H: 2.4, pitch: true } },
+  { op: "change", at: [96.3, 70], kind: "pub", floors: 3, roof: "pitched" },
+  { op: "add", x: 140, y: 60, kind: "shop", floors: 2, roof: "flat" },
+  { op: "road", pts: [[10, 90], [40, 85], [60, 95]], cls: 1, name: "Tanner's Row" },
+  { op: "wall", pts: [[150, 20], [190, 25], [195, 60]] }, { op: "gate", at: [170, 22.5] },
+  { op: "park", pts: [[110, 60], [130, 60], [130, 75], [110, 75]], name: "The Lantern Green" },
+  { op: "district", pts: [[20, 20], [60, 18], [62, 50], [24, 55]], name: "The Thieves' Quarter", owner: "guild" }
+]);
+```
+
+in `campaign.js` (`at` finds the house standing there; `owner` names a faction of `table.js`; `plaza` is a square, like `park`). The campaign's steps come first, the page's after them. The game master's own places (**+ Add location**) are set in as before; their interiors are built in the map editor.
+
 ## 8. The data format
 
 `ATLAS.city({ ... })`. Coordinates are plan units; a line or ring is `[[x, y], ...]`. Everything is optional except `roads`.
