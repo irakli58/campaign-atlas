@@ -89,7 +89,7 @@
     // powers: a few polities grown out from their capitals along the lanes (the council may give its own factions instead)
     const adj = S.map(() => []); for (const [a, b] of lanes.values()) { adj[a].push(b); adj[b].push(a); }
     const rp = rng(p.seed + "|powers"), caps = [homeS].concat(S.filter(s => s.f.colony && s !== homeS).sort(() => rp() - .5).slice(0, Math.max(2, Math.min(7, Math.round(N / 90)))));
-    const powers = caps.map((c, k) => ({ id: "p" + k, name: `${pick(rp, ["The", "The Free", "The United", "The", "The Old"])} ${/d/.test(c.name) ? word(rp) : c.name} ${k === 0 ? "Compact" : pick(rp, ["Hegemony", "League", "Directorate", "Republic", "Combine", "Syndicate", "Dominion"])}`, capital: c.i }));
+    const powers = caps.map((c, k) => ({ id: "p" + k, name: `${pick(rp, ["The", "The Free", "The United", "The", "The Old"])} ${/\d/.test(c.name) ? word(rp) : c.name} ${k === 0 ? "Compact" : pick(rp, ["Hegemony", "League", "Directorate", "Republic", "Combine", "Syndicate", "Dominion"])}`, capital: c.i }));
     const owner = new Array(N).fill(-1), q = []; caps.forEach((c, k) => { owner[c.i] = k; q.push([c.i, 0]); });
     const reach = Math.max(4, Math.round(N / caps.length / 6));
     while (q.length) { const [i, dd] = q.shift(); if (dd >= reach) continue; for (const j of adj[i]) if (owner[j] < 0 && rp() < .85) { owner[j] = owner[i]; q.push([j, dd + 1]); } }
@@ -148,16 +148,24 @@
     const cell = 40, grid = G._grid || (G._grid = (() => { const m = new Map(); for (const s of G.systems) { const k = Math.floor(s.x / cell) + "," + Math.floor(s.y / cell); (m.get(k) || m.set(k, []).get(k)).push(s.i); } return m; })());
     const rad = range / G.ly, c = Math.ceil(rad / cell);
     const ok = o.can || (() => true);
+    // (a corridor the game master gave its own length, G.laneLy, is that long whatever the map says: a jump gate, a
+    // fold in space; it is taken even when the stars at its ends stand further apart than the ship can jump)
+    const lly = G.laneLy && G.laneLy.size ? G.laneLy : null;
     best[from] = 0; const open = [from];
+    const relax = (i, j, d) => {
+      if (d > range) return;
+      const lane = laneSet.has(Math.min(i, j) + "-" + Math.max(i, j)), w = d * (lane ? 1 : 1.25) + (o.risk ? o.risk(i, j) : 0);
+      if (best[i] + w < best[j]) { best[j] = best[i] + w; prev[j] = i; open.push(j); }
+    };
     while (open.length) {
       let bi = 0; for (let k = 1; k < open.length; k++) if (best[open[k]] < best[open[bi]]) bi = k;
       const i = open.splice(bi, 1)[0]; if (done[i]) continue; done[i] = 1; if (i === to) break;
       const s = G.systems[i], cx = Math.floor(s.x / cell), cy = Math.floor(s.y / cell);
       for (let a = -c; a <= c; a++) for (let b = -c; b <= c; b++) for (const j of grid.get((cx + a) + "," + (cy + b)) || []) {
-        if (done[j] || j === i || !ok(j)) continue; const d = dist(G, i, j); if (d > range) continue;
-        const lane = laneSet.has(Math.min(i, j) + "-" + Math.max(i, j)), w = d * (lane ? 1 : 1.25) + (o.risk ? o.risk(i, j) : 0);
-        if (best[i] + w < best[j]) { best[j] = best[i] + w; prev[j] = i; open.push(j); }
+        if (done[j] || j === i || !ok(j)) continue;
+        relax(i, j, (lly && lly.get(Math.min(i, j) + "-" + Math.max(i, j))) || dist(G, i, j));
       }
+      if (lly && G.adj) for (const j of G.adj[i] || []) { const d = lly.get(Math.min(i, j) + "-" + Math.max(i, j)); if (d && !done[j] && ok(j)) relax(i, j, d); }
     }
     if (!isFinite(best[to])) return null;
     const path = []; for (let k = to; k >= 0; k = prev[k]) { path.unshift(k); if (k === from) break; }
