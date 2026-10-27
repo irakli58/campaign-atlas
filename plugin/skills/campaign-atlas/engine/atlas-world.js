@@ -647,7 +647,7 @@
     // (the traced land takes the game master's brush strokes too)
     const traced = () => { if (DRAW && DRAW.trace) { const g = DRAW.trace.G; WD.G = Object.assign({}, g, { H: Uint8Array.from(g.H), M: Uint8Array.from(g.M), C: g.C ? Uint8Array.from(g.C) : new Uint8Array(g.cols * g.rows) }); for (const s of WD.shape.strokes) stroke(WD.G, s); WD.rivers = [...DRAW.trace.rivers, ...WD.rivers]; WD.labels = [...DRAW.trace.labels, ...WD.labels]; } };
     let st = STYLE[WD.look] || STYLE.parchment; const gm = () => ctx.mode() === "gm";
-    const [W, H] = WD.size;
+    let [W, H] = WD.size;
     const filt = Object.assign({ kinds: {}, know: "all", only3d: false, routes: {} }, (() => { try { return JSON.parse(ctx.store.get("world-filter") || "{}"); } catch (e) { return {}; } })());
     // tool: loc, route (the places and their ways), brush (the land), river, realm, label; selFeat: a river, name or realm
     const S = { sel: null, selRoute: null, selFeat: null, hover: null, edit: false, tool: null, first: null, q: "", hits: null, journey: null, drag: null, note: "", brush: "land", size: 30, draft: null, cur: null, fdrag: null };
@@ -1108,15 +1108,21 @@
     function newWorldDlg() {
       const g = OV.gen || {}, SK = A.worldSketch, km = k => k === "planet" ? "the whole planet, pole to pole" : `about ${Math.round(GEN_SIZES[k][0] * 2.3 / 100) * 100} km across`;
       const sizes = [["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"], ["vast", "Vast"], ["world", "A great continent"], ["planet", "A whole planet"]].map(([k, l]) => [k, `${l}: ${km(k)}${GEN_SECS[k] >= 60 ? ` (takes about ${Math.round(GEN_SECS[k] / 60)} min)` : ""}`]);
-      const lands = [["continent", "One continent"], ["continents", "Several continents"], ["islands", "Islands"], ["archipelago", "An archipelago"], ["coast", "A coast (the sea on one side)"], ["inland", "All land"], ["sketch", "As I drew it (a picture)"]];
+      const lands = [["continent", "One continent"], ["continents", "Several continents"], ["islands", "Islands"], ["archipelago", "An archipelago"], ["coast", "A coast (the sea on one side)"], ["inland", "All land"], ["paint", "Paint it myself"], ["sketch", "From a picture of my own"]];
       const looks = (A.worldArt ? A.worldArt.looksFor(WD) : []).map(([v, l]) => [v, l]);
       const clim = Object.entries(A.worldBiomes ? A.worldBiomes.CLIMATES : { varied: [0, 0, 0, "Varied"] }).map(([k, v]) => [k, v[3]]);
       let pic = null;
       dlg.innerHTML = `<form method="dialog" class="ke wm-newworld"><h3>Make a new world</h3>
         <p class="kn">A whole new land, made the way the Earth makes one: plates raise its mountains, rivers carve them, the winds bring its rain. Your places are set on it again; Undo brings back the old land.</p>
         <label>How big <select name="size">${opt(sizes, g.size || "vast")}</select></label>
-        <label>Its shape <select name="land">${opt(lands, g.sketch ? "sketch" : g.land || "continent")}</select></label>
+        <label>Its shape <select name="land">${opt(lands, g.paint ? "paint" : g.sketch ? "sketch" : g.land || "continent")}</select></label>
         <div class="wm-nw-pic" hidden><label>Your drawing <input type="file" name="pic" accept="image/*"></label><p class="kn">A drawing on paper or a coloured map: the land you outlined (or did not colour blue) becomes the land, and the mountains you drew (peaks, hatching, or brown and grey) become ranges. A photo of a sketch works.</p><p class="kn wm-nw-read"></p></div>
+        <div class="wm-nw-paint" hidden>
+          <div class="wm-pal" role="radiogroup" aria-label="What to paint">${[["water", "Sea, lakes, rivers", SK ? SK.WATER : "#4f8fcf"], ...(SK ? SK.KINDS.map(k => [k[0], k[1], k[2]]) : [])].map(([k, l, c], i) => `<button type="button" class="wm-pc" data-pc="${c}" aria-pressed="${i === 1}" title="${esc(l)}"><i style="background:${c}"></i>${esc(l)}</button>`).join("")}</div>
+          <div class="wm-pbar"><label>Brush <input type="range" name="pbrush" min="2" max="60" value="14"></label><button type="button" class="wm-btn" data-nw="fromMap">Start from this map</button><button type="button" class="wm-btn" data-nw="blank">Start from the sea</button><label class="wm-btn wm-pload">Load a picture<input type="file" accept="image/*" hidden data-nw="load"></label><button type="button" class="wm-btn" data-nw="pundo">Undo stroke</button></div>
+          <canvas class="wm-pcv" width="600" height="400"></canvas>
+          <p class="kn">Paint the land on the sea, then forests, deserts, swamps, snow, hills, mountains and volcanoes where you want them; blue inside the land is a lake, a thin blue line a river. The plates, the rivers and the climate make the rest: the land you paint, as the Earth would make it.</p>
+        </div>
         <label>Climate <select name="climate">${opt(clim, g.climate || "varied")}</select></label>
         <label>Where the deserts and rains fall <select name="rules">${opt([["earth", "As on the Earth: the winds, the seas, the mountains decide"], ["classic", "Atlas's older, simpler rules"]], g.rules || "earth")}</select></label>
         <label>Kind of world <select name="realism">${opt([["fantasy", "Fantasy: its own places (enchanted woods, ...)"], ["realistic", "Realistic: only what the Earth would make"]], g.realism || (WD.T && WD.T.realism) || "fantasy")}</select></label>
@@ -1125,8 +1131,42 @@
         <p class="kn">The same seed and choices always make the same world.</p>
         <div class="ka">${OV.gen ? `<button type="button" data-nw="back">Back to the campaign's own land</button>` : ""}<button type="submit" value="cancel" formnovalidate>Cancel</button><button type="submit" value="make" class="prim">Make it</button></div></form>`;
       const f = dlg.querySelector("form"), picBox = f.querySelector(".wm-nw-pic"), readOut = f.querySelector(".wm-nw-read");
-      const showPic = () => { picBox.hidden = f.elements.land.value !== "sketch"; };
+      // the painter: the colour key's brushes on a little canvas the map's shape
+      const pBox = f.querySelector(".wm-nw-paint"), pcv = f.querySelector(".wm-pcv"), pg = pcv.getContext("2d", { willReadFrequently: true }), pUndo = [];
+      let pInit = false, pCol = (SK && SK.KINDS[0][2]) || "#a6d27c";
+      const pAspect = () => { const k = f.elements.size.value, [sw, sh] = GEN_SIZES[k]; return k === "planet" ? 2 : sw / sh; };
+      const pSize = () => { const a = pAspect(), w = 600, h = Math.round(w / a); if (pcv.width !== w || pcv.height !== h) { const keep = pInit ? pg.getImageData(0, 0, pcv.width, pcv.height) : null, ow = pcv.width, oh = pcv.height; pcv.width = w; pcv.height = h; if (keep) { const t = document.createElement("canvas"); t.width = ow; t.height = oh; t.getContext("2d").putImageData(keep, 0, 0); pg.imageSmoothingEnabled = false; pg.drawImage(t, 0, 0, w, h); } } };
+      const fromMap = () => {
+        pSize(); const G = WD.G, w = pcv.width, h = pcv.height, img = pg.createImageData(w, h), hx = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+        const Wt = hx(SK.WATER), C = SK.KINDS.map(k => hx(k[2])), S2 = WD.G ? sampler(G) : null, B = G && G.B, BC = A.worldBiomes ? A.worldBiomes.CODE : {};
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          let c = Wt;
+          if (S2) { const X = (x + .5) / w * W, Y = (y + .5) / h * H, v = S2(X, Y); if (v > G.sea) { const t = (v - G.sea) / (255 - G.sea), b = B ? B[Math.min(G.rows - 1, Math.floor(Y / G.cell)) * G.cols + Math.min(G.cols - 1, Math.floor(X / G.cell))] : -1;
+            c = t > .45 ? C[SK.K.mountains] : t > .27 ? C[SK.K.hills] : b === BC.forest ? C[SK.K.forest] : b === BC.desert ? C[SK.K.desert] : b === BC.swamp ? C[SK.K.swamp] : b === BC.snow ? C[SK.K.snow] : C[SK.K.plains]; } }
+          const o = (y * w + x) * 4; img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+        }
+        pg.putImageData(img, 0, 0); pInit = true; pUndo.length = 0;
+      };
+      const blank = () => { pSize(); pg.fillStyle = SK.WATER; pg.fillRect(0, 0, pcv.width, pcv.height); pInit = true; pUndo.length = 0; };
+      const showPic = () => { const v = f.elements.land.value; picBox.hidden = v !== "sketch"; pBox.hidden = v !== "paint"; if (v === "paint" && !pInit && SK) { if (g.paint) { const im = new Image(); im.onload = () => { pSize(); pg.drawImage(im, 0, 0, pcv.width, pcv.height); pInit = true; }; im.src = g.paint; } else fromMap(); } };
       showPic(); f.elements.land.addEventListener("change", showPic);
+      f.elements.size.addEventListener("change", () => { if (pInit) pSize(); });
+      for (const b of f.querySelectorAll(".wm-pc")) b.addEventListener("click", () => { pCol = b.dataset.pc; for (const o of f.querySelectorAll(".wm-pc")) o.setAttribute("aria-pressed", o === b); });
+      f.querySelector('[data-nw="fromMap"]').addEventListener("click", fromMap);
+      f.querySelector('[data-nw="blank"]').addEventListener("click", blank);
+      f.querySelector('[data-nw="pundo"]').addEventListener("click", () => { const u = pUndo.pop(); if (u) pg.putImageData(u, 0, 0); });
+      f.querySelector('[data-nw="load"]').addEventListener("change", e => {
+        const file = e.target.files && e.target.files[0]; if (!file) return; const im = new Image(), url = URL.createObjectURL(file);
+        im.onload = () => { pSize(); const t = document.createElement("canvas"), w = pcv.width, h = pcv.height; t.width = w * 2; t.height = h * 2; const tg = t.getContext("2d", { willReadFrequently: true }); tg.fillStyle = "#fff"; tg.fillRect(0, 0, t.width, t.height); tg.drawImage(im, 0, 0, t.width, t.height); URL.revokeObjectURL(url);
+          const key = SK.toKey(tg.getImageData(0, 0, t.width, t.height).data, t.width, t.height, w, h); pUndo.push(pg.getImageData(0, 0, w, h)); pg.putImageData(new ImageData(key, w, h), 0, 0); pInit = true; };
+        im.src = url;
+      });
+      // (strokes: round, with the chosen colour; held, they paint as the pointer moves)
+      let pDown = null;
+      const pPt = e => { const r = pcv.getBoundingClientRect(); return [(e.clientX - r.left) * pcv.width / r.width, (e.clientY - r.top) * pcv.height / r.height]; };
+      pcv.addEventListener("pointerdown", e => { e.preventDefault(); pcv.setPointerCapture(e.pointerId); pUndo.push(pg.getImageData(0, 0, pcv.width, pcv.height)); if (pUndo.length > 30) pUndo.shift(); pDown = pPt(e); pg.fillStyle = pCol; pg.beginPath(); pg.arc(pDown[0], pDown[1], +f.elements.pbrush.value / 2, 0, 6.3); pg.fill(); });
+      pcv.addEventListener("pointermove", e => { if (!pDown) return; const q = pPt(e); pg.strokeStyle = pCol; pg.lineCap = "round"; pg.lineWidth = +f.elements.pbrush.value; pg.beginPath(); pg.moveTo(pDown[0], pDown[1]); pg.lineTo(q[0], q[1]); pg.stroke(); pDown = q; });
+      const pUp = () => { pDown = null; }; pcv.addEventListener("pointerup", pUp); pcv.addEventListener("pointercancel", pUp);
       f.querySelector('[data-nw="roll"]').addEventListener("click", () => { f.elements.seed.value = 1000 + Math.floor(Math.random() * 900000); });
       const back = f.querySelector('[data-nw="back"]'); if (back) back.addEventListener("click", () => { closeDlg(); save("gen", null); note("Back to the campaign's own land."); });
       // the picture, read as soon as it is chosen, so the referee sees what was understood
@@ -1147,7 +1187,14 @@
         if (!e.submitter || e.submitter.value !== "make") return; e.preventDefault();
         const v = { size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
         const whole = v.size === "planet";
-        if (f.elements.land.value === "sketch") {
+        if (f.elements.land.value === "paint") {
+          // (the painting, read exactly by its colours; kept small as text, and as a picture to paint on again)
+          const [sw, sh] = GEN_SIZES[v.size], a = whole ? 2 : pcv.width / pcv.height, d = pg.getImageData(0, 0, pcv.width, pcv.height);
+          v.land = whole ? "continents" : "continent"; v.dims = whole ? [sw, sh] : [Math.round(Math.sqrt(sw * sh * a)), Math.round(Math.sqrt(sw * sh / a))];
+          v.sketch = SK.encode(SK.read(d.data, pcv.width, pcv.height, ...SK.gridFor(pcv.width, pcv.height, a), { colour: true }));
+          // (the picture, made small so it keeps in the page's store)
+          const t = document.createElement("canvas"); t.width = 300; t.height = Math.round(300 / a); t.getContext("2d").drawImage(pcv, 0, 0, t.width, t.height); v.paint = t.toDataURL("image/png");
+        } else if (f.elements.land.value === "sketch") {
           if (!pic && !(g.sketch)) { readOut.textContent = "Choose the picture of your drawing first."; return; }
           const [sw, sh] = GEN_SIZES[v.size], a = whole ? 2 : pic ? Math.max(.4, Math.min(3, pic.iw / pic.ih)) : (g.dims ? g.dims[0] / g.dims[1] : sw / sh);
           v.land = whole ? "continents" : "continent"; v.dims = whole ? [sw, sh] : [Math.round(Math.sqrt(sw * sh * a)), Math.round(Math.sqrt(sw * sh / a))];
@@ -1184,6 +1231,8 @@
       // streams, need not be worked out again)
       if (lk === lastLand && keepG && WD.G && keepG.cols === WD.G.cols && keepG.rows === WD.G.rows) WD.G = keepG;
       if (WD.look !== was) { st = STYLE[WD.look] || STYLE.parchment; root.classList.remove("wm-" + was); root.classList.add("wm-" + WD.look); }
+      // (a world made at another size: the frame and the camera follow it)
+      if (WD.size[0] !== W || WD.size[1] !== H) { [W, H] = WD.size; size(); home(true); }
       if (WD.look !== was || lk !== lastLand) { lastLand = lk; PG = null; ways.clear(); drawLand(); }
       if (keepSel && !WD.byId[keepSel]) S.sel = null; if (keepR && !WD.rById[keepR]) S.selRoute = null; if (S.selFeat && !featOf(S.selFeat)[1]) S.selFeat = null;
       drawRoutes(); drawMarkers(); drawFx(); renderPanel(); renderBars();

@@ -52,6 +52,10 @@ function ecology(L, o, U) {
   const kop = new Uint8Array(N), biome = new Uint8Array(N), canopy = new Uint8Array(N), med = MEDIAN_MM[o.climate] || 620;
   const slope = n => { const i = I(n), j = J(n); let s = 0; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; s = Math.max(s, Math.abs(E[b * cols + a] - E[n])); } return s / (cellKm * 1000); };
   const accBig = Math.max(30, N * .0025);
+  // (a painted map's kinds of land (atlas-world-sketch.js KINDS: 1 forest, 2 desert, 3 swamp, 4 snow): they steer the
+  // climate where they are, eased across a few cells so their edges blend: a desert painted gets little rain, a forest
+  // and a swamp much, snow the cold; the ecology then works out the rest)
+  const PT = L.paint ? [1, 2, 3, 4].map(k => { const F = new Float32Array(N); for (let n = 0; n < N; n++) F[n] = L.paint[n] === k ? 1 : 0; blur(F, cols, rows, 3, 2); return F; }) : null;
   for (let n = 0; n < N; n++) {
     const j = J(n), a = Math.abs(lat(j)), e = Math.max(0, E[n]);
     // warmth: the latitude's, less with height; the seasons swing more toward the poles and far from the sea
@@ -61,10 +65,10 @@ function ecology(L, o, U) {
     const cont = 1 - Math.exp(-dOcean[n] * cellKm / 550), lapse = e * .0065 - (o.tempShift || 0) * 40 - (o.warmC || 0);
     // (a cold current keeps its coast cool and grey in summer: Lima, Walvis Bay, San Diego)
     const fg = earth && L.fog ? L.fog[n] : 0;
-    const tw = 30 - .0045 * a * a + 2 * cont - lapse - 6 * fg, tc = 27 - .0085 * a * a - .35 * a * cont - lapse - fg, t = (tw + tc) / 2;
+    const cold = PT ? PT[3][n] * 16 : 0, tw = 30 - .0045 * a * a + 2 * cont - lapse - 6 * fg - cold, tc = 27 - .0085 * a * a - .35 * a * cont - lapse - fg - cold, t = (tw + tc) / 2;
     T[n] = t; Tw[n] = tw; Tc[n] = tc;
     // the year's rain in mm, and when it falls (the share in the warm half of the year)
-    P[n] = Math.max(5, earth && L.mm ? L.mm[n] : L.rain[n] / (L.want || .55) * med);
+    P[n] = Math.max(5, (earth && L.mm ? L.mm[n] : L.rain[n] / (L.want || .55) * med) * (PT ? Math.max(.08, 1 + .9 * PT[0][n] + .8 * PT[2][n] - .85 * PT[1][n]) : 1));
     // (each belt's season blended smoothly into the next: the even rain of the equator, the summer rain of the monsoon
     // and savanna belt, the dry summers of the subtropical west coasts (the Mediterranean, California, central Chile),
     // the even rain of maritime coasts, the summer rain of continental interiors)
@@ -134,7 +138,14 @@ function ecology(L, o, U) {
   for (let n = 0; n < N; n++) {
     if (!land(n)) continue; const b = biome[n];
     simple[n] = b === B.icesheet ? B.snow : WET.has(b) ? B.swamp : (b === B.alpine || b === B.rock || E[n] > 1800) ? B.mountains : DES.has(b) ? B.desert : canopy[n] > 90 || b === B.gallery && canopy[n] > 60 ? B.forest : B.plains;
+    // (and where a kind was painted, it is that kind: the forest closes, the swamp floods, the desert stays bare)
+    const pk = L.paint ? L.paint[n] : 0;
+    if (pk === 1) { simple[n] = B.forest; detailF(n, B.temperate); canopy[n] = Math.max(canopy[n], 185); }
+    else if (pk === 2) { simple[n] = B.desert; canopy[n] = 0; if (!DES.has(biome[n])) detailF(n, B.rockdesert); }
+    else if (pk === 3) { simple[n] = B.swamp; if (!WET.has(biome[n])) detailF(n, B.marsh); }
+    else if (pk === 4) { simple[n] = B.snow; canopy[n] = 0; detailF(n, B.icesheet); }
   }
+  function detailF(n, b) { if (biome[n] === B.gallery || BIO.LIST[biome[n]] && BIO.LIST[biome[n]][0] === BIO.LIST[b][0]) return; if (b === B.temperate && [B.boreal, B.rainforest, B.mixed, B.subtropical, B.monsoon, B.temperate, B.cloud].includes(biome[n])) return; biome[n] = b; }
   const ground = earth ? groundEarth() : groundClassic();
   function groundClassic() {
   // the bare ground of dry land, where little grows over it (the user, 27 Oct 2026: the desert "looks kinda

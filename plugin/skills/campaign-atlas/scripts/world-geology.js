@@ -123,6 +123,13 @@ function geology(o, U) {
   // drawing leads; with none drawn, the plates make the mountains as on any world)
   let drawnM = false;
   if (SK && SK.mtn) { const mC = blockAvg(SK.mtn); let s = 0, l = 0; for (let n = 0; n < CN; n++) if (crust[n]) { l++; s += mC[n] > .25 ? 1 : 0; } drawnM = s > l * .003; if (drawnM) for (let n = 0; n < CN; n++) up[n] = up[n] * .4 + (crust[n] ? 1.7 * mC[n] : 0); }
+  // (a volcano painted red: a cone raised there, and a volcano marked)
+  if (SK && SK.kind) { const seen = new Uint8Array(cols * rows);
+    for (let n0 = 0; n0 < cols * rows; n0++) { if (seen[n0] || SK.kind[n0] !== 7) continue; const st = [n0]; seen[n0] = 1; let sx = 0, sy = 0, c = 0;
+      while (st.length) { const n = st.pop(), i = n % cols, j = (n / cols) | 0; sx += i; sy += j; c++; for (const m of [i > 0 ? n - 1 : -1, i < cols - 1 ? n + 1 : -1, j > 0 ? n - cols : -1, j < rows - 1 ? n + cols : -1]) if (m >= 0 && !seen[m] && SK.kind[m] === 7) { seen[m] = 1; st.push(m); } }
+      const ci0 = Math.min(cc - 1, ((sx / c) / f) | 0), cj0 = Math.min(cr - 1, ((sy / c) / f) | 0), R = Math.ceil(60 / ckm) + 1;
+      for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) { const a = ci0 + di, b = cj0 + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; up[b * cc + a] += 1.3 * gauss(Math.hypot(di, dj) * ckm / 30); }
+      volc.push(cj0 * cc + ci0); } }
   // old belts, worn low, across the old continents
   for (let k = 0; k < nP && !drawnM; k++) {
     if (rnd() < .45) continue; const s = plates[k].seed; if (!crust[s]) continue;
@@ -233,11 +240,14 @@ function geology(o, U) {
   { let landN = 0; const lk = []; for (let n = 0; n < N; n++) { if (E[n] > 0) landN++; if (lakeCells[n]) lk.push(n); }
     const room = Math.round(landN * .03); if (lk.length > room) { lk.sort((a, b) => (F[b] - E[b]) - (F[a] - E[a])); for (let k = room; k < lk.length; k++) lakeCells[lk[k]] = 0; } }
   // (the lakes the sketch shows are lakes, whatever the rain and however many there are)
-  if (SK && SK.lake) for (let n = 0; n < N; n++) if (SK.lake[n] && E[n] > 0) lakeCells[n] = 1;
+  if (SK && SK.lake) { for (let n = 0; n < N; n++) if (SK.lake[n] && E[n] > 0) lakeCells[n] = 1;
+    // (and only as big as drawn: water the hollows would add round a drawn lake is left as land)
+    const st = [], seen = new Uint8Array(N); for (let n = 0; n < N; n++) if (SK.lake[n] && lakeCells[n]) { seen[n] = 1; st.push(n); }
+    while (st.length) { const n = st.pop(), i = n % cols, j = (n / cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < cols - 1 ? n + 1 : -1, j > 0 ? n - cols : -1, j < rows - 1 ? n + cols : -1]) if (m >= 0 && !seen[m] && lakeCells[m]) { seen[m] = 1; st.push(m); if (!SK.lake[m]) lakeCells[m] = 0; } } }
 
   /* 8. what lives on it: climate classes, biomes and tree cover, from all of the above (world-ecology.js) */
   const want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
-  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC }, U);
+  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog, paint: SK && SK.kind ? SK.kind : null }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC }, U);
 
   /* to the grid the maps are drawn from */
   // (and each height's fraction, kept apart: a shaded relief map needs the land's slopes finer than 255 steps)

@@ -2118,3 +2118,16 @@ button.ho-b:hover { color: var(--ink); }
 .fac-down .fac-lv { color: #b0161b; }
 .fac-sys select { width: auto; margin: 0; padding: 2px 6px; }
 .fac-sys .t-n { width: 56px; margin: 0; }
+
+/* the world map: Make a new world, and its painter */
+.wm-newworld { max-width: 680px; }
+.wm-newworld label { display: block; margin: .45rem 0; }
+.wm-nw-paint { margin: .5rem 0; }
+.wm-pal { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .4rem; }
+.wm-pc { display: inline-flex; align-items: center; gap: .35rem; font: inherit; font-size: .8rem; padding: .2rem .5rem; border: 1px solid var(--rule, #bbb); border-radius: 999px; background: var(--paper, #fff); color: inherit; cursor: pointer; }
+.wm-pc i { width: .9rem; height: .9rem; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .25); display: inline-block; }
+.wm-pc[aria-pressed="true"] { outline: 2px solid var(--accent, #333); outline-offset: 1px; }
+.wm-pbar { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-bottom: .4rem; }
+.wm-pbar label { display: inline-flex; align-items: center; gap: .3rem; margin: 0; }
+.wm-pload { cursor: pointer; }
+.wm-pcv { width: 100%; height: auto; border: 1px solid var(--rule, #bbb); border-radius: 4px; touch-action: none; cursor: crosshair; image-rendering: auto; }

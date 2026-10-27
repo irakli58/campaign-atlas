@@ -14,9 +14,32 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  // the colour key of a painted map (the user, 27 Oct 2026: "I like the coloured map one better ... more consistent,
+  // make it more fleshed out"): each kind of land, its colour in the page's painter, and how a colour on an uploaded
+  // map is told to be it (by hue, strength and lightness). Blue is water: the sea where it reaches the open sea, a lake
+  // or a river where it does not. 0 is plain land.
+  const KINDS = [
+    ["plains", "Plains and grassland", "#a6d27c"], ["forest", "Forest", "#2f6b35"], ["desert", "Desert", "#ecd88c"], ["swamp", "Swamp", "#6f8a5c"],
+    ["snow", "Snow and ice", "#f4f6f8"], ["hills", "Hills", "#b08a5a"], ["mountains", "Mountains", "#7a5236"], ["volcano", "Volcano", "#d2402a"]
+  ];
+  const K = Object.fromEntries(KINDS.map((k, i) => [k[0], i])), KIND_MTN = [0, 0, 0, 0, .55, .26, 1, .95], WATER = "#4f8fcf";
+  function kindOf(r, g, b) {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), v = mx / 255, s = mx ? (mx - mn) / mx : 0;
+    let h = 0; if (mx > mn) { h = mx === r ? ((g - b) / (mx - mn)) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4; h = (h * 60 + 360) % 360; }
+    if (s > .45 && v > .35 && (h < 18 || h > 340)) return K.volcano;
+    if (s < .1 && v > .9) return K.snow;
+    if (s < .14 && v < .78) return K.mountains;                       // grey rock
+    if (h >= 8 && h < 50 && s > .25 && v < .6) return K.mountains;    // brown
+    if (h >= 18 && h < 52 && s > .2 && v < .8) return K.hills;        // light brown, ochre
+    if (h >= 36 && h < 66 && s > .2 && v >= .78) return K.desert;     // sand
+    if (h >= 60 && h < 115 && s < .4 && v >= .38 && v < .66) return K.swamp;   // olive, grey-green
+    if (h >= 70 && h < 175 && v < .55) return K.forest;               // dark green
+    return K.plains;
+  }
 
   // px: RGBA bytes, iw by ih; cols by rows: the grid it is read onto
-  function read(px, iw, ih, cols, rows) {
+  // (opts.colour: read as a painted map whatever its share of blue, as the page's painter makes)
+  function read(px, iw, ih, cols, rows, opts) {
     const N = cols * rows, minL = new Float32Array(N).fill(255), sum = new Float32Array(N * 4), cnt = new Float32Array(N);
     for (let y = 0; y < ih; y++) {
       const j = Math.min(rows - 1, Math.floor(y * rows / ih));
@@ -30,8 +53,8 @@
     const R = new Float32Array(N), Gc = new Float32Array(N), B = new Float32Array(N), L = new Float32Array(N), blue = new Uint8Array(N); let nb = 0;
     for (let n = 0; n < N; n++) { const c = cnt[n] || 1; R[n] = sum[n * 4] / c; Gc[n] = sum[n * 4 + 1] / c; B[n] = sum[n * 4 + 2] / c; L[n] = sum[n * 4 + 3] / c; if (B[n] - (R[n] + Gc[n]) / 2 > 14 && B[n] > 80) { blue[n] = 1; nb++; } }
     const paper = Float32Array.from(L).sort()[Math.floor(N * .75)] || 255;
-    let sea = new Uint8Array(N), wall = null; const colour = nb > N * .08 && nb < N * .94;
-    const lake = new Uint8Array(N), river = new Uint8Array(N);
+    let sea = new Uint8Array(N), wall = null; const colour = opts && opts.colour || nb > N * .08 && nb < N * .94;
+    const lake = new Uint8Array(N), river = new Uint8Array(N), kind = new Uint8Array(N);
     if (colour) {
       // the open sea is the blue with a body that reaches the sheet's edge; blue the sea does not reach is a lake, or a
       // river where it is only a line
@@ -124,17 +147,18 @@
       if (sea[n]) continue;
       if (wall) { if (wall[n] && !coastInk[n] && !looped[n]) mtn[n] = 1; }
       else {
-        const r = R[n], g = Gc[n], b = B[n], l = L[n], mx = Math.max(r, g, b), mn = Math.min(r, g, b), sat = mx ? (mx - mn) / mx : 0;
-        const brown = r > g && g >= b - 6 && sat > .18 && l < paper * .8, grey = sat < .12 && l < paper * .78, dark = l < paper * .45, snow = l > paper * .97 && sat < .06 && dS[n] > 3;
-        if (brown || grey || dark || snow) mtn[n] = dark || snow ? 1 : .8;
+        // (the colour key, by hue: see KINDS; a colour none of them is plain land)
+        const k = kindOf(R[n], Gc[n], B[n]); kind[n] = k; mtn[n] = KIND_MTN[k] || 0;
       }
     }
     // (a mountain mark stands for the mountains about it: the marks spread and softened into ranges; specks dropped)
     specks(cols, rows, n => mtn[n] > 0, Math.max(2, N * .00008), n => { mtn[n] = 0; });
+    // (a painted kind smaller than a few cells is a slip of the brush)
+    for (let k = 1; k < KINDS.length; k++) specks(cols, rows, n => kind[n] === k, k === K.volcano ? 1 : Math.max(3, N * .0002), n => { kind[n] = 0; });
     blur(mtn, cols, rows, Math.max(1, Math.round(cols / 160)), 2);
     let mx = 0; for (let n = 0; n < N; n++) mx = Math.max(mx, mtn[n]); if (mx > 0) for (let n = 0; n < N; n++) mtn[n] = sea[n] ? 0 : Math.min(1, mtn[n] / mx * 1.4);
-    const land = new Uint8Array(N); for (let n = 0; n < N; n++) { land[n] = sea[n] ? 0 : 1; if (sea[n]) lake[n] = river[n] = 0; }
-    return { cols, rows, land, mtn, lake, river, how: colour ? "colour" : "lines" };
+    const land = new Uint8Array(N); for (let n = 0; n < N; n++) { land[n] = sea[n] ? 0 : 1; if (sea[n] || lake[n] || river[n]) kind[n] = 0; if (sea[n]) lake[n] = river[n] = 0; }
+    return { cols, rows, land, mtn, lake, river, kind, how: colour ? "colour" : "lines" };
   }
   // the grid a sketch is read onto: at most 400 cells across, the picture's own shape (or the map's, if given)
   function gridFor(iw, ih, aspect) { const a = aspect || iw / ih, cols = Math.min(400, Math.max(40, Math.round(Math.sqrt(64000 * a)))); return [cols, Math.max(20, Math.round(cols / a))]; }
@@ -142,18 +166,18 @@
   // kept as text: the land as runs of sea and land, the mountains in sixteen steps, as runs
   function encode(sk) {
     const runs = (arr, q) => { const out = []; let v = q(arr[0]), n = 0; for (let i = 0; i < arr.length; i++) { const w = q(arr[i]); if (w === v && n < 65535) n++; else { out.push(v, n); v = w; n = 1; } } out.push(v, n); return out.join(","); };
-    return { cols: sk.cols, rows: sk.rows, land: runs(sk.land, v => v ? 1 : 0), mtn: runs(sk.mtn, v => Math.round(v * 15)), lake: sk.lake ? runs(sk.lake, v => v ? 1 : 0) : undefined, river: sk.river ? runs(sk.river, v => v ? 1 : 0) : undefined };
+    return { cols: sk.cols, rows: sk.rows, land: runs(sk.land, v => v ? 1 : 0), mtn: runs(sk.mtn, v => Math.round(v * 15)), lake: sk.lake ? runs(sk.lake, v => v ? 1 : 0) : undefined, river: sk.river ? runs(sk.river, v => v ? 1 : 0) : undefined, kind: sk.kind ? runs(sk.kind, v => v) : undefined };
   }
   function decode(e) {
-    const N = e.cols * e.rows, land = new Uint8Array(N), mtn = new Float32Array(N), lake = new Uint8Array(N), river = new Uint8Array(N);
+    const N = e.cols * e.rows, land = new Uint8Array(N), mtn = new Float32Array(N), lake = new Uint8Array(N), river = new Uint8Array(N), kind = new Uint8Array(N);
     const un = (s, into, f) => { const a = String(s).split(",").map(Number); let i = 0; for (let k = 0; k < a.length; k += 2) for (let r = 0; r < a[k + 1] && i < N; r++) into[i++] = f(a[k]); };
-    un(e.land, land, v => v); un(e.mtn, mtn, v => v / 15); if (e.lake) un(e.lake, lake, v => v); if (e.river) un(e.river, river, v => v);
-    return { cols: e.cols, rows: e.rows, land, mtn, lake, river };
+    un(e.land, land, v => v); un(e.mtn, mtn, v => v / 15); if (e.lake) un(e.lake, lake, v => v); if (e.river) un(e.river, river, v => v); if (e.kind) un(e.kind, kind, v => v);
+    return { cols: e.cols, rows: e.rows, land, mtn, lake, river, kind };
   }
   // onto the map's own grid: smoothly enlarged, the coast given a natural raggedness at the finer grain (noise: a
   // function (x, y) to 0..1), the shape as drawn
   function fit(sk, cols, rows, noise) {
-    const N = cols * rows, land = new Uint8Array(N), mtn = new Float32Array(N), lake = new Uint8Array(N), river = new Float32Array(N), F = Float32Array.from(sk.land);
+    const N = cols * rows, land = new Uint8Array(N), mtn = new Float32Array(N), lake = new Uint8Array(N), river = new Float32Array(N), kind = new Uint8Array(N), F = Float32Array.from(sk.land);
     const LK = sk.lake ? Float32Array.from(sk.lake) : null, RV = sk.river ? Float32Array.from(sk.river) : null; if (RV) blur(RV, sk.cols, sk.rows, 1, 1);
     blur(F, sk.cols, sk.rows, 1, 1);
     const at = (A, x, y) => { const fx = x * sk.cols / cols - .5, fy = y * sk.rows / rows - .5, i = clamp(Math.floor(fx), 0, sk.cols - 1), j = clamp(Math.floor(fy), 0, sk.rows - 1), i1 = Math.min(sk.cols - 1, i + 1), j1 = Math.min(sk.rows - 1, j + 1), tx = clamp(fx - i, 0, 1), ty = clamp(fy - j, 0, 1); return (A[j * sk.cols + i] * (1 - tx) + A[j * sk.cols + i1] * tx) * (1 - ty) + (A[j1 * sk.cols + i] * (1 - tx) + A[j1 * sk.cols + i1] * tx) * ty; };
@@ -162,8 +186,10 @@
       const n = j * cols + i, x = i + .5, y = j + .5, wob = noise ? (noise(x / (k * 1.6), y / (k * 1.6)) - .5) * .5 + (noise(x / (k * .6) + 7, y / (k * .6)) - .5) * .22 : 0;
       land[n] = at(F, x, y) + wob > .5 ? 1 : 0; mtn[n] = land[n] ? at(sk.mtn, x, y) : 0;
       if (land[n] && LK) lake[n] = at(LK, x, y) + wob * .6 > .5 ? 1 : 0; if (land[n] && RV) river[n] = Math.min(1, at(RV, x, y) * 2.5);
+      // (a painted kind read from the nearest sketch cell, the place nudged a little so its edge wanders)
+      if (land[n] && sk.kind) { const fx = clamp(Math.floor((x + wob * k * 2.2) * sk.cols / cols), 0, sk.cols - 1), fy = clamp(Math.floor((y + wob * k * 2.2) * sk.rows / rows), 0, sk.rows - 1); kind[n] = sk.kind[fy * sk.cols + fx]; }
     }
-    return { land, mtn, lake, river };
+    return { land, mtn, lake, river, kind };
   }
 
   function specks(cols, rows, is, max, fix) {
@@ -198,5 +224,12 @@
       for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { let s = 0, c = 0; for (let k = -r; k <= r; k++) { const b = j + k; if (b >= 0 && b < rows) { s += t[b * cols + i]; c++; } } F[j * cols + i] = s / c; }
     }
   }
-  return { read, gridFor, encode, decode, fit };
+  // a picture turned into the painter's colours, cell by cell, as read would understand it
+  function toKey(px, iw, ih, cols, rows) {
+    const sk = read(px, iw, ih, cols, rows), out = new Uint8ClampedArray(cols * rows * 4), hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const W = hex(WATER), C = KINDS.map(k => hex(k[2]));
+    for (let n = 0; n < cols * rows; n++) { const c = !sk.land[n] || sk.lake[n] || sk.river[n] ? W : sk.kind && sk.kind[n] ? C[sk.kind[n]] : sk.mtn[n] > .5 ? C[K.mountains] : sk.mtn[n] > .2 ? C[K.hills] : C[K.plains]; out[n * 4] = c[0]; out[n * 4 + 1] = c[1]; out[n * 4 + 2] = c[2]; out[n * 4 + 3] = 255; }
+    return out;
+  }
+  return { read, toKey, gridFor, encode, decode, fit, KINDS, K, WATER, kindOf, blur };
 });
