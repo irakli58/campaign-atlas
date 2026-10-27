@@ -395,7 +395,7 @@ function naturalness(L, rivers, cols, rows, natOf, climate) {
 function invent(A, flags, log) {
   const K = A.worldKit, W0 = A.worldData || {}, old = A.worldTerrainData || {};
   const lookWord = (flags.look && flags.look !== true ? flags.look : null) || W0.look || old.look || lookOfCity(A);
-  const look = K.LOOK_OF[String(lookWord).toLowerCase()]; if (!look) throw new Error(`unknown look "${lookWord}": relief (shaded relief), painted or parchment (fantasy), engraved (the past), atlas (the modern world), holo (a planet surveyed) or stars (a star map)`);
+  const look = K.LOOK_OF[String(lookWord).toLowerCase()]; if (!look) throw new Error(`unknown look "${lookWord}": hydro (a hydrographic relief print), relief (shaded relief), painted or parchment (fantasy), engraved (the past), atlas (the modern world), holo (a planet surveyed) or stars (a star map)`);
   const sizeWord = flags.size && flags.size !== true ? String(flags.size) : old.sizeName || (old.height ? "medium" : "vast");
   const [w, h] = Array.isArray(W0.size) ? W0.size : SIZES[sizeWord] || SIZES.medium;
   const land = flags.land && flags.land !== true ? String(flags.land) : old.land || "continent";
@@ -444,7 +444,7 @@ function invent(A, flags, log) {
       // temperature (°C + 60)
       if (G.eco && flags.biomes !== "classic") { T.biome = Buffer.from(G.eco.biome).toString("base64"); T.canopy = Buffer.from(G.eco.canopy).toString("base64"); T.tempC = Buffer.from(Uint8Array.from(G.eco.T, v => Math.max(0, Math.min(255, Math.round(v + 60))))).toString("base64"); if (G.eco.ground.some(v => v)) T.ground = Buffer.from(G.eco.ground).toString("base64"); }
       // (the land was made to a size, so the map knows its scale: miles for fantasy and the past, km otherwise)
-      const kmAcross = num("km", Math.round(w * 2.3)), miles = ["relief", "painted", "parchment", "engraved"].includes(look);
+      const kmAcross = num("km", Math.round(w * 2.3)), miles = ["hydro", "relief", "painted", "parchment", "engraved"].includes(look);
       T.scale = { unit: miles ? "mile" : "km", per: Math.round((miles ? kmAcross * .6214 : kmAcross) / w * 1000) / 1000 };
       if (realism === "alien") T.planetConditions = planet;
     } else L = makeLand({ cols, rows, seed, land });
@@ -588,7 +588,7 @@ function lookOfCity(A) {
   if (lk === "modern" || era === "modern") return "atlas";
   if (era === "victorian" || era === "1920s" || lk === "victorian" || lk === "industrial") return "engraved";
   // (fantasy has been shaded relief since 27 Oct 2026, as the user asked; painted and parchment remain choices)
-  if (lk === "fantasy" || (A.config || {}).genre === "fantasy" || /fantas|sorcer|dragon|elv|elf|dwar|wizard|dungeons/i.test(setting)) return "relief";
+  if (lk === "fantasy" || (A.config || {}).genre === "fantasy" || /fantas|sorcer|dragon|elv|elf|dwar|wizard|dungeons/i.test(setting)) return "hydro";
   return "parchment";
 }
 // ---- a map the game master drew (or painted, or photographed): the picture is kept beside the campaign as
@@ -665,7 +665,7 @@ function starter(dir, A, flags, size) {
   if (m) {
     const unit = (m[2] || "mile").toLowerCase().replace(/(?<!s)s$/, "").replace(/^km$/, "km");
     scale = { unit, per: Math.round(+m[1] / w * 10000) / 10000 };
-    if ((lk === "parchment" || lk === "painted" || lk === "relief") && /mile|league|km/.test(unit)) { const k = unit === "league" ? 1 / 3 : unit === "km" ? 1.6 : 1; speeds = { road: Math.round(24 * k), trail: Math.round(16 * k), pass: Math.round(10 * k), river: Math.round(30 * k), sea: Math.round(72 * k) }; }
+    if ((lk === "parchment" || lk === "painted" || lk === "relief" || lk === "hydro") && /mile|league|km/.test(unit)) { const k = unit === "league" ? 1 / 3 : unit === "km" ? 1.6 : 1; speeds = { road: Math.round(24 * k), trail: Math.round(16 * k), pass: Math.round(10 * k), river: Math.round(30 * k), sea: Math.round(72 * k) }; }
   }
   const L = locs.map(l => "    " + JSON.stringify(l).replace(/"(\w+)":/g, "$1: ")).join(",\n");
   const txt = `// The world map of ${title}: the places the story travels between, and the ways between them (references/world.md).
@@ -673,7 +673,7 @@ function starter(dir, A, flags, size) {
 // no at: [x, y] where its kind belongs, and suggests routes while there are none here. Run it again after adding places.
 ATLAS.world({
   title: ${JSON.stringify(title)},
-  look: ${JSON.stringify(lk)},                       // relief (shaded relief) · painted · parchment (fantasy) · engraved (the past) · atlas (the modern world) · holo (a planet) · stars (a star map)
+  look: ${JSON.stringify(lk)},                       // hydro (hydrographic relief print) · relief (shaded relief) · painted · parchment (fantasy) · engraved (the past) · atlas (the modern world) · holo (a planet) · stars (a star map)
   ${scale ? `scale: ${JSON.stringify(scale).replace(/"(\w+)":/g, "$1: ")},` : `// scale: { unit: "mile", per: 0.6 },     // how far one unit of the map is (the map is ${w} units across); without it, no distances`}
   ${speeds ? `speeds: ${JSON.stringify(speeds).replace(/"(\w+)":/g, "$1: ")},` : `// speeds: { road: 24, trail: 16, pass: 10, river: 30, sea: 72 },   // a day's travel on each kind of route, in the scale's unit`}
   regions: [],                              // names for the seas, ranges and forests: { name: "The Grey Sea", kind: "sea" }

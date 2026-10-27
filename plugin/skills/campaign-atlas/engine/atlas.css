@@ -1848,6 +1848,13 @@ button.ho-b:hover { color: var(--ink); }
 .wm-relief .wl .wi .s { fill: #b9b3a3; }
 .wm-relief .wl-t { font-family: var(--f-sc); font-style: normal; font-weight: 600; letter-spacing: .04em; }
 .wm-relief .wm-ttl { fill: #2b2a24; }
+.wm-hydro { --wm-ink: #3b3328; --wm-mk: #fbf8f1; --wm-bg: #efede8; --wm-label: #2f281f; --wm-halo: rgba(250, 247, 240, .9); }
+.wm-hydro .wm-rl { font-family: var(--f-sc); fill: #3b3328; fill-opacity: .9; stroke: #f7f3ea; stroke-width: 2.4px; stroke-opacity: .7; paint-order: stroke; letter-spacing: .26em; }
+.wm-hydro .wm-rl.w { font-family: var(--f-display); font-style: italic; fill: #3f6f8c; stroke: #f1efea; letter-spacing: .2em; }
+.wm-hydro .wl .wi .r { fill: #8a3b26; }
+.wm-hydro .wl .wi .s { fill: #b9b3a3; }
+.wm-hydro .wl-t { font-family: var(--f-sc); font-style: normal; font-weight: 600; letter-spacing: .04em; }
+
 .wm-painted { --wm-ink: #2a2016; --wm-mk: #efe4c9; --wm-bg: #2e5468; --wm-label: #f6eedb; --wm-halo: #1f1810; }
 .wm-painted .wm-rl { font-family: var(--f-sc); fill: #f4ecd6; fill-opacity: .95; stroke: #241b12; stroke-width: 3.2px; stroke-opacity: .75; letter-spacing: .26em; }
 .wm-painted .wm-rl.w { font-family: var(--f-display); font-style: italic; fill: #dbe9ea; stroke: #1c3440; letter-spacing: .2em; }

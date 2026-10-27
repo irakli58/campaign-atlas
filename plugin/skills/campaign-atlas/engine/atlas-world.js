@@ -27,7 +27,7 @@
   // (27 Oct 2026: the past has its own look, an engraved atlas plate; a planet in science fiction a survey; the game
   // master may choose another, kept as the world's "style": atlas-world-art.js draws each)
   // (27 Oct 2026: fantasy is painted in colour by default, as the user asked; parchment stays one choice)
-  const LOOK_OF = { relief: "relief", shaded: "relief", natural: "relief", painted: "painted", fantasy: "relief", colour: "painted", color: "painted", parchment: "parchment", medieval: "parchment",
+  const LOOK_OF = { hydro: "hydro", hydrographic: "hydro", print: "hydro", relief: "relief", shaded: "relief", natural: "relief", painted: "painted", fantasy: "hydro", colour: "painted", color: "painted", parchment: "parchment", medieval: "parchment",
     engraved: "engraved", old: "engraved", antique: "engraved", industrial: "engraved", historical: "engraved", victorian: "engraved", "1920s": "engraved",
     atlas: "atlas", modern: "atlas", political: "atlas", holo: "holo", survey: "holo", planet: "holo", alien: "holo",
     stars: "stars", star: "stars", scifi: "stars", future: "stars", space: "stars" };
@@ -61,6 +61,12 @@
     // colour that of what grows there; dark routes and labels over it)
     relief: {
       ink: "#2b2a24", paper: "#f3efe4", mk: "#fff8ec", river: "#4f7fa8", label: "#24211c",
+      sea: [[0, hex("#9cc2d8")], [1, hex("#3f6e93")]], land: [[0, hex("#bccb8e")], [1, hex("#ffffff")]], wet: hex("#6f9a5a"), dry: hex("#dcc79a"), tree: "#5f8a4a",
+      routes: { road: ["#7a2e1d", 2, "8 2.5"], trail: ["#4a3a26", 1.5, "2 3"], pass: ["#3a2a1a", 1.7, "5 2 1.6 2"], river: ["#2e5f86", 1.9, "6 3"], sea: ["#24506f", 1.6, "8 5"], rail: ["#2b2a24", 2.2, "10 3"], air: ["#4a4842", 1.3, "3 4"], tunnel: ["#4a4842", 1.7, "3 3"], portal: ["#6a3f9e", 1.9, "2 3"], lane: ["#24506f", 1.6, "8 4"], jump: ["#6a3f9e", 1.7, "2 4"] }
+    },
+    // (the hydrographic print: pale paper round the land, dark ink)
+    hydro: {
+      ink: "#2b2a24", paper: "#f1efea", mk: "#fff8ec", river: "#3f6f8c", label: "#24211c",
       sea: [[0, hex("#9cc2d8")], [1, hex("#3f6e93")]], land: [[0, hex("#bccb8e")], [1, hex("#ffffff")]], wet: hex("#6f9a5a"), dry: hex("#dcc79a"), tree: "#5f8a4a",
       routes: { road: ["#7a2e1d", 2, "8 2.5"], trail: ["#4a3a26", 1.5, "2 3"], pass: ["#3a2a1a", 1.7, "5 2 1.6 2"], river: ["#2e5f86", 1.9, "6 3"], sea: ["#24506f", 1.6, "8 5"], rail: ["#2b2a24", 2.2, "10 3"], air: ["#4a4842", 1.3, "3 4"], tunnel: ["#4a4842", 1.7, "3 3"], portal: ["#6a3f9e", 1.9, "2 3"], lane: ["#24506f", 1.6, "8 4"], jump: ["#6a3f9e", 1.7, "2 4"] }
     },
@@ -168,7 +174,7 @@
     temple: '<path class="s" d="M-9-2L0-8l9 6Z"/><path class="s" d="M-8 7h16V5.6H-8Z"/><path d="M-6-2v7.5M-2-2v7.5M2-2v7.5M6-2v7.5" fill="none"/>',
     monastery: '<path class="s" d="M-8 7V0h16v7Z"/>' + ROOF("M-9.4.6L0-5l9.4 5.6Z") + '<path class="s" d="M3-5V-10h3v5"/>'
   });
-  ICONS.relief = ICONS.painted;
+  ICONS.relief = ICONS.painted; ICONS.hydro = ICONS.painted;
   const PLANETS = ["#c97b4a", "#5f8fc9", "#8fbf6a", "#c9b36a", "#9b6ac9", "#6ac9c0", "#d9d2c4", "#c96a7e"];
   const iconOf = (look, L) => {
     const set = ICONS[look] || ICONS.parchment, k = String(L.kind || "").toLowerCase();

@@ -27,7 +27,7 @@
   const washed = (look, c, I, x, y, nz, t, water, k) => { if (!I.mix) return c; for (const [q, a] of I.mix) { const b = BIO.BY[BIO.LIST[q][0]]; if (!!b.water !== water) continue; const g = NT.ground(look, b, x, y, I.d, nz, t); if (g) c = mix(c, g, a * (look === "painted" ? (NT.TINT[b.id] == null ? .5 : NT.TINT[b.id]) : k)); } return c; };
   const { sampler, coastRings, chaikin, rdpRing, pathD, hash, ramp, mix, hex, clamp, vnoise } = K;
   const r1 = v => Math.round(v * 10) / 10;
-  const LOOKS = [["relief", "Shaded relief"], ["painted", "Fantasy: a painted map"], ["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["stars", "Science fiction: a star chart"]];
+  const LOOKS = [["hydro", "Hydrographic relief"], ["relief", "Shaded relief"], ["painted", "Fantasy: a painted map"], ["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["stars", "Science fiction: a star chart"]];
   // the looks a world may wear: a world with land may wear any but the star chart; a star chart only that
   const looksFor = WD => WD.G && !WD.stars && WD.look !== "stars" ? LOOKS.filter(l => l[0] !== "stars") : LOOKS.filter(l => l[0] === "stars");
 
@@ -39,7 +39,7 @@
     const nz = vnoise(Math.floor(hash(W, H, 11) * 1e9)), detail = opts.detail == null ? 9 : opts.detail, wf = wetOf(WD);
     // (smooth: the slopes are lit from a smooth surface through the grid (a cubic B-spline), so they curve as land does
     // instead of breaking into the grid's facets; the colours and the coast keep to the grid itself)
-    const SC = opts.smooth ? cubic(G) : null, sv = SC ? new Float32Array(N) : hv;
+    const SC = opts.smooth ? cubic(G) : null, sv = SC ? new Float32Array(N) : hv, VL = opts.carve ? valleys(WD, cw, ch, k) : null;
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
       const x = (px + .5) / k, y = (py + .5) / k, h = S(x, y), i = py * cw + px;
       // fine relief the grid is too coarse to hold, on land only, more on the heights
@@ -47,7 +47,7 @@
       hv[i] = h + fine;
       // (and, for the light only, a fine grain of ridges and gullies, stronger on the heights, so the smooth surface
       // keeps the crispness of real ground)
-      if (SC) { const up = h > sea ? .25 + (h - sea) / (256 - sea) : 0; sv[i] = SC(x, y) + fine + (opts.grain ? ((nz(x * .3 + 31, y * .3) - .5) + (nz(x * .75 + 9, y * .75 + 4) - .5) * .3) * opts.grain * up : 0); }
+      if (SC) { const up = h > sea ? .25 + (h - sea) / (256 - sea) : 0; sv[i] = SC(x, y) + fine + (opts.grain ? ((nz(x * .3 + 31, y * .3) - .5) + (nz(x * .75 + 9, y * .75 + 4) - .5) * .3) * opts.grain * up : 0) + (opts.ridged && h > sea ? ridged(nz, x, y) * opts.ridged * (.025 + smooth(.06, .42, (h - sea) / (256 - sea))) : 0) - (VL && h > sea ? VL[i] * opts.carve * smooth(.04, .4, (h - sea) / (256 - sea)) : 0); }
       mv[i] = (G.M ? S(x, y, G.M) : 128) * wf;
     }
     const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
@@ -69,6 +69,13 @@
   }
   // light from the north-west: 1 is flat, above 1 lit, below shaded
   const shade = (gx, gy, s) => 1 - (gx + gy) * s;
+  // ridges and gullies finer than the grid: ridged noise (each octave folded at its middle into sharp crests), its
+  // places nudged by a slower noise so the crests branch and wander as eroded ground does
+  function ridged(nz, x, y) {
+    const wx = x + (nz(x * .04 + 3, y * .04) - .5) * 14, wy = y + (nz(x * .04, y * .04 + 7) - .5) * 14; let v = 0, a = 1, f = .07;
+    for (let o = 0; o < 2; o++) { const r = 1 - Math.abs(nz(wx * f + o * 13, wy * f) * 2 - 1); v += r * r * a; a *= .5; f *= 2.1; }
+    return v - .45;
+  }
   // the heights read through a cubic B-spline: smooth in its slopes, where straight interpolation creases at every cell
   function cubic(G) {
     const { cols, rows, cell } = G, arr = G.Hf || G.H, at = (a, b) => arr[clamp(b, 0, rows - 1) * cols + clamp(a, 0, cols - 1)];
@@ -83,10 +90,16 @@
   // slope goes flat, falling on the slope as on a real surface (Lambert); the shade a cool blue-grey, not black, the
   // lit slopes a little warm. ex: how much the relief is raised
   const LIGHTS = [[-.5, -.5, .7071, .62], [0, -.574, .819, .19], [-.574, 0, .819, .19]];
-  function lit(c, gx, gy, ex) {
-    const nx = -gx * ex, ny = -gy * ex, nl = Math.hypot(nx, ny, 1); let s = 0, f = 0;
-    for (const [lx, ly, lz, w] of LIGHTS) { s += w * Math.max(0, (nx * lx + ny * ly + lz) / nl); f += w * lz; }
+  // (the hydrographic prints' light: one low sun from the north-west, a faint fill; the shade a warm dark brown)
+  const LOW_SUN = [[-.58, -.58, .574, .8], [0, -.5, .866, .1], [-.5, 0, .866, .1]];
+  function lit(c, gx, gy, ex, P) {
+    const L = P ? P.lights : LIGHTS, nx = -gx * ex, ny = -gy * ex, nl = Math.hypot(nx, ny, 1); let s = 0, f = 0;
+    for (const [lx, ly, lz, w] of L) { s += w * Math.max(0, (nx * lx + ny * ly + lz) / nl); f += w * lz; }
     const v = s / f;
+    if (P) {
+      if (v < 1) { const dk = Math.min(1, (1 - v) * P.dark); return [c[0] * (1 - dk) + P.shade[0] * dk, c[1] * (1 - dk) + P.shade[1] * dk, c[2] * (1 - dk) + P.shade[2] * dk]; }
+      const hi = Math.min(.7, (v - 1) * P.bright); return [c[0] + (255 - c[0]) * hi * .6, c[1] + (248 - c[1]) * hi * .55, c[2] + (232 - c[2]) * hi * .45];
+    }
     if (v < 1) { const dk = 1 - v; return [c[0] * (1 - dk * .78) + 38 * dk * .78 * .55, c[1] * (1 - dk * .74) + 48 * dk * .74 * .55, c[2] * (1 - dk * .62) + 78 * dk * .62 * .55]; }
     const hi = Math.min(.6, v - 1); return [c[0] + (255 - c[0]) * hi * .55, c[1] + (250 - c[1]) * hi * .5, c[2] + (236 - c[2]) * hi * .4];
   }
@@ -140,7 +153,98 @@
      it (Tom Patterson's natural-colour relief is the model): dense forest deep green, open woodland and grassland paler,
      dry land tan, tundra grey-green, bare rock brown-grey, snow and ice white; the sea lighter over the shelf and deep
      blue beyond; rivers and lakes in blue. No drawn mountains or trees: the relief and the colour say it all. */
-  function relief(WD, uid, o) {
+  function hydroSvg(WD, uid, img, pr, N) {
+    const [W, H] = WD.size, G = WD.G, off = Math.max(W, H) * .005, ink = "#3b3328";
+    // (the slab is the land and its lakes together: the lakes lie on it, painted, not cut through it to the paper)
+    const { cols, rows, sea } = G, src = G.Hf || G.H, oc = new Uint8Array(cols * rows), st = [];
+    for (let n = 0; n < oc.length; n++) { const i = n % cols, j = (n / cols) | 0; if (src[n] <= sea && (!i || !j || i === cols - 1 || j === rows - 1)) { oc[n] = 1; st.push(n); } }
+    while (st.length) { const n = st.pop(), i = n % cols, j = (n / cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < cols - 1 ? n + 1 : -1, j > 0 ? n - cols : -1, j < rows - 1 ? n + cols : -1]) if (m >= 0 && !oc[m] && src[m] <= sea) { oc[m] = 1; st.push(m); } }
+    const solid = Float32Array.from(src, (v, n) => v <= sea && !oc[n] ? sea + 1 : v), cd = coastD(Object.assign({}, G, { H: solid, Hf: solid }), .6), shore = coastD(G, .6);
+    let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern>`
+      + `<filter id="${uid}-sh" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="${(off * 1.4).toFixed(1)}"/></filter>`
+      + `<radialGradient id="${uid}-pv" cx=".5" cy=".45" r=".75"><stop offset=".6" stop-color="#f3f1ec"/><stop offset="1" stop-color="#dedbd3"/></radialGradient></defs>`;
+    // the paper, the slab's shadow on it, the slab's edge, the land
+    s += `<rect width="${W}" height="${H}" fill="url(#${uid}-pv)"/>`;
+    s += `<path d="${cd}" fill="#2a2218" fill-opacity=".38" fill-rule="evenodd" transform="translate(${(off * 1.3).toFixed(1)} ${(off * 1.8).toFixed(1)})" filter="url(#${uid}-sh)"/>`;
+    s += `<path d="${cd}" fill="#7d6f5c" fill-rule="evenodd" transform="translate(${(off * .22).toFixed(2)} ${(off * .32).toFixed(2)})"/>`;
+    s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#5a4d3c" stroke-opacity=".5" stroke-width=".5" stroke-linejoin="round"/>`;
+    s += `<path d="${shore}" fill="none" stroke="#3f6f8c" stroke-opacity=".55" stroke-width=".45"/>`;
+    s += streams(WD, "#4f7c95");
+    s += N ? NT.rivers(WD, "relief", N, pr, "#3f6f8c", null, .9) : rivers(WD, "#3f6f8c", null, .9);
+    const c = seaCorner(WD, pr), tx = W * c[0], ty = H * c[1];
+    s += `<g class="wm-deco">${northArrow(W * (c[0] < .5 ? .94 : .06), H * .9, Math.min(W, H) * .035, ink, true)}${WD.title ? `<text x="${tx}" y="${ty - 14}" text-anchor="middle" fill="${ink}" font-family="Georgia, 'Times New Roman', serif" font-size="${(Math.min(W, H) * .011).toFixed(1)}" letter-spacing=".3em">HYDROGRAPHIC MAP OF</text><text class="wm-ttl" x="${tx}" y="${ty + 14}" text-anchor="middle" fill="${ink}" font-family="Georgia, 'Times New Roman', serif" font-size="${(Math.min(W, H) * .028).toFixed(1)}" letter-spacing=".12em">${String(A.esc ? A.esc(WD.title) : WD.title).toUpperCase()}</text>` : ""}</g>`;
+    return s;
+  }
+  // every stream, as a hydrographic map draws them: the water's way down the land's own grid (each cell to its lowest
+  // neighbour, the hollows filled so it runs on), drawn wherever enough of it gathers, thicker as more does; in dry
+  // country more must gather before a stream shows
+  function net(WD, frac) {
+    const G = WD.G, { cols, rows, cell, sea } = G, H = G.Hf || G.H, n0 = cols * rows, lv = new Float32Array(n0), rec = new Int32Array(n0).fill(-1), seen = new Uint8Array(n0), order = [];
+    const hp = []; const push = (n, v) => { hp.push([v, n]); let i = hp.length - 1; while (i) { const p = (i - 1) >> 1; if (hp[p][0] <= hp[i][0]) break; [hp[p], hp[i]] = [hp[i], hp[p]]; i = p; } };
+    const pop = () => { const top = hp[0], last = hp.pop(); if (hp.length) { hp[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < hp.length && hp[l][0] < hp[m][0]) m = l; if (r < hp.length && hp[r][0] < hp[m][0]) m = r; if (m === i) break; [hp[m], hp[i]] = [hp[i], hp[m]]; i = m; } } return top; };
+    for (let n = 0; n < n0; n++) { const i = n % cols, j = (n / cols) | 0; if (H[n] <= sea || !i || !j || i === cols - 1 || j === rows - 1) { seen[n] = 1; lv[n] = H[n]; push(n, H[n]); } }
+    while (hp.length) { const [v, c] = pop(); order.push(c); const i = c % cols, j = (c / cols) | 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; const m = b * cols + a; if (seen[m]) continue; seen[m] = 1; rec[m] = c; lv[m] = Math.max(H[m], v + .001); push(m, lv[m]); } }
+    const acc = new Float32Array(n0); let land = 0;
+    for (let n = 0; n < n0; n++) if (H[n] > sea) { land++; acc[n] = G.M ? .25 + Math.min(1, G.M[n] / 140) * .75 : 1; }
+    for (let k = order.length - 1; k >= 0; k--) { const n = order[k], r = rec[n]; if (r >= 0 && H[n] > sea) acc[r] += acc[n]; }
+    const T = Math.max(1.5, land * frac), on = n => H[n] > sea && acc[n] >= T, ups = new Uint16Array(n0);
+    for (let n = 0; n < n0; n++) if (on(n) && rec[n] >= 0) ups[rec[n]]++;
+    const done = new Uint8Array(n0), out = [], wn = vnoise(Math.floor(hash(cols, rows, 83) * 1e9));
+    for (let n = 0; n < n0; n++) {
+      if (!on(n) || ups[n]) continue;
+      let c = n; const pts = [], aa = [];
+      while (c >= 0) { pts.push([((c % cols) + .5) * cell, (((c / cols) | 0) + .5) * cell]); aa.push(acc[c] / T); if (done[c] || H[c] <= sea) break; done[c] = 1; c = rec[c]; }
+      if (pts.length < 2) continue;
+      // (it winds: each point but the ends nudged a little by a slow noise)
+      for (let q = 1; q < pts.length - 1; q++) { const [x, y] = pts[q]; pts[q] = [x + (wn(x * .12, y * .12) - .5) * cell * 1.3, y + (wn(x * .12 + 9, y * .12 + 3) - .5) * cell * 1.3]; }
+      out.push({ pts, aa });
+    }
+    return out;
+  }
+  function streams(WD, col) {
+    const by = new Map();
+    for (const { pts, aa } of net(WD, .00035)) {
+      if (pts.length < 3) continue;
+      const sm = chaikin(pts, 3, false), per = (sm.length - 1) / (pts.length - 1);
+      // (a stream thickens downstream: drawn in short stretches, each as wide as the water gathered there)
+      for (let q = 0; q < pts.length - 1; q += 4) {
+        const seg = sm.slice(Math.floor(q * per), Math.min(sm.length, Math.ceil((q + 4) * per) + 1)), ww = Math.min(1.3, .2 + .17 * Math.log2(aa[q] + 1)).toFixed(2);
+        if (seg.length > 1) by.set(ww, (by.get(ww) || "") + pathD(seg, false));
+      }
+    }
+    let s = ""; for (const [w, d] of by) s += `<path d="${d}" fill="none" stroke="${col}" stroke-opacity=".8" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    return `<g class="wm-streams">${s}</g>`;
+  }
+  // valleys carved along every stream, the small ones too fine to draw as well: each line stroked onto a canvas the
+  // raster's size, then softened into a V, so the light finds ridges and gullies branching as the water made them
+  function boxB(F, w, h, r) {
+    const t = new Float32Array(F.length);
+    for (let y = 0; y < h; y++) { let a = 0; const o = y * w; for (let x = -r; x < w + r; x++) { if (x + r < w && x + r >= 0) a += F[o + x + r]; if (x - r - 1 >= 0 && x - r - 1 < w) a -= F[o + x - r - 1]; if (x >= 0 && x < w) t[o + x] = a / (2 * r + 1); } }
+    for (let x = 0; x < w; x++) { let a = 0; for (let y = -r; y < h + r; y++) { if (y + r < h && y + r >= 0) a += t[(y + r) * w + x]; if (y - r - 1 >= 0 && y - r - 1 < h) a -= t[(y - r - 1) * w + x]; if (y >= 0 && y < h) F[y * w + x] = a / (2 * r + 1); } }
+  }
+  function valleys(WD, cw, ch, k) {
+    const v = new Float32Array(cw * ch);
+    // (two networks: the small streams' valleys narrow, the larger ones' broad; each stroked, then softened into a V)
+    for (const [frac, wid, blur, wt] of [[.00005, .9, 2.4, .55], [.0004, 2.2, 4.5, 1]]) {
+      const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch; const g = cv.getContext("2d");
+      g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = "#fff";
+      for (const { pts, aa } of net(WD, frac)) {
+        const sm = chaikin(pts, 4, false); g.beginPath(); sm.forEach((p, q) => q ? g.lineTo(p[0] * k, p[1] * k) : g.moveTo(p[0] * k, p[1] * k));
+        g.lineWidth = Math.max(1, k * wid * (1 + .35 * Math.min(4, Math.log2(aa[aa.length - 1] + 1)))); g.stroke();
+      }
+      const d = g.getImageData(0, 0, cw, ch).data, F = new Float32Array(cw * ch); for (let i = 0; i < F.length; i++) F[i] = d[i * 4] / 255;
+      // (three box blurs make a soft bell: the valley's V, its floor and its sides)
+      const r = Math.max(1, Math.round(k * blur * .9)); for (let p = 0; p < 3; p++) boxB(F, cw, ch, r);
+      for (let i = 0; i < v.length; i++) v[i] += F[i] * wt;
+    }
+    return v;
+  }
+  // the hydrographic print (the user's example, 27 Oct 2026: a raised relief of California on pale paper): the land a
+  // slab casting its shadow on the paper, no sea colour; one low sun and warm brown shade; fine ridges and gullies; sage
+  // valleys, tan and brown mountains, pale grey peaks; every stream drawn
+  const HYDRO = { lights: LOW_SUN, shade: [64, 48, 36], dark: .9, bright: 1.1, rx: 1.75, paper: [241, 239, 234], ridged: 2.5, carve: 7 };
+  function hydro(WD, uid, o) { return relief(WD, uid, o, HYDRO); }
+  function relief(WD, uid, o, P) {
     const [W, H] = WD.size, G = WD.G, pr = probe(WD), sea = G.sea, N = nat(WD);
     const C = { dry: hex("#ddc99c"), dryCool: hex("#cfc6a2"), grass: hex("#bfcd91"), wood: hex("#86a965"), forest: hex("#5d8a4b"), dense: hex("#3f6f38"), jungle: hex("#356a33"),
       tundra: hex("#b8bca6"), rock: hex("#b3a690"), rockHi: hex("#d2c9ba"), snow: hex("#f7f8f8"), marsh: hex("#8fa486"), beach: hex("#e3d6b0"), shelf: hex("#a7cde0"), mid: hex("#6f9fc2"), deep: hex("#3d6b92"), lake: hex("#8db7d0") };
@@ -175,6 +279,7 @@
       bare = (x, y) => [NA.S(x, y, R), NA.S(x, y, Gc), NA.S(x, y, Bc)]; sandAt = (x, y) => NA.S(x, y, SD); badAt = (x, y) => NA.S(x, y, BD);
     }
     const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
+      if (h <= sea && P) return I.lake ? [128, 170, 192] : P.paper;
       if (h <= sea) {
         const d = clamp((sea - h) / 128, 0, 1);
         // the sea: pale over the shelf by the coast, deepening down the slope to the ocean floor, its relief faintly lit
@@ -212,16 +317,26 @@
         const dd = desAt ? desAt(x, y) * (1 - fd) : smooth(.34, .06, wet) * (1 - fd);
         if (dd > 0) c = mix(c, tm > .42 ? mix([214, 196, 146], [222, 168, 98], smooth(.4, .9, dd)) : [200, 192, 160], dd * .9);
       }
-      c = mix(c, [176, 168, 150], smooth(.2, .5, t) * .55);
-      c = mix(c, [250, 250, 250], smooth(.42, .92, t));
+      if (P) {
+        // (the print's colours by height: sage lowland, tan foothills, brown mountains, pale grey rock at the top; the
+        // forests keep their green, a little muted)
+        c = mix(c, [166, 176, 134], .4);
+        c = mix(c, [192, 166, 124], smooth(.08, .3, t) * .7 * (1 - fd * .6));
+        c = mix(c, [148, 116, 86], smooth(.25, .55, t) * .75);
+        c = mix(c, [232, 230, 224], smooth(.5, .92, t));
+      } else {
+        c = mix(c, [176, 168, 150], smooth(.2, .5, t) * .55);
+        c = mix(c, [250, 250, 250], smooth(.42, .92, t));
+      }
       // snow and ice where it never melts
       if (snwAt) { const w = snwAt(x, y); if (w > .02) c = mix(c, [246, 248, 250], w * .9); }
       // swamp: a dark olive green, wet and low
       if (swpAt) { const w = swpAt(x, y); if (w > .02) c = mix(c, [88, 112, 76], w * .7); }
       if (I.mix) c = washed("painted", c, Object.assign({}, I, { mix: I.mix.filter(([q]) => !["glacier", "icesheet", "snowforest", "snow"].includes(BIO.LIST[q][0])) }), x, y, nz, t, false);
       if ((I.b && (I.b.id === "glacier" || I.b.id === "snow")) || (tm < .08 && t > .3)) c = mix(c, [245, 246, 248], .8);
-      return lit(c, gx, gy, RX);
-    }, { detail: 0, max: 2600, smooth: true, grain: 3.5 });
+      return lit(c, gx, gy, P ? RX * P.rx : RX, P);
+    }, { detail: 0, max: P ? 3200 : 2600, smooth: true, grain: P ? 0 : 3.5, ridged: P ? P.ridged : 0, carve: P ? P.carve : 0 });
+    if (P) return hydroSvg(WD, uid, img, pr, N);
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     const cd = coastD(G, .6);
     s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/>`;
@@ -798,7 +913,7 @@
   function draw(WD, look, uid, o) {
     o = o || {};
     if (look === "stars" || !WD.G) return stars(WD, uid, o);
-    return ({ relief, painted, parchment, engraved, atlas, holo })[look](WD, uid, o);
+    return ({ hydro, relief, painted, parchment, engraved, atlas, holo })[look](WD, uid, o);
   }
   A.worldArt = { LOOKS, looksFor, draw };
 })(ATLAS);
