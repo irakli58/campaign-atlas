@@ -199,15 +199,16 @@
     for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
       const n = j * cols + i, x = i + .5, y = j + .5;
       // the coast: warped at a broad scale (bays, headlands), then a fractal grain on the edge itself
-      const wx = x + fbm(x, y, 3, 1 / (S * 9)) * S * 2.6 * L, wy = y + fbm(x + 31, y - 17, 3, 1 / (S * 9)) * S * 2.6 * L;
-      const edge = fbm(x, y, 5, 1 / (S * 2.2)) * (.1 + .32 * L);
+      const wx = x + (fbm(x, y, 3, 1 / (S * 14)) * S * 9 + fbm(x - 5, y + 8, 2, 1 / (S * 4)) * S * 2.5) * L, wy = y + (fbm(x + 31, y - 17, 3, 1 / (S * 14)) * S * 9 + fbm(x + 12, y - 3, 2, 1 / (S * 4)) * S * 2.5) * L;
+      const edge = fbm(x, y, 5, 1 / (S * 2.2)) * (.1 + .7 * L);
       land[n] = at(F, wx, wy) + edge > .5 ? 1 : 0; if (!land[n]) continue;
       // mountains: bent with the land, peaks and passes along the range, spurs off its sides
-      const mx = wx + fbm(x - 9, y + 4, 2, 1 / (S * 5)) * S * 1.4 * L, my = wy + fbm(x + 6, y - 11, 2, 1 / (S * 5)) * S * 1.4 * L;
+      const mx = wx + fbm(x - 9, y + 4, 2, 1 / (S * 5)) * S * 4 * L, my = wy + fbm(x + 6, y - 11, 2, 1 / (S * 5)) * S * 4 * L;
       const core = at(MW, mx, my), wide = at(MS, mx, my);
       if (core > .01 || wide > .01) {
-        const along = clamp(.55 + .45 * (fbm(x + 77, y, 3, 1 / (S * 3.5)) + 1) * .9, .3, 1.15), spur = ridged(x, y, 1 / (S * 1.3));
-        mtn[n] = clamp(L ? core * (1 - .55 * L + .55 * L * along) + wide * L * (.15 + .75 * spur * spur) : core, 0, 1);
+        // (along the range: high massifs and low passes between them; off its sides, branching spurs)
+        const a = fbm(x + 77, y, 3, 1 / (S * 4)), along = clamp(.1 + 1.6 * (a + .45), 0, 1.2), spur = ridged(x, y, 1 / (S * 1.6));
+        mtn[n] = clamp(L ? core * (1 - Math.min(1, 1.6 * L) + Math.min(1, 1.6 * L) * along) + wide * Math.min(1, 1.6 * L) * (.1 + 1.3 * spur * spur * spur) : core, 0, 1);
       }
       if (LK) lake[n] = at(LK, wx, wy) + edge * .7 > .5 ? 1 : 0; if (RV) river[n] = Math.min(1, at(RV, x, y) * 2.5);
       // kinds of land: read from the nearest sketch cell at a place nudged further, so their edges wander
