@@ -37,10 +37,17 @@
     const [W, H] = WD.size, G = WD.G, S = sampler(G), sea = G.sea, k = Math.min(2, (opts.max || 2000) / Math.max(W, H));
     const cw = Math.round(W * k), ch = Math.round(H * k), N = cw * ch, hv = new Float32Array(N), mv = new Float32Array(N);
     const nz = vnoise(Math.floor(hash(W, H, 11) * 1e9)), detail = opts.detail == null ? 9 : opts.detail, wf = wetOf(WD);
+    // (smooth: the slopes are lit from a smooth surface through the grid (a cubic B-spline), so they curve as land does
+    // instead of breaking into the grid's facets; the colours and the coast keep to the grid itself)
+    const SC = opts.smooth ? cubic(G) : null, sv = SC ? new Float32Array(N) : hv;
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
       const x = (px + .5) / k, y = (py + .5) / k, h = S(x, y), i = py * cw + px;
       // fine relief the grid is too coarse to hold, on land only, more on the heights
-      hv[i] = h > sea ? h + (nz(x * .09, y * .09) - .5) * detail * (.4 + (h - sea) / (256 - sea)) : h;
+      const fine = h > sea ? (nz(x * .09, y * .09) - .5) * detail * (.4 + (h - sea) / (256 - sea)) : 0;
+      hv[i] = h + fine;
+      // (and, for the light only, a fine grain of ridges and gullies, stronger on the heights, so the smooth surface
+      // keeps the crispness of real ground)
+      if (SC) { const up = h > sea ? .25 + (h - sea) / (256 - sea) : 0; sv[i] = SC(x, y) + fine + (opts.grain ? ((nz(x * .3 + 31, y * .3) - .5) + (nz(x * .75 + 9, y * .75 + 4) - .5) * .3) * opts.grain * up : 0); }
       mv[i] = (G.M ? S(x, y, G.M) : 128) * wf;
     }
     const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
@@ -49,7 +56,7 @@
     // is (tm), whether it is a lake, and the kind of its mountains (mk)
     const NA = nat(WD), I = { b: null, d: 0, tm: .5, lake: false, mk: "rock", N: NA, mix: null };
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
-      const i = py * cw + px, l = px > 0 ? hv[i - 1] : hv[i], r = px < cw - 1 ? hv[i + 1] : hv[i], u = py > 0 ? hv[i - cw] : hv[i], b = py < ch - 1 ? hv[i + cw] : hv[i];
+      const i = py * cw + px, l = px > 0 ? sv[i - 1] : sv[i], r = px < cw - 1 ? sv[i + 1] : sv[i], u = py > 0 ? sv[i - cw] : sv[i], b = py < ch - 1 ? sv[i + cw] : sv[i];
       const gx = (r - l) * z, gy = (b - u) * z, x = (px + .5) / k, y = (py + .5) / k;
       // (mix: each laid-down kind near the point and how strongly it shows there, its edge soft and broken; b: the one
       // that holds the point, if one does)
@@ -62,6 +69,27 @@
   }
   // light from the north-west: 1 is flat, above 1 lit, below shaded
   const shade = (gx, gy, s) => 1 - (gx + gy) * s;
+  // the heights read through a cubic B-spline: smooth in its slopes, where straight interpolation creases at every cell
+  function cubic(G) {
+    const { cols, rows, cell } = G, arr = G.Hf || G.H, at = (a, b) => arr[clamp(b, 0, rows - 1) * cols + clamp(a, 0, cols - 1)];
+    const w = t => { const t2 = t * t, t3 = t2 * t; return [(1 - t) * (1 - t) * (1 - t) / 6, (3 * t3 - 6 * t2 + 4) / 6, (-3 * t3 + 3 * t2 + 3 * t + 1) / 6, t3 / 6]; };
+    return (x, y) => {
+      const fx = x / cell - .5, fy = y / cell - .5, i = Math.floor(fx), j = Math.floor(fy), wx = w(fx - i), wy = w(fy - j); let v = 0;
+      for (let b = 0; b < 4; b++) { let r = 0; for (let a = 0; a < 4; a++) r += wx[a] * at(i - 1 + a, j - 1 + b); v += wy[b] * r; }
+      return v;
+    };
+  }
+  // the light of a hand-drawn relief: the main light from the north-west, softer ones from the north and the west so no
+  // slope goes flat, falling on the slope as on a real surface (Lambert); the shade a cool blue-grey, not black, the
+  // lit slopes a little warm. ex: how much the relief is raised
+  const LIGHTS = [[-.5, -.5, .7071, .62], [0, -.574, .819, .19], [-.574, 0, .819, .19]];
+  function lit(c, gx, gy, ex) {
+    const nx = -gx * ex, ny = -gy * ex, nl = Math.hypot(nx, ny, 1); let s = 0, f = 0;
+    for (const [lx, ly, lz, w] of LIGHTS) { s += w * Math.max(0, (nx * lx + ny * ly + lz) / nl); f += w * lz; }
+    const v = s / f;
+    if (v < 1) { const dk = 1 - v; return [c[0] * (1 - dk * .78) + 38 * dk * .78 * .55, c[1] * (1 - dk * .74) + 48 * dk * .74 * .55, c[2] * (1 - dk * .62) + 78 * dk * .62 * .55]; }
+    const hi = Math.min(.6, v - 1); return [c[0] + (255 - c[0]) * hi * .55, c[1] + (250 - c[1]) * hi * .5, c[2] + (236 - c[2]) * hi * .4];
+  }
 
   /* ---- shapes every look uses */
   const ringsAt = (G, level, eps) => coastRings(Object.assign({}, G, { sea: level })).map(r => chaikin(rdpRing(r, eps || .8), 2, true));
@@ -118,6 +146,8 @@
       tundra: hex("#b8bca6"), rock: hex("#b3a690"), rockHi: hex("#d2c9ba"), snow: hex("#f7f8f8"), marsh: hex("#8fa486"), beach: hex("#e3d6b0"), shelf: hex("#a7cde0"), mid: hex("#6f9fc2"), deep: hex("#3d6b92"), lake: hex("#8db7d0") };
     // (light from the north-west, the slopes exaggerated a little as relief maps are, a soft fill from the north)
     const ex = 5.5 * Math.min(2, Math.max(.6, 1400 / Math.max(W, H)));
+    // (how much the relief is raised under the light: about the old look's strength, less on very large maps)
+    const RX = .3 * Math.min(1.4, Math.max(.7, 1400 / Math.max(W, H)));
     // (the user, 27 Oct 2026, after a softer natural-colour try: "the ones before were better": colour by height, from
     // green lowland through pale upland to white peaks, under a strong light, as the plain relief previews were; and
     // where a forest is denser, the land greener)
@@ -125,6 +155,14 @@
     // (where the ecology says desert, the land's own share of it, and of swamp, eased across the cells)
     const share = code => { if (!simB) return null; const G = WD.G, F = new Float32Array(G.cols * G.rows); for (let n = 0; n < F.length; n++) F[n] = simB[n] === code ? 1 : 0; const t = new Float32Array(F.length); for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s += F[j * G.cols + a]; c++; } } t[j * G.cols + i] = s / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s += t[b * G.cols + i]; c++; } } F[j * G.cols + i] = s / c; } } return (x, y) => NA.S(x, y, F); };
     const desAt = share(DES), swpAt = share(SWP), snwAt = BIO ? share(BIO.CODE.snow) : null;
+    // the tree cover eased across the cells and read a little off the straight (a slow noise nudging where it is read),
+    // so a forest's edge wanders as a real one does instead of stepping along the grid
+    let canopyAt = null;
+    if (NA && NA.canopy) {
+      const G = WD.G, F = Float32Array.from(G.Cn), t = new Float32Array(F.length), wn = vnoise(Math.floor(hash(W, H, 53) * 1e9));
+      for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let a = 0, c = 0; for (let k = -1; k <= 1; k++) { const q = i + k; if (q >= 0 && q < G.cols) { a += F[j * G.cols + q]; c++; } } t[j * G.cols + i] = a / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let a = 0, c = 0; for (let k = -1; k <= 1; k++) { const q = j + k; if (q >= 0 && q < G.rows) { a += t[q * G.cols + i]; c++; } } F[j * G.cols + i] = a / c; } }
+      const amp = G.cell * 1.6; canopyAt = (x, y) => NA.S(x + (wn(x * .05, y * .05) - .5) * amp, y + (wn(x * .05 + 17, y * .05 + 5) - .5) * amp, F) / 255;
+    }
     // the bare ground under thin vegetation (world-ecology.js: sand seas, gravel plains, bare rock, salt pans), its
     // colours eased across the cells; hot deserts warmer in tone, cold ones greyer
     let bare = null, sandAt = null, badAt = null;
@@ -139,15 +177,16 @@
     const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
       if (h <= sea) {
         const d = clamp((sea - h) / 128, 0, 1);
-        let c = I.lake ? [40, 112, 178] : [30, 60 + 60 * (1 - d), 110 + 80 * (1 - d)];
+        // the sea: pale over the shelf by the coast, deepening down the slope to the ocean floor, its relief faintly lit
+        let c = I.lake ? [40, 112, 178] : mix([30, 60 + 60 * (1 - d), 110 + 80 * (1 - d)], [96, 168, 204], smooth(.09, .0, d) * .55);
         if (I.mix) c = washed("painted", c, I, x, y, nz, 0, true);
-        return c;
+        return I.lake ? c : lit(c, gx, gy, RX * .35);
       }
       const t = (h - sea) / (255 - sea), wet = m / 255, tm = I.tm;
       // the two rules (the user, 27 Oct 2026): the taller the land, the whiter, to white at the highest peaks; the denser
       // a forest, the greener (from the pale green of open land to the deep green of the thickest woods). A simulated
       // world's tree cover is its own (world-ecology.js); otherwise it is guessed from the wetness
-      const fd = NA && NA.canopy ? NA.canopy(x, y) : clamp((wet - .38) / .4, 0, 1) * (1 - smooth(.4, .65, t)) * smooth(.1, .3, tm);
+      const fd = NA && NA.canopy ? canopyAt(x, y) : clamp((wet - .38) / .4, 0, 1) * (1 - smooth(.4, .65, t)) * smooth(.1, .3, tm);
       let c;
       if (bare) {
         // the third rule, as a desert really is: what grows thins as the land dries (the aridity index, from the
@@ -181,9 +220,8 @@
       if (swpAt) { const w = swpAt(x, y); if (w > .02) c = mix(c, [88, 112, 76], w * .7); }
       if (I.mix) c = washed("painted", c, Object.assign({}, I, { mix: I.mix.filter(([q]) => !["glacier", "icesheet", "snowforest", "snow"].includes(BIO.LIST[q][0])) }), x, y, nz, t, false);
       if ((I.b && (I.b.id === "glacier" || I.b.id === "snow")) || (tm < .08 && t > .3)) c = mix(c, [245, 246, 248], .8);
-      const sh = clamp(1 - (gx + gy) * .24, .35, 1.5);
-      return c.map(v => v * sh);
-    }, { detail: 0, max: 2600 });
+      return lit(c, gx, gy, RX);
+    }, { detail: 0, max: 2600, smooth: true, grain: 3.5 });
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     const cd = coastD(G, .6);
     s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/>`;
