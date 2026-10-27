@@ -34,14 +34,17 @@
   /* ---- painting the land and sea: heights on a grid as fine as the picture, light from the north-west */
   function raster(WD, colour, opts) {
     opts = opts || {};
-    const [W, H] = WD.size, G = WD.G, S = sampler(G), sea = G.sea, k = Math.min(2, (opts.max || 2000) / Math.max(W, H));
-    const cw = Math.round(W * k), ch = Math.round(H * k), N = cw * ch, hv = new Float32Array(N), mv = new Float32Array(N);
+    // (rect: only a window of the map, [x, y, w, h], drawn at k pixels a unit: the sharper picture of where the map is
+    // zoomed in; otherwise the whole map, as fine as max allows)
+    const [W, H] = WD.size, G = WD.G, S = sampler(G), sea = G.sea, k = opts.k || Math.min(2, (opts.max || 2000) / Math.max(W, H));
+    const [ox, oy, rw, rh] = opts.rect || [0, 0, W, H];
+    const cw = Math.max(1, Math.round(rw * k)), ch = Math.max(1, Math.round(rh * k)), N = cw * ch, hv = new Float32Array(N), mv = new Float32Array(N);
     const nz = vnoise(Math.floor(hash(W, H, 11) * 1e9)), detail = opts.detail == null ? 9 : opts.detail, wf = wetOf(WD);
     // (smooth: the slopes are lit from a smooth surface through the grid (a cubic B-spline), so they curve as land does
     // instead of breaking into the grid's facets; the colours and the coast keep to the grid itself)
-    const SC = opts.smooth ? cubic(G) : null, sv = SC ? new Float32Array(N) : hv, VL = opts.carve ? valleys(WD, cw, ch, k) : null;
+    const SC = opts.smooth ? cubic(G) : null, sv = SC ? new Float32Array(N) : hv, VL = opts.carve ? valleys(WD, cw, ch, k, ox, oy) : null;
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
-      const x = (px + .5) / k, y = (py + .5) / k, h = S(x, y), i = py * cw + px;
+      const x = ox + (px + .5) / k, y = oy + (py + .5) / k, h = S(x, y), i = py * cw + px;
       // fine relief the grid is too coarse to hold, on land only, more on the heights
       const fine = h > sea ? (nz(x * .09, y * .09) - .5) * detail * (.4 + (h - sea) / (256 - sea)) : 0;
       hv[i] = h + fine;
@@ -51,13 +54,18 @@
       mv[i] = (G.M ? S(x, y, G.M) : 128) * wf;
     }
     const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
-    const cx = cv.getContext("2d"), img = cx.createImageData(cw, ch), d = img.data, z = (WD.T && WD.T.real ? .55 : 1) * k;
+    // (metric: the slopes lit as they are in metres, not in the height grid's steps, which are fine at the bottom and
+    // coarse at the top: so a plain's gentle swells stay flat and the mountains keep their drama; ve: how much the
+    // relief is raised, as relief maps raise it)
+    const MT = opts.metric;
+    if (MT) for (let i = 0; i < N; i++) sv[i] = metresOf(sv[i], sea);
+    const cx = cv.getContext("2d"), img = cx.createImageData(cw, ch), d = img.data, z = MT ? MT.ve * k / (2 * MT.mpu) * 2 : (WD.T && WD.T.real ? .55 : 1) * k;
     // what the colour is told of the land at each point: its laid-down kind (b) and how deep inside it (d), how warm it
     // is (tm), whether it is a lake, and the kind of its mountains (mk)
     const NA = nat(WD), I = { b: null, d: 0, tm: .5, lake: false, mk: "rock", N: NA, mix: null };
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
       const i = py * cw + px, l = px > 0 ? sv[i - 1] : sv[i], r = px < cw - 1 ? sv[i + 1] : sv[i], u = py > 0 ? sv[i - cw] : sv[i], b = py < ch - 1 ? sv[i + cw] : sv[i];
-      const gx = (r - l) * z, gy = (b - u) * z, x = (px + .5) / k, y = (py + .5) / k;
+      const gx = (r - l) * z, gy = (b - u) * z, x = ox + (px + .5) / k, y = oy + (py + .5) / k;
       // (mix: each laid-down kind near the point and how strongly it shows there, its edge soft and broken; b: the one
       // that holds the point, if one does)
       if (NA) { const bl = NA.blend(x, y); let cc = 0, ca = .5; if (bl) for (const [q, a] of bl) if (a > ca) { ca = a; cc = q; } I.mix = bl; I.b = cc ? BIO.BY[BIO.LIST[cc][0]] : null; I.d = bl ? NA.depth(x, y) : 0; I.tm = NA.temp(x, y); I.lake = hv[i] <= sea && NA.lake(x, y); I.mk = hv[i] > sea + 40 ? NT.mtnKind(NA, x, y) : "rock"; }
@@ -69,6 +77,13 @@
   }
   // light from the north-west: 1 is flat, above 1 lit, below shaded
   const shade = (gx, gy, s) => 1 - (gx + gy) * s;
+  // the height grid's steps back to metres (the inverse of world-geology.js landT; the sea floor roughly)
+  const LAND_M = [[0, 0], [200, .06], [500, .15], [1000, .28], [1500, .37], [2000, .45], [3000, .6], [4500, .78], [6000, .9], [8500, 1]];
+  function metresOf(v, sea) {
+    if (v <= sea) return (v - sea) * 40; const t = (v - sea) / (255 - sea);
+    for (let q = 1; q < LAND_M.length; q++) if (t <= LAND_M[q][1]) return LAND_M[q - 1][0] + (t - LAND_M[q - 1][1]) / (LAND_M[q][1] - LAND_M[q - 1][1]) * (LAND_M[q][0] - LAND_M[q - 1][0]);
+    return 8500;
+  }
   // ridges and gullies finer than the grid: ridged noise (each octave folded at its middle into sharp crests), its
   // places nudged by a slower noise so the crests branch and wander as eroded ground does
   function ridged(nz, x, y) {
@@ -154,7 +169,7 @@
      dry land tan, tundra grey-green, bare rock brown-grey, snow and ice white; the sea lighter over the shelf and deep
      blue beyond; rivers and lakes in blue. No drawn mountains or trees: the relief and the colour say it all. */
   function hydroSvg(WD, uid, img, pr, N) {
-    const [W, H] = WD.size, G = WD.G, off = Math.max(W, H) * .005, ink = "#3b3328";
+    const [W, H] = WD.size, G = WD.G, off = Math.min(Math.max(W, H) * .005, 12), ink = "#3b3328";  // (the slab no thicker than on a continent-sized map, however big the world)
     // (the slab is the land and its lakes together: the lakes lie on it, painted, not cut through it to the paper)
     const { cols, rows, sea } = G, src = G.Hf || G.H, oc = new Uint8Array(cols * rows), st = [];
     for (let n = 0; n < oc.length; n++) { const i = n % cols, j = (n / cols) | 0; if (src[n] <= sea && (!i || !j || i === cols - 1 || j === rows - 1)) { oc[n] = 1; st.push(n); } }
@@ -168,6 +183,8 @@
     s += `<path d="${cd}" fill="#2a2218" fill-opacity=".38" fill-rule="evenodd" transform="translate(${(off * 1.3).toFixed(1)} ${(off * 1.8).toFixed(1)})" filter="url(#${uid}-sh)"/>`;
     s += `<path d="${cd}" fill="#7d6f5c" fill-rule="evenodd" transform="translate(${(off * .22).toFixed(2)} ${(off * .32).toFixed(2)})"/>`;
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#5a4d3c" stroke-opacity=".5" stroke-width=".5" stroke-linejoin="round"/>`;
+    // (where the page lays a sharper picture of the land when the map is zoomed in, within the land's own outline)
+    s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath><g class="wm-detail" clip-path="url(#${uid}-land)"></g>`;
     s += `<path d="${shore}" fill="none" stroke="#3f6f8c" stroke-opacity=".55" stroke-width=".45"/>`;
     s += streams(WD, "#4f7c95");
     s += N ? NT.rivers(WD, "relief", N, pr, "#3f6f8c", null, .9) : rivers(WD, "#3f6f8c", null, .9);
@@ -178,7 +195,12 @@
   // every stream, as a hydrographic map draws them: the water's way down the land's own grid (each cell to its lowest
   // neighbour, the hollows filled so it runs on), drawn wherever enough of it gathers, thicker as more does; in dry
   // country more must gather before a stream shows
+  const NETS = new WeakMap();
   function net(WD, frac) {
+    const memo = NETS.get(WD.G) || new Map(); NETS.set(WD.G, memo); if (memo.has(frac)) return memo.get(frac);
+    const res = netOf(WD, frac); memo.set(frac, res); return res;
+  }
+  function netOf(WD, frac) {
     const G = WD.G, { cols, rows, cell, sea } = G, H = G.Hf || G.H, n0 = cols * rows, lv = new Float32Array(n0), rec = new Int32Array(n0).fill(-1), seen = new Uint8Array(n0), order = [];
     const hp = []; const push = (n, v) => { hp.push([v, n]); let i = hp.length - 1; while (i) { const p = (i - 1) >> 1; if (hp[p][0] <= hp[i][0]) break; [hp[p], hp[i]] = [hp[i], hp[p]]; i = p; } };
     const pop = () => { const top = hp[0], last = hp.pop(); if (hp.length) { hp[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < hp.length && hp[l][0] < hp[m][0]) m = l; if (r < hp.length && hp[r][0] < hp[m][0]) m = r; if (m === i) break; [hp[m], hp[i]] = [hp[i], hp[m]]; i = m; } } return top; };
@@ -222,14 +244,15 @@
     for (let y = 0; y < h; y++) { let a = 0; const o = y * w; for (let x = -r; x < w + r; x++) { if (x + r < w && x + r >= 0) a += F[o + x + r]; if (x - r - 1 >= 0 && x - r - 1 < w) a -= F[o + x - r - 1]; if (x >= 0 && x < w) t[o + x] = a / (2 * r + 1); } }
     for (let x = 0; x < w; x++) { let a = 0; for (let y = -r; y < h + r; y++) { if (y + r < h && y + r >= 0) a += t[(y + r) * w + x]; if (y - r - 1 >= 0 && y - r - 1 < h) a -= t[(y - r - 1) * w + x]; if (y >= 0 && y < h) F[y * w + x] = a / (2 * r + 1); } }
   }
-  function valleys(WD, cw, ch, k) {
+  function valleys(WD, cw, ch, k, ox, oy) {
+    ox = ox || 0; oy = oy || 0;
     const v = new Float32Array(cw * ch);
     // (two networks: the small streams' valleys narrow, the larger ones' broad; each stroked, then softened into a V)
     for (const [frac, wid, blur, wt] of [[.00005, .9, 2.4, .55], [.0004, 2.2, 4.5, 1]]) {
       const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch; const g = cv.getContext("2d");
       g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = "#fff";
       for (const { pts, aa } of net(WD, frac)) {
-        const sm = chaikin(pts, 4, false); g.beginPath(); sm.forEach((p, q) => q ? g.lineTo(p[0] * k, p[1] * k) : g.moveTo(p[0] * k, p[1] * k));
+        const sm = chaikin(pts, 4, false); g.beginPath(); sm.forEach((p, q) => q ? g.lineTo((p[0] - ox) * k, (p[1] - oy) * k) : g.moveTo((p[0] - ox) * k, (p[1] - oy) * k));
         g.lineWidth = Math.max(1, k * wid * (1 + .35 * Math.min(4, Math.log2(aa[aa.length - 1] + 1)))); g.stroke();
       }
       const d = g.getImageData(0, 0, cw, ch).data, F = new Float32Array(cw * ch); for (let i = 0; i < F.length; i++) F[i] = d[i * 4] / 255;
@@ -242,7 +265,7 @@
   // the hydrographic print (the user's example, 27 Oct 2026: a raised relief of California on pale paper): the land a
   // slab casting its shadow on the paper, no sea colour; one low sun and warm brown shade; fine ridges and gullies; sage
   // valleys, tan and brown mountains, pale grey peaks; every stream drawn
-  const HYDRO = { lights: LOW_SUN, shade: [64, 48, 36], dark: .9, bright: 1.1, rx: 1.75, paper: [241, 239, 234], ridged: 2.5, carve: 7 };
+  const HYDRO = { lights: LOW_SUN, shade: [64, 48, 36], dark: .9, bright: 1.1, rx: 1.75, paper: [241, 239, 234], ridged: 2.5, carve: 7, ve: 30 };
   function hydro(WD, uid, o) { return relief(WD, uid, o, HYDRO); }
   function relief(WD, uid, o, P) {
     const [W, H] = WD.size, G = WD.G, pr = probe(WD), sea = G.sea, N = nat(WD);
@@ -252,6 +275,8 @@
     const ex = 5.5 * Math.min(2, Math.max(.6, 1400 / Math.max(W, H)));
     // (how much the relief is raised under the light: about the old look's strength, less on very large maps)
     const RX = .3 * Math.min(1.4, Math.max(.7, 1400 / Math.max(W, H)));
+    // (the hydrographic print lights the land as it is in metres, when the map knows its scale)
+    const SCL = WD.scale, MPU = P && SCL && SCL.per > 0 && /mile|km/.test(SCL.unit || "") ? SCL.per * (/mile/.test(SCL.unit) ? 1609.34 : 1000) : 0;
     // (the user, 27 Oct 2026, after a softer natural-colour try: "the ones before were better": colour by height, from
     // green lowland through pale upland to white peaks, under a strong light, as the plain relief previews were; and
     // where a forest is denser, the land greener)
@@ -334,12 +359,13 @@
       if (swpAt) { const w = swpAt(x, y); if (w > .02) c = mix(c, [88, 112, 76], w * .7); }
       if (I.mix) c = washed("painted", c, Object.assign({}, I, { mix: I.mix.filter(([q]) => !["glacier", "icesheet", "snowforest", "snow"].includes(BIO.LIST[q][0])) }), x, y, nz, t, false);
       if ((I.b && (I.b.id === "glacier" || I.b.id === "snow")) || (tm < .08 && t > .3)) c = mix(c, [245, 246, 248], .8);
-      return lit(c, gx, gy, P ? RX * P.rx : RX, P);
-    }, { detail: 0, max: P ? 3200 : 2600, smooth: true, grain: P ? 0 : 3.5, ridged: P ? P.ridged : 0, carve: P ? P.carve : 0 });
+      return lit(c, gx, gy, MPU ? 1 : P ? RX * P.rx : RX, P);
+    }, { detail: 0, max: P ? 3200 : 2600, smooth: true, grain: P ? 0 : 3.5, ridged: P ? P.ridged : 0, carve: P ? P.carve : 0, rect: o && o.rect, k: o && o.k, metric: MPU ? { mpu: MPU, ve: P.ve } : null });
+    if (o && o.only) return img;
     if (P) return hydroSvg(WD, uid, img, pr, N);
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     const cd = coastD(G, .6);
-    s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/>`;
+    s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/><g class="wm-detail"></g>`;
     s += N ? NT.rivers(WD, "relief", N, pr, "#2c5fc6", null, 1.25) : rivers(WD, "#2c5fc6", null, 1.25);
     const c = seaCorner(WD, pr);
     s += `<g class="wm-deco"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" fill="none" stroke="#2b2a24" stroke-width="1.4"/>${northArrow(W * c[0], H * c[1], Math.min(W, H) * .045, "#2b2a24", true)}${WD.title ? `<text class="wm-ttl" x="${W / 2}" y="34" text-anchor="middle" fill="#2b2a24">${A.esc ? A.esc(WD.title) : WD.title}</text>` : ""}</g>`;
@@ -915,5 +941,10 @@
     if (look === "stars" || !WD.G) return stars(WD, uid, o);
     return ({ hydro, relief, painted, parchment, engraved, atlas, holo })[look](WD, uid, o);
   }
-  A.worldArt = { LOOKS, looksFor, draw };
+  // the sharper picture of a window of the map, for the page to lay over the land when zoomed in (the shaded reliefs
+  // only); base: how many pixels a unit the whole map's own picture has
+  const DETAIL = { hydro: 3200, relief: 2600 };
+  const detailBase = (WD, look) => DETAIL[look] ? Math.min(2, DETAIL[look] / Math.max(WD.size[0], WD.size[1])) : 0;
+  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; return relief(WD, "d", { rect, k, only: true }, look === "hydro" ? HYDRO : undefined); }
+  A.worldArt = { LOOKS, looksFor, draw, detail, detailBase };
 })(ATLAS);

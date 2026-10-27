@@ -115,8 +115,10 @@ function geology(o, U) {
   // old belts, worn low, across the old continents
   for (let k = 0; k < nP; k++) {
     if (rnd() < .45) continue; const s = plates[k].seed; if (!crust[s]) continue;
-    const a = rnd() * Math.PI, ux = Math.cos(a), uy = Math.sin(a), L = .2 + rnd() * .25, cx = X(s), cy = Y(s);
-    for (let n = 0; n < CN; n++) { if (plate[n] !== k || !crust[n]) continue; const dx = X(n) - cx, dy = Y(n) - cy, t = dx * ux + dy * uy; if (Math.abs(t) > L) continue; const off = Math.abs(-dx * uy + dy * ux) * cr * ckm; up[n] += .7 * gauss(off / 90) * (1 - (t / L) ** 2); }
+    const a = rnd() * Math.PI, ux = Math.cos(a), uy = Math.sin(a), L = (.2 + rnd() * .25) / (zs > 1 ? Math.sqrt(zs) : 1), cx = X(s), cy = Y(s), wd = zs > 1 ? 150 : 90;
+    // (on a whole planet such a belt would run thousands of km dead straight: there it is shorter and bends along its
+    // length, as the Appalachians and the Urals do)
+    for (let n = 0; n < CN; n++) { if (plate[n] !== k || !crust[n]) continue; const dx = X(n) - cx, dy = Y(n) - cy, t = dx * ux + dy * uy; if (Math.abs(t) > L) continue; const bend = zs > 1 ? (U.fbm(nD, t / L * 1.5 + k * 3.1, k * 1.7, 2) - .5) * L * 1.2 : 0, off = Math.abs(-dx * uy + dy * ux - bend) * cr * ckm; up[n] += .7 * gauss(off / wd) * (1 - (t / L) ** 2); }
   }
   // hotspots: a chain of volcanic islands over a moving ocean plate; on a continent a gentle swell
   for (let h = 0; h < Math.floor(rnd() * 2.6); h++) {

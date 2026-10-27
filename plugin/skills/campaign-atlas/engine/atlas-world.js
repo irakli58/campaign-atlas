@@ -675,7 +675,7 @@
           const water = /sea|ocean|lake|bay|gulf|strait|sound|river/.test(L.kind || ""), fs = (L.size || (L.kind === "river" ? 10 : water ? 20 : L.kind === "region" ? 24 : 15)) * 1.15;
           s += `<text class="wm-rl${water ? " w" : ""}" x="${r1(L.at[0])}" y="${r1(L.at[1])}" font-size="${fs}" text-anchor="middle"${L.angle ? ` transform="rotate(${r1(L.angle)} ${r1(L.at[0])} ${r1(L.at[1])})"` : ""}>${esc(L.name)}</text>`;
         }
-        $(".wm-land").innerHTML = s; return;
+        $(".wm-land").innerHTML = s; refine.at = null; clearTimeout(refine.t); refine.t = setTimeout(refine, 350); return;
       }
       if (G) {
         const img = paintTerrain(WD), pat = (id, src) => src ? `<pattern id="${uid}-${id}" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${src}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern>` : "";
@@ -876,10 +876,26 @@
         const per = WD.scale.per / k, want = 110 * per, p10 = Math.pow(10, Math.floor(Math.log10(want))), step = [1, 2, 5, 10].map(m => m * p10).filter(v => v <= want).pop() || p10, px = step / per;
         sc.hidden = false; sc.innerHTML = `<span style="width:${Math.round(px)}px"></span>${nice(step)} ${esc(plural(WD.scale.unit || "unit", step))}`;
       } else sc.hidden = true;
+      clearTimeout(refine.t); refine.t = setTimeout(refine, 350);
       clearTimeout(place.t); place.t = setTimeout(() => { try { ctx.store.set("world-view", JSON.stringify({ cx: (V.sw / 2 - V.tx) / V.k, cy: (V.sh / 2 - V.ty) / V.k, z: V.k / V.k0 })); } catch (e) {} }, 400);
     }
     const frame = () => { raf = 0; if (gone) return; if (anim) { const t = Math.min(1, (performance.now() - anim.t0) / anim.ms), e = t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; V.k = Math.exp(Math.log(anim.k0) + (Math.log(anim.k1) - Math.log(anim.k0)) * e); const cx = anim.c0[0] + (anim.c1[0] - anim.c0[0]) * e, cy = anim.c0[1] + (anim.c1[1] - anim.c0[1]) * e; V.tx = V.sw / 2 - cx * V.k; V.ty = V.sh / 2 - cy * V.k; if (t < 1) request(); else anim = null; } place(); };
     const request = () => { if (!raf && !gone) raf = requestAnimationFrame(frame); };
+    // the sharper land where the map is zoomed in (the shaded reliefs): once the camera rests, the window in view is
+    // drawn again as fine as the screen shows it and laid over the land, so a continent of a whole planet holds its
+    // valleys and streams up close; zoomed back out, the whole map's own picture is enough
+    function refine() {
+      const slot = cam.querySelector(".wm-detail"); if (!slot || !A.worldArt || !A.worldArt.detail || gone || anim) return;
+      const base = A.worldArt.detailBase(WD, WD.look); if (!base || V.k < base * 1.4) { slot.innerHTML = ""; refine.at = null; return; }
+      const k = Math.min(2.5, V.k), pad = .15, vx = -V.tx / V.k, vy = -V.ty / V.k, vw = V.sw / V.k, vh = V.sh / V.k;
+      const x0 = Math.max(0, vx - vw * pad), y0 = Math.max(0, vy - vh * pad), x1 = Math.min(W, vx + vw * (1 + pad)), y1 = Math.min(H, vy + vh * (1 + pad));
+      if (x1 <= x0 || y1 <= y0) return;
+      const at = refine.at; if (at && at.k >= k * .85 && at.k <= k * 1.6 && vx >= at.r[0] && vy >= at.r[1] && vx + vw <= at.r[0] + at.r[2] && vy + vh <= at.r[1] + at.r[3]) return;
+      let href = null; try { href = A.worldArt.detail(WD, WD.look, [x0, y0, x1 - x0, y1 - y0], k); } catch (e) { console.warn("world map: the closer picture could not be drawn", e); }
+      if (!href) return;
+      slot.innerHTML = `<image href="${href}" x="${r1(x0)}" y="${r1(y0)}" width="${r1(x1 - x0)}" height="${r1(y1 - y0)}" preserveAspectRatio="none"/>`;
+      refine.at = { k, r: [x0, y0, x1 - x0, y1 - y0] };
+    }
 
     /* ---- the camera */
     function size() {
