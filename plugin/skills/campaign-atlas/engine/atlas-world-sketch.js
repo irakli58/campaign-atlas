@@ -154,6 +154,8 @@
     // (a mountain mark stands for the mountains about it: the marks spread and softened into ranges; specks dropped)
     specks(cols, rows, n => mtn[n] > 0, Math.max(2, N * .00008), n => { mtn[n] = 0; });
     // (a painted kind smaller than a few cells is a slip of the brush)
+    // (a river is a line of some length: a few blue cells by a lake's shore are not one)
+    specks(cols, rows, n => !!river[n], Math.max(6, cols * .04), n => { river[n] = 0; });
     for (let k = 1; k < KINDS.length; k++) specks(cols, rows, n => kind[n] === k, k === K.volcano ? 1 : Math.max(3, N * .0002), n => { kind[n] = 0; });
     blur(mtn, cols, rows, Math.max(1, Math.round(cols / 160)), 2);
     let mx = 0; for (let n = 0; n < N; n++) mx = Math.max(mx, mtn[n]); if (mx > 0) for (let n = 0; n < N; n++) mtn[n] = sea[n] ? 0 : Math.min(1, mtn[n] / mx * 1.4);

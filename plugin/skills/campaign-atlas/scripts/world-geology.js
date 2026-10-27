@@ -167,7 +167,7 @@ function geology(o, U) {
     for (let n = 0; n < CN; n++) if (crust[n]) h[n] += up[n] * dt;
     landscapeStep(h, cc, cr, isBase, rain, K, mExp, dt, U);
     // (a river the sketch shows keeps cutting its valley as the land rises, so the water gathers along it)
-    if (rivC) for (let n = 0; n < CN; n++) if (crust[n] && rivC[n] > .03) h[n] *= 1 - .02 * Math.min(1, rivC[n] * 1.5);
+    if (rivC && it % 4 === 0) for (let n = 0; n < CN; n++) if (crust[n] && rivC[n] > .03 && h[n] > 3) h[n] *= 1 - .02 * Math.min(1, rivC[n] * 1.5);
     // creep: hilltops round, steep slopes ease
     if (it % 2 === 0) creep(h, cc, cr, isBase, kd * 2 * dt);
     // halfway, the rain the ranges catch begins to feed the rivers that cut them
@@ -239,6 +239,8 @@ function geology(o, U) {
   }
   { let landN = 0; const lk = []; for (let n = 0; n < N; n++) { if (E[n] > 0) landN++; if (lakeCells[n]) lk.push(n); }
     const room = Math.round(landN * .03); if (lk.length > room) { lk.sort((a, b) => (F[b] - E[b]) - (F[a] - E[a])); for (let k = room; k < lk.length; k++) lakeCells[lk[k]] = 0; } }
+  // (no lake of the hollows' own on a drawn river: its water runs on)
+  if (SK && SK.river) for (let n = 0; n < N; n++) if (SK.river[n] > .3 && !(SK.lake && SK.lake[n])) lakeCells[n] = 0;
   // (the lakes the sketch shows are lakes, whatever the rain and however many there are)
   if (SK && SK.lake) { for (let n = 0; n < N; n++) if (SK.lake[n] && E[n] > 0) lakeCells[n] = 1;
     // (and only as big as drawn: water the hollows would add round a drawn lake is left as land)

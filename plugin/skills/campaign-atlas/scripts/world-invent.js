@@ -107,6 +107,44 @@ function distance(cols, rows, is) {
 }
 // rivers: the land drains to the sea (or off the sheet) the way water would, filling hollows; where enough water has
 // gathered, a river runs
+// the rivers a sketch drew (the user, 27 Oct 2026: "where's the river leading out to sea from the lake? That might be
+// a story relevant thing"): each drawn line is a river, whatever the water would choose: followed from its source (a
+// lake it touches, or its higher end) to its mouth (the sea, or a lake), carried on to the water at either end if the
+// line stops short of it, its bed cut so it runs downhill all the way, drawn broad as a main river is
+function drawnRivers(o, L, R) {
+  const { cols, rows, cell } = o, N = cols * rows, H = L.H, RV = L.drawnRiver, I = n => n % cols, J = n => (n / cols) | 0;
+  const nb8 = n => { const i = I(n), j = J(n), out = []; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { if (!di && !dj) continue; const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < cols && b < rows) out.push(b * cols + a); } return out; };
+  // the open sea (water reaching the sheet's edge) and the lakes (water that does not)
+  const ocean = new Uint8Array(N), st = []; for (let n = 0; n < N; n++) { const i = I(n), j = J(n); if (H[n] <= 128 && (!i || !j || i === cols - 1 || j === rows - 1)) { ocean[n] = 1; st.push(n); } }
+  while (st.length) { const n = st.pop(); for (const m of nb8(n)) if (!ocean[m] && H[m] <= 128) { ocean[m] = 1; st.push(m); } }
+  const dSea = distance(cols, rows, n => ocean[n] === 1), isLake = n => H[n] <= 128 && !ocean[n];
+  // (a drawn river through a lake is one river: the line is followed across the lake too)
+  const on = new Uint8Array(N); for (let n = 0; n < N; n++) on[n] = RV[n] > .45 && !ocean[n] ? 1 : 0;
+  const seen = new Uint8Array(N);
+  const bfs = (from, comp) => { const prev = new Map([[from, -1]]), q = [from]; let last = from; for (let h = 0; h < q.length; h++) { const c = q[h]; last = c; for (const m of nb8(c)) if (comp.has(m) && !prev.has(m)) { prev.set(m, c); q.push(m); } } return { prev, last }; };
+  for (let n0 = 0; n0 < N; n0++) {
+    if (!on[n0] || seen[n0]) continue;
+    const comp = new Set([n0]), q = [n0]; seen[n0] = 1;
+    for (let h = 0; h < q.length; h++) for (const m of nb8(q[h])) if (on[m] && !seen[m]) { seen[m] = 1; comp.add(m); q.push(m); }
+    if (comp.size < Math.max(8, cols * .02)) continue;
+    // its two ends: the farthest apart along it
+    const a = bfs(n0, comp).last, { prev, last: b } = bfs(a, comp);
+    const path = []; for (let c = b; c >= 0; c = prev.get(c)) path.push(c);   // b to a
+    // which end is the mouth: the one nearer the sea (a lake's outflow runs to the sea)
+    const nearLake = c => nb8(c).concat(...nb8(c).map(nb8)).some(isLake);
+    let src = path[0], mouth = path[path.length - 1];
+    if (dSea[src] < dSea[mouth] || (nearLake(mouth) && !nearLake(src))) { path.reverse(); [src, mouth] = [mouth, src]; }
+    // on to the sea from the mouth, down the shortest way, if the line stopped short of it
+    for (let c = mouth, g = 0; !ocean[c] && g < 60 && dSea[mouth] < Math.max(8, cols * .03); g++) { let best = -1; for (const m of nb8(c)) if (best < 0 || dSea[m] < dSea[best]) best = m; if (best < 0 || dSea[best] >= dSea[c] && !ocean[best]) break; path.push(best); c = best; if (H[best] <= 128) break; }
+    // back to a lake at the source, if one lies within a few cells
+    { let best = -1, bd = 1e9; const i0 = I(src), j0 = J(src); for (let dj = -6; dj <= 6; dj++) for (let di = -6; di <= 6; di++) { const x = i0 + di, y = j0 + dj; if (x < 0 || y < 0 || x >= cols || y >= rows) continue; const m = y * cols + x, d = Math.hypot(di, dj); if (isLake(m) && d < bd) { bd = d; best = m; } }
+      if (best >= 0) { const pre = []; let c = src; for (let g = 0; g < 8 && c !== best; g++) { const i = I(c), j = J(c), ti = I(best), tj = J(best); c = (j + Math.sign(tj - j)) * cols + i + Math.sign(ti - i); pre.unshift(c); } path.unshift(...pre.filter(c => !path.includes(c))); } }
+    // its bed cut so it falls all the way to its mouth
+    let top = 255; for (const c of path) { if (H[c] <= 128) continue; top = Math.max(129, Math.min(top, H[c])); H[c] = top; if (R.mask) R.mask[c] = 1; }
+    const xy = path.map(m => [(I(m) + .5) * cell, (J(m) + .5) * cell]);
+    R.rivers.push({ pts: smooth(simplify(xy, cell * .6), 2).map(p => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]), w: Math.max(3.2, ...R.rivers.map(r => r.w || 0)), drawn: true });
+  }
+}
 function makeRivers(o, L) {
   const { cols, rows, cell } = o, N = cols * rows, H = L.H, parent = new Int32Array(N).fill(-1), seen = new Uint8Array(N), order = [], hp = new Heap(), filled = new Float32Array(N);
   // (a world made by its geology: its lakes fill and spill, so rivers run on out of them to the sea; only the sea, and the
@@ -451,7 +489,7 @@ function invent(A, flags, log) {
       let sketch = null;
       if (flags.sketch) { const SKM = require("../engine/atlas-world-sketch.js"), sk = typeof flags.sketch.land === "string" ? SKM.decode(flags.sketch) : flags.sketch; sketch = SKM.fit(sk, cols, rows, noiseFn(seed + 41), flags.loose != null && flags.loose !== true ? +flags.loose : 0); }
       const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: 1 - (SEA_SHARE[land] || .5), planet, km: whole ? 40030 : num("km", Math.round(w * 2.3)), tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: whole || flags["climate-model"] === "earth" ? "earth" : undefined, lat: whole ? [90, -90] : undefined, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: whole ? 1.4e6 : undefined, noiseZoom: whole ? 6 : undefined, edgeMargin: whole ? .025 : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
-      L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco }; geo = G.info; T.rain = 1;
+      L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)
       if (G.eco && flags.biomes !== "classic") { T.biome = Buffer.from(G.eco.biome).toString("base64"); T.canopy = Buffer.from(G.eco.canopy).toString("base64"); T.tempC = Buffer.from(Uint8Array.from(G.eco.T, v => Math.max(0, Math.min(255, Math.round(v + 60))))).toString("base64"); if (G.eco.ground.some(v => v)) T.ground = Buffer.from(G.eco.ground).toString("base64"); }
@@ -463,6 +501,7 @@ function invent(A, flags, log) {
     // (the classic land gets its fjords cut; the geology's own coasts have their drowned valleys already)
     const fj = regions && !geo ? carveFjords(co, L, mulberry32(seed + 41)) : 0;
     const R = makeRivers(Object.assign({ wetf: geo ? 1 : BIO.CLIMATES[climate][2], lakesFlow: !!geo }, co), L); T.rivers = R.rivers; riverMask = R.mask;
+    if (L.drawnRiver) drawnRivers(co, L, R);
     if (regions) { CV = makeCover(Object.assign({ geo, rain: !!geo }, co), L, R, mulberry32(seed + 43), log); CV.fjords = fj; if (CV.liquid) T.liquid = CV.liquid; if (CV.lore && CV.lore.length) T.lore = CV.lore; }
     if (geo) CV = Object.assign(CV || { made: {}, vols: [] }, { geo });
     // seas and lakes, named at their deepest water
