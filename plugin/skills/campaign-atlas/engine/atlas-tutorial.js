@@ -149,6 +149,8 @@
         const el = await find(s.sel, s.auto ? 2500 : 3500); if (token !== R.token) return;
         // (a step with nothing to say is done quietly: putting back what the lesson changed)
         if (!s.say) { if (el) await perform(s, el); R.si++; continue; }
+        // (a step for something only some pages have, like the app's link for phones, is passed over where it is not)
+        if (!el && s.optional) { R.si++; continue; }
         target = el || null;
         if (el) { el.scrollIntoView({ block: "center", inline: "nearest", behavior: VIDEO ? "auto" : "smooth" }); await sleep(VIDEO ? 120 : 380); if (token !== R.token) return; light(el); }
         else spot.classList.remove("on");
@@ -243,7 +245,7 @@
 
   /* ---- the ways in: Help in the masthead, a ? beside a tool, and a word on the first visit */
   function helpButton() {
-    if (document.querySelector(".tu-helpbtn") || VIDEO) return;
+    if (document.querySelector(".tu-helpbtn")) return;
     const host = document.querySelector(".mode") || document.querySelector("header nav") || document.querySelector("header");
     if (!host) return;
     const b = document.createElement("button"); b.type = "button"; b.className = "tu-helpbtn"; b.textContent = "Help"; b.title = "Help and tutorials: every lesson, a search, where you left off";

@@ -57,7 +57,8 @@
     const w = whereOf(ref), n = npcOf(ref), op = (OPINIONS.find(o => o[0] === d.opinion) || [0, ""])[1];
     const conv = (d.turns || []).slice(-8).map(t => `A player: ${t.q}\n${nameOf(ref)}: ${t.a}`).join("\n");
     const extra = [
-      w ? `WHERE THEY ARE: ${placeName(w.pl)}${w.room && A.nameOf ? ", " + (A.nameOf(A.get(w.pl, 99), w.room) || w.room) : ""}${n.doing ? "; " + n.doing : ""}` : "",
+      A.lives ? A.lives.about(ref) : "",
+      w ? `WHERE THEY ARE ON THE MAP: ${placeName(w.pl)}${w.room && A.nameOf ? ", " + (A.nameOf(A.get(w.pl, 99), w.room) || w.room) : ""}${n.doing ? "; " + n.doing : ""}` : "",
       `WHAT HAS HAPPENED AT THE TABLE LATELY (they know of it only if they were there, were told, or it is common talk):\n${lately() || "(nothing recorded)"}`,
       op ? `WHAT THEY THINK OF THE PARTY: ${op}` : "",
       conv ? `THE CONVERSATION SO FAR (this scene):\n${conv}` : "",

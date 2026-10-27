@@ -1887,3 +1887,39 @@ button.ho-b:hover { color: var(--ink); }
 .ps-news .ps-when { text-align: left; margin: 0 0 4px; }
 .ps-news h3 { font-family: var(--f-display); font-weight: 400; font-size: 30px; line-height: 1.15; margin: 0 0 8px; color: #fff; }
 .ps-news p { font-size: 18px; line-height: 1.55; color: #d6d0c4; margin: 0 0 10px; }
+/* factions and people (atlas-factions.js) */
+.fa-card { border-left: 4px solid var(--fa, var(--accent)); }
+.fa-h { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.fa-h h3 { margin: 0; }
+.fa-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--fa, var(--accent)); display: inline-block; align-self: center; }
+.fa-has { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 14px; margin: 10px 0; }
+.fa-bar { display: flex; gap: 6px; align-items: center; }
+.fa-bar > .kn { width: 78px; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; }
+.fa-pips { display: inline-flex; gap: 3px; }
+.fa-pips i { width: 11px; height: 11px; border-radius: 2px; border: 1px solid var(--rule); }
+.fa-pips i.on { background: var(--fa, var(--accent)); border-color: var(--fa, var(--accent)); }
+.fa-bar .t-mini { padding: 0 6px; min-width: 22px; }
+.fa-plan { margin: 8px 0; }
+.fa-plan > .kn, .fa-rels > .kn { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
+.fa-plan ol { margin: 4px 0 6px; padding-left: 22px; }
+.fa-plan li.done { color: var(--muted); text-decoration: line-through; }
+.fa-plan li.now { font-weight: 600; }
+.fa-plan li.now::marker { color: var(--fa, var(--accent)); }
+.fa-rels { display: grid; gap: 4px; margin: 10px 0; }
+.fa-rel { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; font-size: 14.5px; }
+.fa-rel > span { min-width: 160px; }
+.fa-rel select { width: auto; margin: 0; padding: 3px 6px; }
+.fa-rel small { flex-basis: 100%; }
+.fa-more { margin: 6px 0 0; }
+.fa-more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.fa-web { width: 100%; max-width: 380px; height: auto; display: block; margin: 0 auto; }
+.fa-web text { font-size: 16px; fill: var(--ink); font-family: var(--f-body); }
+.fa-person { border-top: 1px solid var(--rule); padding: 8px 0; }
+.fa-person:first-child { border-top: 0; }
+.fa-ph { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.fa-now { margin: 3px 0 4px; }
+.fa-person select { width: auto; margin: 0; padding: 3px 6px; }
+.fa-tag { display: inline-block; font-family: var(--f-mono); font-size: 10px; letter-spacing: .04em; border: 1px solid var(--fa, var(--rule)); color: var(--fa, var(--muted)); border-radius: 999px; padding: 0 6px; margin-top: 3px; }
+.fa-moveform { align-items: center; }
+.fa-moveform .t-in { width: auto; margin: 0; }
+.tw-fx select, .tw-fx input { width: auto; flex: 1 1 120px; margin: 0; min-width: 0; }

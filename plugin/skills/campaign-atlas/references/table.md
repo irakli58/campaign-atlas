@@ -22,6 +22,7 @@ A campaign is played, not only read. Every page Atlas builds has an **At the tab
 16. The copilot: Talk and Improvise
 17. Checking the campaign for consistency
 18. The world's time: the calendar, events, news
+19. Factions and people's lives
 
 ## 1. What the page does by itself
 
@@ -85,6 +86,7 @@ Where it keeps things: the page's database on claude.ai and in the Atlas app; an
 | Random tables | a place's `tables`; `table.js`: `ATLAS.tables({...})` | Poe (atmosphere), Christie (rumour) |
 | Intensity and content | each place's `intensity` and `content` | The clerk, honestly |
 | The calendar and the world's events | `table.js`: `ATLAS.calendar({...})`, `ATLAS.events([...])` (section 18) | Christie (what the world does on its own), Doyle (what the players can learn of it) |
+| The factions, and people's days | `table.js`: `ATLAS.factions({...})`; on the cast: `home`, `work`, `sched`, `week`, `factions`, `fears`, `believes`, `suspects`, `wrong` (section 19) | Christie (who wants what), the council's political writer where it has one |
 
 `table.js` sits in the campaign folder beside `campaign.js` (`atlas.js init` writes an empty one). Write it after the bible is agreed and the places are registered, so every id it names exists.
 
@@ -299,3 +301,42 @@ ATLAS.events([
 **The players** see the world's date in a corner of their screen, and a **News** tab with all they have been told, newest first; news that comes while they are elsewhere shows a word on the screen and a count on the tab. Their copy and their phones get the date in words and the news, never the events, their causes or what is planned.
 
 **Where it is kept**: collections `clock` (`now`: minutes since the start, and the date in words; `opts`: who must approve, paused, small happenings; `cal`: the game master's calendar), `events` (each event's state: pending, done, later, dismissed, off, with what it moved and told), `eventdefs` (the game master's own and changed events), `news`. The copilot is told the date and what has happened lately; the consistency check finds an event that waits on, or is called off by, a place, clue, clock or event that is not there, a `when` that cannot be read, an event set before the story begins, or events that wait on each other in a circle. `check` asks the same of `table.js` (section 12), and notes a campaign with sessions but no events.
+
+## 19. Factions and people's lives
+
+The user asked (26 Oct 2026, the master plan, parts 6 and 7) for factions that act from what they actually have, whose standing changes through events and the party's deeds, and for important people with a home, a workplace, a day and a week, factions, fears, beliefs and suspicions, who move as the world's time moves. It is a tab of At the table, **Factions and people** (atlas-factions.js). What people know stays the investigation's (section 14): knowledge with its source, reliability and when, never more than they could know.
+
+**What the council writes.** The factions, in `table.js` (Christie leads: who wants what and what they will do for it; Martin, Herbert or le Carré where they sit):
+
+```js
+ATLAS.factions({
+  medical: { n: "Medical Nine", kind: "the medical ring", leader: "okafor", members: ["okafor", "Nurse Petra Lindqvist"], hq: "med-lab", territory: ["med-lab"],
+    has: { money: 2, people: 2, arms: 0, influence: 3, knowledge: 5 }, lacks: "Anyone she can trust with the truth.",
+    wants: "To contain the breach before anyone learns there was one.", clock: "okafor",
+    plan: ["Close Hydroponics 9", "Wipe the cryo log", "Move Ines to the pods", "Blame Ines"], step: 0, doing: "Keeping the beds sealed.",
+    rels: { security: ["wary", "Security could open any door she closes"], dock: "friendly" }, party: "wary",
+    knows: "Everything about the crate.", wrong: "That the spores die in vacuum.", inner: "Petra suspects, and is afraid to ask.", rep: "Efficient, cold.", past: "…" }
+});
+```
+
+- `has`: what it has to act with, each 0 (none) to 5 (as much as any power in the story): money, people, arms, influence, knowledge. A faction does nothing it has not the means for; `lacks` says what it is short of.
+- `plan`: its steps in order, `step` the one it is on, `doing` what it is doing now; `clock` ties it to a villain's clock when it has one.
+- `rels`: how it stands toward each other faction: `war`, `hostile`, `wary`, `neutral`, `friendly`, `allied`, with why (`["wary", "why"]`); `party`: how it stands toward the party.
+- For the referee only: `knows` (its intelligence), `wrong` (what it believes wrongly: misinformation), `inner` (its own quarrels), `rep` (how others see it), `past` (its history).
+- `leader` and `members`: a cast id, or a name written in full.
+
+People's lives, on the cast (`campaign.js`), for every important person:
+
+```js
+okafor: { …, home: "med-lab", work: "med-lab", factions: ["medical"],
+  sched: [["06-08", "hydroponics", "checking the beds before anyone is in"], ["08-20", "med-lab", "in her office"], ["20-06", "med-lab", "asleep in her office"]],
+  week: { Sunday: [["06-09", "docking-bay", "with Hale, over the bay records"], ["09-20", "med-lab", "in her office"], ["20-06", "med-lab", "asleep"]] },
+  fears: "…", believes: "…", suspects: "…", wrong: "what they have wrong, and believe", rep: "their reputation" }
+```
+
+- `sched`: their usual day, hour ranges with a place and what they do there (`"20-06"` runs past midnight); `week`: the days that differ, by the calendar's weekday names, each a whole day. Outside any range they are at `home` at night and at `work` by day.
+- `fears`, `believes`, `suspects`, `wrong` (a misunderstanding, held as true), `rep`: the copilot speaks from them.
+
+**What events change** (section 18): an event's `effects`, done when it happens and undone with it: `{ faction, rel: [other, stance] }` (both ways), `{ faction, party: stance }`, `{ faction, step: 1 }`, `{ faction, has: { arms: -1 } }`, `{ faction, gains: place }` and `{ faction, loses: place }`, `{ person, at: place, doing, hours }` (they go there, for so many hours or until moved back), `{ person, status: "missing" }` (missing, hiding, arrested, hurt, gone, dead, or "" for as usual), `{ person, joins: faction }`, `{ person, leaves: faction }`, `{ person, learns: "what", how: "rumour" }` (a knowledge record of the investigation, with the event as its source). The referee adds and changes them in the event form under Time.
+
+**At the table.** Each faction's card: its leader and members, seat and holdings, what it has (raised or lowered with a click), what it lacks and wants, its plan with the step it is on (on and back), what it is doing, how it stands toward each other faction and the party (changed with a choice; both ways), and folded, what only the referee knows and every change since, dated in the world's time. Beside them, the web of how they stand, and **the people, now**: where each is at this hour of the world's time, by their day and week or where they were moved, with how they are (missing, hurt, dead…) and **move them**. The copilot is told where someone is now, their factions, and what they fear, believe and suspect; the investigation can join a clue or a person to a faction. **Where it is kept**: collections `factions` (what has changed of each, with its log) and `npcstate` (where each was moved, how they are, the factions joined or left). The consistency check finds a faction holding or naming what is not there, two factions that see each other very differently (mark it intentional if it is a deception), a person's day naming a place that is not there or putting them in two places at once, and a person in a faction that does not exist; `check` asks the same of the files, and notes a living world with no factions.

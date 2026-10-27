@@ -23,6 +23,8 @@
   // calendar ({ start, months, weekdays, era }) and the events that happen in the world whether or not the party acts
   A.calendar = cal => { A.calendarData = Object.assign({}, A.calendarData || {}, cal || {}); return A; };
   A.events = list => { A.eventsData = (A.eventsData || []).concat(list || []); return A; };
+  // the powers that act in the world (atlas-factions.js; the user's master plan, part 6): { id: { n, kind, leader, members, hq, territory, has, wants, plan, rels, ... } }
+  A.factions = obj => { A.factionsData = Object.assign({}, A.factionsData || {}, obj || {}); return A; };
 
   /* ---- a map as the referee redrew it (the map editor, atlas-mapedit.js; the user asked, 21 Oct 2026, to get a place's
           map exactly as they want it). An edit replaces the place's floors (rooms, doors, stairs, markers, hand-placed

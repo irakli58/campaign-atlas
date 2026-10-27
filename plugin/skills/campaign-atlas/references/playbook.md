@@ -16,7 +16,7 @@ This is the order that works, with the command for each step. It was arrived at 
 | 6 | Every place registered | one `ATLAS.place(id, {...})` line each | Tier, category, region, tagline, position on the map |
 | 7 | The trail planned | `A check` | Every place that matters has two leads in, on paper |
 | 8 | The places, one at a time | the loop below | `A check <place>` is clean for each |
-| 8b | The table | `table.js`, and on the places (`references/table.md`) | Clocks, the session plan, the calendar and the world's events, the players' characters woven in, handouts, rolls, stat blocks, rescues, random tables, intensity; `check`'s "the table" line is OK |
+| 8b | The table | `table.js`, and on the places (`references/table.md`) | Clocks, the session plan, the calendar and the world's events, the factions and people's days, the players' characters woven in, handouts, rolls, stat blocks, rescues, random tables, intensity; `check`'s "the table" line is OK |
 | 9 | Build and look | `A build`, the preview | Both modes, light and dark, phone width |
 | 10 | Publish | the Artifact tool | One address, saved to memory and to the folder's notes |
 | 11 | Report | to the user | What was made, what the council changed, what was invented |

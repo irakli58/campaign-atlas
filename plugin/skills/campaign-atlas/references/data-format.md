@@ -278,7 +278,7 @@ Run `node scripts/atlas.js catalogue <dir>` for the current list and a drawn she
 
 ## 7. For the table
 
-`table.js` holds `ATLAS.clocks([...])`, `ATLAS.sessions([...])`, `ATLAS.pcs({...})`, `ATLAS.rescues([...])`, `ATLAS.tables({...})`, `ATLAS.handouts([...])`, `ATLAS.calendar({...})` and `ATLAS.events([...])`; the places and their clues, people and encounters carry `intensity`, `content`, `tables`, `roll`, `rescue`, `handout` and `stats`; `campaign.js` may say `era` and `people`. Every one of them is described, with an example, in `references/table.md`.
+`table.js` holds `ATLAS.clocks([...])`, `ATLAS.sessions([...])`, `ATLAS.pcs({...})`, `ATLAS.rescues([...])`, `ATLAS.tables({...})`, `ATLAS.handouts([...])`, `ATLAS.calendar({...})`, `ATLAS.events([...])` and `ATLAS.factions({...})`; the cast may carry `home`, `work`, `sched`, `week`, `factions`, `fears`, `believes`, `suspects`, `wrong` and `rep`; the places and their clues, people and encounters carry `intensity`, `content`, `tables`, `roll`, `rescue`, `handout` and `stats`; `campaign.js` may say `era` and `people`. Every one of them is described, with an example, in `references/table.md`.
 
 ## 8. The investigation: `edits/story.js`
 

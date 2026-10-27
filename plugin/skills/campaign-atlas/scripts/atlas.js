@@ -576,6 +576,33 @@ function checkTable(A) {
     if (Array.isArray(chosen.members) && chosen.members.length && chosen.members.length < 2) P(`story/council.json: a council needs two writers at least to debate`);
   }
   if (["sandbox", "hybrid"].includes(A.config.kind) && evs.length < 3) P(`a living world needs events in motion: at least three (ATLAS.events in table.js), its people and factions acting on their own`);
+  // the factions and people's days (atlas-factions.js; references/table.md, section 19), and what events change in them
+  const facs = A.factionsData || {}, castIds = new Set(Object.keys(A.castData || {})), STANCES = ["war", "hostile", "wary", "neutral", "friendly", "allied"];
+  const RANGE = /^\d{1,2}(:\d{2})?\s*-\s*\d{1,2}(:\d{2})?$/;
+  for (const [id, f] of Object.entries(facs)) {
+    const nm = (f && f.n) || id;
+    if (!f || !has(f.n)) { P(`the faction ${id} has no name (n)`); continue; }
+    if (!has(f.wants)) N(`the faction "${nm}" does not say what it wants (wants)`);
+    for (const p of [].concat(f.hq || [], f.territory || [])) if (p && !isPlace(p)) P(`the faction "${nm}" holds "${p}", which is not a place`);
+    for (const [o, r] of Object.entries(f.rels || {})) { if (!facs[o]) P(`the faction "${nm}" stands toward "${o}", which is not a faction`); const k = Array.isArray(r) ? r[0] : typeof r === "object" && r ? r.stance : r; if (!STANCES.includes(k)) P(`the faction "${nm}" stands "${k}" toward ${o}: ${STANCES.join(", ")}`); }
+    if (f.party && !STANCES.includes(f.party)) P(`the faction "${nm}" stands "${f.party}" toward the party: ${STANCES.join(", ")}`);
+    for (const [k, v] of Object.entries(f.has || {})) if (!(+v >= 0 && +v <= 5)) P(`the faction "${nm}" has ${k}: ${v}; each is 0 to 5`);
+    for (const m of [].concat(f.leader || [], f.members || [])) if (/^[a-z0-9-]+$/.test(m) && !castIds.has(m)) N(`the faction "${nm}" names "${m}", who is not in the cast (a cast id, or a name written in full)`);
+    if (f.clock && !ids.has(f.clock)) P(`the faction "${nm}" works by the clock "${f.clock}", which does not exist`);
+  }
+  for (const [cid, c] of Object.entries(A.castData || {})) {
+    for (const p of [c.home, c.work].filter(Boolean)) if (!isPlace(p)) P(`${c.n || cid}'s home or work is "${p}", which is not a place`);
+    for (const f of [].concat(c.factions || [])) if (!facs[f]) P(`${c.n || cid} belongs to "${f}", which is not a faction`);
+    for (const day of [c.sched || []].concat(Object.values(c.week || {}))) for (const row of day) { if (!Array.isArray(row) || !RANGE.test(String(row[0]))) P(`${c.n || cid}'s day has "${Array.isArray(row) ? row[0] : row}": each part is ["08-18", "place-id", "doing what"]`); else if (row[1] && !isPlace(row[1])) P(`${c.n || cid}'s day takes them to "${row[1]}", which is not a place`); }
+  }
+  for (const e of evs) for (const x of [].concat(e.effects || [])) {
+    const nm = e.title || e.id;
+    if (x.faction && !facs[x.faction]) P(`the event "${nm}" changes the faction "${x.faction}", which does not exist`);
+    if (x.person && !castIds.has(x.person)) P(`the event "${nm}" changes "${x.person}", who is not in the cast`);
+    for (const p of [x.gains, x.loses, x.at].filter(Boolean)) if (!isPlace(p)) P(`the event "${nm}" names the place "${p}", which does not exist`);
+    for (const f of [x.joins, x.leaves, x.rel && x.rel[0]].filter(Boolean)) if (!facs[f]) P(`the event "${nm}" names the faction "${f}", which does not exist`);
+  }
+  if (["sandbox", "hybrid"].includes(A.config.kind) && !Object.keys(facs).length) N(`a living world has its powers: give its factions (ATLAS.factions in table.js), each with what it has, wants and is doing`);
   for (const e of evs) for (const c of [].concat(e.after || [], e.unless || [])) if (c.event && !evIds.has(c.event)) P(`the event "${e.title || e.id}" waits on the event "${c.event}", which does not exist`);
   if (!evs.length && ses.length) N(`no world events: what happens in the world whether or not the party acts, on a date or when something happens (ATLAS.calendar and ATLAS.events in table.js)`);
   // the players' characters
@@ -616,7 +643,7 @@ function checkTable(A) {
   }
   stats += Object.values(A.castData || {}).filter(c => c.stats).length;
   if (!stats && has(A.config.system)) N(`no stat blocks: give the dangers and anyone who may fight their numbers in ${A.config.system}'s rules (stats:)`);
-  const line = `the table: ${clocks.length} clock${clocks.length === 1 ? "" : "s"} · ${ses.length} session${ses.length === 1 ? "" : "s"} · ${Object.keys(pcs).length} character${Object.keys(pcs).length === 1 ? "" : "s"} · ${hs.length} handout${hs.length === 1 ? "" : "s"} · ${stats} stat block${stats === 1 ? "" : "s"}${evs.length ? ` · ${evs.length} world event${evs.length === 1 ? "" : "s"}` : ""}`;
+  const line = `the table: ${clocks.length} clock${clocks.length === 1 ? "" : "s"} · ${ses.length} session${ses.length === 1 ? "" : "s"} · ${Object.keys(pcs).length} character${Object.keys(pcs).length === 1 ? "" : "s"} · ${hs.length} handout${hs.length === 1 ? "" : "s"} · ${stats} stat block${stats === 1 ? "" : "s"}${evs.length ? ` · ${evs.length} world event${evs.length === 1 ? "" : "s"}` : ""}${Object.keys(facs).length ? ` · ${Object.keys(facs).length} faction${Object.keys(facs).length === 1 ? "" : "s"}` : ""}`;
   return { line, out, problems, notes };
 }
 function cmdCheck(dir, want) {
@@ -769,7 +796,7 @@ function pageParts(dir) {
   // the game master's drawing rides in the page itself, before the page is drawn
   const pic = world && A.worldTerrainData && A.worldTerrainData.drawing ? path.join(dir, A.worldTerrainData.drawing) : null;
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
-  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-art.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir, A), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-copilot.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-consistency.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-worldtime.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-art.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir, A), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-copilot.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-consistency.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-worldtime.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-factions.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
   const js = raw.replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw, link, style: css + "\n" + over, world, drawingJS };

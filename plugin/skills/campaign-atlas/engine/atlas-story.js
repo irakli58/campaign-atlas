@@ -66,7 +66,7 @@
   // what a person holds to be so, and how sure it is
   St.KTYPES = [["fact", "Seen for themselves"], ["report", "Told by someone"], ["rumour", "A rumour"], ["deduction", "Worked out"], ["suspicion", "Suspects, cannot prove"], ["false", "Believes, wrongly"]];
   // how they came by it
-  St.KHOW = [["witnessed", "Saw it happen"], ["present", "Was there at the time"], ["found", "Found the clue"], ["told", "Was told"], ["read", "Read it"], ["accessed", "Looked it up in records or a machine"], ["rumour", "Heard it said"], ["inferred", "Worked it out"], ["assigned", "Because you say so"]];
+  St.KHOW = [["witnessed", "Saw it happen"], ["present", "Was there at the time"], ["found", "Found the clue"], ["told", "Was told"], ["read", "Read it"], ["accessed", "Looked it up in records or a machine"], ["rumour", "Heard it said"], ["inferred", "Worked it out"], ["faction", "Heard it through their faction"], ["assigned", "Because you say so"]];
   // what they will do with it
   St.KSHARE = [["shares", "Tells anyone who asks"], ["pressed", "Tells if pressed, paid or trusted"], ["hides", "Hides it, may lie"], ["refuses", "Will not tell, whatever happens"]];
   St.KREL = [["reliable", "Reliable"], ["doubtful", "Doubtful"], ["false", "False"]];
@@ -152,6 +152,7 @@
           chapter:3, item:id, question:id) */
   const plainRole = r => String(r || "").split(/\s*[;—(]\s*|\s+-\s+/)[0].trim();
   const joinT = (...a) => a.filter(Boolean).join(" ");
+  St.extraEntities = St.extraEntities || [];
   St.entities = () => {
     if (St._ents) return St._ents;
     const list = [], by = {}, add = e => { if (by[e.ref]) return by[e.ref]; by[e.ref] = e; list.push(e); return e; };
@@ -182,6 +183,8 @@
     (A.storyData || []).forEach((ch, i) => { if (ch.group !== "The story") return; add({ ref: "chapter:" + i, kind: "chapter", name: ch.title, sub: "The story bible", text: String(ch.md || "").slice(0, 6000), facts: [String(ch.md || "").replace(/[#*_>`]/g, "").replace(/\s+/g, " ").slice(0, 200)] }); });
     for (const [id, it] of Object.entries(St.items())) add({ ref: "item:" + id, kind: it.kind === "event" ? "event" : it.kind === "quest" ? "quest" : "item", ik: it.kind, name: it.n || id, sub: (St.ITEMS.find(x => x[0] === it.kind) || [0, "A story element"])[1], text: joinT(it.n, it.d, it.when), facts: [it.d].filter(Boolean) });
     for (const [id, q] of Object.entries(St.questions())) add({ ref: "question:" + id, kind: "question", name: q.text, sub: (St.QSTATE.find(x => x[0] === q.state) || [0, "Open"])[1], text: q.text, facts: [] });
+    // what other files of the page add (atlas-factions.js: the factions)
+    for (const f of St.extraEntities) { try { for (const e of f() || []) add(e); } catch (err) { console.warn("atlas", err); } }
     St._ents = { list, by };
     return St._ents;
   };

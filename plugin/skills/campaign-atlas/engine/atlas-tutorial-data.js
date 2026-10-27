@@ -41,7 +41,7 @@
       ] },
       { id: "map3d", title: "Big maps and 3D", summary: "A map at full size, and the room in 3D from its one fixed angle.", features: ["fullsize", "room3d"], needs: has(".lmap-sec"), steps: [
         { say: "Full size opens the map as large as your screen allows.", sel: ".lmap-sec [data-lmfull]", act: "click", try: "Click Full size." },
-        { say: "Close it again when you have looked.", sel: "dialog[open] [data-x], dialog[open] .lm-close, dialog[open] button[aria-label='Close']", act: "click", auto: true },
+        { say: "Close it again when you have looked.", sel: "#lmDlg[open] .lm-dlg-x", act: "click", auto: true },
         { say: "And here the floor in 3D, seen from one fixed angle so you never lose your way. Slide and zoom; it never turns.", sel: ".lmap-sec [data-m3d], .lmap-sec [data-lm3d]", act: "look" }
       ] },
       { id: "editor", title: "Editing a map", summary: "Redraw any map: rooms, doors, stairs, furniture and models, in 2D or 3D.", features: ["mapeditor", "furnish", "models"], needs: has(".lmap-sec [data-medit]"), steps: [
@@ -72,7 +72,7 @@
         { say: "The players' screen is a window of its own for the television or a second screen, with nothing of yours on it.", sel: "[data-t='tab'][data-tab='screen']", act: "click", try: "Click Players' screen.", wait: 500 },
         { say: "Open it, drag it onto the television, and choose what they see from here.", sel: "[data-t='openscreen']", act: "look" },
         { say: "Maps go to them a room at a time. In caves you brush the fog away as they explore, flat or in 3D.", sel: ".t-fog, .t-fog3d", act: "look" },
-        { say: "With the Atlas app, players can also follow on their own phones: switch it on and show them the QR code.", sel: ".t-lan", act: "look" }
+        { say: "With the Atlas app, players can also follow on their own phones: switch it on and show them the QR code.", sel: ".t-lan", act: "look", optional: true }
       ] },
       { id: "dock", title: "The quick tools", summary: "Dice, a person on the spot, ideas when they're stuck, questions, the copilot: always at the bottom right.", features: ["dock", "dice", "person", "stuck", "ask"], needs: has("#tDock"), steps: [
         { say: "These quick tools are on every page, at the bottom right.", sel: "#tDock", act: "look" },
@@ -115,6 +115,12 @@
         { say: "What you let the players hear goes to their screen as news, with a word on it that it came. Send news of your own here too.", sel: "#tvBody .tw-own", act: "look" },
         { say: "Time is in the quick tools as well, with a count of what waits for you.", sel: "#tDock [data-dock='time']", act: "click", try: "Click Time.", wait: 500 },
         { say: "Close it from the toolbar.", sel: "#tDock [data-dock='time']", act: "click", auto: true }
+      ] },
+      { id: "factions", title: "Factions and people", summary: "Who holds power, what they have and want, how they stand; where everyone is now.", features: ["factions", "lives"], needs: has("[data-t='tab'][data-tab='factions']"), steps: [
+        { say: "Factions and people: the powers that act in your world, and where each important person is.", sel: "[data-t='tab'][data-tab='factions']", act: "click", try: "Click Factions and people.", wait: 600 },
+        { say: "Each faction: who leads it, what it holds, what it has to act with, what it wants, and the step its plan is on. It can do no more than it has.", sel: "#tvBody .fa-card", act: "look" },
+        { say: "How they stand toward each other, and toward the party. Change it when the story does; the world's events change it too, and undo it if you take them back.", sel: "#tvBody .fa-rels", act: "look" },
+        { say: "And the people, now: where each one is at this hour of the world's time, by their day and their week. Move someone, or mark them missing, hurt or dead.", sel: "#tvBody .fa-people", act: "look" }
       ] }
     ] },
     { id: "story", title: "The story", lessons: [
@@ -127,7 +133,7 @@
         { say: "Each finding has its evidence. Mend it, ask Claude for a fix, or mark it intentional: a lie or a mystery on purpose.", sel: "#tvBody", act: "look" }
       ] },
       { id: "bible", title: "The story and its music", summary: "The council's story bible, and the music made for every place.", features: ["bible", "music"], steps: [
-        { say: "The story: the council's bible, Tolkien's judgement, and the story as you gave it.", sel: "#v-story", act: "look" },
+        { say: "The story: the council's bible, the judge's grades, and the story as you gave it.", sel: "#v-story", act: "look", optional: true },
         { say: "Every place has its own music, made by the page itself. Play it from here.", sel: ".musicbar, #v-music", act: "look" },
         { say: "That is Atlas. Help and tutorials is always here for any lesson again.", sel: ".tu-helpbtn", act: "look" }
       ] }
@@ -145,6 +151,7 @@
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
     worldtime: ["The world's time", "clock calendar date day hour time pause"], events: ["World events", "event plan happens approve due notification council suggest called off"], news: ["News for the players", "news told players notification"],
+    factions: ["Factions", "faction power house guild government corporation stance allies enemies territory plan"], lives: ["Where everyone is", "schedule day week home work where now status missing"],
     investigation: ["The investigation", "clues connections"], clues: ["Clues", "clue evidence"], knowledge: ["Who knows what", "knowledge"], autoconnect: ["Auto-Connect", "connect suggest"],
     consistency: ["Consistency", "contradiction check fits"], bible: ["The story bible", "story council tolkien"], music: ["Music", "music theme sound"],
     tablehome: ["Start here", "game night overview tools"], combat: ["Combat and dice", "initiative wounds sanity combat"], make: ["Make it up", "random tables person place"], board: ["The board", "corkboard string conspiracy"],
@@ -154,7 +161,7 @@
   // map's buttons. dev/tutorial-coverage.js finds every one of these in the engine; one with no feature here, or a feature
   // no lesson teaches, fails it: a new tool is not finished until it has its lesson.
   const COVERS = {
-    tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime" },
+    tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", factions: "factions" },
     dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
     view: { gaz: "gazetteer", table: "views", world: "worldmap", story: "bible", music: "music" },
     tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues" },

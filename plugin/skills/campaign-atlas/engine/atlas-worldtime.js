@@ -43,15 +43,15 @@
     const o = origin(), c = cal() || {};
     if (o.real) {
       const d = new Date(o.ms + m * 60000), h = d.getUTCHours(), mi = d.getUTCMinutes();
-      return { long: `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`, time: hour(h, mi), short: `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 3)}, ${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`, day: dayOf(m), h };
+      return { long: `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`, time: hour(h, mi), short: `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()].slice(0, 3)}, ${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`, day: dayOf(m), h, wd: DAYS[d.getUTCDay()] };
     }
     // the world's own calendar: months of so many days, weekdays, an era
     const months = (c.months && c.months.length ? c.months : [["Month", 30]]).map(x => Array.isArray(x) ? x : [x, 30]), yearLen = months.reduce((a, x) => a + (+x[1] || 30), 0);
     const total = (o.day - 1) * 1440 + o.h * 60 + o.mi + m, dayN = Math.floor(total / 1440), mins = ((total % 1440) + 1440) % 1440, year = o.year + Math.floor(dayN / yearLen); let dy = ((dayN % yearLen) + yearLen) % yearLen, mi2 = 0;
     while (dy >= (+months[mi2][1] || 30)) { dy -= +months[mi2][1] || 30; mi2++; }
-    const wd = c.weekdays && c.weekdays.length ? c.weekdays[((dayN % c.weekdays.length) + c.weekdays.length) % c.weekdays.length] + " " : "";
+    const wdn = c.weekdays && c.weekdays.length ? c.weekdays[((dayN % c.weekdays.length) + c.weekdays.length) % c.weekdays.length] : "", wd = wdn ? wdn + " " : "";
     const h = Math.floor(mins / 60), mn = mins % 60;
-    return { long: `${wd}${dy + 1} ${months[mi2][0]}, ${c.era ? c.era + " " : ""}${year}`, time: hour(h, mn), short: `${dy + 1} ${months[mi2][0]}, ${String(h).padStart(2, "0")}:${String(mn).padStart(2, "0")}`, day: dayOf(m), h };
+    return { long: `${wd}${dy + 1} ${months[mi2][0]}, ${c.era ? c.era + " " : ""}${year}`, time: hour(h, mn), short: `${dy + 1} ${months[mi2][0]}, ${String(h).padStart(2, "0")}:${String(mn).padStart(2, "0")}`, day: dayOf(m), h, wd: wdn };
   }
   const hour = (h, mi) => { const p = h < 5 || h >= 21 ? "night" : h < 12 ? "morning" : h < 17 ? "afternoon" : "evening"; return `${((h + 11) % 12) + 1}${mi ? ":" + String(mi).padStart(2, "0") : ""} ${h < 12 ? "am" : "pm"}, ${p}`; };
   const dayOf = m => { const o = origin(); return Math.floor((o.h * 60 + o.mi + m) / 1440) + 1; };
@@ -107,6 +107,7 @@
     // (recorded as done before the clock moves: moving it sets the watches off, and they must find it done)
     const st = S(), s = evState(id) || {}, rec = Object.assign({}, s, { state: "done", at: now(), t: Date.now(), auto: !!o.auto, news: null, ticked: null, def: s.def });
     if (o.tell && tellable(e)) rec.news = tell(e);
+    if (A.worldEffects && (e.effects || []).length) rec.fx = A.worldEffects.apply(e, at(now()).short);
     st.set("events", id, rec);
     if (e.tick) { const [cid, by] = [].concat(e.tick), cl = (A.clocksData || []).find(x => x.id === cid); if (cl) { const tot = +cl.segments || (cl.ticks || []).length || 4, was = api.clockAt(cl), to = Math.min(tot, was + (+by || 1)); if (to !== was) { st.set("events", id, Object.assign({}, rec, { ticked: [cid, to - was] })); st.set("clocks", cid, Object.assign({}, st.get("clocks", cid) || {}, { at: to, t: Date.now() })); } } }
   }
@@ -176,6 +177,7 @@
       // taken back: what it moved moves back, and what the players were told of it is taken back too
       if (s.ticked) { const [cid, by] = s.ticked, cl = (A.clocksData || []).find(x => x.id === cid); if (cl) st.set("clocks", cid, Object.assign({}, st.get("clocks", cid) || {}, { at: Math.max(0, api.clockAt(cl) - by), t: Date.now() })); }
       if (s.news) st.set("news", s.news, null);
+      if (s.fx && A.worldEffects) A.worldEffects.revert(s.fx);
       // (and if it is still due, it waits for the game master rather than happening again by itself)
       const w = dueAt(e), due = !e.random && (w != null ? now() >= w : [].concat(e.after || []).length > 0) && ready(e) && !offBy(e);
       st.set("events", id, due ? { state: "pending", at: now(), t: Date.now() } : null);
@@ -216,7 +218,7 @@
   function detail(e, cause) {
     const hear = e.news ? [e.news.paper, e.news.headline].filter(Boolean).join(" · ") + (e.news.text ? ". " + e.news.text : "") : e.players;
     const row = (k, v) => v ? `<div class="tw-f"><span class="kn">${k}</span> ${v}</div>` : "";
-    return `${e.what ? `<p>${esc(e.what)}</p>` : ""}${row("Who", esc([].concat(e.who || []).join(", ")))}${row("Factions", esc([].concat(e.factions || []).join(", ")))}${cause ? row("Because", esc(cause)) : ""}${row("Why <i>(only you)</i>", esc(e.why || e.secret || ""))}${row("What follows", esc(e.then || ""))}${(e.outcomes || []).length ? row("It may go", esc([].concat(e.outcomes).join(" · "))) : ""}${row("Called off if", esc(condsText(e.unless)))}${row("The players hear", esc(hear || ""))}${e.tick ? row("It moves", esc(`the clock "${(clockOf([].concat(e.tick)[0]) || {}).name || [].concat(e.tick)[0]}" on ${+[].concat(e.tick)[1] || 1}`)) : ""}`;
+    return `${e.what ? `<p>${esc(e.what)}</p>` : ""}${row("Who", esc([].concat(e.who || []).join(", ")))}${row("Factions", esc([].concat(e.factions || []).join(", ")))}${cause ? row("Because", esc(cause)) : ""}${row("Why <i>(only you)</i>", esc(e.why || e.secret || ""))}${row("What follows", esc(e.then || ""))}${(e.outcomes || []).length ? row("It may go", esc([].concat(e.outcomes).join(" · "))) : ""}${row("Called off if", esc(condsText(e.unless)))}${row("The players hear", esc(hear || ""))}${e.tick ? row("It moves", esc(`the clock "${(clockOf([].concat(e.tick)[0]) || {}).name || [].concat(e.tick)[0]}" on ${+[].concat(e.tick)[1] || 1}`)) : ""}${(e.effects || []).length && A.worldEffects ? row("It changes", esc(e.effects.map(A.worldEffects.say).filter(Boolean).join("; "))) : ""}`;
   }
   function pendingCard(x, compact) {
     const e = x.e, tl = tellable(e);
@@ -243,6 +245,7 @@
         ${field("Who is involved", `<input class="t-in" name="who" value="${esc([].concat(d.who || []).join(", "))}">`)}</div>
       <div class="tw-conds"><span class="kn">It waits until all of these have happened</span>${rows("after")}<button type="button" class="t-link" data-tw="addcond" data-w="after">+ a condition</button></div>
       <div class="tw-conds"><span class="kn">It is called off if any of these happens first</span>${rows("unless")}<button type="button" class="t-link" data-tw="addcond" data-w="unless">+ a reason to call it off</button></div>
+      ${A.worldEffects && A.worldEffects.any() ? `<div class="tw-conds"><span class="kn">When it happens, it changes (undone if you take it back)</span>${(d.fx || []).map((r, i) => A.worldEffects.rowHTML(r, i)).join("")}<button type="button" class="t-link" data-tw="addfx">+ a change in the world</button></div>` : ""}
       ${field("What happens <i>(for you)</i>", `<textarea class="t-in" name="what" rows="2">${esc(d.what || "")}</textarea>`)}
       ${field("Why <i>(only you: the cause, hidden plans, motives)</i>", `<textarea class="t-in" name="why" rows="2">${esc(d.why || d.secret || "")}</textarea>`)}
       ${field("What follows", `<textarea class="t-in" name="then" rows="2">${esc(d.then || "")}</textarea>`)}
@@ -350,11 +353,12 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
   }
 
   /* ---- the event form */
-  const draftOf = e => { const w = e && dueAt(e), [day, time] = w != null ? dayTime(w) : ["", "09:00"]; return Object.assign({}, e || {}, { day, time, after: [].concat((e && e.after) || []).map(toRow), unless: [].concat((e && e.unless) || []).map(toRow) }); };
+  const draftOf = e => { const w = e && dueAt(e), [day, time] = w != null ? dayTime(w) : ["", "09:00"]; return Object.assign({}, e || {}, { day, time, after: [].concat((e && e.after) || []).map(toRow), unless: [].concat((e && e.unless) || []).map(toRow), fx: A.worldEffects ? [].concat((e && e.effects) || []).map(A.worldEffects.toRow) : [] }); };
   function readForm(f) {
     const d = UI.edit.d, g = n => (f.elements[n] ? String(f.elements[n].value || "").trim() : "");
     for (const k of ["title", "importance", "place", "day", "time", "who", "what", "why", "then", "outcomes", "factions", "headline", "paper", "players", "tickc", "tickn"]) d[k] = g(k);
     for (const w of ["after", "unless"]) d[w] = (d[w] || []).map((r, i) => ({ v: g(w + "k" + i), n: g(w + "n" + i) }));
+    if (A.worldEffects) d.fx = (d.fx || []).map((r, i) => A.worldEffects.readRow(f, i));
     d.news = null;
   }
   function saveForm() {
@@ -371,6 +375,7 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
     const outs = String(d.outcomes || "").split("\n").map(x => x.trim()).filter(Boolean); if (outs.length) def.outcomes = outs;
     if (d.headline) def.news = { headline: d.headline, text: d.players || "", paper: d.paper || "" };
     if (d.tickc) def.tick = [d.tickc, +d.tickn || 1];
+    const fx = A.worldEffects ? (d.fx || []).map(A.worldEffects.fromRow).filter(Boolean) : []; if (fx.length) def.effects = fx;
     const id = UI.edit.id || "e" + Date.now().toString(36);
     S().set("eventdefs", id, def);
     api.note(UI.edit.id ? `${def.title}: changed.` : `${def.title}: planned.`);
@@ -382,7 +387,8 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
   document.addEventListener("click", e => {
     const b = e.target.closest && e.target.closest("[data-tw]"); if (!b || ["INPUT", "FORM", "SELECT", "TEXTAREA"].includes(b.tagName)) return;
     const k = b.dataset.tw, id = b.dataset.id, f = b.closest("form[data-tw='save']");
-    if (f && UI.edit && (k === "addcond" || k === "delcond")) readForm(f);
+    // (the form is drawn again with the row added or taken away: a field keeping the focus would stop that)
+    if (f && UI.edit && (k === "addcond" || k === "delcond" || k === "addfx" || k === "delfx")) { readForm(f); if (document.activeElement && f.contains(document.activeElement)) document.activeElement.blur(); }
     switch (k) {
       case "adv": backStack.push(now()); advance(+b.dataset.m); break;
       case "back": if (backStack.length) setNow(backStack.pop()); break;
@@ -398,6 +404,8 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
       case "cancel": UI.edit = null; UI.err = ""; break;
       case "addcond": UI.edit.d[b.dataset.w].push({ v: "", n: "" }); break;
       case "delcond": UI.edit.d[b.dataset.w].splice(+b.dataset.i, 1); break;
+      case "addfx": (UI.edit.d.fx = UI.edit.d.fx || []).push({ k: "" }); break;
+      case "delfx": UI.edit.d.fx.splice(+b.dataset.i, 1); break;
       case "restore": S().set("eventdefs", id, null); if (UI.edit && UI.edit.id === id) UI.edit = null; break;
       case "remove": {
         const own = !(A.eventsData || []).some(x => x.id === id);
@@ -413,6 +421,8 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
     setTimeout(() => { paint(); if (k === "new" || k === "edit" || k === "sgedit") { const el = document.getElementById("twEdit"); if (el) { el.scrollIntoView({ block: "start" }); const t = el.querySelector("input[name='title']"); if (t) t.focus({ preventScroll: true }); } } }, 80);
   });
   document.addEventListener("change", e => {
+    // (a change in the world: its kind chosen, the form shows what that kind needs)
+    if (e.target.dataset && e.target.dataset.twfx === "kind" && UI.edit) { const f = e.target.closest("form"); readForm(f); e.target.blur(); paint(); return; }
     const t = e.target; if (!t.dataset || !t.dataset.tw) return; const o = Object.assign({}, opts());
     if (t.dataset.tw === "random") o.random = t.checked; else if (t.dataset.tw === "table") o.table = t.value; else if (t.dataset.tw === "freq") o.freq = t.value; else if (t.dataset.tw === "ask") o.ask = t.value; else return;
     S().set("clock", "opts", o); if (t.dataset.tw === "ask") setTimeout(evaluate, 60);
