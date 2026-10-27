@@ -81,6 +81,12 @@
       return fetch(URL_.replace(/db$/, "make-city"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not made"); return d; }); })
         .then(function (d) { location.hash = "city/" + d.id; location.reload(); return d; });
+    },
+    // the players on their own phones: the players' link on this computer's network (o: nothing to ask how it stands,
+    // { on: true } to let them join, { on: true, fresh: true } for a new link, { on: false } to close it)
+    lan: function (o) {
+      return fetch(URL_.replace(/db$/, "players-lan"), o ? { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) } : { headers: { "x-atlas-token": TOKEN }, cache: "no-store" })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not done"); return d; }); });
     }
   };
 })();

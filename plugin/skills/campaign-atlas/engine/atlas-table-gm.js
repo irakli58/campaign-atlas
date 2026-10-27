@@ -450,6 +450,7 @@
     if (UI.tab === "board") bindBoard();
     if (plug && plug.bind) plug.bind(body);
     fitPreviews(); requestAnimationFrame(fitPreviews); fogPrev3();
+    if (UI.tab === "screen") lanPaint();
   }
   const visible = () => X && X.state.view === "table";
   const refresh = tabs => { if (visible() && (!tabs || tabs.includes(UI.tab))) renderTab(); };
@@ -670,6 +671,7 @@
           <p class="t-small">On another computer or a tablet instead: open this same page there, and on that one press <button type="button" class="t-link" data-t="beplayers">make this window the players' screen</button>. (Pressed here, it turns this page into theirs.)</p></div>
         <div class="t-scr-r"><div class="kl">What they see now</div><div class="t-prev" role="img" aria-label="${esc(cap(nowText(d)))}">${previewHTML(d)}</div><div class="t-small">${esc(cap(nowText(d)))}</div></div>
       </section>
+      ${lanAvail() ? `<section class="t-card t-lan"><h3>${T.icon("party")} On the players' own phones and laptops</h3><div id="tLan"><p class="t-small">…</p></div></section>` : ""}
       <section class="t-card"><h3>Show them</h3><div class="t-tiles">${tile("title", "The title", "play")}${A.worldData && A.worldMount ? tile("world", "The world map", "map") : ""}${tile("board", "Their board", "board")}${tile("safety", "Lines and veils", "safety")}${tile("blank", "A dark screen", "close")}</div></section>
       <div class="t-grid t-g2"><div>
         <section class="t-card"><h3>${T.icon("map")} A map, a room at a time</h3>${fogEditor()}</section></div>
@@ -679,6 +681,17 @@
         <section class="t-card"><h3>${T.icon("tonight")} Words to read</h3><input class="t-in" data-t="scenetitle" placeholder="A title (optional)" maxlength="120"><textarea rows="4" data-t="scenetext" placeholder="Words to show the players: a description, a sign, a message"></textarea><div class="t-row"><button type="button" class="t-btn" data-t="showscene">Show it to them</button></div></section>
       </div></div>`;
   }
+  /* ---- the players on their own phones (the Atlas app only: app/lib/players-lan.js). The app opens the players' copy
+          to this computer's network when the game master says so, with a link and its QR code. */
+  const lanAvail = () => !!(window.ATLAS_APP && window.ATLAS_APP.lan);
+  function lanFill(d) {
+    const box = $("#tLan"); if (!box) return;
+    if (!d) { box.innerHTML = `<p class="t-small">The app did not answer: is it still running?</p>`; return; }
+    if (!d.on) { box.innerHTML = `<p class="t-small">Each player can follow the game on their own phone or laptop: the same players' copy as the television, with nothing of yours in it, on this computer's Wi-Fi. Nothing is reachable from the network until you switch it on here.</p><div class="t-row"><button type="button" class="t-btn prim" data-t="lanon">Let the players join from this Wi-Fi</button></div><p class="t-small">The first time, Windows may ask whether Node.js may use private networks: allow it. Only the players' copy can be reached, and only with the link.</p>`; return; }
+    const url = (d.urls || [])[0];
+    box.innerHTML = `${d.error ? `<p class="t-warnbox">${esc(d.error)}</p>` : ""}${url ? `<div class="t-lanqr">${d.qr || ""}<div><p class="t-small">Players point their phone's camera at the code, or type the address:</p><p class="t-lanurl">${esc(url)}</p>${(d.urls || []).length > 1 ? `<p class="t-small">On another network of this computer: ${d.urls.slice(1).map(esc).join(", ")}</p>` : ""}<div class="t-row"><button type="button" class="t-mini" data-t="lancopy" data-url="${esc(url)}">Copy the link</button><button type="button" class="t-mini" data-t="lannew" title="The old link stops working at once">A new link</button><button type="button" class="t-mini" data-t="lanoff">Stop letting them join</button></div></div></div>` : `<p class="t-small">This computer is not on a network a phone can reach. Join the Wi-Fi, then look again.</p><div class="t-row"><button type="button" class="t-mini" data-t="lanoff">Stop letting them join</button></div>`}<p class="t-small">Their phones must be on the same Wi-Fi as this computer, and the app must stay open.</p>`;
+  }
+  const lanPaint = o => { if (!lanAvail() || !$("#tLan")) return; window.ATLAS_APP.lan(o).then(lanFill, () => lanFill(null)); };
   function toggleRoom(rid) {
     const id = UI.fogPlace, fi = UI.fogFloor, cur = S.get("fog", id) || {}, f = Object.assign({}, cur.f || {}), set = new Set(f[fi] || []);
     set.has(rid) ? set.delete(rid) : set.add(rid); f[fi] = [...set]; S.set("fog", id, Object.assign({}, cur, { f }));
@@ -913,6 +926,10 @@
       case "tab": dockClose(); UI.tab = d.tab; pref.set("tab", d.tab); if (X.state.view !== "table") X.setView("table"); else view(); window.scrollTo({ top: ($("#tablev") || document.body).offsetTop - 8, behavior: "smooth" }); break;
       case "tablet": { const on = app().dataset.tablet !== "1"; app().dataset.tablet = on ? "1" : ""; pref.set("tablet", on ? "1" : ""); b.setAttribute("aria-pressed", on); b.textContent = on ? "Table-side view: on" : "Table-side view"; break; }
       case "openscreen": openScreen(); break;
+      case "lanon": lanPaint({ on: true }); break;
+      case "lannew": lanPaint({ on: true, fresh: true }); break;
+      case "lanoff": lanPaint({ on: false }); break;
+      case "lancopy": try { navigator.clipboard.writeText(d.url); note("The players' link is copied."); } catch (x) { note("This browser would not copy it: read it out instead."); } break;
       case "beplayers": try { sessionStorage.setItem(cfg().storageKey + "-players", "1"); } catch (_) {} location.hash = "players"; location.reload(); break;
       case "screen": show({ kind: d.kind }); refresh(["screen"]); break;
       case "showmap": { const id = d.id || UI.fogPlace; if (!id || !A.maps[id]) return; UI.fogPlace = id; const fl = Object.values(S.get("fly") || {}).find(f => f.id === id) || (UI.fly && UI.fly.id === id ? UI.fly : null); show({ kind: "map", place: id, floor: UI.fogFloor || 0, fly: fl || null, view: fogView() }); refresh(["screen"]); fogDlgPaint(); break; }

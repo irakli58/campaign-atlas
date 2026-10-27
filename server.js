@@ -9,6 +9,7 @@
 if (+process.versions.node.split(".")[0] < 18) { console.error("\n  Campaign Atlas needs Node.js 18 or newer; this is " + process.version + ". Get the LTS version from https://nodejs.org/\n"); process.exit(1); }
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto"), { spawn } = require("child_process");
 const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch"), Ask = require("./lib/ask");
+const PlayersLan = require("./lib/players-lan");
 
 const ROOT = __dirname, PORT = +process.env.ATLAS_PORT || 4747;
 const UI = path.join(ROOT, "ui"), DATA = path.join(ROOT, "data"), WORK = path.join(ROOT, "workspace"), CAMPS = path.join(WORK, "campaigns");
@@ -99,7 +100,7 @@ function openFolder(dir) {
   try { spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: false }).unref(); } catch (e) {}
 }
 
-let jobs, db;
+let jobs, db, lan;
 async function route(req, res) {
   // this computer only, and only pages the app served itself may ask it to do anything
   if (!HOSTS.has(req.headers.host || "")) return fail(res, 403, "This app answers only on this computer.");
@@ -213,6 +214,12 @@ async function route(req, res) {
       if (!authed) return fail(res, 403, "forbidden");
       try { return send(res, 200, { text: await Ask.ask(String((await body(req, 1 << 17)).prompt || "")) }); } catch (e) { return fail(res, 400, e.message); }
     }
+    // the players on their own phones: the campaign's link on this computer's network, switched on or off (players-lan.js)
+    if (rest === "players-lan") {
+      if (!authed) return fail(res, 403, "forbidden");
+      if (m === "GET") return send(res, 200, await lan.status(mm[1]));
+      if (m === "POST") { const o = await body(req, 1 << 10); return send(res, 200, o.on ? await lan.enable(mm[1], !!o.fresh) : await lan.disable(mm[1])); }
+    }
     if (rest === "db") {
       if (!authed) return fail(res, 403, "forbidden");
       if (m === "GET") { const d = db.get(mm[1]); return +url.searchParams.get("v") === d.v ? (res.writeHead(204), res.end()) : send(res, 200, d); }
@@ -272,6 +279,8 @@ process.on("unhandledRejection", e => note("unhandled", e));
 setup();
 jobs = Jobs.create({ DATA, WORK, CAMPS, ATLAS_JS, TEMPLATE, settings, runners });
 db = LocalDB.create(path.join(DATA, "play"));
+// the players on their own phones (off until the game master switches it on for a campaign): lib/players-lan.js
+lan = PlayersLan.create({ DATA, campDir, db, PORT: PORT + 1, UI }); lan.resume();
 const server = http.createServer((req, res) => route(req, res).catch(e => { try { fail(res, 500, e.message); } catch (x) {} }));
 server.on("error", e => { if (e.code === "EADDRINUSE") { console.log(`Campaign Atlas is already running: open http://localhost:${PORT}`); process.exit(0); } throw e; });
 server.listen(PORT, "127.0.0.1", () => {
