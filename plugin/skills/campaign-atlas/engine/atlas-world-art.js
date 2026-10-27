@@ -43,8 +43,11 @@
     // (smooth: the slopes are lit from a smooth surface through the grid (a cubic B-spline), so they curve as land does
     // instead of breaking into the grid's facets; the colours and the coast keep to the grid itself)
     const SC = opts.smooth ? cubic(G) : null, sv = SC ? new Float32Array(N) : hv, VL = opts.carve ? valleys(WD, cw, ch, k, ox, oy) : null, VF = opts.fine && SC ? gullies(WD, SC, cw, ch, k, ox, oy) : null;
+    // (the land and the sea part where the coastline is drawn: the outline is traced half a step above the sea's level
+    // (coastRings), so the picture reads the heights half a step lower; else a strip of painted land lies beyond the
+    // coast's line, which then runs inland like a river (the user, 28 Oct 2026), and a narrow inlet is painted as land)
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
-      const x = ox + (px + .5) / k, y = oy + (py + .5) / k, h = S(x, y), i = py * cw + px;
+      const x = ox + (px + .5) / k, y = oy + (py + .5) / k, h = S(x, y) - .5, i = py * cw + px;
       // fine relief the grid is too coarse to hold, on land only, more on the heights
       const fine = h > sea ? (nz(x * .09, y * .09) - .5) * detail * (.4 + (h - sea) / (256 - sea)) : 0;
       hv[i] = h + fine;
