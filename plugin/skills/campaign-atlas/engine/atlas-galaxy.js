@@ -534,5 +534,7 @@
 
   // the view, mounted by the page's shell when the game master opens it (atlas-shell.js)
   A.galaxyMount = el => { if (!host || host !== el) mount(el); else { refresh(); } return { wake: refresh }; };
+  // (a system chosen from outside the chart: a place's trail back up to the stars)
+  A.galaxyFocus = id => { if (!host) return; const s = findSys(id); if (!s) return; UI.sel = id; centreOn(s, 2.5); over(); side(); };
   if (A.tableUI) { const iv = setInterval(() => { const st = A.tableUI.api.store(); if (!st) return; clearInterval(iv); ST = st; for (const c of ["charts", "ship", "gedits"]) st.watch(c, () => { if (host && host.isConnected && host.offsetParent) { if (c === "gedits" || c === "charts") refresh(); else { over(); side(); } } }); }, 200); setTimeout(() => clearInterval(iv), 120000); }
 })(ATLAS);

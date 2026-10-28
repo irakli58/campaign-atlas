@@ -240,16 +240,25 @@
     const bone = bonesAt(p.id).map(b => `<span class="tag bone keeper">${esc(keyWord)} ${b.k} · ${esc(b.name)}</span>`).join("");
     // where it stands on the world map, as a way there
     const wl = A.worldData && A.worldMount ? (A.worldData.locations || []).find(L => L && L.id && inLoc(p.id, L)) : null;
-    const wtag = wl && (state.mode === "gm" || wl.state !== "unknown") ? `<button type="button" class="tag wtag" data-world="${esc(wl.id)}" title="Show it on the world map">⌖ ${esc(wl.name)}</button>` : "";
+    // where it stands, step by step up to the world or the stars, each step opening its map (the user's master plan, 26
+    // Oct 2026: "all maps should connect logically", "the DM should be able to return to the parent map easily")
+    const showLoc = wl && (state.mode === "gm" || wl.state !== "unknown"), pc = cityOf(p.id), hasCity = !!(pc && CITIES[pc] && A.cityMount);
+    const sysId = (A.meta[p.id] || {}).system, gxs = sysId && state.mode === "gm" && A.galaxyApi && A.galaxyFocus ? ((A.galaxyApi.G() || {}).systems || []).find(s => s.id === sysId) : null;
+    const crumbs = [];
+    if (A.worldData && A.worldMount) crumbs.push(`<button type="button" data-world="" title="The world map">${esc(A.worldData.title || cfg.title || "The world")}</button>`);
+    if (showLoc) crumbs.push(hasCity && (wl.city || wl.id) === pc ? `<button type="button" data-tcity="${esc(pc)}" title="Its city's map">${esc(wl.name)}</button>` : `<button type="button" data-world="${esc(wl.id)}" title="Show it on the world map">${esc(wl.name)}</button>`);
+    if (hasCity && !(showLoc && (wl.city || wl.id) === pc) && (Object.keys(CITIES).length > 1 || A.worldData)) crumbs.push(`<button type="button" data-tcity="${esc(pc)}" title="Its city's map">${esc(cityLabel(pc))}</button>`);
+    if (gxs) crumbs.push(`<button type="button" data-gxsys="${esc(sysId)}" title="The star chart">The stars</button>`, `<button type="button" data-gxsys="${esc(sysId)}" title="Its star system">${esc(gxs.name)}</button>`);
+    const trail = crumbs.length ? `<nav class="trail" aria-label="Where it is">${crumbs.join('<span class="tr-sep" aria-hidden="true">›</span>')}<span class="tr-sep" aria-hidden="true">›</span><span aria-current="page">${esc(p.name)}</span></nav>` : "";
     const links = linksOf(p.id).map(id => `<button type="button" data-go="${esc(id)}"><span class="n">${pad(byId[id].n)}</span>${esc(byId[id].name)}</button>`).join("");
     const hooks = Object.values(M.enc || {}).map(e => `<li><details class="hk"><summary>${esc(e.t || "")}${e.roll && A.tableUI ? " " + A.tableUI.roll(e.roll) : ""}</summary><p>${esc(e.d || "")}</p>${e.stats && A.tableUI ? A.tableUI.stats(e.stats, e.count ? e.count + " of them" : "") : ""}</details></li>`);
     // the head of the dossier, with the place's suggested song at its top right (the user asked for it there)
     $("#dossier").innerHTML = `
       <div class="dhead"><div class="dtop"><div class="dtitle">
-      <div class="eyebrow"><span>No. ${pad(p.n)}</span><span>${esc(CATS[p.cat] || "")}</span><span>${esc(p.dist)}</span></div>
+      ${trail}<div class="eyebrow"><span>No. ${pad(p.n)}</span><span>${esc(CATS[p.cat] || "")}</span><span>${esc(p.dist)}</span></div>
       <h2>${esc(p.name)}</h2>
       ${p.sub ? `<p class="subt keeper">${esc(p.sub)}</p>` : ""}
-      <div class="meta">${acts}${bone}${wtag}</div>
+      <div class="meta">${acts}${bone}</div>
       ${A.tableUI ? A.tableUI.dossierBar(p) : ""}
       </div>${A.music && A.music.card ? A.music.card(p.id) : ""}</div></div>
       <div id="accSlot">${accTop(p.id)}</div>
@@ -617,6 +626,9 @@
     if (t.closest("#v-galaxy")) { setView("galaxy"); return; }
     if (t.closest("#v-table")) { setView("table"); return; }
     const wb = t.closest("[data-world]"); if (wb) { showWorld(wb.dataset.world || null); return; }
+    // (a place's trail: its city's map, brought into view and flown to the place; its star system on the chart)
+    const tc = t.closest("[data-tcity]"); if (tc) { const pid = state.sel; mountCity(tc.dataset.tcity, c => { if (byId[pid] && cityOf(pid) === tc.dataset.tcity) c.flyTo(pid); }); const at = document.querySelector(".atlas"); if (at) at.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    const gs = t.closest("[data-gxsys]"); if (gs) { setView("galaxy"); if (A.galaxyFocus) A.galaxyFocus(gs.dataset.gxsys); return; }
     const j = t.closest("[data-sjump]"); if (j) { const s = document.getElementById("st-" + j.dataset.sjump); if (s) s.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const fa = t.closest("[data-foldall]"); if (fa) { const box = fa.closest(".lm-blk, .sec"), list = box ? [...box.querySelectorAll("details.fold, details.clf, details.hk, details.npc, details.ci")] : [], open = list.some(d => !d.open); list.forEach(d => { d.open = open; }); fa.textContent = open ? "Close all" : "Open all"; return; }
     const nk = t.closest("[data-knew]"); if (nk) { openKeyEditor(null, nk.dataset.knew || null); return; }
