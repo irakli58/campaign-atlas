@@ -306,6 +306,8 @@
   // o.special: only what the look's own woods do not already draw (the ink looks keep their oaks and pines). Returns the
   // trees as SVG, drawn band by band down the map.
   const PLAIN = new Set(["temperate", "boreal", "woodland", "grass", "steppe", "marsh", "bog", "tundra", "icesheet", "dunes", "rockdesert"]);
+  // (the kinds of wood whose trees go by the climate's warmth, where the climate was simulated)
+  const WARMED = new Set(["temperate", "woodland", "grass", "forest", "plains", "mixed", "subtropical"]);
   function trees(WD, look, N, pr, o, uid, free, forestFn) {
     const [W, H] = WD.size, styles = look === "painted" ? PAINT : inkStyle(look, o.ink || "#3b2a1a", o.paper || "#ecdfbd");
     const TB = new Map(), put = (y, parts) => { const b = Math.floor(y / 4); let v = TB.get(b); if (!v) { v = {}; TB.set(b, v); } for (const [k, d] of parts) if (d) v[k] = (v[k] || "") + d; };
@@ -314,7 +316,7 @@
     lattice(W, H, step[0], step[1], seed, (x, y, r) => {
       const t = pr.t(x, y); if (t <= .012 || !free(x, y)) return;
       const [c, share] = N.covW(x, y), b = c ? B[BIO.LIST[c][0]] : null;
-      let bio = b, dens = 0, pine = false;
+      let bio = b, dens = 0, pine = false, cn = null, tw = .5;
       if (b) {
         if (b.water) return;
         // inside a laid-down forest: thick in its heart, thinning out across its edge (a few strays beyond it), with
@@ -325,16 +327,28 @@
       } else {
         if (t > .55) return;
         const m = pr.M(x, y); bio = N.bio(x, y); if (!bio || !bio.tree || (o.special && PLAIN.has(bio.id))) return;
-        const fo = forestFn ? forestFn(x, y, m, t) : 0;
-        dens = bio.dens >= .5 ? (fo > 0 ? Math.min(1, fo * 1.6) : m > 100 ? .02 : 0) : bio.dens;
-        // (the temperate woods have their pines, more of them higher up and in the wettest ground, as they always had)
-        pine = ["temperate", "woodland", "grass"].includes(bio.id) && (t > .28 || m > 225 || hash(x, y, 77) < .18);
+        // (where the climate was simulated (world-ecology.js), the trees as thick as its tree cover says, and the pines
+        // where it is cold: a few in a warm temperate wood, most of a cool one, nearly all where the year averages
+        // below about 2 °C, the boreal forest's; a world made before keeps the older rules: woods from its wetness, pines
+        // higher up and in the wettest ground)
+        cn = N.canopy ? N.canopy(x, y) : null; const fo = cn == null && forestFn ? forestFn(x, y, m, t) : 0;
+        dens = cn != null ? Math.min(1, Math.pow(cn, .85) * 1.15) : bio.dens >= .5 ? (fo > 0 ? Math.min(1, fo * 1.6) : m > 100 ? .02 : 0) : bio.dens;
+        tw = N.temp(x, y); const cold = .06 + .88 * Math.max(0, Math.min(1, (.533 - tw) / (.533 - .378)));
+        pine = cn != null ? WARMED.has(bio.id) && hash(x, y, 77) < cold : ["temperate", "woodland", "grass"].includes(bio.id) && (t > .28 || m > 225 || hash(x, y, 77) < .18);
         // (and next to a laid-down forest, the climate's woods give way to it)
         const bl = N.blend(x, y); if (bl) { let a = 0; for (const [, q] of bl) a = Math.max(a, q); dens *= 1 - a * .8; }
       }
       if (r >= dens) return;
       const tr = bio.tree, pick = hash(x, y, 77); let acc = 0, kind = tr[0][0]; for (const [k, s] of tr) { acc += s; if (pick < acc) { kind = k; break; } }
-      if (pine) kind = "pine";
+      // (on a simulated climate the familiar woods' trees go by their warmth: conifers where it is cold, spruce among them
+      // in the coldest, birch among a cool wood's broadleaf; in the tropics a plain forest is rainforest and open land's
+      // trees acacias)
+      if (cn != null && WARMED.has(bio.id)) {
+        const T = tw * 45 - 15, h2 = hash(x, y, 93);
+        if (T >= 22 && (bio.id === "forest" || bio.id === "plains")) kind = bio.id === "forest" ? (h2 < .65 ? "jungle" : h2 < .9 ? "broad" : "palm") : h2 < .6 ? "acacia" : "broad";
+        else if (pine) kind = T < 2 && h2 < .5 ? "spruce" : "pine";
+        else { if (kind === "pine" || kind === "spruce" || kind === "snowpine") kind = "broad"; if (T < 5 && kind === "broad" && h2 < .3) kind = "birch"; }
+      } else if (pine) kind = "pine";
       const f = TREES[kind]; if (!f) return;
       // the tone wanders across the forest in patches, a tree here and there of another; a tree in a thick wood is
       // taller than one at its edge
