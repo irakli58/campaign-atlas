@@ -227,7 +227,7 @@
     stopPlacing();
     const box = ctl.map ? ctl.map.dbg.renderer.domElement : document.querySelector("#citybox .cityflat"), bar = document.querySelector("#citybox .placebar");
     const [fw, fd] = A.customSize(def.ext);
-    P0 = { id, def, isNew, ctl, bar, g: { id, x: (def.at || [0, 0])[0], y: (def.at || [0, 0])[1], ang: +def.ang || 0, ext: def.ext, lr: Math.hypot(fw, fd) / 2 }, held: false, v: null, turned: false };
+    P0 = { id, def, isNew, ctl, bar, g: { id, x: (def.at || [0, 0])[0], y: (def.at || [0, 0])[1], ang: +def.ang || 0, ext: def.ext, lr: Math.hypot(fw, fd) / 2 }, held: !!def.here, v: null, turned: !!def.here };
     ctl.placing = true;
     const show = () => {
       const v = P0.v, g = P0.g;
@@ -254,7 +254,7 @@
       if (b.dataset.pb === "x") return stopPlacing();
       if (b.dataset.pb === "turn") { P0.turned = true; P0.g.ang += Math.PI / 12; update(); return; }
       if (b.dataset.pb === "again") { P0.held = false; update(); return; }
-      if (b.dataset.pb === "ok" && P0.v && P0.v.ok) { const d = Object.assign({}, P0.def, { at: [Math.round(P0.g.x * 100) / 100, Math.round(P0.g.y * 100) / 100], ang: Math.round(P0.g.ang * 1000) / 1000, city: P0.def.city || ctl.city }); const pid = P0.id; stopPlacing(); await keep(pid, d); }
+      if (b.dataset.pb === "ok" && P0.v && P0.v.ok) { const d = Object.assign({}, P0.def, { here: undefined, at: [Math.round(P0.g.x * 100) / 100, Math.round(P0.g.y * 100) / 100], ang: Math.round(P0.g.ang * 1000) / 1000, city: P0.def.city || ctl.city }); const pid = P0.id; stopPlacing(); await keep(pid, d); }
     };
     box.addEventListener("pointermove", onMove); box.addEventListener("pointerdown", onDown); box.addEventListener("pointerup", onUp); window.addEventListener("keydown", onKey); bar.addEventListener("click", onBar);
     P0.off = () => { box.removeEventListener("pointermove", onMove); box.removeEventListener("pointerdown", onDown); box.removeEventListener("pointerup", onUp); window.removeEventListener("keydown", onKey); bar.removeEventListener("click", onBar); };
@@ -320,6 +320,17 @@
 
   /* ---- the public part */
   L.create = ctl => { cityCtl = ctl; const K = KIND.tavern; openDialog({ type: "tavern", ext: Object.assign({}, K[2].ext) }, true); };
+  // a building of the city made into a place of the game master's own (the city editor's "Make it a place"): the
+  // dialog opens with the building's kind, its footprint (a little inside it, so a terrace's neighbours sharing its walls
+  // stand), floors, roof and colours, and the place is held where the
+  // building stands, so one "Put it here" sets it in (the house makes way for it, as for any place set in)
+  const FROM = { terrace: "house", shop: "shop", pub: "tavern", church: "temple", chapel: "shrine", school: "school", ware: "warehouse" };
+  L.fromBuilding = (ctl, b) => {
+    cityCtl = ctl; const type = FROM[b.type] || (KIND[b.type] ? b.type : "other"), K = KIND[type] || KIND.other, area = b.w * b.d;
+    const size = area < 11 ? "small" : area < 21 ? "medium" : area < 45 ? "large" : "huge", hx = v => /^#[0-9a-f]{6}$/i.test(v || "") ? v : undefined;
+    const ext = Object.assign({}, K[2].ext, { size, w: Math.round(b.w * 92) / 100, d: Math.round(b.d * 92) / 100, floors: Math.max(1, Math.round((b._H || 1.9) / .95)), roof: b._pitch ? "pitched" : "flat", wall: hx(b._wall), roofc: hx(b._roof) });
+    openDialog({ type, ext, at: [Math.round(b.x * 100) / 100, Math.round(b.y * 100) / 100], ang: Math.round((b.a || 0) * 1000) / 1000, here: true }, true);
+  };
   L.setCity = ctl => { cityCtl = ctl; };
   L.save = keep; L.forget = forget; L.place = (id, def) => startPlacing(id, def, !A.customs[id]);
   L.init = (store) => {

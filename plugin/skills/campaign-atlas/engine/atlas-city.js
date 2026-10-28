@@ -1801,6 +1801,19 @@ function createMap3D(host, C, planCanvas, hooks) {
   // the names of the landmarks, shown once the view is near enough to tell them apart
   const ll = [];
   for (const o of marks) { if (!o.L.label || !o.L.name) continue; const el = document.createElement("div"); el.className = "llab" + (o.L.major ? " major" : ""); el.textContent = o.L.name; pinsEl.appendChild(el); ll.push({ el, x: o.x, y: o.y + .6, z: o.z, far: o.L.major ? SPAN * 1.2 : 190 }); }
+  // the people the game master has placed in the city (atlas-cityedit.js): a figure and a name over the street where
+  // each stands, the note on pointing at it; the game master's knowledge, so hidden from the players' view
+  const pp = [];
+  function people(list) {
+    for (const o of pp) o.el.remove(); pp.length = 0;
+    for (const q of list || []) {
+      if (!q || !Array.isArray(q.at)) continue;
+      const el = document.createElement("button"); el.type = "button"; el.className = "cperson keeper" + (q.sel ? " sel" : ""); el.dataset.person = q.ref || "";
+      el.title = q.note ? `${q.name}: ${q.note}` : q.name; el.innerHTML = `<span class="cp-fig" aria-hidden="true"></span><span class="cp-n">${A.esc(q.name)}</span>`;
+      pinsEl.appendChild(el); pp.push({ el, x: wx(q.at[0]), y: 1.7, z: wz(q.at[1]) });
+    }
+    request();
+  }
   const dl = [];
   for (const [d, at] of Object.entries(CD.districts)) {
     const list = DISTS[d] || [], [cx, cy] = at;
@@ -1868,6 +1881,12 @@ function createMap3D(host, C, planCanvas, hooks) {
       pv.set(o.x, o.y, o.z).project(camera);
       const off = pv.z > 1 || dist > o.far || pv.x < -1.05 || pv.x > 1.05 || pv.y < -1.05 || pv.y > 1.05;
       o.el.classList.toggle("off", off);
+      if (!off) o.el.style.transform = `translate(${((pv.x + 1) / 2 * W).toFixed(1)}px, ${((1 - pv.y) / 2 * H).toFixed(1)}px) translate(-50%, -100%)`;
+    }
+    for (const o of pp) {
+      pv.set(o.x, o.y, o.z).project(camera);
+      const off = pv.z > 1 || pv.x < -1.05 || pv.x > 1.05 || pv.y < -1.05 || pv.y > 1.05;
+      o.el.classList.toggle("off", off); o.el.classList.toggle("named", dist < 260);
       if (!off) o.el.style.transform = `translate(${((pv.x + 1) / 2 * W).toFixed(1)}px, ${((1 - pv.y) / 2 * H).toFixed(1)}px) translate(-50%, -100%)`;
     }
   }
@@ -1982,7 +2001,7 @@ function createMap3D(host, C, planCanvas, hooks) {
     request();
   }
   const view = v => { if (v) { controls.target.copy(v.t); camera.position.copy(v.p); controls.update(); request(); return null; } return { t: controls.target.clone(), p: camera.position.clone() }; };
-  return { flyTo, zoom, home, sync, setNight, request, pins, dispose, planAt, ghost, pickBuilding, mark, guide, view, dbg: { renderer, scene, camera, controls, frame, groundMats } };
+  return { flyTo, zoom, home, sync, setNight, request, pins, people, dispose, planAt, ghost, pickBuilding, mark, guide, view, dbg: { renderer, scene, camera, controls, frame, groundMats } };
 }
 
   /* ---- the flat map: what a device without 3D gets instead. Places, water, main roads, district names. */

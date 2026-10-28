@@ -547,6 +547,14 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .
 .pin .pl { display: none; font-family: var(--f-body); font-size: 13.5px; line-height: 1.2; }
 .pin .pr { font-family: var(--f-display); color: #8c7347; font-size: 12px; }
 .pin::after { content: ""; width: 1px; height: 11px; background: #2b2119; }
+/* the people the game master placed in the city (atlas-cityedit.js): a small figure, the name when near enough */
+.cperson { position: absolute; left: 0; top: 0; pointer-events: auto; display: flex; flex-direction: column-reverse; align-items: center; gap: 2px; background: none; border: 0; padding: 0; cursor: pointer; will-change: transform; }
+.cperson.off { display: none; }
+.cperson .cp-fig { width: 9px; height: 15px; background: #8a2432; border: 1.5px solid #f4ecd6; border-radius: 5px 5px 2px 2px; box-shadow: 0 1px 2px rgba(0, 0, 0, .45); position: relative; }
+.cperson .cp-fig::before { content: ""; position: absolute; left: 50%; top: -7px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%; background: #8a2432; border: 1.5px solid #f4ecd6; }
+.cperson .cp-n { display: none; background: #f4ecd6; color: #2b2119; border: 1px solid #2b2119; border-radius: 2px; padding: 0 5px; font-family: var(--f-body); font-size: 12.5px; line-height: 1.35; white-space: nowrap; }
+.cperson.named .cp-n, .cperson:hover .cp-n, .cperson:focus-visible .cp-n { display: block; }
+.cperson.sel .cp-fig, .cperson.sel .cp-fig::before { background: #d9a227; }
 .pin.named .pl, .pin:hover .pl, .pin:focus-visible .pl, .pin.sel .pl { display: inline; }
 .pin.sel .pb { background: #8a2432; color: #f6eedd; border-color: #8a2432; }
 .pin.sel .pr { color: #ecd9b0; }
