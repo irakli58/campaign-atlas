@@ -154,8 +154,8 @@
           const off = Math.abs(v - sea - .5); if (off > 40) return 0;
           const r = SR(x, y, R); if (r < .03) return 0;
           const gc = Math.max(1, Math.hypot(S0(x + hc, y) - S0(x - hc, y), S0(x, y + hc) - S0(x, y - hc))), dc = off / gc; if (dc > 1.8) return 0;
-          const a = (nz(x * .22, y * .22) - .5) * 2 + (nz(x * .45 + 17, y * .45) - .5) * (.5 + .9 * r) + (nz(x * .9 + 5, y * .9 + 9) - .5) * (.2 + 1 * r);
-          return a * r * .8 * gc * (1 - smooth(.7, 1.8, dc));
+          const a = (nz(x * .2, y * .2) - .5) * 2 + (nz(x * .38 + 17, y * .38) - .5) * (.6 + 1.1 * r);
+          return a * r * .7 * gc * (1 - smooth(.7, 1.8, dc));
         };
       }
     }
@@ -307,7 +307,7 @@
       let M = new Float32Array(cols * rows), any = false; for (let n = 0; n < M.length; n++) if (rf[n] === kind) { M[n] = 255; any = true; } if (!any) continue;
       { const Q = new Float32Array(M.length); for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { let a = 0, c = 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const x = i + di, y = j + dj; if (x >= 0 && y >= 0 && x < cols && y < rows) { a += M[y * cols + x]; c++; } } Q[j * cols + i] = a / c; } M = Q; }
       const d = coastRings({ cols, rows, cell, H: M, sea: 70 }).map(r => pathD(chaikin(rdpRing(r, .6), 2, true), true)).join("");
-      s += `<path d="${d}" fill="#7fd8cf" fill-opacity="${kind === 1 ? .6 : .5}" stroke="#f6fcfa" stroke-opacity=".8" stroke-width="${r1(cell * .1)}" stroke-dasharray="${r1(cell * .45)} ${r1(cell * .22)}" stroke-linejoin="round"/>`;
+      s += `<path d="${d}" fill="#7fd8cf" fill-opacity="${kind === 1 ? .6 : .5}" stroke="#f6fcfa" stroke-opacity=".55" stroke-width="${r1(cell * .12)}" stroke-linejoin="round"/>`;
     }
     // the atolls, each group of atoll cells one ring
     const seen = new Uint8Array(cols * rows), nz = vnoise(Math.floor(hash(cols, rows, 211) * 1e9));
@@ -725,6 +725,8 @@
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     // ripples along the coast, fainter further out
     for (const [w, op] of [[34, .16], [24, .24], [15, .34], [7.6, .48]]) s += `<path d="${coarse}" fill="none" stroke="#e2efec" stroke-opacity="${op}" stroke-width="${r1(w + .8)}"/><path d="${coarse}" fill="none" stroke="url(#${uid}-b)" stroke-width="${r1(w - .8)}"/>`;
+    // (the reefs and atolls of geologic coasts, under the land like the sea's own)
+    s += reefsSvg(WD);
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#33281c" stroke-width="1.15" stroke-linejoin="round"/>`;
     s += NT ? NT.rivers(WD, "painted", nat(WD), pr, "#4d8098", "#2b3a33", 1.15) : rivers(WD, "#4d8098", "#2b3a33", 1.15);
     s += paintedSymbols(WD, pr, o, forest, uid);
@@ -1005,6 +1007,7 @@
     // depth lines at sea
     for (const [lv, op, cls] of [[sea - 12, .5, ""], [sea - 32, .38, ""], [sea - 60, .3, "lod1"]]) if (lv > 2) { const d = ringsAt(G, lv, 1.4).map(r => pathD(r, true)).join(""); if (d) s += `<path${cls ? ` class="${cls}"` : ""} d="${d}" fill="none" stroke="#eaf5fb" stroke-opacity="${op}" stroke-width=".8"/>`; }
     const cd = coastD(G, .6);
+    s += reefsSvg(WD);
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#5f8db3" stroke-width=".8" stroke-linejoin="round"/>`;
     // height lines, faint, closer up
     for (let lv = sea + 40; lv < 250; lv += 40) { const d = ringsAt(G, lv, 1.2).map(r => pathD(r, true)).join(""); if (d) s += `<path class="lod1" d="${d}" fill="none" stroke="#7a5a3c" stroke-opacity=".28" stroke-width=".45"/>`; }

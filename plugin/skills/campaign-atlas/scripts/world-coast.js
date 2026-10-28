@@ -133,7 +133,7 @@ function coasts(H, cols, rows, o) {
   // come out and every so far along
   let barriers = 0, spits = 0;
   for (let k = 0; k < K; k++) {
-    const n = C[k], kind = code[n] & 15; if (![KIND.sand, KIND.white].includes(kind) || W[k] < 7 || shelf[k] < .7 || E[k] < .2 || E[k] > 1.2 || (G && G.tide[n] > 2.2)) continue;
+    const n = C[k], kind = code[n] & 15; if (![KIND.sand, KIND.white].includes(kind) || W[k] < 4 || shelf[k] < .6 || E[k] < .2 || E[k] > 1.2 || (G && G.tide[n] > 2.2)) continue;
     if (src.river[k] > .5 || ((n * 2654435761) >>> 0) % 13 === 0) continue;
     const m1 = step(n, nx[k], ny[k], 1), m2 = step(n, nx[k], ny[k], 2), m3 = step(n, nx[k], ny[k], 3), m4 = step(n, nx[k], ny[k], 4);
     if ([m1, m2, m3, m4].some(m => m < 0 || !ocean[m]) || H[m3] < sea - 6) continue;

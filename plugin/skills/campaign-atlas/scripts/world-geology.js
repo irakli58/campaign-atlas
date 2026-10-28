@@ -123,7 +123,7 @@ function geology(o, U) {
       else if (here > (mine ? b.pb : b.pa)) {
         // an island arc: a broken line of volcanic islands over the sinking plate (geologic coasts: separate volcanoes
         // along the arc, placed below)
-        if (o.shores) { if (d > 60 && d < 160) arcC.push([n, d, c]); }
+        if (o.shores) { if (d > 60 && d < 160 && c > .35) arcC.push([n, d, c]); }
         else if (zs > 1 ? d > 70 && d < 150 && U.fbm(nA, X(n) * 14 * zs, Y(n) * 14 * zs, 2) > .6 : d > 70 && d < 130 && U.fbm(nA, X(n) * 9 * zs, Y(n) * 9 * zs, 2) > .5) { crust[n] = 2; up[n] += c * 1.4; if (rnd() < .06) volc.push(n); }
       } else trench[n] += c * gauss(d / 60);
     } else if (b.conv < -.1) {
@@ -156,9 +156,14 @@ function geology(o, U) {
   if (arcC.length) {
     arcC.sort((a, b) => Math.abs(a[1] - 105) - Math.abs(b[1] - 105) + (rnd() - .5) * 30); const picked = [];
     for (const [n, , c] of arcC) {
-      const sp = (40 + 40 * rnd()) / ckm; if (picked.some(m => Math.hypot(ci(m) - ci(n), cj(m) - cj(n)) < sp)) continue; picked.push(n);
-      const r = (9 + 20 * rnd()) / ckm, R2 = Math.ceil(r * 1.6) + 1, ht = c * (1.1 + .7 * rnd());
-      for (let dj = -R2; dj <= R2; dj++) for (let di = -R2; di <= R2; di++) { const a = ci(n) + di, b = cj(n) + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a, dd = Math.hypot(di, dj) / Math.max(.6, r); if (crust[m] === 1 || dd > 1.6) continue; if (dd < 1) crust[m] = 2; up[m] += ht * Math.max(0, 1 - dd * dd / 2.2); }
+      const sp = (60 + 50 * rnd()) / ckm; if (picked.some(m => Math.hypot(ci(m) - ci(n), cj(m) - cj(n)) < sp)) continue; picked.push(n);
+      // (no two alike: most small, a few great, the great ones drawn out along the arc as Java is, and now and then a
+      // volcano that stayed under the sea, leaving a gap)
+      if (rnd() < .18) continue;
+      const big = rnd() * rnd(), r = (6 + 34 * big) / ckm, el = 1 + 1.8 * big + .4 * rnd(), ht = c * (1 + .8 * rnd());
+      const i0 = ci(n), j0 = cj(n), gx0 = i0 > 0 && i0 < cc - 1 ? dist[n + 1] - dist[n - 1] : 0, gy0 = j0 > 0 && j0 < cr - 1 ? dist[n + cc] - dist[n - cc] : 0, gl = Math.hypot(gx0, gy0) || 1, tx = -gy0 / gl, ty = gx0 / gl;
+      const R2 = Math.ceil(r * el * 1.6) + 1;
+      for (let dj = -R2; dj <= R2; dj++) for (let di = -R2; di <= R2; di++) { const a = i0 + di, b = j0 + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a, u = (di * tx + dj * ty) / el, v = (-di * ty + dj * tx), dd = Math.hypot(u, v) / Math.max(.6, r); if (crust[m] === 1 || dd > 1.6) continue; if (dd < 1) crust[m] = 2; up[m] += ht * Math.max(0, 1 - dd * dd / 2.2); }
       if (rnd() < .45) volc.push(n);
     }
   }

@@ -506,10 +506,15 @@ function invent(A, flags, log) {
       const latA = whole ? [90, -90] : SIZE_KM[sizeWord] ? [Math.min(88, midL + spanL / 2), Math.max(-88, midL - spanL / 2)] : undefined;
       // (the ocean's currents, on trial until the user approves them, 28 Oct 2026: --currents; kept when the world is made
       // again; --spin retrograde for a planet that turns the other way)
-      const currentsOn = flags.currents != null ? flags.currents !== "off" && flags.currents !== false : !!old.currents;
+      // (a world made anew gets the ocean's currents and the coasts shaped by their history: the user, 28 Oct 2026, "i want
+      // you to make your own decisions"; both tested on twelve worlds and a planet (the workspace's dev/coast-gallery.html)
+      // and made the default. A world made again keeps what it had, so it comes out as it was; --currents off and
+      // --coast natural or plain choose otherwise)
+      const fresh = !(old.height && old.seed === seed && old.land === land);
+      const currentsOn = flags.currents != null ? flags.currents !== "off" && flags.currents !== false : fresh ? climateModel === "earth" : !!old.currents;
       // (the coasts: natural (waves, drift and sand) or geologic (shaped by their history: world-shore.js), both on trial
       // since 28 Oct 2026; kept when the world is made again)
-      const coastWord = flags.coast != null && flags.coast !== true ? String(flags.coast) : old.coastModel || "";
+      const coastWord = flags.coast != null && flags.coast !== true ? String(flags.coast) : old.coastModel || (fresh ? "geologic" : "");
       if (coastWord && !["natural", "geologic", "plain"].includes(coastWord)) throw new Error(`unknown coast "${coastWord}": geologic (shaped by rock, ice, sea level, rivers and waves), natural (waves, drift and sand) or plain`);
       const spinV = flags.spin != null && flags.spin !== true ? (/^(retro|-1|back)/i.test(String(flags.spin)) ? -1 : 1) : old.currents && old.currents.spin < 0 ? -1 : 1;
       const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", shores: coastWord === "geologic", currents: currentsOn && climateModel === "earth", spin: spinV, climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
