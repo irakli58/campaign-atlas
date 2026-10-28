@@ -60,7 +60,7 @@
       ] }
     ] },
     { id: "world", title: "The world", lessons: [
-      { id: "worldmap", title: "The world map", summary: "The lands between your places, drawn in a style fitting your setting; each city opens in 3D.", features: ["worldmap", "maplook", "worldedit", "oceancurrents", "geocoasts"], needs: has("#v-world"), steps: [
+      { id: "worldmap", title: "The world map", summary: "The lands between your places, drawn in a style fitting your setting; each city opens in 3D.", features: ["worldmap", "maplook", "worldedit", "oceancurrents", "geocoasts", "askchange"], needs: has("#v-world"), steps: [
         { say: "The world map shows the land between your places.", sel: "#v-world", act: "click", try: "Click World map.", wait: 1600 },
         { say: "Choose how it is drawn: a painted fantasy map, fantasy parchment, an engraved atlas, a modern atlas or a science-fiction survey. The players see the same.", sel: ".wm-look", act: "look" },
         { say: "Zoom in: finer things appear as you come closer.", sel: ".wm-ctl [data-z='in']", act: "click", try: "Click + to zoom in.", wait: 700 },
@@ -69,6 +69,7 @@
         { say: "This menu chooses how the map is drawn. Hydrographic relief is a raised print of the land on pale paper, every stream and valley shown; Shaded relief keeps the blue sea; the other styles suit other settings. Your players see the same.", sel: ".wm-look", act: "look", optional: true },
         { say: "Ocean currents shows how the sea moves, where the world's currents were worked out: warm currents in red, cold in blue, arrows the way the water runs, the gyres, the equator and the lines of latitude. Their names can be hidden.", sel: "[data-w='currents']:not([hidden])", act: "look", optional: true },
         { say: "Coasts shows what kind each coast is and why it formed there: fjords, skerries, rias, estuaries, deltas, Dalmatian islands, cliffs, barrier islands, dunes, salt marsh, mangroves, reefs and atolls, each in its own colour with a key. Point at a numbered pin for the reason: the ice age's glaciers, the sea rising, the rock, the rivers' mud, the waves or the tides.", sel: "[data-w='coasts']:not([hidden])", act: "look", optional: true },
+        { say: "A chosen place has Ask for a change: say what should change (its details, who holds it, a road from it to another place, a new settlement near it) and see what it would replace and keep before anything changes.", sel: "[data-w='askloc']", act: "look", optional: true },
         { say: "Edit map moves places, adds places and routes, shapes the land itself, and marks the party's journey.", sel: "[data-w='edit']", act: "look" },
         { say: "Back to the Gazetteer.", sel: "#v-gaz", act: "click", auto: true }
       ] },
@@ -109,13 +110,14 @@
         { say: "Plot a course and Atlas gives the jumps, the fuel, the days and the dangers on the way; making the jump moves the world's time on.", sel: "#galaxyv .gx-side", act: "look" },
         { say: "And what the players' charts show of each system: charted, rumoured, visited, or kept from them. Their screen shows only what is on their charts.", sel: "#galaxyv .gx-side", act: "look" }
       ] },
-      { id: "galaxybuild", title: "Changing the galaxy", summary: "Add and move systems, draw regions, lanes and trade routes, paint territories, change any world; undo any of it.", features: ["galaxyedit"], needs: has("#v-galaxy"), steps: [
+      { id: "galaxybuild", title: "Changing the galaxy", summary: "Add and move systems, draw regions, lanes and trade routes, paint territories, change any world; undo any of it.", features: ["galaxyedit", "askchange"], needs: has("#v-galaxy"), steps: [
         { say: "The galaxy grows from its seed, and then it is yours to change.", sel: "#v-galaxy", act: "click", try: "Click Star chart.", wait: 900 },
         { say: "Edit the galaxy opens its tools.", sel: "#galaxyv [data-gx='tools']", act: "click", try: "Click Edit the galaxy.", wait: 500 },
         { say: "Add a system, a region (dangerous, restricted, charted or unexplored), a lane, a trade route or a corridor with a length of its own, or a sector. Paint territory gives stars to a power: drag over them.", sel: "#galaxyv .gx-tools", act: "look" },
         { say: "Sectors and powers: rename them, take them away, or add a power.", sel: "#galaxyv [data-gx='panel']", act: "look" },
         { say: "A star's card changes it: its name, its star, what is there, who holds it, where it stands. Courses follow every change.", sel: "#galaxyv [data-gx='ship']", act: "click", auto: true, wait: 600 },
         { say: "Open the system to change any world, take one away, or add worlds, stations, facilities, derelicts and belts. Atlas says what would not hang together, and lets it be: it is your setting.", sel: "#galaxyv [data-gx='open']", act: "click", auto: true, wait: 600, optional: true },
+        { say: "A star's card also has Ask for a change: say what should change (its details, who holds it, a world or a station added) and see what it would replace and keep before anything changes.", sel: "#galaxyv [data-gx='ask']", act: "look", optional: true },
         { say: "Undo and Redo take back any change; Copy the changes gives them all back to the campaign.", sel: "#galaxyv [data-gx='undo']", act: "look" },
         { say: "Edit the galaxy again puts the tools away.", sel: "#galaxyv [data-gx='tools']", act: "click", auto: true }
       ] }
@@ -222,7 +224,7 @@
     dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
     view: { gaz: "gazetteer", table: "views", world: "worldmap", galaxy: "galaxy", story: "bible", music: "music" },
     tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues", marks: "mapmarks" },
-    world: { currents: "oceancurrents", curnames: "oceancurrents", coasts: "geocoasts", newworld: "worldbuild", brush: "worldbuild", base: "worldbuild", river: "worldbuild", realm: "worldbuild", label: "worldbuild", finish: "worldbuild", undo: "worldbuild", redo: "worldbuild", editfeat: "worldbuild", dupfeat: "worldbuild", delfeat: "worldbuild", resetfeat: "worldbuild", duploc: "worldedit", edit: "worldedit", addloc: "worldedit", addroute: "worldedit", export: "worldedit", copy: "worldedit", editloc: "worldedit", editroute: "worldedit", delloc: "worldedit", delroute: "worldedit", resetloc: "worldedit", resetroute: "worldedit", plan: "worldedit", setoff: "worldedit", arrive: "worldedit", cancel: "worldedit", partyhere: "worldedit", enter: "worldmap", make: "worldmap", drawn: "maplook", close: "worldmap", dlgclose: "worldmap" }
+    world: { currents: "oceancurrents", curnames: "oceancurrents", coasts: "geocoasts", askloc: "askchange", newworld: "worldbuild", brush: "worldbuild", base: "worldbuild", river: "worldbuild", realm: "worldbuild", label: "worldbuild", finish: "worldbuild", undo: "worldbuild", redo: "worldbuild", editfeat: "worldbuild", dupfeat: "worldbuild", delfeat: "worldbuild", resetfeat: "worldbuild", duploc: "worldedit", edit: "worldedit", addloc: "worldedit", addroute: "worldedit", export: "worldedit", copy: "worldedit", editloc: "worldedit", editroute: "worldedit", delloc: "worldedit", delroute: "worldedit", resetloc: "worldedit", resetroute: "worldedit", plan: "worldedit", setoff: "worldedit", arrive: "worldedit", cancel: "worldedit", partyhere: "worldedit", enter: "worldmap", make: "worldmap", drawn: "maplook", close: "worldmap", dlgclose: "worldmap" }
   };
   // where in the page each feature lives, for the little ? beside it (contextual help): [selector, feature]
   const ANCHORS = [[".lmap-sec .lm-bar", "mapviews"], ["#meDlg .me-tools", "mapeditor"], [".wm-bar", "worldmap"], ["#tablev .tv-acts", "players-screen"], [".cp-host", "copilot"], [".cc-top", "consistency"], ["#tvBody .tw-now", "worldtime"]];
