@@ -46,8 +46,9 @@
     // (the land and the sea part where the coastline is drawn: the outline is traced half a step above the sea's level
     // (coastRings), so the picture reads the heights half a step lower; else a strip of painted land lies beyond the
     // coast's line, which then runs inland like a river (the user, 28 Oct 2026), and a narrow inlet is painted as land)
+    const DT = coastDetail(WD);
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
-      const x = ox + (px + .5) / k, y = oy + (py + .5) / k, h = S(x, y) - .5, i = py * cw + px;
+      const x = ox + (px + .5) / k, y = oy + (py + .5) / k, h0 = S(x, y), h = h0 - .5 + (DT ? DT(x, y, h0) : 0), i = py * cw + px;
       // fine relief the grid is too coarse to hold, on land only, more on the heights
       const fine = h > sea ? (nz(x * .09, y * .09) - .5) * detail * (.4 + (h - sea) / (256 - sea)) : 0;
       hv[i] = h + fine;
@@ -123,7 +124,51 @@
   }
 
   /* ---- shapes every look uses */
-  const ringsAt = (G, level, eps) => coastRings(Object.assign({}, G, { sea: level })).map(r => chaikin(rdpRing(r, eps || .8), 2, true));
+  // (a world whose coasts were shaped by their history (world-shore.js, `--coast geologic`) has its coastline traced on a
+  // grid three times finer, with the detail of each kind of coast in it: see coastDetail)
+  const ringsAt = (G, level, eps) => (G._detail && level === G.sea ? fineRings(G) : coastRings(Object.assign({}, G, { sea: level }))).map(r => chaikin(rdpRing(r, eps || .8), 2, true));
+  /* ---- the coast finer than the grid, as rugged as its kind of coast is (the user, 28 Oct 2026: "coastlines should look
+          natural at every map scale", "don't simply increase random noise when zooming in"): each coast cell's kind
+          (world-shore.js FORM) says how rugged its shore is, a wave-straightened sand coast hardly at all, a fjord or a
+          skerry coast most, its finest detail kept the more the more rugged it is (as a real coast's fractal dimension
+          rises from about 1.02 for South Africa's to 1.25 for western Britain's and more for Norway's); added only in a
+          narrow band about the shore, so the land inland and the sea offshore stay as they are. The picture and the line
+          both read it, so they agree at any zoom */
+  const CDET = new WeakMap(), FINE = new WeakMap();
+  const u8of = s => { const b = typeof atob === "function" ? atob(s) : Buffer.from(s, "base64").toString("binary"), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+  function coastDetail(WD) {
+    const G = WD.G; if (!G) return null; if (CDET.has(G)) return CDET.get(G);
+    const T = WD.T; let fn = null;
+    if (T && T.coastForm && T.coastKinds) {
+      const form = u8of(T.coastForm), { cols, rows, sea } = G;
+      if (form.length === cols * rows) {
+        let R = new Float32Array(cols * rows); for (let n = 0; n < R.length; n++) if (form[n] && T.coastKinds[form[n]]) R[n] = T.coastKinds[form[n]][2] || .4;
+        // (each coast cell's ruggedness spread to the sea before it and the land behind it, then eased)
+        for (let p = 0; p < 2; p++) { const Q = Float32Array.from(R); for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { let m = R[j * cols + i]; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < cols && b < rows) m = Math.max(m, R[b * cols + a] * .92); } Q[j * cols + i] = m; } R = Q; }
+        { const Q = new Float32Array(R.length); for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { let s = 0, c = 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < cols && b < rows) { s += R[b * cols + a]; c++; } } Q[j * cols + i] = s / c; } R = Q; }
+        const SR = sampler(G), nz = vnoise(Math.floor(hash(cols, rows, 157) * 1e9));
+        // (measured in how far it moves the shore, not in height: the land's slope there, per cell, turns one into the
+        // other, so a steep coast's shore moves as far as a gentle one's; a fjord coast's by up to about a cell)
+        const S0 = sampler(G), hc = G.cell / 2;
+        fn = (x, y, v) => {
+          const off = Math.abs(v - sea - .5); if (off > 40) return 0;
+          const r = SR(x, y, R); if (r < .03) return 0;
+          const gc = Math.max(1, Math.hypot(S0(x + hc, y) - S0(x - hc, y), S0(x, y + hc) - S0(x, y - hc))), dc = off / gc; if (dc > 1.8) return 0;
+          const a = (nz(x * .22, y * .22) - .5) * 2 + (nz(x * .45 + 17, y * .45) - .5) * (.5 + .9 * r) + (nz(x * .9 + 5, y * .9 + 9) - .5) * (.2 + 1 * r);
+          return a * r * .8 * gc * (1 - smooth(.7, 1.8, dc));
+        };
+      }
+    }
+    CDET.set(G, fn); G._detail = fn; return fn;
+  }
+  // the coastline traced on a finer grid, the heights eased between the cells and each coast's detail added
+  function fineRings(G) {
+    const key = G.Hf || G.H; if (FINE.has(key)) return FINE.get(key);
+    const { cols, rows, cell } = G, f = Math.max(1, Math.min(3, Math.round(Math.sqrt(1.2e6 / (cols * rows))))), S = sampler(G), fc = cols * f, fr = rows * f, H2 = new Float32Array(fc * fr);
+    for (let j = 0; j < fr; j++) for (let i = 0; i < fc; i++) { const x = (i + .5) * cell / f, y = (j + .5) * cell / f, v = S(x, y); H2[j * fc + i] = v + G._detail(x, y, v); }
+    const rings = coastRings({ cols: fc, rows: fr, cell: cell / f, H: H2, sea: G.sea });
+    FINE.set(key, rings); return rings;
+  }
   const coastD = (G, eps) => ringsAt(G, G.sea, eps).map(r => pathD(r, true)).join("");
   // where a thing may stand: on land or at sea, and how high
   // (how wet the land is, as its climate makes it: an arid world's land is drier than its grid says, a wet one wetter;
@@ -237,16 +282,45 @@
     if (soft) soft = `<filter id="${clip}-sb" filterUnits="userSpaceOnUse" x="0" y="0" width="${WD.size[0]}" height="${WD.size[1]}"><feGaussianBlur stdDeviation="${r1(cell * .6)}"/></filter>${seaClip}<g filter="url(#${clip}-sb)" clip-path="url(#${clip}-sea)" fill="none" stroke-opacity=".9" stroke-linecap="round" stroke-linejoin="round">${soft}</g>`;
     s = marsh + soft + s + (cliff ? `<path d="${cliff}" fill="none" stroke="#4d3f33" stroke-opacity=".55" stroke-width="${r1(cell * .35)}" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#${clip})"/>` : "");
     // dunes behind the beaches as one soft pale ground, faintly rippled; lagoons pale behind their barriers
-    let dune = "", rip = "", lag = "";
+    let dune = "", rip = "", LG = null;
     for (let n = 0; n < code.length; n++) {
       const k = code[n] & 15; if (k !== 8 && k !== 11) continue; const x = (n % cols) * cell, y = ((n / cols) | 0) * cell;
-      if (k === 11) { lag += `M${r1(x)} ${r1(y)}h${r1(cell)}v${r1(cell)}h${r1(-cell)}Z`; continue; }
+      if (k === 11) { (LG = LG || new Float32Array(code.length))[n] = 255; continue; }
       dune += `M${r1(x)} ${r1(y)}h${r1(cell)}v${r1(cell)}h${r1(-cell)}Z`;
       if ((n * 2654435761 >>> 0) % 4 === 0) rip += `M${r1(x + cell * .1)} ${r1(y + cell * .6)}q${r1(cell * .4)} ${r1(-cell * .3)} ${r1(cell * .8)} 0`;
     }
-    if (lag) s += `<path d="${lag}" fill="#bcdcd8" fill-opacity=".6"/>`;
+    // (the lagoons as rounded water, not the grid's squares: their cells eased together and traced)
+    if (LG) { const Q = new Float32Array(LG.length); for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { let a = 0, c = 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const x = i + di, y = j + dj; if (x >= 0 && y >= 0 && x < cols && y < rows) { a += LG[y * cols + x]; c++; } } Q[j * cols + i] = a / c; }
+      const d = coastRings({ cols, rows, cell, H: Q, sea: 70 }).map(r => pathD(chaikin(rdpRing(r, .6), 2, true), true)).join(""); if (d) s += `<path d="${d}" fill="#bcdcd8" fill-opacity=".6"/>`; }
     if (dune) s += `<filter id="${clip}-dn" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="${r1(cell * .6)}"/></filter><path d="${dune}" fill="#e6d3a2" fill-opacity=".55" filter="url(#${clip}-dn)" clip-path="url(#${clip})"/>`;
     if (rip) s += `<path class="lod1" d="${rip}" fill="none" stroke="#b89d62" stroke-opacity=".35" stroke-width="${r1(cell * .1)}" stroke-linecap="round" clip-path="url(#${clip})"/>`;
+    return s;
+  }
+  // the reefs world-shore.js found (T.coastReef: 1 a barrier reef along a tropical shelf's edge, 2 an atoll, 3 a fringing
+  // reef off a warm clear shore): pale turquoise water over the coral, a broken white line of surf on it; an atoll a ring
+  // of coral sand round its lagoon, a few islets green on it. Laid beneath the land, like the shallows
+  function reefsSvg(WD) {
+    const T = WD.T, G = WD.G; if (!T || !T.coastReef || !G) return "";
+    const rf = T._reefU8 || (T._reefU8 = u8of(T.coastReef)), { cols, rows, cell } = G; if (rf.length !== cols * rows) return "";
+    let s = "";
+    for (const kind of [1, 3]) {
+      let M = new Float32Array(cols * rows), any = false; for (let n = 0; n < M.length; n++) if (rf[n] === kind) { M[n] = 255; any = true; } if (!any) continue;
+      { const Q = new Float32Array(M.length); for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { let a = 0, c = 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const x = i + di, y = j + dj; if (x >= 0 && y >= 0 && x < cols && y < rows) { a += M[y * cols + x]; c++; } } Q[j * cols + i] = a / c; } M = Q; }
+      const d = coastRings({ cols, rows, cell, H: M, sea: 70 }).map(r => pathD(chaikin(rdpRing(r, .6), 2, true), true)).join("");
+      s += `<path d="${d}" fill="#7fd8cf" fill-opacity="${kind === 1 ? .6 : .5}" stroke="#f6fcfa" stroke-opacity=".8" stroke-width="${r1(cell * .1)}" stroke-dasharray="${r1(cell * .45)} ${r1(cell * .22)}" stroke-linejoin="round"/>`;
+    }
+    // the atolls, each group of atoll cells one ring
+    const seen = new Uint8Array(cols * rows), nz = vnoise(Math.floor(hash(cols, rows, 211) * 1e9));
+    for (let n0 = 0; n0 < rf.length; n0++) {
+      if (rf[n0] !== 2 || seen[n0]) continue; const st = [n0], cells = []; seen[n0] = 1;
+      while (st.length) { const n = st.pop(); cells.push(n); const i = n % cols, j = (n / cols) | 0; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; const m = b * cols + a; if (!seen[m] && rf[m] === 2) { seen[m] = 1; st.push(m); } } }
+      const cx = cells.reduce((a, n) => a + (n % cols) + .5, 0) / cells.length * cell, cy = cells.reduce((a, n) => a + ((n / cols) | 0) + .5, 0) / cells.length * cell;
+      const R0 = cell * (.7 + .3 * Math.sqrt(cells.length)), ring = [], k0 = n0 * .37;
+      for (let q = 0; q < 30; q++) { const a = q / 30 * Math.PI * 2, r = R0 * (1 + (nz(Math.cos(a) * 1.4 + k0, Math.sin(a) * 1.4) - .5) * .5); ring.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r * .8]); }
+      const d = pathD(chaikin(ring, 2, true), true);
+      s += `<path d="${d}" fill="#8fe2d8" stroke="#ffffff" stroke-opacity=".55" stroke-width="${r1(cell * .5)}" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="#efe8d2" stroke-width="${r1(cell * .2)}" stroke-linejoin="round"/>`;
+      for (let q = 0; q < 30; q += 5 + (n0 + q) % 3) { const [x, y] = ring[q]; s += `<ellipse cx="${r1(x)}" cy="${r1(y)}" rx="${r1(cell * .16)}" ry="${r1(cell * .1)}" fill="#7da55c"/>`; }
+    }
     return s;
   }
   // the sand running out under the water: the shallows off a beach pale with it, then green-blue, then the sea's own
@@ -277,7 +351,7 @@
       + `<radialGradient id="${uid}-pv" cx=".5" cy=".45" r=".75"><stop offset=".6" stop-color="#f3f1ec"/><stop offset="1" stop-color="#dedbd3"/></radialGradient></defs>`;
     // the sea, the shallows off the beaches, the slab's shadow on it, the slab's edge, the land
     const fade = [], coasts = (WD.T && WD.T.coast ? naturalCoasts : beaches)(WD, pr, uid + "-land", fade);
-    s += `<rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>` + shallows(fade, G.cell, uid + "-sw", W, H);
+    s += `<rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>` + shallows(fade, G.cell, uid + "-sw", W, H) + reefsSvg(WD);
     s += `<path d="${cd}" fill="#1d2a33" fill-opacity=".3" fill-rule="evenodd" transform="translate(${(off * 1.3).toFixed(1)} ${(off * 1.8).toFixed(1)})" filter="url(#${uid}-sh)"/>`;
     s += `<path d="${cd}" fill="#7d6f5c" fill-rule="evenodd" transform="translate(${(off * .22).toFixed(2)} ${(off * .32).toFixed(2)})"/>`;
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#5a4d3c" stroke-opacity=".5" stroke-width=".5" stroke-linejoin="round"/>`;
@@ -505,7 +579,7 @@
     if (P) return hydroSvg(WD, uid, img, pr, N);
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     const cd = coastD(G, .6), fade = [], coasts = (WD.T && WD.T.coast ? naturalCoasts : beaches)(WD, pr, uid + "-land", fade);
-    s += shallows(fade, G.cell, uid + "-sw", W, H);
+    s += shallows(fade, G.cell, uid + "-sw", W, H) + reefsSvg(WD);
     s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/><g class="wm-detail"></g>`;
     s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath>` + coasts;
     s += N ? NT.rivers(WD, "relief", N, pr, "#2c5fc6", null, 1.25) : rivers(WD, "#2c5fc6", null, 1.25);
@@ -1081,6 +1155,7 @@
   function draw(WD, look, uid, o) {
     o = o || {};
     if (look === "stars" || !WD.G) return stars(WD, uid, o);
+    coastDetail(WD);
     return ({ hydro, relief, painted, parchment, engraved, atlas, holo })[look](WD, uid, o);
   }
   // the sharper picture of a window of the map, for the page to lay over the land when zoomed in (the shaded reliefs

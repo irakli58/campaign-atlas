@@ -51,6 +51,9 @@
     for (let n = 0; n < N; n++) if (H[n] <= sea && !seen[n]) L[n] = 1;
     const S = sampler(G), jn = vnoise(Math.floor(hash(cols, rows, 67) * 1e9)), jm = vnoise(Math.floor(hash(cols, rows, 71) * 1e9));
     const idx = (x, y) => clamp(Math.floor(y / cell), 0, rows - 1) * cols + clamp(Math.floor(x / cell), 0, cols - 1);
+    // (a point of water is a lake's if a lake's cell is among the four about it and the open sea's is not: the nearest
+    // cell alone, often the land of the shore, left the lake's edge painted as sea, in squares)
+    const lakeAt = (x, y) => { const fx = x / cell - .5, fy = y / cell - .5, i = Math.floor(fx), j = Math.floor(fy); let lk = false; for (let b = j; b <= j + 1; b++) for (let a = i; a <= i + 1; a++) { if (a < 0 || b < 0 || a >= cols || b >= rows) continue; const n = b * cols + a; if (L[n] === 1) lk = true; else if (H[n] <= sea) return false; } return lk; };
     // (redrawn 27 Oct 2026, the user: the regions must blend into the land, not sit on it as patches) each laid-down
     // kind's share of the land round every cell, blurred over a few cells: a region fades out across a wide edge, and
     // the noise makes that edge wander, broken into fingers and outliers as a real wood or desert's edge is
@@ -70,7 +73,7 @@
     const covW = (x, y) => { const b = blend(x, y); if (!b) return [0, 0]; let best = 0, bw = .5; for (const [c, a] of b) if (a > bw) { bw = a; best = c; } return [best, best ? bw : 0]; };
     const covAt = (x, y) => covW(x, y)[0];
     const nat = { climate, C, D, NAT, Tm, L, S, idx, covAt, covW, blend, present, cell,
-      temp: (x, y) => S(x, y, Tm), canopy: G.Cn ? (x, y) => S(x, y, G.Cn) / 255 : null, base: (x, y) => BIO.warmth(climate, y / (rows * cell), 0), wet: (x, y) => rain ? S(x, y, M) / 255 : BIO.wetness(climate, S(x, y, M)), depth: (x, y) => S(x, y, D), lake: (x, y) => L[idx(x, y)] === 1,
+      temp: (x, y) => S(x, y, Tm), canopy: G.Cn ? (x, y) => S(x, y, G.Cn) / 255 : null, base: (x, y) => BIO.warmth(climate, y / (rows * cell), 0), wet: (x, y) => rain ? S(x, y, M) / 255 : BIO.wetness(climate, S(x, y, M)), depth: (x, y) => S(x, y, D), lake: lakeAt,
       // the kind of land at a point: what was laid there, or what its climate makes it
       bio: (x, y) => { const c = covAt(x, y); if (c) return B[BIO.LIST[c][0]]; const k = NAT[idx(x, y)]; return k ? B[BIO.LIST[k][0]] : null; },
       explicit: (x, y) => covAt(x, y) !== 0 };

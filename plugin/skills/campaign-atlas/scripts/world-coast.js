@@ -20,12 +20,13 @@
 "use strict";
 const { wind } = require("./world-ocean.js");
 const R = (a, b, v) => Math.max(a, Math.min(b, v));
+// (o.geo, the geologic coasts (world-shore.js): the rock's hardness, what the shaping left (MARK), the tides in metres)
 const gauss = v => Math.exp(-v * v);
 // what each coast cell became: the low four bits the kind, the high four how wide (0 to 15)
 const KIND = { sand: 1, gravel: 2, cliff: 3, rock: 4, marsh: 5, mangrove: 6, barrier: 7, dunes: 8, black: 9, white: 10, lagoon: 11 };
 
 function coasts(H, cols, rows, o) {
-  const N = cols * rows, sea = 128, cellKm = o.cellKm || 3, [la, lb] = o.lat || [52, 38], spin = o.spin < 0 ? -1 : 1, wrap = !!o.wrap;
+  const G = o.geo || null, N = cols * rows, sea = 128, cellKm = o.cellKm || 3, [la, lb] = o.lat || [52, 38], spin = o.spin < 0 ? -1 : 1, wrap = !!o.wrap;
   const latOf = j => la + (lb - la) * (j + .5) / rows;
   const at = (i, j) => { if (j < 0 || j >= rows) return -1; if (i < 0 || i >= cols) { if (!wrap) return -1; i = (i + cols) % cols; } return j * cols + i; };
   // the open sea: the water that reaches the sheet's edge (a lake's shore makes no beach of the sea's kind)
@@ -76,7 +77,8 @@ function coasts(H, cols, rows, o) {
   for (let k = 0; k < K; k++) {
     const n = C[k], T = o.T ? o.T[n] : 12, ai = o.AI ? o.AI[n] : 1;
     const r = o.acc ? Math.pow(Math.max(0, o.acc[n]) / accRef, .8) * (ai < .5 ? 1.6 : 1) : 0;
-    const c = .25 * E[k] * steep[k], reef = warmSea(n) >= 23 && shelf[k] > .5 ? .3 : 0;
+    // (geologic coasts: soft rock the waves wear gives far more sand than hard)
+    const c = G ? .4 * E[k] * (1 - G.hard[n]) * (.3 + steep[k]) : .25 * E[k] * steep[k], reef = warmSea(n) >= 23 && shelf[k] > .5 ? .3 : 0;
     src.river[k] = r; src.cliff[k] = c; src.reef[k] = reef; supply[k] = r + c + reef;
     kindOf[k] = volc.has(n) ? KIND.black : reef > r + c ? KIND.white : T < 2 && steep[k] > .4 ? KIND.gravel : KIND.sand;
   }
@@ -110,11 +112,16 @@ function coasts(H, cols, rows, o) {
   for (let k = 0; k < K; k++) {
     // (a beach only where clearly more sand stays than most of the coast keeps: about a fifth of the shore (the user,
     // 28 Oct 2026: "not all the coasts should have sand"); the rest rock, cliff, gravel, marsh and mangrove)
-    const n = C[k], T = o.T ? o.T[n] : 12, wn = D[k] / ref, w = wn < .78 || (steep[k] > .45 && E[k] > .7 && wn < 1.1) ? 0 : R(1, 15, Math.round((wn - .6) * 12 * (.5 + .5 * shelf[k]))); W[k] = w;
+    const n = C[k], T = o.T ? o.T[n] : 12, wn = D[k] / ref, td = G ? G.tide[n] : 0;
+    // (geologic coasts: no beach on a fjord's walls or among the skerries the ice scoured)
+    const bare = G && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([di, dj]) => { const m = at(n % cols + di, ((n / cols) | 0) + dj); return m >= 0 && (G.mark[m] === 1 || G.mark[m] === 2); });
+    const w = bare || wn < .78 || (steep[k] > .45 && E[k] > .7 && wn < 1.1) ? 0 : R(1, 15, Math.round((wn - .6) * 12 * (.5 + .5 * shelf[k]))); W[k] = w;
     let kind;
-    if (w >= 1) kind = kindOf[k] === KIND.gravel || (E[k] > 1 && steep[k] > .55 && kindOf[k] === KIND.sand) ? KIND.gravel : kindOf[k];
+    // (big tides on a sheltered low shore lay mud, not sand: tidal flats and salt marsh, or mangroves where it is warm)
+    if (G && td > 3.8 && E[k] < .5 && steep[k] < .3) kind = T > 20 ? KIND.mangrove : T > 2 ? KIND.marsh : KIND.rock;
+    else if (w >= 1) kind = kindOf[k] === KIND.gravel || (E[k] > 1 && steep[k] > .55 && kindOf[k] === KIND.sand) ? KIND.gravel : kindOf[k];
     else if (E[k] < .22 && steep[k] < .3 && src.river[k] + (down[k] < 0 ? .2 : 0) > .05) kind = T > 20 ? KIND.mangrove : T > 2 ? KIND.marsh : KIND.rock;
-    else kind = steep[k] > .45 ? KIND.cliff : KIND.rock;
+    else kind = steep[k] > .45 || (G && G.hard[n] > .62 && E[k] > .55 && steep[k] > .2) ? KIND.cliff : KIND.rock;
     code[n] = kind | (w << 4);
   }
   // dunes behind wide beaches where the wind blows onshore and the land is not too wet
@@ -126,7 +133,7 @@ function coasts(H, cols, rows, o) {
   // come out and every so far along
   let barriers = 0, spits = 0;
   for (let k = 0; k < K; k++) {
-    const n = C[k], kind = code[n] & 15; if (![KIND.sand, KIND.white].includes(kind) || W[k] < 7 || shelf[k] < .7 || E[k] < .2 || E[k] > 1.2) continue;
+    const n = C[k], kind = code[n] & 15; if (![KIND.sand, KIND.white].includes(kind) || W[k] < 7 || shelf[k] < .7 || E[k] < .2 || E[k] > 1.2 || (G && G.tide[n] > 2.2)) continue;
     if (src.river[k] > .5 || ((n * 2654435761) >>> 0) % 13 === 0) continue;
     const m1 = step(n, nx[k], ny[k], 1), m2 = step(n, nx[k], ny[k], 2), m3 = step(n, nx[k], ny[k], 3), m4 = step(n, nx[k], ny[k], 4);
     if ([m1, m2, m3, m4].some(m => m < 0 || !ocean[m]) || H[m3] < sea - 6) continue;

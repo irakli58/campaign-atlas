@@ -102,7 +102,7 @@ function geology(o, U) {
     near[n] = n; dist[n] = 0; q.push(n);
   }
   for (let h = 0; h < q.length; h++) { const n = q[h], i = ci(n), j = cj(n); for (const [di, dj] of NB8) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a, d = dist[n] + Math.hypot(di, dj); if (d < dist[m] && d * ckm < (zs > 1 ? 900 : 450)) { dist[m] = d; near[m] = near[n]; q.push(m); } } }
-  const up = new Float32Array(CN), ridge = new Float32Array(CN), trench = new Float32Array(CN), volc = [];
+  const up = new Float32Array(CN), ridge = new Float32Array(CN), trench = new Float32Array(CN), volc = [], arcC = [], hotT = [];
   const bump = (d, c, w) => gauss((d - c) / w);
   // (on a whole planet the belts are as broad as the Earth's great ones, the Andes and the Himalaya with their high
   // plateaus behind, rather than a regional map's narrower ridges, which at a planet's scale stand as thin walls)
@@ -121,8 +121,10 @@ function geology(o, U) {
       else if (cHere) { up[n] += c * BA * (1.8 * bump(d, 70 * BW, 60 * BW) + (zs > 1 ? .45 * bump(d, 280, 170) : 0)); if (Math.abs(d - 120) < ckm * .6 && rnd() < .05) volc.push(n); }
       else if (cOver) trench[n] += c * gauss(d / 60);
       else if (here > (mine ? b.pb : b.pa)) {
-        // an island arc: a broken line of volcanic islands over the sinking plate
-        if (zs > 1 ? d > 70 && d < 150 && U.fbm(nA, X(n) * 14 * zs, Y(n) * 14 * zs, 2) > .6 : d > 70 && d < 130 && U.fbm(nA, X(n) * 9 * zs, Y(n) * 9 * zs, 2) > .5) { crust[n] = 2; up[n] += c * 1.4; if (rnd() < .06) volc.push(n); }
+        // an island arc: a broken line of volcanic islands over the sinking plate (geologic coasts: separate volcanoes
+        // along the arc, placed below)
+        if (o.shores) { if (d > 60 && d < 160) arcC.push([n, d, c]); }
+        else if (zs > 1 ? d > 70 && d < 150 && U.fbm(nA, X(n) * 14 * zs, Y(n) * 14 * zs, 2) > .6 : d > 70 && d < 130 && U.fbm(nA, X(n) * 9 * zs, Y(n) * 9 * zs, 2) > .5) { crust[n] = 2; up[n] += c * 1.4; if (rnd() < .06) volc.push(n); }
       } else trench[n] += c * gauss(d / 60);
     } else if (b.conv < -.1) {
       const c = Math.min(1.4, -b.conv) * along;
@@ -149,18 +151,34 @@ function geology(o, U) {
     // length, as the Appalachians and the Urals do)
     for (let n = 0; n < CN; n++) { if (plate[n] !== k || !crust[n]) continue; const dx = X(n) - cx, dy = Y(n) - cy, t = dx * ux + dy * uy; if (Math.abs(t) > L) continue; const bend = zs > 1 ? (U.fbm(nD, t / L * 1.5 + k * 3.1, k * 1.7, 2) - .5) * L * 1.2 : 0, off = Math.abs(-dx * uy + dy * ux - bend) * cr * ckm; up[n] += oa * gauss(off / wd) * (1 - (t / L) ** 2); }
   }
-  // hotspots: a chain of volcanic islands over a moving ocean plate; on a continent a gentle swell
-  for (let h = 0; h < Math.floor(rnd() * 2.6); h++) {
+  // (geologic coasts: an arc is a line of separate volcanoes some 100 km behind the trench, 40 to 80 km apart, each a
+  // cone, the close ones merging into long islands as Java's do)
+  if (arcC.length) {
+    arcC.sort((a, b) => Math.abs(a[1] - 105) - Math.abs(b[1] - 105) + (rnd() - .5) * 30); const picked = [];
+    for (const [n, , c] of arcC) {
+      const sp = (40 + 40 * rnd()) / ckm; if (picked.some(m => Math.hypot(ci(m) - ci(n), cj(m) - cj(n)) < sp)) continue; picked.push(n);
+      const r = (9 + 20 * rnd()) / ckm, R2 = Math.ceil(r * 1.6) + 1, ht = c * (1.1 + .7 * rnd());
+      for (let dj = -R2; dj <= R2; dj++) for (let di = -R2; di <= R2; di++) { const a = ci(n) + di, b = cj(n) + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a, dd = Math.hypot(di, dj) / Math.max(.6, r); if (crust[m] === 1 || dd > 1.6) continue; if (dd < 1) crust[m] = 2; up[m] += ht * Math.max(0, 1 - dd * dd / 2.2); }
+      if (rnd() < .45) volc.push(n);
+    }
+  }
+  // hotspots: a chain of volcanic islands over a moving ocean plate; on a continent a gentle swell (geologic coasts: the
+  // chain followed on past its islands, where the old volcanoes have sunk, and a hotspot or two more)
+  // (the count drawn afresh each time round, as it always was, so a world made before comes out the same)
+  const nhS = o.shores ? Math.floor(rnd() * 2.6) + (zs > 1 ? 4 : 1) : 0;
+  for (let h = 0; o.shores ? h < nhS : h < Math.floor(rnd() * 2.6); h++) {
     const s = Math.floor(rnd() * CN), p = plates[plate[s]], sp = Math.hypot(p.vx, p.vy) || 1;
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < (o.shores ? 10 : 6); k++) {
       const x = X(s) - p.vx / sp * k * 60 / (cr * ckm), y = Y(s) - p.vy / sp * k * 60 / (cr * ckm); if (x < 0 || y < 0 || x > asp || y > 1) break;
       const m0 = cell(x, y), R = Math.ceil(80 / ckm);
       for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) { const a = ci(m0) + di, b = cj(m0) + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a, d = Math.hypot(di, dj) * ckm, w = gauss(d / 28); if (crust[m] === 1) continue; else if (w > .35 && k < 4) { crust[m] = 2; up[m] += 1.2 * Math.pow(.8, k) * w; } }
       if (k < 2) volc.push(m0);
+      if (o.shores) hotT.push([m0, k]);
     }
   }
-  // (island arcs and hotspot islands rounded into islands, not blocks)
-  { const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = crust[n] === 2 ? 1 : 0; boxBlur(F, cc, cr, zs > 1 ? 2 : 1, 2); for (let n = 0; n < CN; n++) if (crust[n] !== 1) crust[n] = F[n] > (zs > 1 ? .38 : .42) ? 2 : 0; }
+  // (island arcs and hotspot islands rounded into islands, not blocks; the geologic coasts' volcanoes are cones already,
+  // and the smallest would be rounded away)
+  if (!o.shores) { const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = crust[n] === 2 ? 1 : 0; boxBlur(F, cc, cr, zs > 1 ? 2 : 1, 2); for (let n = 0; n < CN; n++) if (crust[n] !== 1) crust[n] = F[n] > (zs > 1 ? .38 : .42) ? 2 : 0; }
   boxBlur(up, cc, cr, 1, 2);
   for (let n = 0; n < CN; n++) up[n] = Math.max(crust[n] ? .02 : 0, up[n]) / grav;
 
@@ -201,8 +219,27 @@ function geology(o, U) {
   /* 5. the sea's level: a little above the lowest land, so the river mouths flood into bays and estuaries */
   const landVals = []; for (let n = 0; n < N; n++) if (Cf[n]) landVals.push(Hf[n]); landVals.sort((a, b) => a - b);
   const wantLand = Math.round(N * share), seaLvl = landVals.length > wantLand ? landVals[landVals.length - wantLand] : 0;
+  // (geologic coasts, on trial: `--coast geologic`, world-shore.js. The coasts shaped as their history made them: the
+  // rock, the ice age's glaciers, the lowstand's rivers and the sea's return, the deltas, the waves. Each cell told of the
+  // plates' meeting nearest it: 1 two continents, 2 an ocean diving under this continent, 3 the ocean's side of that,
+  // 4 two oceans (an arc), 5 plates parting, 6 sliding past; and how far it lies from that border)
+  let SH = null, SHin = null;
+  if (o.shores) {
+    const marginF = new Uint8Array(N), bdistF = new Float32Array(N).fill(1e9), warpF = new Float32Array(N), crustK = new Uint8Array(N), wC = new Float32Array(CN);
+    for (let m = 0; m < CN; m++) wC[m] = U.fbm(nC, X(m) * 1.6 * zs, Y(m) * 1.6 * zs, 3);
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const n = j * cols + i, m = Math.min(cr - 1, (j / f) | 0) * cc + Math.min(cc - 1, (i / f) | 0), b = near[m] >= 0 ? bInfo[near[m]] : null;
+      crustK[n] = Cf[n] ? (crust[m] === 2 ? 2 : 1) : 0; warpF[n] = samp(wC, i + .5, j + .5);
+      if (!b) continue; bdistF[n] = dist[m] * ckm;
+      const cHere = crust[m] === 1, cOver = !!(plate[m] === b.pa ? b.cb : b.ca);
+      marginF[n] = b.conv > .1 ? (cHere && cOver ? 1 : cHere ? 2 : cOver ? 3 : 4) : b.conv < -.1 ? 5 : 6;
+    }
+    const fineOf = m => Math.min(rows - 1, Math.floor((cj(m) + .5) * f)) * cols + Math.min(cols - 1, Math.floor((ci(m) + .5) * f));
+    SHin = { cols, rows, cellKm, seed, lat: o.lat || LAT[o.climate] || LAT.temperate, wrap: !!(o.lat && o.lat[0] >= 89), spin: o.spin, margin: marginF, bdist: bdistF, warp: warpF, crust: crustK, up: Uf, rain: Rf, ridge: ridgeF, trench: trenchF, volcanoes: volc.map(fineOf), hotspots: hotT.map(([m, k]) => ({ n: fineOf(m), k })) };
+    SH = require("./world-shore.js").shape(Object.assign({ H: Hf, sea: seaLvl, keepLand: !!SK }, SHin), U);
+  }
   const E = new Float32Array(N), isLand = new Uint8Array(N);
-  for (let n = 0; n < N; n++) if (SK ? SK.land[n] : Cf[n] && Hf[n] > seaLvl) isLand[n] = 1;
+  for (let n = 0; n < N; n++) if (SK ? SK.land[n] : SH ? Hf[n] > seaLvl : Cf[n] && Hf[n] > seaLvl) isLand[n] = 1;
   // the land's heights, rank for rank, on the Earth's hypsometric curve (weak gravity lets them stand higher)
   { const idx = []; for (let n = 0; n < N; n++) if (isLand[n]) idx.push(n); idx.sort((a, b) => Hf[a] - Hf[b]);
     const Q = [[0, 2], [.1, 60], [.25, 200], [.5, 460], [.75, 1000], [.88, 1800], [.94, 2700], [.98, 4000], [.995, 5300], [1, 6400 + rnd() * 1800]];
@@ -211,7 +248,9 @@ function geology(o, U) {
   // the sea floor: the shelf, the slope, the deep ocean; a ridge where plates part, a trench where one dives; the
   // drowned valleys shallow
   const dLand = U.distance(cols, rows, n => isLand[n] === 1);
-  for (let n = 0; n < N; n++) {
+  // (geologic coasts: the floor as the margins, the rivers, the ice and the hotspots made it: world-shore.js seafloor)
+  if (SH) SH.floor = require("./world-shore.js").seafloor(E, SHin, SH, U);
+  else for (let n = 0; n < N; n++) {
     if (isLand[n]) continue; const d = dLand[n] * cellKm;
     let z = d < 80 ? -40 - d * 1.6 : d < 260 ? -170 - (d - 80) / 180 * 3300 : -3470 - Math.min(800, (d - 260) * 1.5);
     if (Cf[n]) z = Math.max(z, -(seaLvl - Hf[n]) * 30 - 15);
@@ -220,7 +259,7 @@ function geology(o, U) {
   }
 
   // (the deep floor is smooth at this scale: what the coarse grid left in it is eased away)
-  { const Z = new Float32Array(N); for (let n = 0; n < N; n++) Z[n] = isLand[n] ? -40 : E[n]; boxBlur(Z, cols, rows, 3, 2); for (let n = 0; n < N; n++) if (!isLand[n]) E[n] = Math.min(-5, dLand[n] < 3 ? E[n] : Z[n]); }
+  if (!SH) { const Z = new Float32Array(N); for (let n = 0; n < N; n++) Z[n] = isLand[n] ? -40 : E[n]; boxBlur(Z, cols, rows, 3, 2); for (let n = 0; n < N; n++) if (!isLand[n]) E[n] = Math.min(-5, dLand[n] < 3 ? E[n] : Z[n]); }
 
   // (a lake the sketch shows lies in a hollow: its floor below the lowest of its shore)
   if (SK && SK.lake) { const seen = new Uint8Array(N);
@@ -275,7 +314,7 @@ function geology(o, U) {
   const coast = U.distance(cols, rows, n => Hb[n] <= 128);
   const full = m => Math.min(rows - 1, Math.floor((cj(m) + .5) * f)) * cols + Math.min(cols - 1, Math.floor((ci(m) + .5) * f));
   const vols = [], maxV = Math.max(2, Math.round(N / 22000)); for (const m of volc) { const n = full(m); if (vols.length < maxV && Hb[n] > 128 && !lakeCells[n] && vols.every(v => Math.hypot(I(v) - I(n), J(v) - J(n)) > 28)) vols.push(n); }
-  return { H: Hb, Lo, M, coast, temp: C.temp, eco, ocean: C.ocean || null, info: { plates: nP, continental: plates.filter(p => crust[p.seed] === 1).length, volcanoes: vols, playa, lakes: lakeCells.reduce((s, v) => s + v, 0), peak: Math.round(top / 10) * 10 } };
+  return { H: Hb, Lo, M, coast, temp: C.temp, eco, ocean: C.ocean || null, shore: SH ? Object.assign(SH, { margin: SHin.margin, crust: SHin.crust, hotspots: SHin.hotspots, lat: SHin.lat, wrap: SHin.wrap }) : null, info: { plates: nP, continental: plates.filter(p => crust[p.seed] === 1).length, volcanoes: vols, playa, lakes: lakeCells.reduce((s, v) => s + v, 0), peak: Math.round(top / 10) * 10 } };
 }
 // one step of the rivers' cutting: water routed down the land (through its hollows, which it fills and spills from:
 // a priority flood from the sea), gathered from all the land above, and the stream power law solved implicitly from

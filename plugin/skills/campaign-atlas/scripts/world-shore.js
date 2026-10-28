@@ -65,29 +65,37 @@ function shape(o, U) {
   let upRef; { const u = []; for (let n = 0; n < N; n++) if (crust[n] === 1) u.push(o.up[n]); upRef = Math.max(1e-6, pct(u, .92)); }
   const volcN = new Uint8Array(N);
   for (const v of o.volcanoes || []) { const r = Math.max(1, Math.ceil(cells(35))); for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) { const m = at(I(v) + di, J(v) + dj); if (m >= 0 && di * di + dj * dj <= r * r) volcN[m] = 1; } }
+  // (the distance from the plates' border eased, so the bands follow it in curves, not in the grid's straight steps)
+  const bd = Float32Array.from(o.bdist, v => Math.min(v, 1500)); boxBlur(bd, cols, rows, 2, 3);
+  const lam0 = cells(22 + 10 * rnd());
   for (let n = 0; n < N; n++) {
     const x = I(n) / rows, y = J(n) / rows, g = nA(x * 40, y * 40) - .5;
     if (crust[n] !== 1 || volcN[n]) { lith[n] = LITH.volcanic; hard[n] = .7 + .12 * g; continue; }
     const u = o.up[n] / upRef, w = o.warp[n], alat = Math.abs(latOf(J(n)));
     if (u > .3) {
-      // (a belt's rock folded into bands along the plates' border, its distance from the border the bands' measure: hard
-      // and soft in turn, some 18 to 34 km from crest to crest)
-      const lam = cells(18 + 16 * nB(x * 9, y * 9)), d = o.bdist[n] < 1e8 ? o.bdist[n] / cellKm : (I(n) * .6 + J(n) * .8);
-      band[n] = Math.sin(2 * Math.PI * d / lam + 2.4 * nC(x * 6, y * 6)) * smooth(.3, .6, u); lith[n] = LITH.belt; hard[n] = R(.2, .95, .6 + .3 * band[n] + .1 * g);
+      // (a belt's rock folded into bands along the plates' border, hard and soft in turn, some 15 to 40 km from crest to
+      // crest: their spacing wandering, each fold dying out along its length and another taking over beside it, as folds
+      // do (en échelon), never a washboard)
+      const d = bd[n] / cellKm, ph = 2 * Math.PI * d / lam0 + 3.2 * (U.fbm(nC, x * 5, y * 5, 2) - .5) * 2, s = Math.sin(ph);
+      const keep = smooth(.42, .68, U.fbm(nA, x * 4 + 9, y * 4 - 3, 2));
+      band[n] = Math.sign(s) * Math.pow(Math.abs(s), .75) * keep * smooth(.3, .6, u); lith[n] = LITH.belt; hard[n] = R(.2, .95, .6 + .3 * band[n] + .1 * g);
     } else if (w > .55 || (w > .47 && u > .1)) { lith[n] = LITH.shield; hard[n] = .84 + .12 * g; }
     else if (alat < 36 && nB(x * 7 + 11, y * 7) > .6) { lith[n] = LITH.limestone; hard[n] = .58 + .1 * g; }
     else { lith[n] = LITH.sediment; hard[n] = .2 + .16 * g; }
   }
 
+  // (a world drawn by hand keeps the coasts it was drawn with: only its rock is read)
+  if (o.keepLand) return { lith, hard, ice: new Uint8Array(N), mark, mouths: [], deltas: [], troughMouths: [], hs, iceN: 0, stats: {} };
+
   /* 2. the folded belts' ridges and valleys: the hard bands stand, the soft were worn into valleys; strongest in the
         foothills and lowland belts (the Jura, the Appalachians' Valley and Ridge, the Dinarides by the Adriatic), the high
         mountains keeping their own form; under the sea near the coast too, so the drowned ridges stand as islands */
-  for (let n = 0; n < N; n++) if (lith[n] === LITH.belt && band[n] && H[n] > sea - hs * .6) { H[n] += band[n] * hs * .5 * (1 - smooth(500, 2000, metres[n])); mark[n] = MARK.band; }
+  for (let n = 0; n < N; n++) if (lith[n] === LITH.belt && Math.abs(band[n]) > .05 && H[n] > sea - hs * .6) { H[n] += band[n] * hs * .32 * (1 - smooth(350, 1500, metres[n])); mark[n] = MARK.band; }
 
   /* 3. the glacial maximum */
   const T0 = lat => 27 * Math.pow(Math.cos(lat * Math.PI / 180), 1.6) - 3 - 12 * smooth(60, 85, Math.abs(lat));
   const tl = new Float32Array(N); for (let n = 0; n < N; n++) { const lat = latOf(J(n)); tl[n] = T0(lat) - 6.5 * metres[n] / 1000 - (6 + 5 * smooth(35, 70, Math.abs(lat))); }
-  let RT = route(H, cols, rows, sea, at, o.wrap, U), F = flow(RT);
+  let RT = route(H, cols, rows, sea, at, o.wrap, U), F = flow(RT, cellKm);
   const wet = n => Math.min(2.2, Math.max(.2, o.rain[n]));
   // (the ice gathers where it is cold enough and snowy enough, a wet coast's glaciers forming in warmer air than a dry
   // one's, and flows down the valleys, a tongue reaching as far below the snow as its ice can feed it)
@@ -98,12 +106,18 @@ function shape(o, U) {
   // fjords: where the ice ran to the sea through high ground, its valleys cut below the sea, deepest some way inland
   const troughMouths = [];
   for (let n = 0; n < N; n++) {
-    if (!ice[n] || H[n] <= sea || Qi[n] < 5) continue;
+    if (!ice[n] || H[n] <= sea || Qi[n] < 12) continue;
     const Lf = Math.min(240, 25 + 22 * Math.sqrt(Qi[n])), mo = F.mouth[n];
     if (F.dsea[n] > Lf || mx[n] < 350 || (mo >= 0 && mx[mo] < 220)) continue;
+    // (how deep the ice cut its floor, m: the more ice, the deeper, most some way inland where it was thickest, less at
+    // the mouth (the sill); a fjord only where the floor so cut lies below the sea)
+    const cut = Math.min(1300, 95 * Math.sqrt(Qi[n])) * (.55 + .45 * smooth(0, .35, F.dsea[n] / Lf)) * (1 - .6 * smooth(.6, 1, F.dsea[n] / Lf));
+    if (metres[n] >= cut) continue;
     H[n] = Math.min(H[n], sea - dip * (1 + 2.5 * smooth(.1, .5, F.dsea[n] / Lf))); mark[n] = MARK.trough;
-    if (F.dsea[n] <= cellKm) troughMouths.push(n);
+    if (F.dsea[n] <= cellKm && Qi[n] >= 30) troughMouths.push(n);
   }
+  // (one trough across the shelf for each great fjord, from the mouth with the most ice)
+  { troughMouths.sort((a, b) => Qi[b] - Qi[a]); const kept = []; for (const n of troughMouths) if (kept.every(m => Math.hypot(I(m) - I(n), J(m) - J(n)) > cells(45))) kept.push(n); troughMouths.length = 0; troughMouths.push(...kept); }
   // the scoured lowland: knobs and hollows streamlined along the ice's way to the sea
   const dC0 = U.distance(cols, rows, n => H[n] <= sea), gC = Float32Array.from(dC0, v => Math.min(v, 60)); boxBlur(gC, cols, rows, 2, 2);
   for (let n = 0; n < N; n++) {
@@ -115,7 +129,7 @@ function shape(o, U) {
   }
 
   /* 4. the lowstand and the drowned valleys */
-  RT = route(H, cols, rows, sea, at, o.wrap, U); F = flow(RT);
+  RT = route(H, cols, rows, sea, at, o.wrap, U); F = flow(RT, cellKm);
   const A = new Float32Array(N), Sd = new Float32Array(N);
   for (let n = 0; n < N; n++) if (H[n] > sea) { A[n] = wet(n) * af; Sd[n] = A[n] * (.25 + (1 - hard[n])) * (.3 + Math.min(1.5, mx[n] / 1500)); }
   for (let q = RT.k - 1; q >= 0; q--) { const n = RT.order[q], r = RT.rec[n]; if (r >= 0 && H[n] > sea && H[r] > sea) { A[r] += A[n]; Sd[r] += Sd[n]; } }
@@ -124,11 +138,11 @@ function shape(o, U) {
   const Ld = new Float32Array(N), MO = [];
   for (const m of mouths) {
     const fill = R(0, 1, Math.pow(Sd[m] / Sref, .7)), glacial = mark[m] === MARK.trough;
-    Ld[m] = glacial ? 0 : Math.min(170, (10 + 28 * Math.sqrt(A[m] / Aref)) * Math.pow(1 - fill, 1.3));
+    Ld[m] = glacial ? 0 : Math.min(120, (6 + 22 * Math.sqrt(A[m] / Aref)) * Math.pow(1 - fill, 1.5));
     MO.push({ n: m, A: A[m], S: Sd[m], fill, Ld: Ld[m] });
   }
   for (let n = 0; n < N; n++) {
-    if (H[n] <= sea || mark[n] === MARK.trough || A[n] < 6) continue; const m = F.mouth[n]; if (m < 0 || !(Ld[m] > 0) || F.dsea[n] > Ld[m]) continue;
+    if (H[n] <= sea || mark[n] === MARK.trough || A[n] < 10) continue; const m = F.mouth[n]; if (m < 0 || !(Ld[m] > 0) || F.dsea[n] > Ld[m]) continue;
     H[n] = Math.min(H[n], sea - dip); mark[n] = MARK.drowned;
   }
   // (in soft lowland the drowned valley widens toward its mouth into a funnel)
@@ -143,12 +157,12 @@ function shape(o, U) {
   const WV = waveTools(H, cols, rows, sea, cellKm, latOf, at, o.spin);
   let deltas = 0; const DL = [];
   for (const M of MO) {
-    const m = M.n, x = M.S / Sref; if (x < .55 || H[m] <= sea || mark[m] === MARK.trough) continue;
+    const m = M.n, x = M.S / Sref; if (x < 1 || M.A < 60 || H[m] <= sea || mark[m] === MARK.trough) continue;
     const wv = WV.at(m, W8); if (!wv) continue;
     const tide = WV.tide(m, wv.nx, wv.ny, W8, crust), wave = wv.E;
     // (which wins: the river's sediment, the waves or the tides)
-    const sR = x * .8, sW = wave * 1.3, sT = tide / 3.2, type = sT > sR && sT > sW ? MARK.deltaT : sW > sR ? MARK.deltaW : MARK.deltaR;
-    const Nd = Math.min(700, Math.round((x - .4) * 34 * Math.sqrt(M.A / Aref) / af));
+    const sR = .2 + (x - 1) * .7, sW = wave * 2.2, sT = tide / 3, type = sT > sR && sT > sW ? MARK.deltaT : sW > sR ? MARK.deltaW : MARK.deltaR;
+    const Nd = Math.min(300, Math.round(Math.min(2, x - .8) * M.A * .03));
     if (Nd < 3) continue;
     const made = buildDelta(m, type, Nd, wv.nx, wv.ny);
     if (made > 2) { deltas++; DL.push({ n: m, type, cells: made, tide: Math.round(tide * 10) / 10, wave: Math.round(wave * 100) / 100 }); M.delta = type; }
@@ -243,7 +257,7 @@ function seafloor(E, o, SH, U) {
   for (let h = 0; h < q.length; h++) { const n = q[h]; for (const [di, dj] of NB8) { const m = at(I(n) + di, J(n) + dj); if (m < 0 || E[m] > 0) continue; const d = D[n] + (di && dj ? 1.414 : 1) * cellKm; if (d < D[m]) { D[m] = d; near[m] = near[n]; q.push(m); } } }
   // the river mouths that feed the shelf, and how much (a big river widens its shelf and cuts a canyon)
   const feed = new Float32Array(N); for (const M of SH.mouths) feed[M.n] = Math.max(feed[M.n], M.S);
-  const Sref = Math.max(1e-6, pct(SH.mouths.map(M => M.S), .85));
+  const Sref = Math.max(1e-6, pct(SH.mouths.map(M => M.S), .85)), reefC = [];
   for (let n = 0; n < N; n++) {
     if (E[n] > 0) continue;
     const c = near[n], d = D[n], mg = c >= 0 ? o.margin[c] : 0, x = I(n) / rows, y = J(n) / rows, alat = Math.abs(latOf(J(n)));
@@ -257,16 +271,21 @@ function seafloor(E, o, SH, U) {
     else if (shelfy && d < 900) z = -(70 + 90 * nB(x * 5 + 7, y * 5)) - 40 * smooth(400, 900, d);   // (a sea over the continent itself: the North Sea's kind)
     else { const sw = mg === MARGIN.active || mg === MARGIN.trenchSide || isl ? 22 : 55, e = d - W; z = e < sw ? -130 - e / sw * 3200 : -3330 - Math.min(1500, (e - sw) * 1.4); }
     z += (o.ridge[n] || 0) * 1800 * Math.min(1, d / 300) - (o.trench[n] || 0) * 2600;
-    if (z < -400) z += (nC(x * 12, y * 12) - .5) * 300;
-    // banks on a broad glaciated or sandy shelf
-    if (z > -200 && z < -40 && nB(x * 14 + 1, y * 14) > .68) z = z * .55;
-    // tropical shelves the rivers do not muddy: reef platforms, a barrier reef along the edge
-    if (alat < 24 && !isl && d <= W && W > 40 && feedNear(c) < .3) { z = Math.max(z, -45 - 10 * nB(x * 9, y * 9)); if (d > W - cellKm * 1.2) { z = -6; mark[n] = MARK.barrierReef; } }
+    // (the deep floor's unevenness, growing with the depth rather than starting at one)
+    z += (nC(x * 12, y * 12) - .5) * 300 * smooth(-400, -1500, z);
+    // banks on a broad shelf: low swells of sand and gravel, the shallower for being on the shelf
+    z *= 1 - .45 * smooth(.6, .8, nB(x * 14 + 1, y * 14)) * smooth(-25, -50, z) * (1 - smooth(-170, -230, z));
+    // (tropical shelves the rivers do not muddy: reef platforms, a barrier reef along the edge; laid after the easing)
+    if (alat < 24 && !isl && d <= W && W > 40 && feedNear(c) < .3) reefC.push([n, d > W - cellKm * 1.2, x, y]);
     E[n] = Math.min(-4, z);
   }
   function feedNear(c) { if (c < 0) return 0; let s = 0; const r = Math.ceil(120 / cellKm); for (let dj = -r; dj <= r; dj += 2) for (let di = -r; di <= r; di += 2) { const m = at(I(c) + di, J(c) + dj); if (m >= 0) s = Math.max(s, feed[m]); } return s / Sref; }
-  // the deep floor eased (the coarse grid's steps), the shelf and its features kept
-  { const Z = new Float32Array(N); for (let n = 0; n < N; n++) Z[n] = E[n] > 0 ? -60 : E[n]; boxBlur(Z, cols, rows, 3, 2); for (let n = 0; n < N; n++) if (E[n] <= 0 && D[n] > cellKm * 3 && E[n] < -300) E[n] = Math.min(-4, Z[n]); }
+  // the whole floor eased: the grid's cells and the noise's steps smoothed away, the deep ocean the most; the coast's own
+  // shallows kept
+  { const Z = new Float32Array(N); for (let n = 0; n < N; n++) Z[n] = E[n] > 0 ? -12 : E[n]; boxBlur(Z, cols, rows, 1, 2);
+    const Zd = Float32Array.from(Z); boxBlur(Zd, cols, rows, 3, 2);
+    for (let n = 0; n < N; n++) if (E[n] <= 0) { const deep = smooth(-600, -2500, E[n]) * smooth(cellKm * 2, cellKm * 5, D[n]); E[n] = Math.min(-4, D[n] <= cellKm * 1.5 ? (E[n] + Z[n]) / 2 : Z[n] * (1 - deep) + Zd[n] * deep); } }
+  for (const [n, edge, x, y] of reefC) { E[n] = Math.max(E[n], -45 - 10 * nB(x * 9, y * 9)); if (edge) { E[n] = -6; mark[n] = MARK.barrierReef; } }
   // the way out to sea from a coast cell
   const outward = n => { let sx = 0, sy = 0; for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const m = at(I(n) + di, J(n) + dj); if (m >= 0 && E[m] <= 0) { sx += di; sy += dj; } } const l = Math.hypot(sx, sy); return l ? [sx / l, sy / l] : null; };
   // a line run out to sea, cut into the floor
@@ -275,7 +294,10 @@ function seafloor(E, o, SH, U) {
     for (let s = 0; s < 400; s++) {
       xx += dx; yy += dy; const th = (nB(xx * .2, yy * .2) - .5) * wob, c2 = Math.cos(th), s2 = Math.sin(th); [dx, dy] = [dx * c2 - dy * s2, dx * s2 + dy * c2];
       const m = at(Math.floor(xx), Math.floor(yy)); if (m < 0) break; if (E[m] > 0) continue; const d = D[m]; if (d > to) break; if (d < from) continue;
-      const t = (d - from) / Math.max(1, to - from); E[m] = Math.min(E[m], kind === MARK.canyon ? E[m] - depth * Math.sin(Math.PI * Math.min(1, t * 1.2)) : -depth * (1 - .5 * t)); if (!mark[m]) mark[m] = kind; made++;
+      const t = (d - from) / Math.max(1, to - from), v = kind === MARK.canyon ? E[m] - depth * Math.sin(Math.PI * Math.min(1, t * 1.2)) : -depth * (1 - .5 * t);
+      // (its sides sloping: the cells beside it cut half as deep)
+      E[m] = Math.min(E[m], v); if (!mark[m]) mark[m] = kind; made++;
+      for (const [di, dj] of NB4) { const e = at(Math.floor(xx) + di, Math.floor(yy) + dj); if (e >= 0 && E[e] <= 0) E[e] = Math.min(E[e], (E[e] + v) / 2); }
     }
     return made;
   };
@@ -289,9 +311,10 @@ function seafloor(E, o, SH, U) {
   let atolls = 0, seamounts = 0;
   for (const h of o.hotspots || []) {
     const n = h.n; if (n < 0 || E[n] > 0 || h.k < 2) continue;
-    const alat = Math.abs(latOf(J(n))), warm = alat < 28 - (o.coldSea ? 4 : 0), r = Math.max(1, Math.round(10 / cellKm));
-    for (let dj = -r - 1; dj <= r + 1; dj++) for (let di = -r - 1; di <= r + 1; di++) { const m = at(I(n) + di, J(n) + dj); if (m < 0 || E[m] > 0) continue; const dd = Math.hypot(di, dj); if (dd > r + 1) continue; E[m] = warm && h.k < 6 ? Math.max(E[m], dd <= r ? -12 : -400) : Math.max(E[m], -700 - 300 * dd - h.k * 120); if (warm && h.k < 6 && dd <= r) mark[m] = MARK.atoll; else if (!mark[m]) mark[m] = MARK.seamount; }
-    if (warm && h.k < 6) atolls++; else seamounts++;
+    // (each a rounded rise from the floor, its top the shallower the younger; an atoll's ring of reef at the surface)
+    const alat = Math.abs(latOf(J(n))), atoll = alat < 28 && h.k < 7, top = atoll ? -10 : -500 - h.k * 140, rr = Math.max(1.6, 30 / cellKm), Rm = Math.ceil(rr * 2.6);
+    for (let dj = -Rm; dj <= Rm; dj++) for (let di = -Rm; di <= Rm; di++) { const m = at(I(n) + di, J(n) + dj); if (m < 0 || E[m] > 0) continue; const g = Math.exp(-((di * di + dj * dj) / (rr * rr))); E[m] = Math.max(E[m], top + (E[m] - top) * (1 - g)); if (atoll && di * di + dj * dj <= .6) mark[m] = MARK.atoll; else if (!atoll && g > .5 && !mark[m]) mark[m] = MARK.seamount; }
+    if (atoll) atolls++; else seamounts++;
   }
   return { canyons, atolls, seamounts };
 }
@@ -421,9 +444,9 @@ function route(H, cols, rows, sea, at, wrap, U) {
 }
 // along the drainage: how far each land cell lies from the sea (km, as the water goes) and the cell where its water
 // meets the sea
-function flow(RT) {
-  const { rec, order, k, H, sea, cols } = RT, N = H.length, dsea = new Float32Array(N), mouth = new Int32Array(N).fill(-1), ck = RT.cellKm || 1;
-  for (let q = 0; q < k; q++) { const n = order[q]; if (H[n] <= sea) continue; const r = rec[n]; if (r < 0 || H[r] <= sea) { dsea[n] = .5; mouth[n] = n; } else { dsea[n] = dsea[r] + ((n % cols) !== (r % cols) && ((n / cols) | 0) !== ((r / cols) | 0) ? 1.414 : 1); mouth[n] = mouth[r]; } }
+function flow(RT, cellKm) {
+  const { rec, order, k, H, sea, cols } = RT, N = H.length, dsea = new Float32Array(N), mouth = new Int32Array(N).fill(-1), ck = cellKm || 1;
+  for (let q = 0; q < k; q++) { const n = order[q]; if (H[n] <= sea) continue; const r = rec[n]; if (r < 0 || H[r] <= sea) { dsea[n] = .5 * ck; mouth[n] = n; } else { dsea[n] = dsea[r] + ck * ((n % cols) !== (r % cols) && ((n / cols) | 0) !== ((r / cols) | 0) ? 1.414 : 1); mouth[n] = mouth[r]; } }
   return { dsea, mouth, ck };
 }
 // the open sea: water joined to the sheet's edge

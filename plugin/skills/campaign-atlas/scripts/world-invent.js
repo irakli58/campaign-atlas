@@ -507,13 +507,33 @@ function invent(A, flags, log) {
       // (the ocean's currents, on trial until the user approves them, 28 Oct 2026: --currents; kept when the world is made
       // again; --spin retrograde for a planet that turns the other way)
       const currentsOn = flags.currents != null ? flags.currents !== "off" && flags.currents !== false : !!old.currents;
+      // (the coasts: natural (waves, drift and sand) or geologic (shaped by their history: world-shore.js), both on trial
+      // since 28 Oct 2026; kept when the world is made again)
+      const coastWord = flags.coast != null && flags.coast !== true ? String(flags.coast) : old.coastModel || "";
+      if (coastWord && !["natural", "geologic", "plain"].includes(coastWord)) throw new Error(`unknown coast "${coastWord}": geologic (shaped by rock, ice, sea level, rivers and waves), natural (waves, drift and sand) or plain`);
       const spinV = flags.spin != null && flags.spin !== true ? (/^(retro|-1|back)/i.test(String(flags.spin)) ? -1 : 1) : old.currents && old.currents.spin < 0 ? -1 : 1;
-      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", currents: currentsOn && climateModel === "earth", spin: spinV, climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
+      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", shores: coastWord === "geologic", currents: currentsOn && climateModel === "earth", spin: spinV, climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
       if (G.ocean) T.currents = packCurrents(G.ocean, name, cell);
       // (the coasts as the waves, the drift and the sand made them: on trial until the user approves, 28 Oct 2026,
       // --coast natural; scripts/world-coast.js. Barrier islands and spits are land it adds in the shallows)
-      const coastOn = flags.coast != null ? flags.coast === "natural" : old.coastModel === "natural";
+      // (the coasts shaped by their history: what world-geology.js and world-shore.js made of the land and the floor, and
+      // now what each coast is made of and why)
+      if (coastWord === "geologic" && G.eco && G.shore) {
+        const SM = require("./world-shore.js"), SH = G.shore;
+        const CO = SM.classify(G.H, cols, rows, { cellKm: kmA / cols, lat: SH.lat, wrap: SH.wrap, spin: spinV, T: G.eco.T, AI: G.eco.AI, acc: G.eco.acc, sst: G.ocean ? G.ocean.sst : null, volcanoes: (G.info || {}).volcanoes, geo: SH, margin: SH.margin, crust: SH.crust, hotspots: SH.hotspots });
+        for (const m of CO.raise) { G.H[m] = 129; if (G.Lo) G.Lo[m] = 0; }
+        T.coast = Buffer.from(CO.code).toString("base64"); T.coastForm = Buffer.from(CO.form).toString("base64"); T.coastReef = Buffer.from(CO.reef).toString("base64"); T.coastModel = "geologic";
+        // (each kind of coast this world has: its name, its colour in the map's Coasts view, how rugged its shore is finer
+        // than the grid)
+        T.coastKinds = Object.fromEntries(Object.keys(CO.stats).filter(f => +f).map(f => [f, [SM.FORM[f][0], SM.FORM[f][2], SM.FORM[f][1]]]));
+        const st = SH.stats, shares = Object.entries(CO.stats).filter(([f]) => +f).sort((a, b) => b[1] - a[1]).map(([f, c]) => `${SM.FORM[f][0].toLowerCase()} ${Math.round(c / CO.coastN * 100)}%`).join(", ");
+        log(`  the coasts shaped by their history: ${SH.iceN ? `ice at the glacial maximum on ${SH.iceN} cells, ` : ""}${st.fjord || 0} cells of fjord carved, ${st.scour || 0} scoured, ${st.drowned || 0} of drowned valley, ${st.delta || 0} deltas, ${st.bays || 0} cells worn into bays, ${st.straight || 0} straightened, ${st.band || 0} of folded ridges; the sea floor: ${SH.floor.canyons} canyons, ${SH.floor.atolls} atolls, ${SH.floor.seamounts} seamounts`);
+        log(`  the coasts (${CO.coastN} cells): ${shares}`);
+        for (const nt of CO.notes.slice(0, 14)) log(`   - ${nt.text}`);
+        T.coastNotes = CO.notes.map(nt => ({ at: [Math.round((nt.at[0] + .5) * cell), Math.round((nt.at[1] + .5) * cell)], form: nt.form, text: nt.text }));
+      }
+      const coastOn = coastWord === "natural";
       if (coastOn && G.eco) {
         const CO = require("./world-coast.js").coasts(G.H, cols, rows, { cellKm: kmA / cols, lat: latA || LATS, wrap: whole, spin: spinV, T: G.eco.T, AI: G.eco.AI, acc: G.eco.acc, sst: G.ocean ? G.ocean.sst : null, volcanoes: (G.info || {}).volcanoes });
         for (const m of CO.raise) { G.H[m] = 129; if (G.Lo) G.Lo[m] = 0; }

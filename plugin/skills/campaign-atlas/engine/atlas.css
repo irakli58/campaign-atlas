@@ -802,6 +802,12 @@ details.ci[open] > summary.cn { margin-bottom: 4px; }
 /* the ocean's currents (world-ocean.js): warm red-orange, cold blue, the gyres, the lines of latitude; never caught by
    the pointer, so the map below works as ever */
 .wm-cur { pointer-events: none; }
+/* the coasts' kinds (world-shore.js), a layer the viewer turns on: each stretch in its kind's colour, numbered pins */
+.wm-coa { pointer-events: none; }
+.wco-l { fill: none; stroke-width: 4px; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: .92; vector-effect: non-scaling-stroke; pointer-events: visibleStroke; }
+.wco-pin { pointer-events: all; cursor: help; }
+.wco-pin circle { stroke: #fff; stroke-width: 1.6px; vector-effect: non-scaling-stroke; }
+.wco-pin text { font: 700 9px/1 system-ui, sans-serif; fill: #fff; pointer-events: none; }
 .wc-s { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: .82; vector-effect: non-scaling-stroke; }
 .wc-s.w { stroke: #e2552b; } .wc-s.c { stroke: #2b7ad2; }
 .wc-a { stroke: rgba(255, 255, 255, .7); stroke-width: .6px; vector-effect: non-scaling-stroke; }

@@ -664,10 +664,11 @@
         <span class="wm-editbar keeper"></span>
         ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
         <button type="button" class="wm-btn" data-w="currents" aria-pressed="false" hidden title="The ocean's currents: warm and cold, the gyres, the equator and the lines of latitude">Ocean currents</button>
+        <button type="button" class="wm-btn" data-w="coasts" aria-pressed="false" hidden title="What kind each coast is and why it formed there: fjords, rias, deltas, barrier islands, cliffs, reefs">Coasts</button>
         <button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-cur"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -850,6 +851,33 @@
       }
       g.innerHTML = s + heads + names;
     }
+    /* ---- the coasts' kinds, a layer the viewer turns on and off (28 Oct 2026, the user's request: "a diagnostic view
+            showing why different coastline types formed where they did"): each stretch of coast in its kind's colour, a
+            key, and a numbered pin at each stretch world-shore.js explained, the reason shown on pointing at it */
+    const COA = { on: (() => { try { return ctx.store.get("world-coasts") === "1"; } catch (e) { return false; } })() };
+    function coastLines() {
+      const G = WD.G, T = WD.T, form = T._formU8 || (T._formU8 = unb64(T.coastForm)), { cols, rows, cell } = G; if (!form || form.length !== cols * rows) return "";
+      // (the kind at a point of the coastline: the nearest coast cell that has one)
+      const kindAt = (x, y) => { const i0 = Math.floor(x / cell), j0 = Math.floor(y / cell); let best = 0, bd = 9; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const a = i0 + di, b = j0 + dj; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; const f = form[b * cols + a]; if (!f) continue; const d = Math.hypot((a + .5) * cell - x, (b + .5) * cell - y); if (d < bd) { bd = d; best = f; } } return best; };
+      const by = {};
+      for (const r0 of coastRings(G)) {
+        if (r0.length < 6) continue; const ring = chaikin(rdpRing(r0, .6), 2, true), n = ring.length; let cur = null, pts = [];
+        const flush = () => { if (cur && pts.length > 1) by[cur] = (by[cur] || "") + pathD(pts); pts = []; };
+        for (let i = 0; i <= n; i++) { const p = ring[i % n], f = kindAt(p[0], p[1]); if (f !== cur) { if (cur && f) pts.push(p); flush(); cur = f; } if (f) pts.push(p); }
+        flush();
+      }
+      return Object.entries(by).map(([f, d]) => T.coastKinds[f] ? `<path d="${d}" class="wco-l" style="stroke:${T.coastKinds[f][1]}"><title>${esc(T.coastKinds[f][0])}</title></path>` : "").join("");
+    }
+    function drawCoasts() {
+      const g = $(".wm-coa"), T = WD.T, btn = $('[data-w="coasts"]'), has = !!(T && T.coastForm && T.coastKinds && WD.G);
+      if (btn) { btn.hidden = !has; btn.setAttribute("aria-pressed", !!(has && COA.on)); }
+      if (!g) return; if (!has || !COA.on) { g.innerHTML = ""; return; }
+      if (COA.G !== WD.G) { COA.G = WD.G; COA.lines = coastLines(); }
+      COA.k = V.k || 1; const k = 1 / COA.k;
+      let pins = "";
+      (T.coastNotes || []).forEach((nt, i) => { const kd = nt.form && T.coastKinds[nt.form]; if (!kd || !Array.isArray(nt.at)) return; pins += `<g class="wco-pin" transform="translate(${r1(nt.at[0])} ${r1(nt.at[1])}) scale(${r1(k * 100) / 100})" tabindex="0"><circle r="8" style="fill:${kd[1]}"/><text y="3.6" text-anchor="middle">${i + 1}</text><title>${esc(nt.text)}</title></g>`; });
+      g.innerHTML = COA.lines + pins;
+    }
     function drawRoutes() {
       let s = "";
       for (const r of WD.routes) {
@@ -926,6 +954,7 @@
       }
       cam.setAttribute("transform", `matrix(${k} 0 0 ${k} ${r1(V.tx)} ${r1(V.ty)})`);
       if (CUR.on && CUR.k && (k / CUR.k > 1.3 || k / CUR.k < .77)) drawCurrents();
+      if (COA.on && COA.k && (k / COA.k > 1.3 || k / COA.k < .77)) drawCoasts();
       if (S.draft || (S.edit && S.selFeat) || $(".wm-hdl").firstChild) drawHandles();
       for (const t of cam.querySelectorAll(".wm-rl")) t.style.opacity = z > 5 ? 0 : z > 3 ? (5 - z) / 2 : 1;
       const sc = $(".wm-scale");
@@ -1120,6 +1149,8 @@
         : S.tool === "label" ? "Click where the name goes."
         : S.edit ? "Drag a place, a river, a realm's border or a name to move it. Click one to change it." : `Drag to pan · scroll or pinch to zoom · click a place for what is there${Object.keys(A.cities || {}).length ? " and to enter its 3D map" : ""}.`;
       $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
+      // (the coasts' key, while their layer is shown: the kinds this world has, the most common first)
+      if (COA.on && WD.T && WD.T.coastKinds) { const F = WD.T._formU8 || (WD.T._formU8 = unb64(WD.T.coastForm)), cnt = {}; if (F) for (const v of F) if (v) cnt[v] = (cnt[v] || 0) + 1; $(".wm-hint").insertAdjacentHTML("afterbegin", Object.entries(WD.T.coastKinds).sort((a, b) => (cnt[b[0]] || 0) - (cnt[a[0]] || 0)).map(([f, [nm, col]]) => `<span class="lg"><svg width="22" height="10" aria-hidden="true"><line x1="1" y1="5" x2="21" y2="5" class="wco-l" style="stroke:${col};stroke-width:4px"/></svg>${esc(nm)}</span>`).join("") + `<span class="lg kn">Point at a numbered pin for why that coast formed</span>`); }
       // (the currents' key, while their layer is shown)
       if (CUR.on && WD.T && WD.T.currents) $(".wm-hint").insertAdjacentHTML("afterbegin", `<span class="lg"><svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" class="wc-s w" style="stroke-width:3px"/></svg>Warm current</span><span class="lg"><svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" class="wc-s c" style="stroke-width:3px"/></svg>Cold current</span><button type="button" class="wm-btn wc-nb" data-w="curnames">${CUR.names ? "Hide their names" : "Show their names"}</button>`);
     }
@@ -1173,7 +1204,7 @@
         <label>Climate <select name="climate">${opt(clim, g.climate || "varied")}</select></label>
         <label>Where the deserts and rains fall <select name="rules">${opt([["earth", "As on the Earth: the winds, the seas, the mountains decide"], ["classic", "Atlas's older, simpler rules"]], g.rules || "earth")}</select></label>
         <label>The ocean's currents (on trial) <select name="currents">${opt([["", "Not worked out"], ["on", "Worked out: they warm and cool the coasts, bring fog and coastal deserts"], ["retro", "Worked out, on a world turning the other way"]], g.currents || "")}</select></label>
-        <label>The coasts (on trial) <select name="coast">${opt([["", "Beaches where the shore is low and gentle"], ["natural", "Formed by waves, drift and sand: beaches, cliffs, marsh, dunes, barrier islands"]], g.coast || "")}</select></label>
+        <label>The coasts (on trial) <select name="coast">${opt([["", "Beaches where the shore is low and gentle"], ["natural", "Formed by waves, drift and sand: beaches, cliffs, marsh, dunes, barrier islands"], ["geologic", "Shaped by their history: rock, ice-age glaciers, the sea's rise, rivers and waves (fjords, rias, deltas, reefs)"]], g.coast || "")}</select></label>
         <label>Kind of world <select name="realism">${opt([["fantasy", "Fantasy: its own places (enchanted woods, ...)"], ["realistic", "Realistic: only what the Earth would make"]], g.realism || (WD.T && WD.T.realism) || "fantasy")}</select></label>
         <label>Look <select name="look">${opt(looks, g.look || (looks.some(l => l[0] === "hydro") ? "hydro" : WD.look))}</select></label>
         <label>Seed <input type="number" name="seed" min="1" max="999999" value="${g.seed || 1000 + Math.floor(Math.random() * 9000)}"> <button type="button" class="wm-btn" data-nw="roll">Roll</button></label>
@@ -1270,7 +1301,7 @@
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
       const W0 = JSON.parse(JSON.stringify(A.worldData || {})); delete W0.size;
       const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
-      flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.currents && g.rules !== "classic") { flags.currents = true; if (g.currents === "retro") flags.spin = "retrograde"; } else flags.currents = "off"; flags.coast = g.coast === "natural" && g.rules !== "classic" ? "natural" : "plain"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
+      flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.currents && g.rules !== "classic") { flags.currents = true; if (g.currents === "retro") flags.spin = "retrograde"; } else flags.currents = "off"; flags.coast = (g.coast === "natural" || g.coast === "geologic") && g.rules !== "classic" ? g.coast : "plain"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
       const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
       return new Promise((ok, no) => {
         let w; try { w = new Worker(URL.createObjectURL(new Blob([A.worldGenSrc], { type: "text/javascript" }))); } catch (e) { no(e); return; }
@@ -1294,7 +1325,7 @@
       if (WD.size[0] !== W || WD.size[1] !== H) { [W, H] = WD.size; size(); home(true); }
       if (WD.look !== was || lk !== lastLand) { lastLand = lk; PG = null; ways.clear(); drawLand(); }
       if (keepSel && !WD.byId[keepSel]) S.sel = null; if (keepR && !WD.rById[keepR]) S.selRoute = null; if (S.selFeat && !featOf(S.selFeat)[1]) S.selFeat = null;
-      drawCurrents(); drawRoutes(); drawMarkers(); drawFx(); renderPanel(); renderBars();
+      drawCurrents(); drawCoasts(); drawRoutes(); drawMarkers(); drawFx(); renderPanel(); renderBars();
     }
     function note(t) { const n = $(".wm-note"); n.textContent = t; n.hidden = !t; clearTimeout(note.t); if (t) note.t = setTimeout(() => { n.hidden = true; }, 5000); }
 
@@ -1638,6 +1669,7 @@
         case "export": exportJS(); break;
         case "newworld": newWorldDlg(); break;
         case "currents": CUR.on = !CUR.on; try { ctx.store.set("world-currents", CUR.on ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
+        case "coasts": COA.on = !COA.on; try { ctx.store.set("world-coasts", COA.on ? "1" : "0"); } catch (_) {} drawCoasts(); renderBars(); break;
         case "curnames": CUR.names = !CUR.names; try { ctx.store.set("world-curnames", CUR.names ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
         case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }
@@ -1704,7 +1736,7 @@
     }
 
     /* ---- first paint */
-    drawLand(); drawCurrents(); renderBars();
+    drawLand(); drawCurrents(); drawCoasts(); renderBars();
     if (DRAW) {
       // trace the picture once it has loaded; the map is drawn again from what was found
       const img = new Image();
