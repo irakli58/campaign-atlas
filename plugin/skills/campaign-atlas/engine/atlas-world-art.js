@@ -674,16 +674,20 @@
   // (the user asked, 27 Oct 2026, for fantasy maps "way more detailed", showing maps painted in colour: green lowland,
   // ochre and orange dry land, forests drawn tree by tree, ranges of shaded brown mountains capped with snow, a deep
   // blue-green sea with a pale glow and ripples along every coast, farmland round the towns, ships at sea)
+  const PDL = new WeakMap();
   function painted(WD, uid, o) {
     const [W, H] = WD.size, G = WD.G, pr = probe(WD), sea = G.sea, ink = "#2a2016";
     const SEA = [[0, hex("#5f8f99")], [.1, hex("#457383")], [.32, hex("#376172")], [.65, hex("#2e5468")], [1, hex("#27475b")]], GLOW = hex("#c9dedb");
     const C = { desert: hex("#d08a42"), dry: hex("#bba75e"), grass: hex("#98a350"), lush: hex("#76903f"), floor: hex("#4b682e"), swamp: hex("#5a6a42"), beach: hex("#cdb67d"), rock: hex("#8f7356"), high: hex("#a68d70"), snow: hex("#eef0ec"),
       tundra: hex("#a3a88e"), savanna: hex("#c9ad58"), jungle: hex("#3f6e26"), lake: hex("#4f8ea0"), ice: hex("#e4eef2") };
-    // how far each stretch of sea is from land: the pale glow along the coasts
-    const { cols, rows, cell } = G, N = cols * rows, dL = new Float32Array(N).fill(1e9), q = [];
-    for (let n = 0; n < N; n++) if (G.H[n] > sea) { dL[n] = 0; q.push(n); }
-    for (let h = 0; h < q.length; h++) { const n = q[h], i = n % cols, j = (n / cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < cols - 1 ? n + 1 : -1, j > 0 ? n - cols : -1, j < rows - 1 ? n + cols : -1]) if (m >= 0 && dL[m] > dL[n] + 1) { dL[m] = dL[n] + 1; q.push(m); } }
-    for (let n = 0; n < N; n++) dL[n] = Math.min(dL[n], 60);
+    // how far each stretch of sea is from land: the pale glow along the coasts (worked out once for a world: the sharper
+    // pictures of a zoomed-in window need it again and again)
+    const { cols, rows, cell } = G, N = cols * rows; let dL = PDL.get(G);
+    if (!dL) { dL = new Float32Array(N).fill(1e9); const q = [];
+      for (let n = 0; n < N; n++) if (G.H[n] > sea) { dL[n] = 0; q.push(n); }
+      for (let h = 0; h < q.length; h++) { const n = q[h], i = n % cols, j = (n / cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < cols - 1 ? n + 1 : -1, j > 0 ? n - cols : -1, j < rows - 1 ? n + cols : -1]) if (m >= 0 && dL[m] > dL[n] + 1) { dL[m] = dL[n] + 1; q.push(m); } }
+      for (let n = 0; n < N; n++) dL[n] = Math.min(dL[n], 60);
+      PDL.set(G, dL); }
     const S = sampler(G), nz2 = vnoise(Math.floor(hash(W, H, 29) * 1e9)), fz = vnoise(Math.floor(hash(W, H, 31) * 1e9));
     // where the woods are: the wetter lowland, gathered into clumps (the same in the paint and in the trees)
     const forest = (x, y, m, t) => t <= .012 || t > .52 ? 0 : clamp((m - 116) / 46 + (fz(x * .022, y * .022) - .5) * 1.5 - (t > .4 ? (t - .4) * 4 : 0), 0, 1);
@@ -720,7 +724,8 @@
       if (t > .4 && I.tm < .22) c = mix(c, C.snow, smooth(.22, .06, I.tm) * .6);
       const sh = clamp(shade(gx, gy, .04), .6, 1.3);
       return c.map(v => v * sh * (1 + mot + grain));
-    }, { detail: 10 });
+    }, { detail: 10, rect: o && o.rect, k: o && o.k });
+    if (o && o.only) return img;
     const cd = coastD(G, .6), coarse = coastD(G, 1.3);
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     // ripples along the coast, fainter further out
@@ -728,6 +733,8 @@
     // (the reefs and atolls of geologic coasts, under the land like the sea's own)
     s += reefsSvg(WD);
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#33281c" stroke-width="1.15" stroke-linejoin="round"/>`;
+    // (where the page lays a sharper picture of the land when the map is zoomed in, within the land's own outline)
+    s += `<clipPath id="${uid}-pl"><path d="${cd}" fill-rule="evenodd"/></clipPath><g class="wm-detail" clip-path="url(#${uid}-pl)"></g>`;
     s += NT ? NT.rivers(WD, "painted", nat(WD), pr, "#4d8098", "#2b3a33", 1.15) : rivers(WD, "#4d8098", "#2b3a33", 1.15);
     s += paintedSymbols(WD, pr, o, forest, uid);
     s += paintedSea(WD, pr);
@@ -1163,8 +1170,8 @@
   }
   // the sharper picture of a window of the map, for the page to lay over the land when zoomed in (the shaded reliefs
   // only); base: how many pixels a unit the whole map's own picture has
-  const DETAIL = { hydro: 3200, relief: 2600 };
+  const DETAIL = { hydro: 3200, relief: 2600, painted: 2000 };
   const detailBase = (WD, look) => DETAIL[look] ? Math.min(2, DETAIL[look] / Math.max(WD.size[0], WD.size[1])) : 0;
-  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6 }, look === "hydro" ? HYDRO : undefined); }
+  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; if (look === "painted") return painted(WD, "d", { rect, k, only: true }); return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6 }, look === "hydro" ? HYDRO : undefined); }
   A.worldArt = { LOOKS, looksFor, draw, detail, detailBase };
 })(ATLAS);
