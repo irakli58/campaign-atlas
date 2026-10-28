@@ -275,7 +275,7 @@
     const made = def.created ? new Date(def.created).toLocaleDateString() : "";
     return `<section class="sec keeper loc-panel"><h3>${ICON} A place of your own</h3>
       <p class="loc-sum">${esc(def.typeName || "A place")}${def.district ? " · " + esc(def.district) : ""} · ${esc(cond)}${def.locked ? " · locked" : ""}${made ? ` · made ${esc(made)}` : ""}${def.t && def.t !== def.created ? ` · changed ${esc(new Date(def.t).toLocaleDateString())}` : ""}</p>
-      <div class="loc-acts"><button type="button" class="t-btn prim" data-loc="build" data-id="${esc(p.id)}">Build the interior</button><button type="button" class="t-btn" data-loc="edit" data-id="${esc(p.id)}">Name, outside and notes</button><button type="button" class="t-btn" data-loc="move" data-id="${esc(p.id)}">Move it</button><button type="button" class="t-btn" data-loc="dup" data-id="${esc(p.id)}">Duplicate</button><button type="button" class="t-btn loc-del" data-loc="del" data-id="${esc(p.id)}">Delete…</button></div>
+      <div class="loc-acts"><button type="button" class="t-btn prim" data-loc="build" data-id="${esc(p.id)}">Build the interior</button><button type="button" class="t-btn" data-loc="edit" data-id="${esc(p.id)}">Name, outside and notes</button><button type="button" class="t-btn" data-loc="move" data-id="${esc(p.id)}">Move it</button><button type="button" class="t-btn" data-loc="dup" data-id="${esc(p.id)}">Duplicate</button>${A.askChange ? `<button type="button" class="t-btn" data-loc="ask" data-id="${esc(p.id)}" title="Say what should change; see what it replaces before anything does">Ask for a change…</button>` : ""}${def.prevMap ? `<button type="button" class="t-btn" data-loc="prevmap" data-id="${esc(p.id)}" title="Put back the inside it had before it was drawn again (the one it has now is kept in its place)">Bring back the inside it had</button>` : ""}<button type="button" class="t-btn loc-del" data-loc="del" data-id="${esc(p.id)}">Delete…</button></div>
       ${def.notes ? `<p class="loc-notes"><span class="kl">Your notes</span>${esc(def.notes)}</p>` : ""}
       <div class="loc-links"><span class="kl">Who and what belongs here</span>${links.length ? `<ul>${links.map(l => `<li>${esc(St.name(l.other))} <span class="t-small">(${esc(l.rel)})</span></li>`).join("")}</ul>` : `<p class="t-small">Nobody yet. People and things joined here are joined in the investigation too, and the clues you put on its maps are its clues.</p>`}
         ${St && St.link ? `<form class="loc-link" data-locform="link" data-id="${esc(p.id)}"><select class="t-in" name="who" aria-label="Who or what"><option value="">Someone or something…</option>${people.map(q => `<option value="${esc(q.ref)}">${esc(q.name)}</option>`).join("")}${items.map(([r, n]) => `<option value="${esc(r)}">${esc(n)}</option>`).join("")}</select><select class="t-in" name="rel" aria-label="How">${opts(RELS, "involves")}</select><button class="t-btn">Join</button></form>` : ""}</div>
@@ -308,6 +308,9 @@
       withCity(def.city, () => startPlacing(newId(nd.name), nd, true)); return;
     }
     if (a === "del") askDelete(id);
+    if (a === "ask" && A.askChange) { A.askChange(askTarget(id)); return; }
+    // (the inside it had and the inside it has change places, so this can be undone the same way)
+    if (a === "prevmap" && def.prevMap) { const now = A.mapEdits[id] ? { floors: cp(A.mapEdits[id].floors) } : def.map ? cp(def.map) : null; setInside(id, Object.assign({}, def, { prevMap: now }), cp(def.prevMap)); return; }
   });
   document.addEventListener("submit", e => {
     const f = e.target.closest && e.target.closest('[data-locform="link"]'); if (!f) return; e.preventDefault();
@@ -325,6 +328,51 @@
   // stand), floors, roof and colours, and the place is held where the
   // building stands, so one "Put it here" sets it in (the house makes way for it, as for any place set in)
   const FROM = { terrace: "house", shop: "shop", pub: "tavern", church: "temple", chapel: "shrine", school: "school", ware: "warehouse" };
+
+  /* ---- "Ask for a change" on a place of your own (atlas-ask.js): its name; its kind and its outside; its words (read
+          aloud, and the game master's notes); or its inside drawn again from its kind, the inside it had kept with it
+          ("Bring back the inside it had" puts it back). Its people and clues stay in the campaign whatever changes */
+  const cp = o => JSON.parse(JSON.stringify(o));
+  // (a place's inside set anew: the game master's changes to the old one dropped at once, so they cannot come back over it)
+  async function setInside(id, nd, map) {
+    if (A.mapEdits[id]) A.mapUnedit(id);
+    if (S) S.set("mapedits", id, { off: true, t: Date.now() });
+    if (window.ATLAS_APP && window.ATLAS_APP.saveMap) { try { await window.ATLAS_APP.saveMap(id, null); } catch (e) {} }
+    nd.map = map; A.maps[id] = Object.assign(cp(map), { t: nd.name, ext: nd.pd || "", ov: nd.kp || "" }); A.state.cache = {};
+    return keep(id, nd);
+  }
+  function askTarget(id) {
+    const def = A.customs[id], x = def.ext || {}, K = KIND[def.type] || KIND.other, AC = A.askChange, M = (A.maps[id] && A.get(id, 99)) || {};
+    const floors = (M.floors || []).length, rooms = Math.max(Object.keys(M.rooms || {}).length, (M.floors || []).reduce((n, F) => n + ((F.R || []).length), 0)), clues = Object.keys(M.clues || {}).length, npcs = Object.keys(M.npcs || {}).length, edited = !!A.mapEdits[id];
+    const kinds = KINDS.map(k => k[0]), CH = { size: ["small", "medium", "large", "huge"], roof: ["pitched", "hip", "flat", "dome", "spire", "tower"], cond: ["", "worn", "abandoned", "ruined"] };
+    const WORD = { size: "size", floors: "floors", roof: "roof", cond: "state", sign: "sign", wall: "wall colour", roofc: "roof colour" }, cut = (s, n) => s.length > n ? s.slice(0, n) + "…" : s;
+    const fl = n => `${n} floor${n === 1 ? "" : "s"}`;
+    return {
+      what: "a place of your own", name: def.name, example: "Make it a ruined watchtower with a cellar, and give it a darker history.",
+      now: `${K[1]}${def.district ? ", in " + def.district : ""}. Outside: ${x.size || "medium"}, ${fl(x.floors || 1)}, a ${x.roof || "pitched"} roof${x.cond ? ", " + x.cond : ""}${x.sign ? ", its sign: " + x.sign : ""}. Inside: ${fl(floors)}, ${rooms} rooms${edited ? ", changed by the game master" : ""}. Read aloud on arrival: ${def.pd || "(nothing yet)"}. The game master's notes: ${def.kp || "(nothing yet)"}.`,
+      ops: {
+        rename: { label: "Rename it", values: '{"name": "the new name"}',
+          read: v => { const n = AC.str(v.name, 80); return n && n !== def.name ? { name: n } : null; },
+          plan: v => ({ change: `Rename ${def.name} to ${v.name}`, replaces: [`its name, ${def.name}`], keeps: ["everything else: its outside, its inside, its people and clues"] }),
+          apply: v => keep(id, Object.assign({}, def, { name: v.name })) },
+        outside: { label: "Change what kind of place it is, or how it looks outside", values: `only those that change: {"type": one of ${kinds.join("|")}, "size": "small|medium|large|huge", "floors": 1 to 12, "roof": "pitched|hip|flat|dome|spire|tower", "cond": "" or "worn|abandoned|ruined", "sign": "words on its sign, or empty", "wall": "#rrggbb", "roofc": "#rrggbb"}`,
+          read: v => { const o = {}; if (AC.one(v.type, kinds) && v.type !== def.type) o.type = v.type; for (const k of ["size", "roof", "cond"]) if (v[k] != null && AC.one(v[k], CH[k]) != null && v[k] !== (x[k] || "")) o[k] = v[k]; const f = AC.num(v.floors, 1, 12); if (f && f !== (x.floors || 1)) o.floors = f; if (typeof v.sign === "string" && v.sign !== (x.sign || "")) o.sign = v.sign.slice(0, 40); for (const k of ["wall", "roofc"]) if (/^#[0-9a-f]{6}$/i.test(v[k] || "")) o[k] = v[k]; return Object.keys(o).length ? o : null; },
+          plan: v => ({ change: `Change ${def.name}'s ${v.type ? "kind and " : ""}outside`, replaces: [...(v.type ? [`what kind of place it is: ${K[1].toLowerCase()} → ${(KIND[v.type] || K)[1].toLowerCase()}`] : []), ...Object.entries(v).filter(([k]) => k !== "type").map(([k, val]) => `its ${WORD[k]}: ${x[k] != null && x[k] !== "" ? x[k] : "none"} → ${val === "" ? "none" : val}`)], keeps: ["its name and where it stands", `its inside as it is (${fl(floors)}): draw it again separately if it should match`, "its people and clues"] }),
+          apply: v => { const nd = Object.assign({}, def, { ext: Object.assign({}, x) }); if (v.type) { nd.type = v.type; nd.typeName = (KIND[v.type] || K)[1]; } for (const [k, val] of Object.entries(v)) if (k !== "type") nd.ext[k] = val; return keep(id, nd); } },
+        words: { label: "Write what the players see on arriving, or the game master's notes on it", values: '{"pd": "what the players see and hear as they arrive, read aloud, three or four sentences, no secrets" (or omitted), "kp": "for the game master only: its history, its purpose, a secret and something that could happen here, five or six sentences" (or omitted)}',
+          read: v => { const o = {}, pd = AC.str(v.pd, 3000), kp = AC.str(v.kp, 4000); if (pd) o.pd = pd; if (kp) o.kp = kp; return Object.keys(o).length ? o : null; },
+          plan: v => ({ change: `Write ${def.name}'s ${[v.pd && "words read aloud", v.kp && "notes for you"].filter(Boolean).join(" and ")}`, replaces: [v.pd && def.pd ? `what was read aloud: "${cut(def.pd, 90)}"` : "", v.kp && def.kp ? `your notes on it: "${cut(def.kp, 90)}"` : ""].filter(Boolean), keeps: ["its name, outside and inside", "its people and clues"], detail: [v.pd && "Read aloud: " + v.pd, v.kp && "For you: " + v.kp] }),
+          apply: v => keep(id, Object.assign({}, def, v)) },
+        inside: { label: "Draw its inside again, from its kind (or as an empty shell to draw by hand)", values: `{"type": one of ${kinds.join("|")} (its own kind, or a new one), "blank": true for an empty shell, "cellar": true for a cellar}`,
+          read: v => ({ type: AC.one(v.type, kinds) || def.type, blank: v.blank === true, cellar: v.cellar === true }),
+          plan: v => ({ change: `Draw ${def.name}'s inside again${v.blank ? ", as an empty shell" : `, as ${((KIND[v.type] || K)[1]).toLowerCase()}`}${v.cellar ? ", with a cellar" : ""}`,
+            replaces: [`its inside as it is: ${fl(floors)}, ${rooms} rooms${edited ? ", with your changes to it" : ""}`, ...(clues ? [`where its ${clues} clue${clues === 1 ? " lies" : "s lie"} on the floors (the clue${clues === 1 ? " stays" : "s stay"} in the investigation: put ${clues === 1 ? "it" : "them"} on the new floors)`] : []), ...(npcs ? [`where ${npcs} ${npcs === 1 ? "person stands" : "people stand"} on its floors (they stay in the campaign)`] : []), ...(v.type !== def.type ? [`what kind of place it is: ${K[1].toLowerCase()} → ${(KIND[v.type] || K)[1].toLowerCase()}`] : [])],
+            keeps: ["its name, its outside and where it stands", "its people and clues in the investigation", "the inside it had, kept with it: \"Bring back the inside it had\" on its page undoes this"] }),
+          apply: v => { const old = A.mapEdits[id] ? { floors: cp(A.mapEdits[id].floors) } : def.map ? cp(def.map) : null; const nd = Object.assign({}, def, { type: v.type, typeName: (KIND[v.type] || K)[1], prevMap: old }); return setInside(id, nd, v.type === "cave" ? caveInside(nd, v.blank) : interior(v.type, nd.ext || {}, { blank: v.blank, cellar: v.cellar })); } }
+      }
+    };
+  }
+  L.askTarget = askTarget;
   L.fromBuilding = (ctl, b) => {
     cityCtl = ctl; const type = FROM[b.type] || (KIND[b.type] ? b.type : "other"), K = KIND[type] || KIND.other, area = b.w * b.d;
     const size = area < 11 ? "small" : area < 21 ? "medium" : area < 45 ? "large" : "huge", hx = v => /^#[0-9a-f]{6}$/i.test(v || "") ? v : undefined;

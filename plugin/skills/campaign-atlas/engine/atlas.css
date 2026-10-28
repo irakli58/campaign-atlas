@@ -614,6 +614,15 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .
 .loc-form { display: grid; gap: 10px; padding: 16px 18px 18px; }
 .loc-form h3 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 22px; }
 .loc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+/* "Ask for a change" (atlas-ask.js): the request, then the change with what it replaces and what it keeps */
+.ask-go { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.ask-msg { font-size: 13px; color: var(--muted); }
+.ask-plan { display: grid; gap: 8px; border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; }
+.ask-plan h4 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 18px; }
+.ask-l ul { margin: 4px 0 0; padding-left: 18px; font-size: 14px; }
+.ask-l .kl { display: block; font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.ask-rep .kl { color: #b3261e; }
+.ask-text { margin: 0; padding: 6px 10px; border-left: 3px solid var(--rule); font-size: 14px; white-space: pre-wrap; }
 .loc-form label { display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); }
 .loc-form label.loc-ck { display: flex; gap: 8px; align-items: center; color: var(--ink); }
 .loc-g2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }

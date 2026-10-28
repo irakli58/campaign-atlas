@@ -149,7 +149,7 @@
         ${b && !b.gone ? `<div class="ce-sel"><strong>${esc((KINDS.find(k => k[0] === b.type) || [0, "A building"])[1])}</strong>
           <button type="button" data-ce="move">Move</button><button type="button" data-ce="turn" data-d="-1" title="Turn it left">⟲</button><button type="button" data-ce="turn" data-d="1" title="Turn it right">⟳</button>
           <label>Kind <select data-ce="kind">${opt(KINDS, b.type)}</select></label><label>Floors <input type="number" min="1" max="12" data-ce="floors" value="${Math.max(1, Math.round((b._H || 1.9) / .95))}"></label><label>Roof <select data-ce="roof">${opt([["pitched", "Pitched"], ["flat", "Flat"]], b._pitch ? "pitched" : "flat")}</select></label>
-          ${A.locations && A.locations.fromBuilding ? `<button type="button" data-ce="makeplace" title="Make this building one of your own places, with its own maps, people and clues">Make it a place</button>` : ""}<button type="button" data-ce="remove" class="ce-del">Remove</button></div>` : ""}`;
+          ${A.askChange ? `<button type="button" data-ce="ask" title="Say what should change; see what it replaces before anything does">Ask for a change…</button>` : ""}${A.locations && A.locations.fromBuilding ? `<button type="button" data-ce="makeplace" title="Make this building one of your own places, with its own maps, people and clues">Make it a place</button>` : ""}<button type="button" data-ce="remove" class="ce-del">Remove</button></div>` : ""}`;
     }
     // where a step points: the building's centre as it stands now
     const at = b => [r1(b.x), r1(b.y)];
@@ -165,6 +165,27 @@
       if (U.tool === "add") { push({ op: "add", x: r1(p[0]), y: r1(p[1]), ang: 0, kind: U.kind || "terrace", floors: +U.floors || 2, roof: U.roof || "pitched" }); return; }
       if (U.tool === "gate") { push({ op: "gate", at: [r1(p[0]), r1(p[1])] }); return; }
       U.pts.push([r1(p[0]), r1(p[1])]); ctl.map.guide(U.pts, ["park", "plaza", "district"].includes(U.tool)); render();
+    }
+    // "Ask for a change" on a chosen building (atlas-ask.js): its kind, floors or roof; taken away; or made a place of your
+    // own. Nothing else in the city moves
+    const kname = k => (KINDS.find(x => x[0] === k) || [0, "A building"])[1];
+    function askTarget(b) {
+      const AC = A.askChange, kinds = KINDS.map(k => k[0]), fl = Math.max(1, Math.round((b._H || 1.9) / .95)), what = `${kname(b.type)}, ${fl} floor${fl === 1 ? "" : "s"}, a ${b._pitch ? "pitched" : "flat"} roof`;
+      const others = ["every other building, street and tree of the city", "your places, the people you put here, and your districts"];
+      return { what: "a building of the city", name: kname(b.type).replace(/^An? /, "the ") + " you chose", example: "Make it a three-storey tavern with a flat roof.",
+        now: `${what}, about ${Math.round(b.w * b.d * 10) / 10} square units on the ground.`,
+        ops: {
+          change: { label: "Change what kind of building it is, how many floors it has, or its roof", values: `only those that change: {"kind": one of ${kinds.join("|")}, "floors": 1 to 12, "roof": "pitched|flat"}`,
+            read: v => { const o = {}; if (AC.one(v.kind, kinds) && v.kind !== b.type) o.kind = v.kind; const n = AC.num(v.floors, 1, 12); if (n && n !== fl) o.floors = n; if (AC.one(v.roof, ["pitched", "flat"]) && (v.roof === "pitched") !== !!b._pitch) o.roof = v.roof; return Object.keys(o).length ? o : null; },
+            plan: v => ({ change: `Change ${kname(b.type).toLowerCase()} here`, replaces: [v.kind && `what it is: ${kname(b.type).toLowerCase()} → ${kname(v.kind).toLowerCase()} (with that kind's colours)`, v.floors && `its floors: ${fl} → ${v.floors}`, v.roof && `its roof: ${b._pitch ? "pitched" : "flat"} → ${v.roof}`].filter(Boolean), keeps: ["where it stands and how big it is", ...others] }),
+            apply: v => push(Object.assign({ op: "change", at: at(b), look: look(b) }, v)) },
+          remove: { label: "Take the building away", values: "{}", read: () => ({}),
+            plan: () => ({ change: `Take ${kname(b.type).toLowerCase()} away`, replaces: [`the building: ${what}`], keeps: ["the ground where it stood, left open", ...others] }),
+            apply: () => { push({ op: "remove", at: at(b) }); U.sel = null; if (ctl.map) ctl.map.mark(null); } },
+          place: { label: "Make it a place of the game master's own, with its own maps, people and clues", values: "{}", read: () => (A.locations && A.locations.fromBuilding ? {} : null),
+            plan: () => ({ change: "Make it a place of your own", replaces: ["the building itself, which makes way for the place: it stands where the building stood, the same size and colours, and you name it before it is set in"], keeps: others }),
+            apply: () => { close(); A.locations.fromBuilding(ctl, b); } }
+        } };
     }
     function finish() {
       const closed = ["park", "plaza", "district"].includes(U.tool), need = closed ? 3 : 2;
@@ -202,6 +223,7 @@
       else if (k === "pmove" && U.selP) { U.movingP = true; U.note = "Click where they are now."; render(); }
       else if (k === "premove" && U.selP) { const r = U.selP; U.selP = null; savePeople(peopleOf(id).filter(q => q.ref !== r)); }
       else if (s && k === "makeplace") { const b = s; close(); A.locations.fromBuilding(ctl, b); }
+      else if (s && k === "ask" && A.askChange) A.askChange(askTarget(s));
       else if (s && k === "move") { U.moving = true; render(); }
       else if (s && k === "turn") push({ op: "move", at: at(s), ang: r1(((s.a || 0) + +b.dataset.d * Math.PI / 12) * 1000) / 1000, look: look(s) });
       else if (s && k === "remove") { push({ op: "remove", at: at(s) }); U.sel = null; ctl.map.mark(null); }
