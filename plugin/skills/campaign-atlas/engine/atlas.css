@@ -2054,6 +2054,10 @@ button.ho-b:hover { color: var(--ink); }
 .db-l li { border-top: 1px solid var(--rule); padding: 5px 0; }
 .db-l li:first-child { border-top: 0; }
 .db-guard { font-size: 12.5px; color: #b0161b; border: 1px solid #b0161b; border-radius: 999px; padding: 0 8px; }
+/* a building of the city, clicked: what it is, and Make it a place (atlas-cityedit.js) */
+.ce-peek { position: absolute; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; max-width: 240px; padding: 8px 10px; border-radius: 8px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); box-shadow: 0 4px 16px rgba(0, 0, 0, .25); font-size: 14px; }
+.ce-peek[hidden] { display: none; }
+.ce-peek .t-btn { flex: 1 1 100%; }
 /* recorded sessions and what the table remembers (atlas-sessions.js) */
 .sm-rec.on { border-color: #b0161b; }
 .sm-recnow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

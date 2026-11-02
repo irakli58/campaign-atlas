@@ -633,6 +633,80 @@
           mode(), placesAt(loc), peopleAt(loc, places), leadsInto(loc, places), hasCity(id), cityName(id), enter(cityId,
           locId), open(placeId), db (a promise of the page's database, or of null), store {get, set}, makeCity(loc) when
           the page can make a city itself (the Atlas app). Returns { wake(), select(id), sync(), search(q), dispose() }. */
+  /* ---- the cities of the world map (the user, 3 Nov 2026: any city on the world map opens a city of the existing city
+          generator, laid out for where it lies: rivers, coasts, mountains, roads). A settled place with no 3D map of its
+          own gets one the first time it is entered: the generator that atlas.js city --invent runs (A.cityGen, put in the
+          page by atlas.js), told what the world says of the place. What it was told is kept (collection "worldcities"),
+          so the same city comes back every time and the game master's changes to it (the city editor, places of their
+          own) stay where they were put. A real world's cities are the real ones, and a star chart's are not cities:
+          neither is made here. */
+  const SIDES = [["north", 0], ["east", 90], ["south", 180], ["west", 270]];
+  const KMPER = { km: 1, kms: 1, kilometre: 1, kilometres: 1, kilometer: 1, kilometers: 1, mile: 1.609, miles: 1.609, league: 4.8, leagues: 4.8 };
+  const bearing = (dx, dy) => (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360;
+  const sideOf = b => SIDES.reduce((best, s) => Math.abs(((b - s[1] + 540) % 360) - 180) < Math.abs(((b - best[1] + 540) % 360) - 180) ? s : best)[0];
+  const ONSIDE = { north: "the north", east: "the east", south: "the south", west: "the west" }, eight = b => ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][Math.round(b / 45) % 8];
+  function whereItLies(WD, L) {
+    const [x, y] = L.at, G = WD.G, kmU = WD.scale && WD.scale.per > 0 ? WD.scale.per * (KMPER[String(WD.scale.unit || "").toLowerCase()] || 0) : 0;
+    // (about four kilometres round it: a city and its fields)
+    const R = Math.max(G ? G.cell * 2.5 : 0, kmU ? 4 / kmU : Math.max(WD.size[0], WD.size[1]) * .02);
+    const geo = { words: [] };
+    let sx = 0, sy = 0, sea = 0, hx = 0, hy = 0, top = 0;
+    if (G) {
+      const hAt = (px, py) => { const c = Math.floor(px / G.cell), r = Math.floor(py / G.cell); return c < 0 || r < 0 || c >= G.cols || r >= G.rows ? null : G.H[r * G.cols + c]; }, h0 = hAt(x, y);
+      for (let a = 0; a < 24; a++) for (const f of [.4, .7, 1]) {
+        const dx = Math.cos(a * Math.PI / 12) * R * f, dy = Math.sin(a * Math.PI / 12) * R * f, h = hAt(x + dx, y + dy); if (h == null) continue;
+        if (h < G.sea) { sx += dx; sy += dy; sea++; } else if (h0 != null && h0 >= G.sea) { hx += (h - h0) * dx; hy += (h - h0) * dy; top = Math.max(top, h - h0); }
+      }
+    }
+    // the river nearest it, and which way it runs there
+    let rv = null, rd = R * .6;
+    for (const r of WD.rivers || []) for (let i = 1; i < r.pts.length; i++) { const [ax, ay] = r.pts[i - 1], [bx, by] = r.pts[i], dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l)), d = Math.hypot(ax + dx * t - x, ay + dy * t - y); if (d < rd) { rd = d; rv = { dx, dy, name: r.name }; } }
+    if (sea >= 3) { geo.sea = sideOf(bearing(sx, sy)); geo.words.push(`on the coast, the sea to ${ONSIDE[geo.sea]}`); }
+    if (rv) { geo.river = Math.abs(rv.dx) > Math.abs(rv.dy) ? "ew" : "ns"; geo.words.push(`${rv.name ? "the " + rv.name.replace(/^the /i, "") : "a river"} running ${geo.river === "ew" ? "east and west" : "north and south"}${geo.sea ? " to the sea" : ""} through it`); }
+    geo.site = geo.sea ? (rv ? "harbour" : "coast") : rv ? "river" : "plain";
+    if (top >= 22 && Math.hypot(hx, hy) > 0) { geo.hills = Math.round(bearing(hx, hy)); geo.words.push(`high ground to the ${eight(geo.hills)}`); }
+    const roads = [];
+    for (const r of WD.routes || []) {
+      if (r.from !== L.id && r.to !== L.id || /sea|air|ship|river|portal/i.test(r.kind || "")) continue;
+      const o = WD.byId[r.from === L.id ? r.to : r.from]; if (!o || !o.at) continue;
+      // (the road leaves the way it first goes, where it is drawn; else straight toward where it ends)
+      const pts = Array.isArray(r.pts) && r.pts.length > 1 ? (r.from === L.id ? r.pts : r.pts.slice().reverse()) : null, to = pts ? pts.find(p => Math.hypot(p[0] - x, p[1] - y) > R * .5) || o.at : o.at;
+      roads.push([Math.round(bearing(to[0] - x, to[1] - y)), String(o.name || o.id).replace(/[,:]/g, " ").trim()]);
+    }
+    if (roads.length) { geo.roads = roads.slice(0, 6).map(([b, n]) => b + ":" + n).join(","); geo.words.push(`roads to ${roads.slice(0, 6).map(r => r[1]).join(", ")}`); }
+    return geo;
+  }
+  const canInvent = WD => !!(A.cityGen && WD && !(WD.T && (WD.T.real || WD.T.stars)) && WD.look !== "stars");
+  // what the city is told: its age and people as the campaign's own city has them, its size by what kind of place it is
+  function cityFlags(WD, L) {
+    const main = A.cityData || {}, look = typeof main.look === "string" ? main.look : (main.look || {}).base || "", inv = main.invented || {};
+    const fantasy = look === "fantasy" || /fantas/i.test(String((A.config || {}).setting || "")) || inv.era === "fantasy";
+    const era = fantasy ? "fantasy" : WD.look === "atlas" || look === "modern" ? "modern" : look === "old" || look === "industrial" ? "industrial" : "medieval";
+    const g = whereItLies(WD, L), size = /capital/.test(L.kind) && era === "modern" ? "metropolis" : /capital|city|port/.test(L.kind) ? "city" : "town";
+    const f = { era, size, site: g.site, culture: inv.culture || (fantasy ? "fantasy" : "english") };
+    for (const k of ["sea", "river", "roads", "hills"]) if (g[k] != null) f[k] = g[k];
+    if (main.region) f.region = main.region;
+    return { flags: f, words: g.words };
+  }
+  const tstore = () => A.tableUI && A.tableUI.api && A.tableUI.api.store();
+  function inventCity(id, d) {
+    if ((A.cities || {})[id] || !A.cityGen) return;
+    try { const data = A.cityGen(d.name, d.flags); data.id = id; data.fromWorld = d.loc; (A.cities = A.cities || {})[id] = data; } catch (e) { console.warn("atlas: the city of " + d.name + " could not be laid out", e); }
+  }
+  A.worldCity = {
+    can: canInvent, flags: cityFlags, where: whereItLies,
+    // the city of a place, laid out now (once: after that it is the one kept)
+    make(WD, L) {
+      const id = L.city || L.id, st = tstore(), had = st && st.get("worldcities", id);
+      const d = had && had.flags ? had : Object.assign({ name: L.name, loc: L.id, t: Date.now() }, cityFlags(WD, L));
+      inventCity(id, d); if (st && !had) st.set("worldcities", id, d);
+      if ((A.cities || {})[id]) L.city = id;
+      return (A.cities || {})[id] ? id : null;
+    }
+  };
+  // (the table's store open: the cities already laid out come back before anything asks for them; atlas-table-gm.js)
+  A.worldCitiesInit = store => store.watch("worldcities", docs => { for (const [id, d] of Object.entries(docs || {})) if (d && d.flags && d.name) inventCity(id, d); });
+
   A.worldMount = function (box, ctx) {
     const uid = "w" + Math.floor(Math.random() * 1e6).toString(36);
     const OV = ovFrom([]);
@@ -802,7 +876,7 @@
     function passes(L) {
       if (!seen(L)) return false;
       if (filt.kinds[L.kind] === false) return false;
-      if (filt.only3d && !(L.city && ctx.hasCity(L.city))) return false;
+      if (filt.only3d && !ctx.hasCity(L.city || L.id)) return false;
       if (filt.know === "known" && !["known", "visited", "done"].includes(L.state)) return false;
       if (filt.know === "visited" && !["visited", "done"].includes(L.state)) return false;
       if (filt.know === "new" && ["visited", "done"].includes(L.state)) return false;
@@ -918,7 +992,7 @@
       let s = "";
       for (const L of WD.locs) {
         if (!passes(L)) continue;
-        const imp = impOf(L), here = WD.party.at === L.id, has3d = L.city && ctx.hasCity(L.city);
+        const imp = impOf(L), here = WD.party.at === L.id, has3d = ctx.hasCity(L.city || L.id);
         const cls = ["wl", "i" + imp, L.state === "rumoured" ? "rum" : "", L.state === "unknown" ? "unk" : "", L.state === "done" ? "dn" : "", S.sel === L.id ? "sel" : "", here ? "here" : "", S.hits ? (S.hits.has(L.id) ? "hit" : "dim") : "", L.unplaced ? "unp" : ""].filter(Boolean).join(" ");
         s += `<g class="${cls}" data-loc="${esc(L.id)}" tabindex="0" role="button" aria-label="${esc(L.name)}, ${esc((KINDS[L.kind] || [0, L.kind])[1])}${has3d ? ", has a 3D map" : ""}"><circle class="wl-ring" r="14"/><g class="wi">${iconOf(WD.look, L)}</g>${has3d ? `<g class="wl-3d" transform="translate(${imp === 1 ? 10 : 8} -17)"><rect width="15" height="10" rx="2"/><text x="7.5" y="7.6">3D</text></g>` : ""}${gm() && L.state !== "known" ? `<circle class="wl-st st-${esc(L.state)}" cx="-10" cy="-9" r="3"/>` : ""}${here ? `<g class="wl-party" transform="translate(-13 -9)"><path d="M0 10V-8"/><path d="M0-8h9l-2.5 3.5L9-1H0Z"/></g>` : ""}<text class="wl-t" x="${imp === 1 ? 14 : 12}" y="4.5">${esc(L.name)}${L.state === "rumoured" ? "?" : ""}</text></g>`;
       }
@@ -1025,13 +1099,15 @@
       return `<li><button type="button" class="wm-rt" data-wroute="${esc(r.id)}"><span class="wm-rn">${esc(r.name ? r.name + " to " : "To ")}${esc(other.name)}</span><span class="wm-rf">${esc(facts)}${r.hidden ? " · hidden from the players" : ""}</span>${r.blocked ? `<span class="wm-bad">Blocked: ${esc(r.blocked === true ? "the way is shut" : r.blocked)}</span>` : ""}${r.danger ? `<span class="wm-dgr">Danger: ${esc(r.danger === true ? "a dangerous way" : r.danger)}</span>` : ""}</button></li>`;
     }
     function locPanel(L) {
-      const places = placesOf(L), keeper = gm(), has3d = L.city && ctx.hasCity(L.city), settled = SETTLED.includes(L.kind);
+      const places = placesOf(L), keeper = gm(), has3d = ctx.hasCity(L.city || L.id), settled = SETTLED.includes(L.kind);
       const people = keeper && ctx.peopleAt ? ctx.peopleAt(L, places) : [], leads = keeper && ctx.leadsInto ? ctx.leadsInto(L, places) : [];
       const routes = WD.routes.filter(r => (r.from === L.id || r.to === L.id) && routeSeen(r) && seen(WD.byId[r.from === L.id ? r.to : r.from]));
       const P = WD.party, here = P.at === L.id, acts = [...new Set(places.flatMap(p => p.acts || []))].sort((a, b) => a - b);
       const stName = (STATES.find(s => s[0] === L.state) || [0, L.state])[1], realm = realmAt(WD, L.at);
       let enter = "";
       if (has3d) enter = `<button type="button" class="prim wm-enter" data-w="enter">Enter ${esc(L.name)} · 3D map</button>`;
+      // (a settled place without a city of its own: the generator lays one out as it is entered, for where it lies)
+      else if (settled && A.worldCity.can(WD)) { const w = keeper ? A.worldCity.where(WD, L).words : []; enter = `<button type="button" class="prim wm-enter" data-w="enter">Enter ${esc(L.name)} · 3D map</button>${keeper ? `<p class="kn">Its streets are laid out as you enter, by the city generator, for where it lies${w.length ? ": " + esc(w.join("; ")) : ""}. Change anything afterwards with Edit the city; it stays as you leave it.</p>` : ""}`; }
       else if (keeper && (settled || L.city)) {
         const flag = WD.look === "stars" ? `--kind ${/station|ship/.test(L.kind) ? "station" : "moonbase"}` : WD.look === "atlas" ? "--era modern" : (A.cityData && A.cityData.look === "fantasy") || (A.config && /fantas/i.test(String(A.config.setting || ""))) ? "--era fantasy" : "--era medieval";
         const cid = L.city || L.id, cmd = `node atlas.js city <campaign folder> --invent "${L.name}" --id ${cid} ${flag}`;
@@ -1692,7 +1768,7 @@
         case "delfeat": { const [, f] = featOf(S.selFeat); if (f) twice(b, () => { S.selFeat = null; save("f-" + f.id, f.added ? null : { gone: true }); }); break; }
         case "resetfeat": if (S.selFeat) save("f-" + S.selFeat, null); break;
         case "duploc": if (L) { let id = L.id + "-2"; while (WD.byId[id] || OV.loc[id]) id = L.id + "-" + Math.floor(Math.random() * 900 + 100); const c = {}; for (const k of ["name", "kind", "state", "region", "owner", "desc", "gm"]) if (L[k] != null) c[k] = L[k]; c.name = L.name + " (copy)"; c.at = [r1(clamp(L.at[0] + 22, 0, W)), r1(clamp(L.at[1] + 16, 0, H))]; S.sel = id; save("l-" + id, c); } break;
-        case "enter": if (L && L.city) ctx.enter(L.city, L.id); break;
+        case "enter": if (L) { const cid = L.city || L.id; if (!ctx.hasCity(cid) && A.worldCity.can(WD)) A.worldCity.make(WD, L); if (ctx.hasCity(cid)) ctx.enter(cid, L.id); } break;
         case "make": if (L && ctx.makeCity) { b.disabled = true; b.textContent = "Making the map…"; Promise.resolve(ctx.makeCity(L, WD)).catch(err => { b.disabled = false; b.textContent = "Make its 3D map now"; note("The map could not be made: " + ((err && err.message) || err)); }); } break;
         case "edit": S.edit = !S.edit; S.tool = null; S.first = null; S.draft = null; S.cur = null; root.classList.toggle("editing", S.edit); renderBars(); renderPanel(); drawFx(); break;
         case "addloc": S.tool = S.tool === "loc" ? null : "loc"; S.first = null; renderBars(); break;

@@ -101,6 +101,28 @@
   const nameOf = ref => (cast().find(c => c[0] === ref) || [0, String(ref || "").replace(/^[a-z]+:/, "")])[1];
   function showPeople(ctl, selRef) { if (ctl.map && ctl.map.people) ctl.map.people(peopleOf(ctl.city).map(q => Object.assign({ name: nameOf(q.ref), sel: q.ref === selRef }, q))); }
 
+  /* ---- any building of the city, clicked when the editor is closed (the game master's view only): what it is, and Make it
+          a place, which opens it as a place of the game master's own with rooms and floors laid out for its kind
+          (atlas-locations.js); the user asked, 3 Nov 2026, to explore the houses and buildings of every city */
+  function peek(ctl) {
+    const cv = ctl.map && ctl.map.dbg && ctl.map.dbg.renderer.domElement, host = cv && cv.parentElement; if (!cv || cv.dataset.peek) return; cv.dataset.peek = "1";
+    let down = null;
+    const card = () => { let c = host.querySelector(".ce-peek"); if (!c) { c = document.createElement("div"); c.className = "ce-peek keeper"; c.hidden = true; host.appendChild(c); } return c; };
+    const hide = () => { const c = host.querySelector(".ce-peek"); if (c) c.hidden = true; if (ctl.map) ctl.map.mark(null); };
+    cv.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; });
+    cv.addEventListener("pointerup", e => {
+      const was = down; down = null;
+      if (!was || e.button || Math.hypot(e.clientX - was[0], e.clientY - was[1]) > 5 || ctl.placing || ctl.ceUI || !ctl.ce || (document.getElementById("app") || {}).dataset.mode !== "gm") return;
+      const ib = ctl.map.pickBuilding(e.clientX, e.clientY), b = ib != null ? ctl.ce.C.buildings[ib] : null;
+      if (!b || b.gone || !(A.locations && A.locations.fromBuilding)) { hide(); return; }
+      const c = card(), r = host.getBoundingClientRect(), fl = Math.max(1, Math.round((b._H || 1.9) / .95));
+      c.innerHTML = `<b>${esc((KINDS.find(k => k[0] === b.type) || [0, "A building"])[1])}</b><span class="kn">${fl} floor${fl > 1 ? "s" : ""}</span><button type="button" class="t-btn prim" data-peek="place">Make it a place: its rooms and floors</button><button type="button" class="t-mini" data-peek="x" aria-label="Close">×</button>`;
+      c.style.left = Math.min(r.width - 250, Math.max(8, e.clientX - r.left + 12)) + "px"; c.style.top = Math.min(r.height - 120, Math.max(8, e.clientY - r.top + 12)) + "px"; c.hidden = false;
+      ctl.map.mark(b);
+      c.onclick = ev => { const k = ev.target.closest("[data-peek]"); if (!k) return; hide(); if (k.dataset.peek === "place") A.locations.fromBuilding(ctl, b); };
+    });
+  }
+
   /* ---- attaching to a city as it is built (atlas-city.js calls this before drawing it) */
   A.cityEditor = {
     attach(ctl, C) {
@@ -109,8 +131,8 @@
       // (the store may answer after the city is up, or another window may change it: drawn again when its steps differ)
       const hook = () => { const st = store(); if (!st) return false; st.watch("cityedits", () => { if (!ctl.ce || ctl.ce.busy) return; const now = JSON.stringify(allSteps(id)); if (now !== ctl.ce.applied) redraw(ctl); }); st.watch("citypeople", () => showPeople(ctl, ctl.ceUI && ctl.ceUI.selRef())); return true; };
       if (!hook()) { const iv = setInterval(() => { if (hook()) clearInterval(iv); }, 300); setTimeout(() => clearInterval(iv), 60000); }
-      // (the people are shown once the city's map is up)
-      const up = () => { if (!ctl.map || !ctl.map.people || !store()) return false; showPeople(ctl); return true; };
+      // (the people are shown once the city's map is up; and a building clicked offers to become a place)
+      const up = () => { if (!ctl.map || !ctl.map.people || !store()) return false; showPeople(ctl); peek(ctl); return true; };
       if (!up()) { const iv = setInterval(() => { if (up()) clearInterval(iv); }, 400); setTimeout(() => clearInterval(iv), 60000); }
     },
     open, apply, KINDS

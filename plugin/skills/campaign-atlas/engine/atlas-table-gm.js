@@ -1091,6 +1091,8 @@
       dockInit(); intro();
       if (A.mapEditor) A.mapEditor.init(S, ctx);
       if (A.locations) A.locations.init(S, ctx);
+      // the cities of the world map already laid out on the page come back (atlas-world.js)
+      if (A.worldCitiesInit) A.worldCitiesInit(S);
       // the players' copy: what the players have been shown, kept for it as the table changes (atlas-share.js)
       if (A.share) A.share.start(S, ctx.prefs);
       for (const p of TPLUGS) if (p.init) p.init(S, ctx);

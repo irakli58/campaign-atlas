@@ -67,6 +67,32 @@ const CULTURES = {
 };
 const ordinal = n => n + (n % 100 > 10 && n % 100 < 14 ? "th" : ["th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th"][n % 10]);
 
+// a plan laid out with the sea to the south, turned so the sea lies to the given side (east and west swap the sheet's
+// width and height); its own functions of a point (crooked, rich, grand, height) are asked at the point turned back
+function turn(d, side, SW, SH, M) {
+  if (side === "south") return d;
+  const f = side === "north" ? (x, y) => [SW - x, SH - y] : side === "east" ? (x, y) => [y, SW - x] : (x, y) => [SH - y, x];
+  const inv = side === "north" ? `[${SW} - x, ${SH} - y]` : side === "east" ? `[${SW} - y, x]` : `[y, ${SH} - x]`, invF = new Function("x", "y", "return " + inv);
+  const da = side === "north" ? Math.PI : side === "east" ? -Math.PI / 2 : Math.PI / 2;
+  const pt = p => f(p[0], p[1]).concat(p.slice(2)), P = pts => Array.isArray(pts) ? pts.map(pt) : pts;
+  for (const r of d.roads || []) r[2] = P(r[2]);
+  for (const k of ["rivers", "basins", "parks", "plazas", "rails", "walls"]) for (const o of d[k] || []) { o.pts = P(o.pts); if (o.wharves) { if (side === "north") o.wharves = [SW - o.wharves[1], SW - o.wharves[0]]; else delete o.wharves; } }
+  if (d.gasworks) d.gasworks = d.gasworks.map(pt);
+  if (d.signs) d.signs = d.signs.map(pt);
+  for (const l of d.landmarks || []) { if (l.at) l.at = pt(l.at); if (l.pts) l.pts = P(l.pts); if (l.ang != null) l.ang = +l.ang + da; }
+  for (const k of Object.keys(d.districts || {})) d.districts[k] = pt(d.districts[k]);
+  const W2 = side === "north" ? SW : SH, H2 = side === "north" ? SH : SW;
+  if (d.heights) {
+    const H = d.heights, c = H.cell, cols = Math.ceil((W2 + 2 * M) / c), rows = Math.ceil((H2 + 2 * M) / c), v = [];
+    for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) { const [x, y] = invF(-M + (q + .5) * c, -M + (r + .5) * c), oc = Math.floor((x - H.x0) / c), orr = Math.floor((y - H.y0) / c); v.push(oc >= 0 && orr >= 0 && oc < H.cols && orr < H.rows ? H.v[orr * H.cols + oc] : 0); }
+    d.heights = { cell: c, cols, rows, x0: -M, y0: -M, v };
+  }
+  d.sheet = Object.assign({}, d.sheet, { w: W2, h: H2 });
+  for (const k of ["crooked", "rich", "grand", "height"]) if (d[k] && d[k].__js) d[k] = { __js: `(x, y) => { const p = ${inv}; return (${d[k].__js})(p[0], p[1]); }` };
+  d.invented = Object.assign({}, d.invented, { sea: side });
+  return d;
+}
+
 function inventCity(dir, name, flags, log) {
   log = log || console.log;
   if (!name || name === true) throw new Error('What is the city called? node atlas.js city <campaign> --invent "Name"');
@@ -85,6 +111,18 @@ function inventCity(dir, name, flags, log) {
   let seed = flags.seed && flags.seed !== true ? parseInt(flags.seed, 10) : 0; if (!seed) { for (const ch of name + era + site) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0; seed = seed % 100000 + 1; }
   const rnd = mulberry32(seed * 7 + 3), R = (a, b) => a + (b - a) * rnd(), pick = a => a[Math.floor(rnd() * a.length)], shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const [SW, SH] = dims, M = 30, X0 = -M, Y0 = -M, X1 = SW + M, Y1 = SH + M, wet = site === "coast" || site === "harbour";
+  // where it lies in its world (the user asked, 3 Nov 2026, for the cities of the world map to fit their geography; the
+  // world map reads these from its own land): --sea the side the sea is on (north, south, east or west); --river ns or ew,
+  // the way the river runs; --roads "bearing:Name,..." the roads out to the places its routes join it to; --hills a
+  // bearing, the side the high ground is on. Bearings are of the world: 0 north, 90 east. The plan is laid out with the sea
+  // to the south and turned at the end to face its world, so each is first turned the other way. Without them the city is
+  // laid out exactly as before.
+  const SEAROT = { south: 0, east: -90, north: 180, west: 90 }, seaSide = wet && SEAROT[String(flags.sea || "").toLowerCase()] != null ? String(flags.sea).toLowerCase() : "south", rot = SEAROT[seaSide];
+  const toPlan = b => ((+b - rot) % 360 + 360) % 360, angOf = b => (toPlan(b) - 90) * Math.PI / 180;
+  const routes = String(flags.roads && flags.roads !== true ? flags.roads : "").split(",").map(s => { const i = s.indexOf(":"); return i > 0 && isFinite(+s.slice(0, i)) ? { a: angOf(+s.slice(0, i)), name: s.slice(i + 1).trim().slice(0, 40) } : null; }).filter(Boolean).slice(0, 8);
+  const hillA = flags.hills != null && flags.hills !== true && isFinite(+flags.hills) ? angOf(+flags.hills) : null;
+  const riverRun = /^(ns|ew)$/.test(String(flags.river || "")) ? (Math.abs(rot) === 90 ? (flags.river === "ns" ? "ew" : "ns") : flags.river) : "";
+  const roadTo = n => ck === "french" ? `Route de ${n}` : ck === "german" ? `${n}er Straße` : `${n} Road`;
   const cx = SW * R(.46, .54), cy = SH * (wet ? R(.36, .42) : R(.45, .53)), RC = Math.min(SW, SH) * (era === "medieval" ? .3 : .27);
   const mains = shuffle(C.mains), holy = shuffle(C.holy), dnames = C.districts.slice(0, 1).concat(shuffle(C.districts.slice(1)));
   let mi = 0; const mainName = () => mains[mi++ % mains.length];
@@ -100,7 +138,7 @@ function inventCity(dir, name, flags, log) {
   if (site === "lake") { const lx = SW * (rnd() < .5 ? .14 : .86), ly = SH * R(.2, .8), lr = Math.min(SW, SH) * R(.26, .34); lake = Array.from({ length: 26 }, (_, i) => { const a = i / 26 * 6.2832, r = lr * (1 + .16 * Math.sin(a * 3 + ph1) + .09 * Math.sin(a * 5 + ph2)); return [lx + r * Math.cos(a), ly + r * .8 * Math.sin(a)]; }); basins.push({ name: C.lake, pts: lake }); }
   let river = null; const rhw = { town: 3.2, city: 4.4, metropolis: 5.6 }[size];
   if (site === "river" || site === "harbour") {
-    const ns = site === "harbour" || rnd() < .3, amp = R(9, 16), off = (rnd() < .5 ? -1 : 1) * R(15, 24), pts = [];
+    const ns = site === "harbour" || (riverRun ? (rnd(), riverRun === "ns") : rnd() < .3), amp = R(9, 16), off = (rnd() < .5 ? -1 : 1) * R(15, 24), pts = [];
     if (ns) { const xr = site === "harbour" ? bayX : cx + off; for (let y = Y0 - 10; y <= (site === "harbour" ? seaY(bayX) + 6 : Y1 + 10); y += 16) pts.push([xr + (site === "harbour" ? (cx + off - bayX) * Math.max(0, 1 - (y - Y0) / (cy - Y0 + 30)) : 0) + amp * Math.sin(y / 38 + ph1), y]); }
     else for (let x = X0 - 10; x <= X1 + 10; x += 18) pts.push([x, cy + Math.abs(off) + amp * Math.sin(x / 52 + ph1) + amp * .4 * Math.sin(x / 23 + ph2)]);
     river = pts; rivers.push({ pts, hw: rhw, smooth: 2, label: pick(C.rivers), big: rhw > 4 && !ns, wharves: era === "modern" ? undefined : [cx - 70, cx + 70] });
@@ -159,6 +197,8 @@ function inventCity(dir, name, flags, log) {
       if (wet) { const x = cx + R(40, 70) * (rnd() < .5 ? -1 : 1); landmarks.push({ name: C.wheel, kind: "wheel", at: [x, seaY(x) - 9], ang: 0 }); }
       extra = { grow: false, wobble: 0, wharf: js("() => false") };
     } else extra = { grow: false, wobble: 0 };
+    // (the roads to the world's places cut across the grid from its middle, each named for where it goes)
+    for (const r of routes) lay(roadTo(r.name), 0, [[cx, cy], [cx + Math.cos(r.a) * 420, cy + Math.sin(r.a) * 420]], { straight: true });
     if (wet) { const x = bayX + bayW * 1.15; landmarks.push({ name: C.light, kind: "spire", top: "light", at: [x, seaY(x) - 3], h: 5 }); }
     const dq = [[0, 0], [-4, -4], [4, -4], [-4, 4], [4, 4], [0, -6], [0, 6]];
     for (let i = 0, n = 0; i < dq.length && n < (size === "town" ? 4 : 6); i++) { const [x, y] = at(dq[i][0], dq[i][1]); if (onSheet(x, y, 26) && dry(x, y, 6)) districts[dnames[n++ % dnames.length]] = [x, y]; }
@@ -166,10 +206,13 @@ function inventCity(dir, name, flags, log) {
     // ---- the old plan: roads from the gates to the market, a wall or the boulevard that replaced it, streets between
     const nA = size === "town" ? 5 : Math.floor(R(5, 7.99)), a0 = R(0, 6.28), arms = [];
     const wob = a => 1 + .1 * Math.sin(a * 3 + ph1) + .06 * Math.sin(a * 5 + ph2), ringPt = (a, r) => [cx + r * wob(a) * Math.cos(a), cy + r * wob(a) * .86 * Math.sin(a)];
-    for (let i = 0; i < nA; i++) {
-      const a = a0 + i * 6.2832 / nA + R(-.22, .22), pts = [[cx, cy]]; let x = cx, y = cy, h = a;
+    // (the roads to the world's places go first, each named for where it goes; the others where there is room between)
+    const armDir = [], near = (p, q) => Math.abs(((p - q + 9.4248) % 6.2832) - 3.1416) < .55;
+    if (routes.length) { const norm = v => ((v % 6.2832) + 6.2832) % 6.2832, base = Array.from({ length: nA }, (_, i) => norm(a0 + i * 6.2832 / nA)); armDir.push(...routes.map(r => [norm(r.a), roadTo(r.name)]), ...base.filter(b => !routes.some(r => near(b, r.a))).map(b => [b, ""])); armDir.splice(Math.max(nA, routes.length)); }
+    for (let i = 0; i < (armDir.length || nA); i++) {
+      const a = armDir.length ? armDir[i][0] : a0 + i * 6.2832 / nA + R(-.22, .22), pts = [[cx, cy]]; let x = cx, y = cy, h = a;
       for (let s = 0; s < 30; s++) { h += R(-.12, .12) + (a - h) * .3; x += Math.cos(h) * 22; y += Math.sin(h) * 22; pts.push([x, y]); if (x < X0 - 6 || x > X1 + 6 || y < Y0 - 6 || y > Y1 + 6) break; }
-      arms.push(a); lay(mainName(), 0, pts);
+      arms.push(a); lay((armDir.length && armDir[i][1]) || mainName(), 0, pts);
     }
     arms.sort((p, q) => p - q);
     const ring = (r, from, to) => { const pts = []; for (let a = from; a <= to + 1e-6; a += .16) pts.push(ringPt(a, r)); return pts; };
@@ -184,7 +227,8 @@ function inventCity(dir, name, flags, log) {
     const polar = (a, r) => ringPt(a, r);
     { const [x, y] = polar(bis(big[0]), 13); mark(C.cathedral(holy[0]), C.faith, x, y, C.faith === "church" ? { top: era === "medieval" ? "twin" : "", size: 1.25, major: true } : { size: 1.25, major: true }); }
     { const [x, y] = polar(bis(big[1 % big.length]), 12); mark(era === "medieval" ? C.hall : C.cityhall, "hall", x, y, { top: era === "medieval" ? "spire" : "dome", size: 1.05, major: true }); }
-    if (era === "medieval" || rnd() < .45) { const [x, y] = polar(bis(big[2 % big.length]), RC - 9); mark(C.castle, "castle", x, y, { major: true, size: era === "medieval" ? 1 : .8 }); }
+    // (the castle stands on the high ground, where the world has hills beside the city)
+    if (era === "medieval" || rnd() < .45 || hillA != null) { const [x, y] = polar(hillA != null ? hillA : bis(big[2 % big.length]), RC - 9); mark(C.castle, "castle", x, y, { major: true, size: era === "medieval" ? 1 : .8 }); }
     for (let i = 1; i <= (size === "town" ? 2 : 4); i++) { const [x, y] = polar(bis(i % arms.length) + R(-.25, .25), RC * R(.55, 1.5)); mark(C.church(holy[i % holy.length]), C.faith, x, y, { size: .75, label: i < 3 }); }
     if (wet) { const x = bayX + bayW * 1.15; landmarks.push({ name: C.light, kind: "spire", top: "light", at: [x, seaY(x) - 3], h: 5 }); }
     // a fantasy city's wonders: a wizard's tower in the town, a great tree beyond it, standing stones outside the walls,
@@ -232,8 +276,13 @@ function inventCity(dir, name, flags, log) {
     names: C.names || undefined, districts, roads, rivers, basins, parks, plazas, rails, walls, gasworks: gasworks.length ? gasworks : undefined, signs, landmarks, heights,
     boats: river || wet ? (era === "modern" ? 12 : 34) : 0
   }, extra);
+  turn(data, seaSide, SW, SH, M);
+  const geo = `${seaSide !== "south" ? " --sea " + seaSide : ""}${riverRun ? " --river " + flags.river : ""}${routes.length ? ` --roads "${flags.roads}"` : ""}${hillA != null ? " --hills " + flags.hills : ""}`;
+  if (geo) data.invented.geo = geo.trim();
+  // (the page makes the cities of its world map itself, with the same plan: atlas-world.js)
+  if (flags.layoutOnly) return data;
   const file = writeCity(dir, data, [
-    `${name}: an invented city, laid out by: atlas.js city --invent "${name}" ${year != null ? "--year " + year : "--era " + (fantasy ? "fantasy" : era)} --site ${site} --culture ${ck} --plan ${plan} --size ${size} --seed ${seed}`,
+    `${name}: an invented city, laid out by: atlas.js city --invent "${name}" ${year != null ? "--year " + year : "--era " + (fantasy ? "fantasy" : era)} --site ${site} --culture ${ck} --plan ${plan} --size ${size} --seed ${seed}${geo}`,
     "The same command with the same seed lays out the same city; another seed, another city.",
     "This file is rewritten whenever the city is generated again. Put your own changes in campaign.js:",
     '  ATLAS.cityEdit(c => { c.title = "..."; c.landmarks.push({ name, kind, at: [x, y] }); c.districts["The Rookery"] = [x, y]; });'

@@ -31,6 +31,9 @@
    node atlas.js city <dir> --invent "Saltreach" [--year 1350 | --era ...] [--site river|coast|harbour|lake|plain]
                       [--culture english|american|french|italian|spanish|german|arabic|japanese|fantasy]
                       [--plan organic|grid] [--size town|city|metropolis] [--region ...] [--seed N]
+                      [--sea north|south|east|west] [--river ns|ew] [--roads "270:Harrowgate,0:Eldermere"] [--hills 315]
+                                                 where it lies in its world: the sea's side, the river's run, the roads
+                                                 to other places (bearings, 0 north), the high ground (the world map gives them)
                                                  an INVENTED city, laid out for its age and its part of the world
    node atlas.js city <dir> --invent "Name" --kind camp|base [--year 1943 | --era ...] [--town] [--ruin 0.5]
                                                  an invented camp or military base
@@ -56,7 +59,7 @@ const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare", "sea", "river", "roads", "hills"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -92,6 +95,19 @@ function modelsJS(dir) {
   return fs.readdirSync(md).filter(f => /\.(glb|gltf)$/i.test(f)).sort().map(f => `ATLAS.models.blobs[${JSON.stringify(f.replace(/\.(glb|gltf)$/i, ""))}] = "${fs.readFileSync(path.join(md, f)).toString("base64")}";`).join("\n");
 }
 const hasWorld = dir => fs.existsSync(path.join(dir, "world.js"));
+// the city generator, for the page itself: the cities of its world map are laid out where they are entered, by the same
+// plan as atlas.js city --invent, with what the world says of their place (the user, 3 Nov 2026: any city of the world
+// map opens the existing city generator). Its own functions of a point come back as functions.
+function cityGenJS() {
+  const mods = { "./city-invent.js": path.join(__dirname, "city-invent.js"), "./city-common.js": path.join(__dirname, "city-common.js") };
+  let src = "(function (A) {\n\"use strict\";\nvar __f = {\n";
+  for (const [k, f] of Object.entries(mods)) src += JSON.stringify(k) + ": function (module, exports, require) {\n" + fs.readFileSync(f, "utf8") + "\n},\n";
+  src += "\"fs\": function (module) { module.exports = {}; },\n\"path\": function (module) { module.exports = {}; }\n};\n";
+  src += "var __m = {};\nfunction require(k) { if (__m[k]) return __m[k].exports; var m = { exports: {} }; __m[k] = m; __f[k](m, m.exports, require); return m.exports; }\n";
+  src += "function live(v) { if (Array.isArray(v)) return v.map(live); if (v && typeof v === \"object\") { if (typeof v.__js === \"string\") return new Function(\"return (\" + v.__js + \")\")(); var o = {}; for (var k in v) o[k] = live(v[k]); return o; } return v; }\n";
+  src += "A.cityGen = function (name, flags) { return live(require(\"./city-invent.js\").inventCity(null, name, Object.assign({}, flags, { layoutOnly: true }), function () {})); };\n})(ATLAS);";
+  return src;
+}
 // the world generator, for the page's "Make a new world": the same scripts atlas.js world runs (world-invent.js,
 // world-geology.js, world-ecology.js and the shared biomes and sketch files), put together to run in a worker in the
 // page, with the little of Node they use stood in for
@@ -885,7 +901,7 @@ function pageParts(dir) {
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
   const raw = [path.join(ENGINE, "atlas-engine.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-biomes.js"), path.join(ENGINE, "atlas-world-nature.js"), path.join(ENGINE, "atlas-world-art.js"), path.join(ENGINE, "atlas-world-sketch.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-galaxy-gen.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir, A), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapmarks.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-copilot.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-consistency.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-worldtime.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-factions.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-journal.js"), "utf8"), ...["atlas-history.js", "atlas-deeds.js", "atlas-economy.js", "atlas-dashboard.js", "atlas-sessions.js"].map(f => fs.readFileSync(path.join(ENGINE, f), "utf8")), fs.readFileSync(path.join(ENGINE, "atlas-galaxy.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-facility.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-caveui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-ask.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), ...(city ? [fs.readFileSync(path.join(ENGINE, "atlas-cityedit.js"), "utf8")] : []), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
   // (a page with a world map can make a new world itself: the generator rides along, for a worker)
-  const js = (world ? raw + "\n;\n" + worldGenJS() : raw).replace(/<\/script/gi, "<\\/script");
+  const js = (world ? raw + "\n;\n" + worldGenJS() + "\n;\n" + cityGenJS() : raw).replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw, link, style: css + "\n" + over, world, drawingJS };
 }
