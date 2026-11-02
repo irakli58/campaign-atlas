@@ -58,7 +58,7 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
 3. (done 28 Oct: the trail up from every place, Ask for a change on places, buildings, world places and systems; still possible: making a city again from the page in the Atlas app, with its places and edits laid back over it)
 4. (done 3 Nov: stage H, the living world. Possible later: the players' own view of the purse and what they carry; history entries for the factions' changes made by hand)
 5. Record the tutorial video again (new lessons: the living world's four tabs, people in a city, the trail, Ask for a change): rebuild the samples first (kestrel, hollow, realm).
-6. **Modern real cities, last**: only adding the story's places into buildings that already stand; the real streets and buildings never change.
+6. (done 3 Nov: modern real cities. On a real city (city.js `real: true`) + Add location asks which of the city's own buildings the place is in, lights up the one under the pointer, and the place takes it as it stands (atlas-city.js `realAt`, `outlineOf`, `setCustom(C, list, real)`; atlas-locations.js placing in `real` mode; no outside asked, Ask for a change offers no outside); a place with no building within reach keeps a model. The city editor stays off real cities. London regression exact; tested on a New York copy)
 7. **Finally, the UI/UX polish** across the app: make a checkpoint branch first, keep the identity, test every workflow and screen size, update the lessons. **At its start, remind the user** to review the narrator's voice, the voice quality and every sound effect with them (they said some are "really bad"); change nothing there before then.
 
 Open-ended: the asset library; expedition planning for planets.

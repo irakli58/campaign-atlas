@@ -125,18 +125,18 @@
   const opts = (list, cur) => list.map(([k, n]) => `<option value="${esc(k)}"${k === cur ? " selected" : ""}>${esc(n)}</option>`).join("");
   function districtsOf(ctl) { const D = (ctl && ctl.D) || {}; return Object.keys(D.districts || {}); }
   function form(def, isNew) {
-    const x = def.ext || {}, ds = districtsOf(cityCtl), kinds = KINDS.map(k => [k[0], k[1]]);
+    const x = def.ext || {}, ds = districtsOf(cityCtl), kinds = KINDS.map(k => [k[0], k[1]]), real = !!(cityCtl && cityCtl.real);
     return `<form class="loc-form" method="dialog">
-      <div class="loc-head"><h3>${isNew ? "A place of your own" : "Name, outside and notes"}</h3><button type="button" class="t-btn" data-locd="x" aria-label="Close">Close</button></div>
+      <div class="loc-head"><h3>${isNew ? "A place of your own" : real ? "Name and notes" : "Name, outside and notes"}</h3><button type="button" class="t-btn" data-locd="x" aria-label="Close">Close</button></div>
       <div class="loc-g2"><label>Name<input class="t-in" name="name" value="${esc(def.name || "")}" maxlength="80" required placeholder="The Rusty Anchor"></label>
         <label>What kind of place<select class="t-in" name="type">${opts(kinds, def.type || "tavern")}</select></label></div>
-      ${isNew ? `<p class="t-small">That is all it needs: the rest can be left for later, and changed whenever you like.</p>` : ""}
+      ${isNew ? `<p class="t-small">That is all it needs: the rest can be left for later, and changed whenever you like.${real ? " This is a real city, so nothing new is built in it: next, you choose which of its own buildings the place is in, and it stays as it stands." : ""}</p>` : ""}
       <details class="loc-more"${isNew ? "" : " open"}><summary>What it is</summary>
         <label>What the players see when they arrive (read aloud)<textarea class="t-in" name="pd" rows="3" maxlength="3000">${esc(def.pd || "")}</textarea></label>
         <label>What it really is, for you only: its history, its purpose, its secrets<textarea class="t-in" name="kp" rows="3" maxlength="4000">${esc(def.kp || "")}</textarea></label>
         <label>District<select class="t-in" name="district"><option value="">None</option>${opts(ds.map(d => [d, d]), def.district || "")}${def.district && !ds.includes(def.district) ? `<option selected>${esc(def.district)}</option>` : ""}</select></label>
       </details>
-      <details class="loc-more"${isNew ? "" : " open"}><summary>Its outside</summary>
+      <details class="loc-more"${isNew ? "" : " open"}${real ? " hidden" : ""}><summary>Its outside</summary>
         <div class="loc-g3"><label>Size<select class="t-in" name="size">${opts([["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"]], x.size || "medium")}</select></label>
           <label>Storeys<input class="t-in" type="number" name="floors" min="1" max="40" value="${+x.floors || 2}"></label>
           <label>Roof<select class="t-in" name="roof">${opts(ROOFS, x.roof || "pitched")}</select></label>
@@ -154,7 +154,7 @@
         <label>Your notes: quests, people, factions, events here<textarea class="t-in" name="notes" rows="3" maxlength="4000">${esc(def.notes || "")}</textarea></label>
         <label class="loc-ck"><input type="checkbox" name="locked"${def.locked ? " checked" : ""}> Locked: the way in has to be found</label>
       </details>
-      <div class="loc-ai"><span class="kl">Optional help</span><button type="button" class="t-btn" data-locd="aitext">Suggest what it is</button><button type="button" class="t-btn" data-locd="aiext">Suggest its outside</button><span class="loc-aimsg t-small" aria-live="polite"></span></div>
+      <div class="loc-ai"><span class="kl">Optional help</span><button type="button" class="t-btn" data-locd="aitext">Suggest what it is</button>${real ? "" : `<button type="button" class="t-btn" data-locd="aiext">Suggest its outside</button>`}<span class="loc-aimsg t-small" aria-live="polite"></span></div>
       <div class="loc-go">${isNew ? `<button type="button" class="t-btn prim" data-locd="place">Put it in the city →</button>` : `<button type="button" class="t-btn prim" data-locd="save">Save</button>`}<button type="button" class="t-btn" data-locd="x">Cancel</button></div>
     </form>`;
   }
@@ -229,26 +229,32 @@
     const [fw, fd] = A.customSize(def.ext);
     P0 = { id, def, isNew, ctl, bar, g: { id, x: (def.at || [0, 0])[0], y: (def.at || [0, 0])[1], ang: +def.ang || 0, ext: def.ext, lr: Math.hypot(fw, fd) / 2 }, held: !!def.here, v: null, turned: !!def.here };
     ctl.placing = true;
+    // a real city is not changed: the place takes one of its own buildings, as it stands (the user, 27 Oct 2026)
+    const real = !!(ctl.real && ctl.realAt);
     const show = () => {
       const v = P0.v, g = P0.g;
       bar.hidden = false;
-      const state = !v ? "Move the pointer over the city." : !v.ok ? `<b class="pb-no">It cannot stand here:</b> ${esc(v.why)}` : `<b class="pb-ok">It can stand here.</b>${v.houses ? ` ${v.houses} house${v.houses > 1 ? "s" : ""} will make way for it.` : ""}${v.warn ? " " + esc(v.warn) : ""}`;
-      bar.innerHTML = `<span class="pb-t">${P0.held ? "Here?" : `Click where <b>${esc(def.name)}</b> stands.`} ${state}</span><span class="pb-b">${P0.held ? `<button type="button" class="t-btn prim" data-pb="ok"${v && v.ok ? "" : " disabled"}>Put it here</button><button type="button" class="t-btn" data-pb="again">Choose again</button>` : ""}<button type="button" class="t-btn" data-pb="turn" title="Turn it (R)">⟳ Turn</button><button type="button" class="t-btn" data-pb="x">Cancel</button></span>`;
+      const state = real ? (!v ? "Move the pointer over the city's buildings." : !v.ok ? `<b class="pb-no">No building here:</b> choose one of the city's own buildings.` : `<b class="pb-ok">${v.name ? esc(v.name) + ": t" : "T"}his building.</b> It stays as it stands; the place takes it.`)
+        : !v ? "Move the pointer over the city." : !v.ok ? `<b class="pb-no">It cannot stand here:</b> ${esc(v.why)}` : `<b class="pb-ok">It can stand here.</b>${v.houses ? ` ${v.houses} house${v.houses > 1 ? "s" : ""} will make way for it.` : ""}${v.warn ? " " + esc(v.warn) : ""}`;
+      bar.innerHTML = `<span class="pb-t">${P0.held ? "Here?" : real ? `Click the building <b>${esc(def.name)}</b> is in.` : `Click where <b>${esc(def.name)}</b> stands.`} ${state}</span><span class="pb-b">${P0.held ? `<button type="button" class="t-btn prim" data-pb="ok"${v && v.ok ? "" : " disabled"}>${real ? "This one" : "Put it here"}</button><button type="button" class="t-btn" data-pb="again">Choose again</button>` : ""}${real ? "" : `<button type="button" class="t-btn" data-pb="turn" title="Turn it (R)">⟳ Turn</button>`}<button type="button" class="t-btn" data-pb="x">Cancel</button></span>`;
     };
     // its front turns to the nearest street, as the city's own buildings do, until the game master turns it themselves
     const face = () => {
-      const C = ctl.city3, g = P0.g; if (P0.turned || !C || !C.nearestRoad) return;
+      const C = ctl.city3, g = P0.g; if (real || P0.turned || !C || !C.nearestRoad) return;
       const nr = C.nearestRoad(g.x, g.y, 40); if (!nr) return;
       const s = nr.s, a = Math.atan2(s.by - s.ay, s.bx - s.ax), fx = nr.qx - g.x, fy = nr.qy - g.y, nx = -Math.sin(a), ny = Math.cos(a), sg = fx * nx + fy * ny >= 0 ? 1 : -1;
       g.ang = Math.atan2(nx * sg, ny * sg);
     };
-    const update = () => { face(); P0.v = ctl.judge ? ctl.judge(P0.g) : { ok: true }; if (ctl.map) ctl.map.ghost(P0.g, P0.v); show(); };
+    const update = () => {
+      if (real) { const k = ctl.realAt(P0.g); P0.v = k ? { ok: true, name: k.name } : { ok: false }; if (ctl.map) ctl.map.ghost(k ? Object.assign({}, P0.g, { pts: k.pts, h: k.h }) : null, P0.v); show(); return; }
+      face(); P0.v = ctl.judge ? ctl.judge(P0.g) : { ok: true }; if (ctl.map) ctl.map.ghost(P0.g, P0.v); show();
+    };
     const planOf = ev => { if (ctl.map) return ctl.map.planAt(ev.clientX, ev.clientY); const svg = document.querySelector("#citybox .cityflat"); if (!svg) return null; const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return [q.x, q.y]; };
     let down = null;
     const onMove = ev => { if (P0.held || ev.buttons) return; const p = planOf(ev); if (!p) return; P0.g.x = p[0]; P0.g.y = p[1]; update(); };
     const onDown = ev => { down = { x: ev.clientX, y: ev.clientY }; };
     const onUp = ev => { if (!down || ev.button !== 0) { down = null; return; } const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y); down = null; if (moved > 6) return; const p = planOf(ev); if (!p) return; P0.g.x = p[0]; P0.g.y = p[1]; P0.held = true; update(); };
-    const onKey = ev => { if (ev.key === "Escape") { ev.preventDefault(); stopPlacing(); } else if ((ev.key === "r" || ev.key === "R") && !/INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) { P0.turned = true; P0.g.ang += (ev.shiftKey ? -1 : 1) * Math.PI / 12; update(); } };
+    const onKey = ev => { if (ev.key === "Escape") { ev.preventDefault(); stopPlacing(); } else if (!real && (ev.key === "r" || ev.key === "R") && !/INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) { P0.turned = true; P0.g.ang += (ev.shiftKey ? -1 : 1) * Math.PI / 12; update(); } };
     const onBar = async ev => {
       const b = ev.target.closest("[data-pb]"); if (!b) return;
       if (b.dataset.pb === "x") return stopPlacing();
@@ -275,7 +281,7 @@
     const made = def.created ? new Date(def.created).toLocaleDateString() : "";
     return `<section class="sec keeper loc-panel"><h3>${ICON} A place of your own</h3>
       <p class="loc-sum">${esc(def.typeName || "A place")}${def.district ? " · " + esc(def.district) : ""} · ${esc(cond)}${def.locked ? " · locked" : ""}${made ? ` · made ${esc(made)}` : ""}${def.t && def.t !== def.created ? ` · changed ${esc(new Date(def.t).toLocaleDateString())}` : ""}</p>
-      <div class="loc-acts"><button type="button" class="t-btn prim" data-loc="build" data-id="${esc(p.id)}">Build the interior</button><button type="button" class="t-btn" data-loc="edit" data-id="${esc(p.id)}">Name, outside and notes</button><button type="button" class="t-btn" data-loc="move" data-id="${esc(p.id)}">Move it</button><button type="button" class="t-btn" data-loc="dup" data-id="${esc(p.id)}">Duplicate</button>${A.askChange ? `<button type="button" class="t-btn" data-loc="ask" data-id="${esc(p.id)}" title="Say what should change; see what it replaces before anything does">Ask for a change…</button>` : ""}${def.prevMap ? `<button type="button" class="t-btn" data-loc="prevmap" data-id="${esc(p.id)}" title="Put back the inside it had before it was drawn again (the one it has now is kept in its place)">Bring back the inside it had</button>` : ""}<button type="button" class="t-btn loc-del" data-loc="del" data-id="${esc(p.id)}">Delete…</button></div>
+      <div class="loc-acts"><button type="button" class="t-btn prim" data-loc="build" data-id="${esc(p.id)}">Build the interior</button><button type="button" class="t-btn" data-loc="edit" data-id="${esc(p.id)}">${((def.city && A.cities && A.cities[def.city]) || A.cityData || {}).real ? "Name and notes" : "Name, outside and notes"}</button><button type="button" class="t-btn" data-loc="move" data-id="${esc(p.id)}">Move it</button><button type="button" class="t-btn" data-loc="dup" data-id="${esc(p.id)}">Duplicate</button>${A.askChange ? `<button type="button" class="t-btn" data-loc="ask" data-id="${esc(p.id)}" title="Say what should change; see what it replaces before anything does">Ask for a change…</button>` : ""}${def.prevMap ? `<button type="button" class="t-btn" data-loc="prevmap" data-id="${esc(p.id)}" title="Put back the inside it had before it was drawn again (the one it has now is kept in its place)">Bring back the inside it had</button>` : ""}<button type="button" class="t-btn loc-del" data-loc="del" data-id="${esc(p.id)}">Delete…</button></div>
       ${def.notes ? `<p class="loc-notes"><span class="kl">Your notes</span>${esc(def.notes)}</p>` : ""}
       <div class="loc-links"><span class="kl">Who and what belongs here</span>${links.length ? `<ul>${links.map(l => `<li>${esc(St.name(l.other))} <span class="t-small">(${esc(l.rel)})</span></li>`).join("")}</ul>` : `<p class="t-small">Nobody yet. People and things joined here are joined in the investigation too, and the clues you put on its maps are its clues.</p>`}
         ${St && St.link ? `<form class="loc-link" data-locform="link" data-id="${esc(p.id)}"><select class="t-in" name="who" aria-label="Who or what"><option value="">Someone or something…</option>${people.map(q => `<option value="${esc(q.ref)}">${esc(q.name)}</option>`).join("")}${items.map(([r, n]) => `<option value="${esc(r)}">${esc(n)}</option>`).join("")}</select><select class="t-in" name="rel" aria-label="How">${opts(RELS, "involves")}</select><button class="t-btn">Join</button></form>` : ""}</div>
@@ -347,7 +353,9 @@
     const kinds = KINDS.map(k => k[0]), CH = { size: ["small", "medium", "large", "huge"], roof: ["pitched", "hip", "flat", "dome", "spire", "tower"], cond: ["", "worn", "abandoned", "ruined"] };
     const WORD = { size: "size", floors: "floors", roof: "roof", cond: "state", sign: "sign", wall: "wall colour", roofc: "roof colour" }, cut = (s, n) => s.length > n ? s.slice(0, n) + "…" : s;
     const fl = n => `${n} floor${n === 1 ? "" : "s"}`;
-    return {
+    // (in a real city the place is one of the city's own buildings, as it stands: its outside is not changed)
+    const realCity = !!((def.city && A.cities && A.cities[def.city]) || A.cityData || {}).real;
+    const t = {
       what: "a place of your own", name: def.name, example: "Make it a ruined watchtower with a cellar, and give it a darker history.",
       now: `${K[1]}${def.district ? ", in " + def.district : ""}. Outside: ${x.size || "medium"}, ${fl(x.floors || 1)}, a ${x.roof || "pitched"} roof${x.cond ? ", " + x.cond : ""}${x.sign ? ", its sign: " + x.sign : ""}. Inside: ${fl(floors)}, ${rooms} rooms${edited ? ", changed by the game master" : ""}. Read aloud on arrival: ${def.pd || "(nothing yet)"}. The game master's notes: ${def.kp || "(nothing yet)"}.`,
       ops: {
@@ -371,6 +379,8 @@
           apply: v => { const old = A.mapEdits[id] ? { floors: cp(A.mapEdits[id].floors) } : def.map ? cp(def.map) : null; const nd = Object.assign({}, def, { type: v.type, typeName: (KIND[v.type] || K)[1], prevMap: old }); return setInside(id, nd, v.type === "cave" ? caveInside(nd, v.blank) : interior(v.type, nd.ext || {}, { blank: v.blank, cellar: v.cellar })); } }
       }
     };
+    if (realCity) delete t.ops.outside;
+    return t;
   }
   L.askTarget = askTarget;
   L.fromBuilding = (ctl, b) => {

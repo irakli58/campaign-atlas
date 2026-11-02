@@ -1972,7 +1972,15 @@ function createMap3D(host, C, planCanvas, hooks) {
   let ghostG = null;
   function ghost(g, verdict) {
     if (ghostG) { scene.remove(ghostG); ghostG.traverse(o => { if (o.geometry && o.geometry !== boxG) o.geometry.dispose(); if (o.material) o.material.dispose(); }); ghostG = null; }
-    if (g) {
+    if (g && g.pts) {
+      // (in a real city: the city's own building under the pointer, lit up as it stands)
+      let cx = 0, cy = 0; for (const p of g.pts) { cx += p[0]; cy += p[1]; } cx /= g.pts.length; cy /= g.pts.length;
+      const geo = fpGeo({ pts: g.pts, cx, cy, holes: [] }, (g.h || 1) + .35), col = verdict && verdict.ok ? 0x3aa860 : 0xc0392b;
+      ghostG = new T.Group();
+      ghostG.add(new T.Mesh(geo, new T.MeshBasicMaterial({ color: col, transparent: true, opacity: .45, depthWrite: false })));
+      ghostG.add(new T.LineSegments(new T.EdgesGeometry(geo), new T.LineBasicMaterial({ color: col })));
+      ghostG.position.set(wx(cx), 0, wz(cy)); scene.add(ghostG);
+    } else if (g) {
       const [w, d] = A.customSize(g.ext), H = Math.max(1, +((g.ext || {}).floors) || 2) * .95, col = !verdict || verdict.ok ? (verdict && verdict.warn ? 0xe0a030 : 0x3aa860) : 0xc0392b;
       ghostG = new T.Group();
       const body = new T.Mesh(boxG, new T.MeshBasicMaterial({ color: col, transparent: true, opacity: .42, depthWrite: false })); body.scale.set(w, H, d); ghostG.add(body);
@@ -2065,10 +2073,12 @@ function createMap3D(host, C, planCanvas, hooks) {
         if (dead) return;
         use(D);
         const city = buildCity(D, placed);
-        setCustom(city, customs);
+        setCustom(city, customs, !!D.real);
         // the game master's changes to the city (atlas-cityedit.js), laid over it as it was built: never built again
         if (A.cityEditor && !D.real) A.cityEditor.attach(ctl, city);
         ctl.city3 = city; ctl.judge = g => judge(city, g); ctl.footprint = (g, k) => footprint(g, k);
+        // a real city: a place of the game master's own is put in one of its buildings (atlas-locations.js)
+        ctl.real = !!D.real; ctl.realAt = g => { const k = realAt(city, g.x, g.y, 3); return k ? { pts: k.pts, h: k.h, name: k.lm ? k.lm.name || "" : "" } : null; };
         const span = PLAN.X1 - PLAN.X0, area = span * (PLAN.Y1 - PLAN.Y0), maxTex = gl.getParameter(0x0D33) || 4096;
         const ppu = Math.max(3, Math.min(7, Math.floor(Math.min(maxTex, 5600) / span)));
         // how sharply to reprint the plan once the map is up: as fine as a fixed budget of pixels allows.
@@ -2129,7 +2139,51 @@ function createMap3D(host, C, planCanvas, hooks) {
     return [corner(-w / 2 - k, -d / 2 - k), corner(w / 2 + k, -d / 2 - k), corner(w / 2 + k, d / 2 + k), corner(-w / 2 - k, d / 2 + k)];
   }
   const inPoly = (x, y, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
-  function setCustom(C, list) {
+  // ---- a real city's own building at a point (the user, 27 Oct 2026: real places are not changed "other than adding new
+  //      locations on buildings that already are there"): the smallest that holds the point, else the nearest within
+  //      reach; a landmark not yet a place, a surveyed footprint, a hut, a house along a street, a closed wall's ring
+  function realAt(C, x, y, reach) {
+    const area = P => { let a = 0; for (let i = 0, j = P.length - 1; i < P.length; j = i++) a += (P[j][0] + P[i][0]) * (P[j][1] - P[i][1]); return Math.abs(a / 2); };
+    const rect = b => { const c = Math.cos(b.a || 0), s = Math.sin(b.a || 0), hw = b.w / 2, hd = b.d / 2; return [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([u, v]) => [b.x + u * c - v * s, b.y + u * s + v * c]); };
+    const cands = [];
+    for (const L of C.landmarks) if (L.pts && L.pts.length > 2 && !L.flat && !L.place) cands.push({ pts: L.pts, h: L.h || 1, lm: L });
+    for (const q of C.footprints) cands.push({ pts: q.pts, h: q.h || 1, take: () => C.footprints.splice(C.footprints.indexOf(q), 1) });
+    for (const b of C.huts) cands.push({ pts: rect(b), h: b.h || 1, take: () => C.huts.splice(C.huts.indexOf(b), 1) });
+    for (const b of C.buildings) if (!b.gone) cands.push({ pts: rect(b), h: b.h || 1, take: () => { b.gone = true; } });
+    for (const w of C.walls) {
+      const p = w.kind === "wall" && w.src && w.src.pts; if (!p || p.length < 4 || Math.hypot(p[0][0] - p[p.length - 1][0], p[0][1] - p[p.length - 1][1]) >= .3) continue;
+      const pts = p.slice(0, -1), a = area(pts); if (a > 1 && a < 150) cands.push({ pts, h: 1, take: () => C.walls.splice(C.walls.indexOf(w), 1) });
+    }
+    const ok = cands.filter(k => (k.area = area(k.pts)) > .6);
+    const inIt = ok.filter(k => inPoly(x, y, k.pts)).sort((a, b) => a.area - b.area)[0];
+    if (inIt) return inIt;
+    for (const k of ok) { let cx = 0, cy = 0; for (const p of k.pts) { cx += p[0]; cy += p[1]; } k.dist = Math.hypot(cx / k.pts.length - x, cy / k.pts.length - y); }
+    return ok.filter(k => k.dist < (reach || 3)).sort((a, b) => a.dist - b.dist)[0] || null;
+  }
+  // the outline a place takes in one of the map's own buildings: its long axis and the box that holds it, as buildCity
+  // does for the campaign's own places on a surveyed map
+  function outlineOf(k, id) {
+    const pts = k.pts; let mx = 0, my = 0, sxx = 0, syy = 0, sxy = 0;
+    for (const p of pts) { mx += p[0]; my += p[1]; } mx /= pts.length; my /= pts.length;
+    for (const p of pts) { const dx = p[0] - mx, dy = p[1] - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+    const ang = .5 * Math.atan2(2 * sxy, sxx - syy), c = Math.cos(ang), sn = Math.sin(ang);
+    let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+    for (const p of pts) { const u = (p[0] - mx) * c + (p[1] - my) * sn, v = -(p[0] - mx) * sn + (p[1] - my) * c; u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); }
+    const fp = { name: "", kind: "hall", top: "", label: false, major: false, flat: false, place: id, src: null, native: true, pts, holes: [], ang, w: u1 - u0, d: v1 - v0, cx: mx + (u0 + u1) / 2 * c - (v0 + v1) / 2 * sn, cy: my + (u0 + u1) / 2 * sn + (v0 + v1) / 2 * c, h: Math.max(k.h, .9), body: 0 };
+    fp.x = fp.cx; fp.y = fp.cy; return fp;
+  }
+  function setCustom(C, list, real) {
+    if (!list.length) return;
+    // in a real city a place of the game master's own takes the city's building it was set on, as it stands: drawn on
+    // its true outline in the place's colours, with its pin; nothing round it changes (a model of its own only when no
+    // building is there, as before)
+    if (real) list = list.filter(e => {
+      const k = realAt(C, e.x, e.y, 3); if (!k) return true;
+      let fp; if (k.lm) { fp = k.lm; fp.place = e.id; } else { k.take(); fp = outlineOf(k, e.id); C.landmarks.push(fp); }
+      C.LMS.push({ id: e.id, p: e.p, x: fp.cx != null ? fp.cx : fp.x, y: fp.cy != null ? fp.cy : fp.y, kind: "custom", lr: Math.max(2, Math.min(6, Math.hypot(fp.w || 4, fp.d || 4) / 2)), ang: 0, face: 0, ext: e.ext, custom: true, native: true, fp, at0: [e.x, e.y] });
+      C.lots.push({ id: e.id, pts: fp.pts });
+      return false;
+    });
     if (!list.length) return;
     const polys = list.map(e => footprint(e, .45)), under = (x, y) => polys.some(q => inPoly(x, y, q));
     const boxUnder = (x, y, w, d, a) => { const c = Math.cos(a || 0), s = Math.sin(a || 0); return [[0, 0], [-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]].some(([u, v]) => under(x + u * c - v * s, y + u * s + v * c)); };
