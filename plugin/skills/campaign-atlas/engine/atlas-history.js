@@ -25,12 +25,12 @@
   // the kinds of what happens, in the order the filter lists them
   const KIND = {
     event: "In the world", deed: "The party did", conseq: "Because of it", found: "Found", heard: "Heard of", reached: "Reached",
-    settled: "Finished", news: "News", off: "Called off", loot: "Gained or spent", note: "Written by you"
+    settled: "Finished", news: "News", off: "Called off", loot: "Gained or spent", session: "At the table", note: "Written by you"
   };
   // the collections that are the world (a plugin adds its own: A.history.keep)
   const COLLS = ["clock", "events", "eventdefs", "news", "factions", "npcstate", "clocks", "history"];
   // what the party found and where it went is not the world's: going back leaves it as it is
-  const OURS = /^(f|k|v|x)~/;
+  const OURS = /^(f|k|v|x)_/;
 
   /* ---- everything that has happened, from where it lives */
   function fromEvents() {
@@ -90,13 +90,13 @@
       if (first) st.set("history", "since", { t: Date.now(), m: nowM() });
       for (const [pl, d] of Object.entries(st.get("clues") || {})) for (const cid of (d && d.done) || []) {
         const k = A.maps[pl] ? (A.get(pl, 99).clues || {})[cid] : null;
-        want.set(`f~${pl}~${cid}`, { kind: "found", title: `Found: ${k ? k.t || cid : cid}`, what: k && k.d ? String(k.d).slice(0, 300) : "", places: [pl], vis: "players" });
+        want.set(`f_${pl}_${cid}`, { kind: "found", title: `Found: ${k ? k.t || cid : cid}`, what: k && k.d ? String(k.d).slice(0, 300) : "", places: [pl], vis: "players" });
       }
       for (const [pl, d] of Object.entries(st.get("status") || {})) {
         const r = RANK[(d || {}).status] || 0; if (!A.meta[pl]) continue;
-        if (r >= 1) want.set(`k~${pl}`, { kind: "heard", title: `Heard of ${placeName(pl)}`, places: [pl], vis: "players" });
-        if (r >= 2) want.set(`v~${pl}`, { kind: "reached", title: `Reached ${placeName(pl)}`, places: [pl], vis: "players" });
-        if (r >= 3) want.set(`x~${pl}`, { kind: "settled", title: `Finished at ${placeName(pl)}`, places: [pl], vis: "players" });
+        if (r >= 1) want.set(`k_${pl}`, { kind: "heard", title: `Heard of ${placeName(pl)}`, places: [pl], vis: "players" });
+        if (r >= 2) want.set(`v_${pl}`, { kind: "reached", title: `Reached ${placeName(pl)}`, places: [pl], vis: "players" });
+        if (r >= 3) want.set(`x_${pl}`, { kind: "settled", title: `Finished at ${placeName(pl)}`, places: [pl], vis: "players" });
       }
       for (const [id, h] of want) if (!H[id]) st.set("history", id, Object.assign({ m, t: Date.now(), who: [], factions: [] }, first ? { early: true } : {}, h));
       for (const id of Object.keys(H)) if (OURS.test(id) && !want.has(id)) st.set("history", id, null);
@@ -144,7 +144,7 @@
       ${h.cause ? `<p class="t-small"><span class="kn">Why</span> ${esc(h.cause)}</p>` : ""}${h.whoText ? `<p class="t-small"><span class="kn">Who</span> ${esc(h.whoText)}</p>` : ""}
       ${out.length ? `<p class="t-small"><span class="kn">What came of it</span> ${out.map(esc).join("; ")}</p>` : ""}
       ${tags ? `<div class="hs-tags">${tags}</div>` : ""}
-      ${h.from === "time" ? `<button type="button" class="t-link" data-hs="time">under The world's time</button>` : h.from === "deeds" ? `<button type="button" class="t-link" data-hs="deeds">under Consequences</button>` : h.own && !OURS.test(h.id) ? `<button type="button" class="t-link" data-hs="del" data-id="${esc(h.id)}">remove</button>` : ""}</li>`;
+      ${h.from === "time" ? `<button type="button" class="t-link" data-hs="time">under The world's time</button>` : h.from === "deeds" ? `<button type="button" class="t-link" data-hs="deeds">under Consequences</button>` : h.from === "rec" ? `<button type="button" class="t-link" data-hs="rec" data-id="${esc(h.mem || "")}">where it was said</button>` : h.own && !OURS.test(h.id) ? `<button type="button" class="t-link" data-hs="del" data-id="${esc(h.id)}">remove</button>` : ""}</li>`;
   }
   function timeline(l, pub) {
     if (!l.length) return `<p class="kn">${all().length ? "Nothing that fits." : "Nothing yet. As time moves on and the party acts, what happens is written here."}</p>`;
@@ -195,6 +195,8 @@
     else if (k === "clear") { UI.f = { kind: "", who: "", place: "", vis: "", q: "" }; paint(); }
     else if (k === "more") { UI.open += 60; paint(); }
     else if (k === "time" || k === "deeds") api.open(k);
+    // (remembered at the table: its recording, at the moment it was said: atlas-sessions.js)
+    else if (k === "rec" && A.memory) A.memory.show(id);
     else if (k === "del") twice(b, () => remove(id));
     else if (k === "unsnap") twice(b, () => S().set("snaps", id, null));
     else if (k === "restore") twice(b, () => restore(id));

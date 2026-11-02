@@ -145,7 +145,16 @@
         { say: "Choose who they are talking to.", sel: "#tPop select[data-cp='who']", act: "look" },
         { say: "Type what the player said. The answer comes in that person's voice, from only what they know: they may lie, dodge or bargain. Change it, ask for another or a different tone, and keep it in their memory only if you say so.", sel: "#tPop .cp-ask, #tPop .cp-talk", act: "look" },
         { say: "Improvise helps with the rest: a place to describe, a reaction, what follows, what happens next, and whether something fits.", sel: "#tPop [data-cp='mode'][data-m='imp']", act: "click", try: "Click Improvise.", wait: 400 },
+        { say: "And What do we remember?: anything from earlier sessions, answered from what the table remembers, with the session and the time where each thing was said, and what is fact, a claim, or only the players' idea.", sel: "#tPop .cp-host", act: "look" },
         { say: "Close it from the toolbar.", sel: "#tDock [data-dock='talk']", act: "click", auto: true }
+      ] },
+      { id: "recorded", title: "Recorded sessions", summary: "Record the table; its words; what the campaign remembers of every session.", features: ["sessions", "tablememory"], needs: has("[data-t='tab'][data-tab='recorded']"), steps: [
+        { say: "Recorded sessions: the table's own notes, which remember everything that matters, session after session.", sel: "[data-t='tab'][data-tab='recorded']", act: "click", try: "Click Recorded sessions.", wait: 600 },
+        { say: "Read the table the few words about recording, tick that everyone agreed, and start. The sound is kept ten seconds at a time, so an interruption loses seconds, not the evening. A banner shows it is recording on every page, with Stop one click away.", sel: "#tvBody .sm-rec", act: "look" },
+        { say: "In the Atlas app, a phone of its own can be the recorder: open the recorder link and point the phone at the code. It sends the sound to this computer as it records.", sel: "#tvBody [data-sm='linkon']", act: "look", optional: true },
+        { say: "Or add a recording afterwards, from a phone's own recorder app; or its words alone, from any tool that writes them.", sel: "#tvBody input[data-sm='words']", act: "look" },
+        { say: "Each session keeps what was said and who said it. Claude reads it and writes down what to remember: promises, threats, clues, fates, theories. You keep each one, change it, mark it unsure, or say it is not so. Only what you keep counts.", sel: "#tvBody .sm-sess, #tvBody input[data-sm='q']", act: "look" },
+        { say: "Search everything said and remembered. Unfinished business, the promises and threats not yet settled, can be handed to the consequences to see what comes of it.", sel: "#tvBody input[data-sm='q']", act: "look" }
       ] },
       { id: "more", title: "Everything else at the table", summary: "Combat, making things up, the board, the players' characters, safety tools, and the printed book.", features: ["tablehome", "combat", "make", "board", "party", "safety", "export"], needs: has("#v-table"), steps: [
         { say: "At the table opens on Start here: every tool, with what it is for.", sel: "#v-table", act: "click", auto: true, wait: 400 },
@@ -235,6 +244,7 @@
     worldtime: ["The world's time", "clock calendar date day hour time pause"], events: ["World events", "event plan happens approve due notification council suggest called off"], news: ["News for the players", "news told players notification"], facility: ["A facility's systems", "power oxygen pressure temperature contamination security structure comms emergency station ship lab survival"],
     journal: ["The players' journal", "journal notes theories quests hints summaries manual assisted full"],
     factions: ["Factions", "faction power house guild government corporation stance allies enemies territory plan"], lives: ["Where everyone is", "schedule day week home work where now status missing"],
+    sessions: ["Recorded sessions", "record recording microphone phone audio transcript words speakers consent upload whisper session library"], tablememory: ["What the table remembers", "memory remember promise threat clue theory unfinished business recall cite session timestamp keep unsure"],
     dashboard: ["The world at a glance", "dashboard overview glance mode manual assisted autonomous by hand helped on its own safeguards approve waiting"], history: ["The world's history", "history timeline record past filter snapshot save moment go back rollback players know"],
     deeds: ["Consequences", "consequence deed party did reaction follows simulator council days weeks"], money: ["Money and goods", "money loot treasure purse stash prices merchant shop buy sell economy rarity quality condition coins gold credits"],
     investigation: ["The investigation", "clues connections"], clues: ["Clues", "clue evidence"], knowledge: ["Who knows what", "knowledge"], autoconnect: ["Auto-Connect", "connect suggest"],
@@ -246,7 +256,7 @@
   // map's buttons. dev/tutorial-coverage.js finds every one of these in the engine; one with no feature here, or a feature
   // no lesson teaches, fails it: a new tool is not finished until it has its lesson.
   const COVERS = {
-    tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", factions: "factions", dash: "dashboard", history: "history", deeds: "deeds", money: "money" },
+    tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", factions: "factions", dash: "dashboard", history: "history", deeds: "deeds", money: "money", recorded: "sessions" },
     dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
     view: { gaz: "gazetteer", table: "views", world: "worldmap", galaxy: "galaxy", story: "bible", music: "music" },
     tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues", marks: "mapmarks" },

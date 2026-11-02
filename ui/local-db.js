@@ -87,6 +87,15 @@
     lan: function (o) {
       return fetch(URL_.replace(/db$/, "players-lan"), o ? { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) } : { headers: { "x-atlas-token": TOKEN }, cache: "no-store" })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not done"); return d; }); });
+    },
+    // the recorder on a phone of its own (the same calls as lan); a recording's sound kept on this computer, and deleted
+    recorder: function (o) {
+      return fetch(URL_.replace(/db$/, "recorder"), o ? { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) } : { headers: { "x-atlas-token": TOKEN }, cache: "no-store" })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not done"); return d; }); });
+    },
+    audioUrl: function (rec, part) { return URL_.replace(/db$/, "rec-audio/" + rec + "/" + (part || 0)) + "?t=" + encodeURIComponent(TOKEN); },
+    dropAudio: function (rec) {
+      return fetch(URL_.replace(/db$/, "rec-drop"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ rec: rec }) }).then(function (r) { return r.json(); });
     }
   };
 })();

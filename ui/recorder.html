@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#141518">
+<title>Atlas recorder</title>
+<style>
+  /* The recorder (app/lib/recorder-lan.js serves it): a phone (or a laptop) in the middle of the table records the
+     session and sends the sound, ten seconds at a time, to the computer that runs Atlas. Kept on the phone until the
+     computer has it, so a dropped Wi-Fi or a reload loses nothing already recorded. */
+  :root { --bg: #141518; --panel: #1d1f23; --ink: #efeae0; --muted: #a39d92; --rule: #34373c; --accent: #d9a441; --red: #d0242b; --ok: #4f9a5f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #f4efe4; --panel: #fffaf0; --ink: #1d1b17; --muted: #6b655a; --rule: #d9d0bf; --accent: #9a6a12; --ok: #2f7a3f; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.45 Georgia, "Times New Roman", serif; }
+  main { max-width: 560px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+  h1 { font-weight: 400; font-size: 26px; margin: 4px 0 2px; }
+  .kick { font: 12px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .card { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; padding: 16px; margin: 14px 0; }
+  .muted { color: var(--muted); font-size: 15px; }
+  blockquote { margin: 8px 0; padding: 8px 12px; border-left: 3px solid var(--accent); font-style: italic; }
+  label.ck { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0; }
+  label.ck input { width: 22px; height: 22px; margin-top: 2px; flex: none; }
+  select, input[type=number] { font: inherit; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; }
+  button { font: inherit; border-radius: 12px; border: 1px solid var(--rule); background: transparent; color: var(--ink); padding: 14px 18px; min-height: 56px; cursor: pointer; }
+  button.go { background: var(--red); border-color: var(--red); color: #fff; font-size: 20px; width: 100%; }
+  button.go:disabled { opacity: .45; }
+  button.stop { border-color: var(--red); color: var(--red); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; } .row > button { flex: 1 1 140px; }
+  .now { display: flex; align-items: center; gap: 14px; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 5px rgba(208, 36, 43, .3); animation: p 1.6s ease-in-out infinite; flex: none; }
+  .dot.paused { background: var(--accent); animation: none; box-shadow: none; }
+  @keyframes p { 50% { box-shadow: 0 0 0 12px rgba(208, 36, 43, 0); } }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+  .big { font-size: 30px; } .time { font: 46px/1.1 ui-monospace, Menlo, Consolas, monospace; margin: 10px 0 4px; }
+  .lvl { height: 10px; border-radius: 5px; background: var(--rule); overflow: hidden; margin: 10px 0 6px; } .lvl i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .2s; }
+  .bad { color: var(--red); font-weight: 600; } .good { color: var(--ok); }
+  .hide { display: none !important; }
+  progress { width: 100%; height: 14px; }
+  .words p { margin: 3px 0; font-size: 15px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="kick">Atlas recorder</div>
+  <h1 id="title">The session</h1>
+
+  <section id="lost" class="card hide"></section>
+
+  <section id="setup">
+    <div class="card">
+      <p><label>Session <input id="sess" type="number" min="1" max="999" style="width:90px"></label></p>
+      <p class="muted">Read this to the table first:</p>
+      <blockquote id="consentText">We would like to record tonight's game so Atlas can keep notes of what happens in our story. The recording stays with the game master. Say if you'd rather not; we can pause or stop at any time, and delete it afterwards.</blockquote>
+      <label class="ck"><input type="checkbox" id="consent"> Everyone at the table knows and has agreed</label>
+      <label class="ck" id="liveRow"><input type="checkbox" id="live"> Write the words down as we play <span class="muted">(the phone's own speech service; who spoke is not told apart)</span></label>
+      <p id="langRow"><select id="lang" aria-label="Language of the words"></select></p>
+      <button class="go" id="start" disabled>● Start recording</button>
+      <p id="cant" class="bad hide"></p>
+    </div>
+    <div class="card">
+      <p><b>Recorded with the phone's own recorder app?</b> Send it to the computer here.</p>
+      <input type="file" id="file" accept="audio/*,video/mp4,.m4a,.mp3,.wav,.ogg,.opus,.webm">
+      <progress id="upProg" class="hide" max="1" value="0"></progress><p id="upMsg" class="muted"></p>
+    </div>
+    <p class="muted">For a whole evening the safest way is the phone's own recorder app, which keeps recording with the screen off; send the file here afterwards. Recording on this page needs the screen on and the page open: plug the phone in.</p>
+  </section>
+
+  <section id="rec" class="hide">
+    <div class="card">
+      <div class="now"><span class="dot" id="dot"></span><b class="big" id="state">Recording</b></div>
+      <div class="time" id="time">0:00</div>
+      <div class="lvl"><i id="lvl"></i></div>
+      <p id="mic" class="muted">Hearing the table.</p>
+      <p id="sent" class="muted"></p>
+      <div class="row"><button id="pause">Pause</button><button class="stop" id="stop">■ Stop</button></div>
+      <button id="again" class="hide" style="width:100%;margin-top:10px">Start the microphone again</button>
+    </div>
+    <div class="card words hide" id="wordsBox"><div class="kick">The words, as they are said</div><div id="words"></div></div>
+    <p class="muted">Keep this page open and the screen on. If the screen locks, the phone stops the microphone: it starts again when you open the page.</p>
+  </section>
+
+  <section id="done" class="hide"><div class="card"><p class="big">Saved.</p><p id="doneMsg"></p><button class="go" id="newRec">Record another</button></div></section>
+</main>
+<script>
+(function () {
+  "use strict";
+  var REC = __REC__;
+  var $ = function (id) { return document.getElementById(id); };
+  var hms = function (s) { s = Math.max(0, Math.round(s || 0)); var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+  var r1 = function (v) { return Math.round(v * 10) / 10; };
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var MIMES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  var LANGS = [["", "The phone's own language"], ["en-US", "English (US)"], ["en-GB", "English (UK)"], ["ka-GE", "Georgian"], ["ru-RU", "Russian"], ["uk-UA", "Ukrainian"], ["de-DE", "German"], ["fr-FR", "French"], ["es-ES", "Spanish"], ["it-IT", "Italian"], ["pl-PL", "Polish"], ["pt-BR", "Portuguese"], ["tr-TR", "Turkish"]];
+  var device = (function () { var u = navigator.userAgent; return /iPhone/.test(u) ? "an iPhone" : /iPad/.test(u) ? "an iPad" : /Android/.test(u) ? "an Android phone" : /Mac OS X/.test(u) ? "a Mac" : /Windows/.test(u) ? "a Windows laptop" : "a phone"; })();
+  $("title").textContent = REC.title || "The session"; $("sess").value = REC.session || 1;
+  $("lang").innerHTML = LANGS.map(function (l) { return '<option value="' + l[0] + '">' + l[1] + "</option>"; }).join("");
+  if (!SR) { $("liveRow").classList.add("hide"); $("langRow").classList.add("hide"); }
+  var cant = !window.isSecureContext ? "This page did not open securely, so the phone will not give it the microphone. Open the link as https, and say to go on when the phone warns." : !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder) ? "This browser cannot record from a web page: use the phone's own recorder app and send the file below." : "";
+  if (cant) { $("cant").textContent = cant; $("cant").classList.remove("hide"); }
+  $("consent").onchange = function () { $("start").disabled = !this.checked || !!cant; };
+
+  /* ---- what is not yet on the computer, kept here */
+  var dbp = new Promise(function (ok, no) { var r = indexedDB.open("atlas-recorder", 1); r.onupgradeneeded = function () { r.result.createObjectStore("recs", { keyPath: "id" }); r.result.createObjectStore("chunks", { keyPath: ["rec", "part", "seq"] }); r.result.createObjectStore("words", { keyPath: ["rec", "n"] }); }; r.onsuccess = function () { ok(r.result); }; r.onerror = function () { no(r.error); }; });
+  function idb(st, mode, f) { return dbp.then(function (d) { return new Promise(function (ok, no) { var t = d.transaction(st, mode), q = f(t.objectStore(st)); t.oncomplete = function () { ok(q && q.result); }; t.onerror = function () { no(t.error); }; }); }); }
+  var put = function (st, v) { return idb(st, "readwrite", function (s) { return s.put(v); }); };
+  var all = function (st) { return idb(st, "readonly", function (s) { return s.getAll(); }); };
+  var del = function (st, k) { return idb(st, "readwrite", function (s) { return s.delete(k); }); };
+  function post(u, o) { return fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(o) }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not sent"); return d; }); }); }
+
+  // the pieces go to the computer one by one, the oldest first; whatever fails is tried again a few seconds later
+  var sending = false, waiting = 0;
+  function send() {
+    if (sending) return; sending = true;
+    all("chunks").then(function (l) {
+      waiting = l.length; shown();
+      l.sort(function (a, b) { return a.rec < b.rec ? -1 : a.rec > b.rec ? 1 : a.part - b.part || a.seq - b.seq; });
+      return l.reduce(function (p, c) { return p.then(function () { return fetch("chunk?rec=" + c.rec + "&part=" + c.part + "&seq=" + c.seq, { method: "PUT", body: c.blob }).then(function (r) { if (!r.ok) throw new Error("not kept"); return del("chunks", [c.rec, c.part, c.seq]); }).then(function () { waiting--; shown(); }); }); }, Promise.resolve());
+    }).then(function () { return all("words"); }).then(function (w) {
+      if (!w.length) return;
+      var by = {}; w.forEach(function (x) { (by[x.rec] = by[x.rec] || []).push(x); });
+      return Object.keys(by).reduce(function (p, rec) { var l = by[rec].sort(function (a, b) { return a.n - b.n; }); return p.then(function () { return post("words", { rec: rec, segs: l.map(function (x) { return x.seg; }) }).then(function () { return Promise.all(l.map(function (x) { return del("words", [x.rec, x.n]); })); }); }); }, Promise.resolve());
+    }).then(function () { sending = false; }, function () { sending = false; setTimeout(send, 4000); });
+  }
+  function shown() { $("sent").innerHTML = waiting ? '<span class="bad">' + waiting + " piece" + (waiting > 1 ? "s" : "") + " waiting to reach the computer</span> (kept here until they do)" : '<span class="good">Everything recorded is on the computer.</span>'; }
+  setInterval(send, 5000);
+
+  /* ---- recording */
+  var R = null;
+  var elapsed = function () { return !R ? 0 : R.acc + (R.running && !R.paused ? (performance.now() - R.t0) / 1000 : 0); };
+  function state(now) { if (!R) return; var o = { rec: R.id, state: R.lost ? "lost" : R.paused ? "paused" : "recording", dur: r1(elapsed()), parts: R.parts }; put("recs", Object.assign({ session: R.session, started: R.started, lang: R.lang, live: R.live }, o, { id: R.id })); if (now || Date.now() - (R.st || 0) > 15000) { R.st = Date.now(); post("state", o).catch(function () {}); } }
+  function begin(id, o) {
+    R = { id: id, session: o.session, started: o.started || Date.now(), acc: o.dur || 0, part: (o.parts || []).length - 1, parts: o.parts || [], seq: 0, live: o.live, lang: o.lang, running: false, paused: false, n: Date.now() };
+    return part().then(function () {
+      $("setup").classList.add("hide"); $("done").classList.add("hide"); $("rec").classList.remove("hide"); $("lost").classList.add("hide");
+      wake(); if (R.live) words(true); R.timer = setInterval(tick, 1000); state(true); paint();
+    });
+  }
+  function part() {
+    return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, channelCount: 1 } }).then(function (stream) {
+      var mime = MIMES.filter(function (m) { return MediaRecorder.isTypeSupported(m); })[0] || "";
+      var mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 32000 } : { audioBitsPerSecond: 32000 });
+      var at = elapsed(); R.part++; R.seq = 0; R.stream = stream; R.mr = mr; R.lost = false;
+      R.parts.push({ n: R.part, at: r1(at), mime: mr.mimeType || mime });
+      var p = R.part, id = R.id;
+      mr.ondataavailable = function (e) { if (e.data && e.data.size && R) { var s = R.seq++; put("chunks", { rec: id, part: p, seq: s, blob: e.data, t: r1(elapsed()) }).then(send); } };
+      var tr = stream.getAudioTracks()[0]; if (tr) tr.onended = lost;
+      try { var C = window.AudioContext || window.webkitAudioContext; if (!R.ctx) R.ctx = new C(); var an = R.ctx.createAnalyser(); an.fftSize = 1024; R.ctx.createMediaStreamSource(stream).connect(an); R.an = an; R.buf = new Float32Array(1024); } catch (e) {}
+      mr.start(10000); R.t0 = performance.now(); R.running = true;
+    });
+  }
+  function lost() { if (!R || !R.running) return; R.acc = elapsed(); R.running = false; R.lost = true; state(true); paint(); }
+  function again() { if (!R || !R.lost) return; part().then(function () { state(true); paint(); }, function (e) { $("mic").textContent = "The microphone could not start again: " + e.message; }); }
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && R) { wake(); if (R.lost && !R.paused) again(); } });
+  function wake() { try { if (navigator.wakeLock && R) navigator.wakeLock.request("screen").then(function (w) { R.wl = w; }, function () {}); } catch (e) {} }
+  function tick() {
+    if (!R) return; var lvl = 0;
+    if (R.an && R.running && !R.paused) { R.an.getFloatTimeDomainData(R.buf); var s = 0; for (var i = 0; i < R.buf.length; i++) s += R.buf[i] * R.buf[i]; lvl = Math.sqrt(s / R.buf.length); }
+    R.quiet = lvl < .004 && R.running && !R.paused ? (R.quiet || 0) + 1 : 0;
+    $("time").textContent = hms(elapsed()); $("lvl").style.width = Math.min(100, Math.round(lvl * 900)) + "%";
+    var m = $("mic"); m.textContent = R.lost ? "The microphone stopped: the screen may have locked. Tap below, or it starts again when the page is open." : R.paused ? "Paused." : R.quiet > 25 ? "No sound for a while: is the microphone covered?" : "Hearing the table."; m.className = R.lost || R.quiet > 25 ? "bad" : "muted";
+    state(false);
+  }
+  function paint() { if (!R) return; $("state").textContent = R.lost ? "Waiting for the microphone" : R.paused ? "Paused" : "Recording"; $("dot").className = "dot" + (R.paused || R.lost ? " paused" : ""); $("pause").textContent = R.paused ? "Go on" : "Pause"; $("again").classList.toggle("hide", !R.lost); $("wordsBox").classList.toggle("hide", !R.live); }
+  $("pause").onclick = function () { if (!R) return; if (R.paused) { R.t0 = performance.now(); R.paused = false; try { R.mr.resume(); } catch (e) {} if (R.live) words(true); } else { R.acc = elapsed(); R.paused = true; try { R.mr.pause(); } catch (e) {} words(false); } state(true); paint(); };
+  $("again").onclick = again;
+  $("stop").onclick = function () {
+    if (!R) return; var r = R; r.acc = elapsed(); r.running = false; words(false);
+    new Promise(function (ok) { try { if (r.mr.state === "inactive") return ok(); r.mr.onstop = ok; r.mr.stop(); } catch (e) { ok(); } setTimeout(ok, 3000); }).then(function () {
+      try { r.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} clearInterval(r.timer); if (r.wl) r.wl.release().catch(function () {});
+      var o = { rec: r.id, state: "stopped", dur: r1(r.acc), parts: r.parts }; put("recs", Object.assign({ id: r.id, session: r.session, started: r.started }, o)).then(function () { return post("state", o); }).then(function () { return del("recs", r.id); }).catch(function () {});
+      R = null; send(); $("rec").classList.add("hide"); $("done").classList.remove("hide"); $("doneMsg").textContent = hms(r.acc) + " of session " + r.session + (waiting ? ": the last pieces are on their way to the computer." : ", on the computer.");
+    });
+  };
+  $("newRec").onclick = function () { $("done").classList.add("hide"); $("setup").classList.remove("hide"); };
+  $("start").onclick = function () {
+    if (cant || !$("consent").checked) return;
+    $("start").disabled = true;
+    var o = { session: +$("sess").value || 1, consent: $("consentText").textContent, device: device, live: !!(SR && $("live").checked), lang: $("lang").value };
+    post("start", o).then(function (d) { return begin(d.id, Object.assign(o, { started: Date.now() })); }).catch(function (e) { $("start").disabled = false; $("cant").textContent = e.name === "NotAllowedError" ? "The microphone was not allowed: allow it for this page and start again." : "Could not start: " + e.message + " (is the computer still running Atlas, on the same Wi-Fi?)"; $("cant").classList.remove("hide"); });
+  };
+
+  /* ---- the words as they are said, from the phone's own speech service */
+  function words(on) {
+    if (!SR || !R) return;
+    if (!on) { R.want = false; try { R.sr && R.sr.stop(); } catch (e) {} return; }
+    R.want = true; if (R.sr) return;
+    var sr = new SR(), st = {}; sr.continuous = true; sr.interimResults = true; sr.lang = R.lang || navigator.language || "en-US";
+    sr.onresult = function (e) { for (var i = e.resultIndex; i < e.results.length; i++) { var r = e.results[i]; if (st[i] == null) st[i] = elapsed(); if (r.isFinal) { var x = String(r[0].transcript || "").trim(); if (x) { var seg = [r1(st[i]), r1(Math.max(.5, elapsed() - st[i])), "", x]; put("words", { rec: R.id, n: Date.now() + Math.random(), seg: seg }); var w = $("words"); w.insertAdjacentHTML("beforeend", "<p></p>"); w.lastChild.textContent = hms(seg[0]) + "  " + x; while (w.children.length > 4) w.removeChild(w.firstChild); } delete st[i]; } } };
+    sr.onerror = function (e) { if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") { R.want = false; $("words").textContent = "The words cannot be written on this phone while it records; the sound is recorded."; } };
+    sr.onend = function () { if (!R) return; R.sr = null; if (R.want && !R.paused && R.running) setTimeout(function () { if (R && R.want) words(true); }, 300); };
+    R.sr = sr; try { sr.start(); } catch (e) { R.sr = null; }
+  }
+
+  /* ---- a recording made elsewhere, sent whole */
+  $("file").onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    var a = new Audio(), u = URL.createObjectURL(f), msg = $("upMsg"), pr = $("upProg");
+    msg.textContent = "Reading it…";
+    var go = function (dur) {
+      URL.revokeObjectURL(u); pr.classList.remove("hide"); msg.textContent = "Sending " + f.name + "…";
+      var x = new XMLHttpRequest(); x.open("PUT", "file?session=" + (+$("sess").value || 1) + "&name=" + encodeURIComponent(f.name) + "&mime=" + encodeURIComponent(f.type || "") + "&dur=" + Math.round(dur || 0) + "&at=" + (f.lastModified || Date.now()) + "&device=" + encodeURIComponent(device));
+      x.upload.onprogress = function (e) { if (e.lengthComputable) pr.value = e.loaded / e.total; };
+      x.onload = function () { pr.classList.add("hide"); msg.textContent = x.status === 200 ? "On the computer: " + f.name + (dur ? " (" + hms(dur) + ")" : "") + ". The game master finds it under Recorded sessions." : "It could not be sent: " + x.responseText.slice(0, 120); };
+      x.onerror = function () { pr.classList.add("hide"); msg.textContent = "It could not be sent: is the computer still running Atlas, on the same Wi-Fi?"; };
+      x.send(f);
+    };
+    a.preload = "metadata"; a.onloadedmetadata = function () { go(isFinite(a.duration) ? a.duration : 0); }; a.onerror = function () { go(0); }; a.src = u;
+  };
+
+  /* ---- what was being recorded when the page went away, and what has not reached the computer */
+  all("recs").then(function (l) {
+    var r = l.filter(function (x) { return x.state !== "stopped"; })[0]; if (!r) return;
+    var box = $("lost"); box.classList.remove("hide");
+    box.innerHTML = "<p><b>A recording was interrupted</b>: session " + r.session + ", " + hms(r.dur) + " recorded. What was recorded is kept.</p>";
+    var row = document.createElement("div"); row.className = "row"; box.appendChild(row);
+    var b1 = document.createElement("button"); b1.className = "go"; b1.textContent = "● Go on recording it"; row.appendChild(b1);
+    var b2 = document.createElement("button"); b2.textContent = "Finish it"; row.appendChild(b2);
+    b1.onclick = function () { if (cant) return; begin(r.id, r).catch(function (e) { box.insertAdjacentHTML("beforeend", '<p class="bad"></p>'); box.lastChild.textContent = "The microphone could not start: " + e.message; }); };
+    b2.onclick = function () { post("state", { rec: r.id, state: "stopped", dur: r.dur, parts: r.parts }).then(function () { return del("recs", r.id); }).then(function () { box.classList.add("hide"); }, function () { box.classList.add("hide"); }); };
+  }).catch(function () {});
+  window.addEventListener("beforeunload", function (e) { if (R) { state(true); e.preventDefault(); e.returnValue = ""; } });
+  send();
+})();
+</script>
+</body>
+</html>

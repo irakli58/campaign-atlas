@@ -112,7 +112,7 @@ A change is one of {"faction": id, "party": "war|hostile|wary|neutral|friendly|a
   const cause = (d, c) => c.why || `After the party's deed: ${d.title}`;
   function record(did) {
     const d = deedOf(did); if (!d || !A.history) return;
-    A.history.add({ id: "d~" + did, kind: "deed", m: d.m, t: d.t, title: d.title, what: [d.how && d.how !== "well" ? (HOW.find(h => h[0] === d.how) || [0, ""])[1] : "", d.what].filter(Boolean).join(". "), places: [d.place], who: [d.who], factions: [d.fac], vis: "players", from: "deeds",
+    A.history.add({ id: "d_" + did, kind: "deed", m: d.m, t: d.t, title: d.title, what: [d.how && d.how !== "well" ? (HOW.find(h => h[0] === d.how) || [0, ""])[1] : "", d.what].filter(Boolean).join(". "), places: [d.place], who: [d.who], factions: [d.fac], vis: "players", from: "deeds",
       outcome: (d.cons || []).filter(c => c.state === "done" || c.state === "planned").map(c => c.title + (c.state === "planned" ? ` (day ${at(c.when).day})` : "")) });
   }
   function accept(did, cid, tell) {
@@ -122,7 +122,7 @@ A change is one of {"faction": id, "party": "war|hostile|wary|neutral|friendly|a
       c.fx = FX() && (c.effects || []).length ? FX().apply({ title: c.title, effects: c.effects }, at(m).short) : [];
       if (tell && (c.players || c.headline)) { c.news = uid("n"); S().set("news", c.news, { m, when: at(m).short, headline: c.headline || c.title, text: c.players || "", paper: "", t: Date.now() }); }
       c.state = "done"; c.at = m;
-      if (A.history) A.history.add({ id: `c~${did}~${cid}`, kind: "conseq", m, title: c.title, what: c.what || "", cause: cause(d, c), places: [d.place], who: (c.effects || []).map(x => x.person), factions: (c.effects || []).map(x => x.faction), outcome: (c.effects || []).map(x => FX() ? FX().say(x) : "").filter(Boolean), vis: c.news ? "players" : "gm", pub: c.news ? { headline: c.headline || c.title, text: c.players || "" } : null, news: c.news, from: "deeds" });
+      if (A.history) A.history.add({ id: `c_${did}_${cid}`, kind: "conseq", m, title: c.title, what: c.what || "", cause: cause(d, c), places: [d.place], who: (c.effects || []).map(x => x.person), factions: (c.effects || []).map(x => x.faction), outcome: (c.effects || []).map(x => FX() ? FX().say(x) : "").filter(Boolean), vis: c.news ? "players" : "gm", pub: c.news ? { headline: c.headline || c.title, text: c.players || "" } : null, news: c.news, from: "deeds" });
     } else {
       c.ev = "c" + did.slice(1) + cid.slice(1); c.when = m + c.days * 1440; c.state = "planned";
       const def = { title: c.title, importance: c.importance, when: c.when, why: cause(d, c), deed: did };
@@ -136,7 +136,7 @@ A change is one of {"faction": id, "party": "war|hostile|wary|neutral|friendly|a
   }
   function takeBack(did, cid) {
     const d = deedOf(did); if (!d) return; const cons = (d.cons || []).map(c => Object.assign({}, c)), c = cons.find(x => x.id === cid); if (!c) return;
-    if (c.state === "done") { if (FX() && c.fx) FX().revert(c.fx); if (c.news) S().set("news", c.news, null); if (A.history) A.history.remove(`c~${did}~${cid}`); }
+    if (c.state === "done") { if (FX() && c.fx) FX().revert(c.fx); if (c.news) S().set("news", c.news, null); if (A.history) A.history.remove(`c_${did}_${cid}`); }
     if (c.state === "planned" && c.ev) {
       const s = S().get("events", c.ev);
       if (s) { if (s.fx && FX()) FX().revert(s.fx); if (s.news) S().set("news", s.news, null); S().set("events", c.ev, null); }
@@ -149,7 +149,7 @@ A change is one of {"faction": id, "party": "war|hostile|wary|neutral|friendly|a
   function removeDeed(did) {
     const d = deedOf(did); if (!d) return;
     for (const c of d.cons || []) if (c.state === "done" || c.state === "planned") takeBack(did, c.id);
-    putDeed(did, null); if (A.history) A.history.remove("d~" + did);
+    putDeed(did, null); if (A.history) A.history.remove("d_" + did);
   }
 
   /* ---- drawing it */
@@ -262,5 +262,12 @@ A change is one of {"faction": id, "party": "war|hostile|wary|neutral|friendly|a
     html, status: () => { const l = deeds(), p = l.reduce((n, [, d]) => n + (d.cons || []).filter(c => c.state === "proposed").length, 0); return p ? `${p} waiting for you` : l.length ? `${l.length} deed${l.length > 1 ? "s" : ""}` : "Nothing yet"; },
     init(store) { for (const c of ["deeds", "events", "eventdefs"]) store.watch(c, () => { if (!UI.edit) paint(); }); if (A.history) A.history.keep("deeds"); } });
 
-  A.deeds = { list: deeds, proposed: () => deeds().flatMap(([did, d]) => (d.cons || []).filter(c => c.state === "proposed").map(c => ({ did, d, c }))), accept, takeBack, prompt, cleanCon };
+  // a deed written by another tool (a remembered promise or insult from a recorded session: atlas-sessions.js), with the
+  // council asked at once if it says so
+  function add(d, ask) {
+    const did = uid("d"), rec = Object.assign({ how: "well", m: nowM(), t: Date.now(), cons: [] }, d);
+    for (const k of Object.keys(rec)) if (rec[k] === undefined || rec[k] === "") delete rec[k];
+    putDeed(did, rec); record(did); UI.open[did] = true; if (ask) askCouncil(did); return did;
+  }
+  A.deeds = { list: deeds, proposed: () => deeds().flatMap(([did, d]) => (d.cons || []).filter(c => c.state === "proposed").map(c => ({ did, d, c }))), accept, takeBack, prompt, cleanCon, add };
 })(ATLAS);

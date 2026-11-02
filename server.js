@@ -9,7 +9,7 @@
 if (+process.versions.node.split(".")[0] < 18) { console.error("\n  Campaign Atlas needs Node.js 18 or newer; this is " + process.version + ". Get the LTS version from https://nodejs.org/\n"); process.exit(1); }
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto"), { spawn } = require("child_process");
 const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch"), Ask = require("./lib/ask");
-const PlayersLan = require("./lib/players-lan");
+const PlayersLan = require("./lib/players-lan"), RecorderLan = require("./lib/recorder-lan");
 
 const ROOT = __dirname, PORT = +process.env.ATLAS_PORT || 4747;
 const UI = path.join(ROOT, "ui"), DATA = path.join(ROOT, "data"), WORK = path.join(ROOT, "workspace"), CAMPS = path.join(WORK, "campaigns");
@@ -102,14 +102,14 @@ function openFolder(dir) {
   try { spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: false }).unref(); } catch (e) {}
 }
 
-let jobs, db, lan;
+let jobs, db, lan, recorder;
 async function route(req, res) {
   // this computer only, and only pages the app served itself may ask it to do anything
   if (!HOSTS.has(req.headers.host || "")) return fail(res, 403, "This app answers only on this computer.");
   const url = new URL(req.url, "http://localhost"), p = url.pathname, m = req.method;
-  // the token comes in a header, which another website's page cannot send here; only the live progress stream, which
-  // changes nothing, may carry it in the address (a browser's EventSource cannot set headers)
-  const authed = req.headers["x-atlas-token"] === TOKEN || (m === "GET" && /\/events$/.test(p) && url.searchParams.get("t") === TOKEN);
+  // the token comes in a header, which another website's page cannot send here; only the live progress stream and a
+  // recording's sound, which change nothing, may carry it in the address (a browser's EventSource and audio cannot set headers)
+  const authed = req.headers["x-atlas-token"] === TOKEN || (m === "GET" && /\/(events|rec-audio\/r[a-z0-9]+\/\d+)$/.test(p) && url.searchParams.get("t") === TOKEN);
   if (m === "POST" && !/^application\/json\b/.test(req.headers["content-type"] || "")) return fail(res, 415, "JSON only.");
   const site = req.headers["sec-fetch-site"];
   const ours = !site || site === "same-origin" || site === "none";
@@ -224,6 +224,15 @@ async function route(req, res) {
       if (m === "GET") return send(res, 200, await lan.status(mm[1]));
       if (m === "POST") { const o = await body(req, 1 << 10); return send(res, 200, o.on ? await lan.enable(mm[1], !!o.fresh) : await lan.disable(mm[1])); }
     }
+    // the recorder on a phone of its own: its link on this computer's network, switched on or off (recorder-lan.js);
+    // a recording's sound for the page to play; a recording's sound deleted
+    if (rest === "recorder") {
+      if (!authed) return fail(res, 403, "forbidden");
+      if (m === "GET") return send(res, 200, await recorder.status(mm[1]));
+      if (m === "POST") { const o = await body(req, 1 << 10); return send(res, 200, o.on ? await recorder.enable(mm[1], !!o.fresh) : await recorder.disable(mm[1])); }
+    }
+    if (m === "GET" && (mm2 = rest.match(/^rec-audio\/(r[a-z0-9]+)\/(\d+)$/))) { if (!authed) return fail(res, 403, "forbidden"); return recorder.audio(mm[1], mm2[1], +mm2[2], res); }
+    if (m === "POST" && rest === "rec-drop") { if (!authed) return fail(res, 403, "forbidden"); const o = await body(req, 1 << 10); return send(res, 200, { ok: recorder.drop(mm[1], o.rec) }); }
     if (rest === "db") {
       if (!authed) return fail(res, 403, "forbidden");
       if (m === "GET") { const d = db.get(mm[1]); return +url.searchParams.get("v") === d.v ? (res.writeHead(204), res.end()) : send(res, 200, d); }
@@ -285,6 +294,8 @@ jobs = Jobs.create({ DATA, WORK, CAMPS, ATLAS_JS, TEMPLATE, settings, runners })
 db = LocalDB.create(path.join(DATA, "play"));
 // the players on their own phones (off until the game master switches it on for a campaign): lib/players-lan.js
 lan = PlayersLan.create({ DATA, campDir, db, PORT: PORT + 1, UI }); lan.resume();
+// the recorder on a phone of its own (off until the game master opens its link for a campaign): lib/recorder-lan.js
+recorder = RecorderLan.create({ DATA, campDir, db, PORT: PORT + 2, UI }); recorder.resume();
 const server = http.createServer((req, res) => route(req, res).catch(e => { try { fail(res, 500, e.message); } catch (x) {} }));
 server.on("error", e => { if (e.code === "EADDRINUSE") { console.log(`Campaign Atlas is already running: open http://localhost:${PORT}`); process.exit(0); } throw e; });
 server.listen(PORT, "127.0.0.1", () => {

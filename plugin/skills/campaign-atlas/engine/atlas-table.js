@@ -788,6 +788,7 @@
     history: `<path d="M6 3.5v17M6 6.5h11l-2 2.5 2 2.5H6"/><circle cx="6" cy="15" r="1.4" fill="currentColor"/><circle cx="6" cy="19.5" r="1.4" fill="currentColor"/><path d="M9 15h8M9 19.5h5"/>`,
     deeds: `<path d="M12 4v16M7 20h10M5 7h14"/><path d="M5 7 2.5 13a3 3 0 0 0 5 0zM19 7l-2.5 6a3 3 0 0 0 5 0z"/>`,
     coin: `<ellipse cx="10" cy="7" rx="6" ry="2.5"/><path d="M4 7v4c0 1.4 2.7 2.5 6 2.5M16 7v2.5"/><ellipse cx="14" cy="13.5" rx="6" ry="2.5"/><path d="M8 13.5v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4"/>`,
+    mic: `<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>`,
     dash: `<path d="M3.5 16a8.5 8.5 0 1 1 17 0"/><path d="M12 16l4-5.5M6 16h1.5M16.5 16H18M7.5 9.5l1 1M12 6.5v1.5"/><circle cx="12" cy="16" r="1.4" fill="currentColor"/>`,
     close: `<path d="M6 6l12 12M18 6 6 18"/>`
   };

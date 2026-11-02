@@ -24,7 +24,8 @@
     ["details", "Details around them", "Small things to notice, sounds, people in the background"],
     ["next", "What could happen next", "Options from the story's open threads"],
     ["encounter", "An encounter now", "Something to meet, fitting the place and the moment"],
-    ["check", "Does it fit?", "Whether something fits what the campaign has established, from the consistency check and the campaign's words"]
+    ["check", "Does it fit?", "Whether something fits what the campaign has established, from the consistency check and the campaign's words"],
+    ["remember", "What do we remember?", "Anything from earlier sessions, with the session and time where it was said"]
   ];
   const S = () => api.store();
   const docId = ref => String(ref).replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -48,6 +49,8 @@
     for (const c of A.clocksData || []) { const at = api.clockAt(c); if (at) out.push(`${c.name}: ${at} of ${+c.segments || (c.ticks || []).length || 4} — ${(c.ticks || [])[at - 1] || ""}`); }
     // the world's time and what has happened in it (atlas-worldtime.js)
     const W = A.worldTime; if (W && (A.calendarData || (A.eventsData || []).length)) { const d = W.at(W.now()); out.push(`It is now ${d.long}, ${d.time} (day ${d.day} of the story).`); const r = W.recent(); if (r.length) out.push("Lately in the world: " + r.join("; ")); }
+    // unfinished business from earlier sessions, as the table remembers it (atlas-sessions.js): the council plans from it
+    const U = A.memory ? A.memory.unfinished() : []; if (U.length) out.push("Unfinished business from earlier sessions: " + U.slice(0, 6).map(m => `[${A.memory.cite(m)}] ${m.text}`).join("; "));
     return out.join("\n");
   }
 
@@ -58,6 +61,8 @@
     const conv = (d.turns || []).slice(-8).map(t => `A player: ${t.q}\n${nameOf(ref)}: ${t.a}`).join("\n");
     const extra = [
       A.lives ? A.lives.about(ref) : "",
+      // (what the table remembers of them and of what is asked: from the recorded sessions, only what the game master kept)
+      A.memory ? A.memory.forPrompt(nameOf(ref) + " " + q, 8).replace("WHAT THE TABLE REMEMBERS", "WHAT THE TABLE REMEMBERS (they know of it only if they were there, were told, or it is common talk)") : "",
       w ? `WHERE THEY ARE ON THE MAP: ${placeName(w.pl)}${w.room && A.nameOf ? ", " + (A.nameOf(A.get(w.pl, 99), w.room) || w.room) : ""}${n.doing ? "; " + n.doing : ""}` : "",
       `WHAT HAS HAPPENED AT THE TABLE LATELY (they know of it only if they were there, were told, or it is common talk):\n${lately() || "(nothing recorded)"}`,
       op ? `WHAT THEY THINK OF THE PARTY: ${op}` : "",
@@ -161,8 +166,12 @@
       details: `Give five small details around the players${I.place ? " at " + placeName(I.place) : ""}${I.text ? " (" + I.text + ")" : ""}: sounds, smells, small things to notice, people in the background. One line each.`,
       next: `Where things stand: ${I.text || "(as the passages and the table's state say)"}. Suggest three things that could happen next, each from the story's open threads (the villains' clocks, leads not yet followed), with what sets it off. One short paragraph each.`,
       encounter: `Suggest an encounter for right now${I.place ? " at " + placeName(I.place) : ""}${I.text ? " (" + I.text + ")" : ""}: who or what, what they want, how it could go (talk, flight or fight), and how it ties to the story. Name stat blocks only if the passages give them.`,
-      check: `The game master asks: ${I.text || "are there contradictions in the campaign?"}${I.place ? " (about " + placeName(I.place) + ")" : ""}${I.a ? " (about " + nameOf(I.a) + ")" : ""}. Answer from the consistency check's findings and the campaign's words below: say whether it fits what is established, quote what it would contradict, tell a deliberate lie or mystery apart from a mistake, and say what would need to change for it to make sense. Do not invent problems the material does not show.`
+      check: `The game master asks: ${I.text || "are there contradictions in the campaign?"}${I.place ? " (about " + placeName(I.place) + ")" : ""}${I.a ? " (about " + nameOf(I.a) + ")" : ""}. Answer from the consistency check's findings, what the table remembers and the campaign's words below: say whether it fits what is established, quote what it would contradict (with its session and time when it was said at the table), tell a deliberate lie or mystery apart from a mistake (a character's claim may be false; the game master may change the story on purpose), and say what would need to change for it to make sense. Do not invent problems the material does not show.`,
+      remember: `The game master asks: ${I.text || "what unfinished business could come back to haunt the party?"}${I.place ? " (about " + placeName(I.place) + ")" : ""}${I.a ? " (about " + nameOf(I.a) + ")" : ""}. Answer from what the table remembers and the words said at the table, below, giving each fact's [S# time]. Keep apart what happened, what someone only claimed, what the players merely suggested or suspect, and what you infer yourself. If nothing remembered answers it, say so plainly. A few lines.`
     }[I.kind];
+    // (what the table remembers of it, from the recorded sessions: atlas-sessions.js; only what the game master kept)
+    const mem = A.memory ? A.memory.forPrompt(q, I.kind === "remember" ? 24 : 8) : "", said = A.memory && I.kind === "remember" ? A.memory.snippets(q, 6) : [];
+    const remembered = (mem ? mem + "\n\n" : "") + (said.length ? "WORDS SAID AT THE TABLE:\n" + said.join("\n\n") + "\n\n" : I.kind === "remember" && !mem ? "WHAT THE TABLE REMEMBERS: nothing recorded bears on this.\n\n" : "");
     // (the consistency check's findings that bear on it: atlas-consistency.js, the same the Consistency tab lists)
     const found = I.kind === "check" && A.consistency ? A.consistency.about([I.text, I.place && placeName(I.place), I.a && nameOf(I.a)].filter(Boolean).join(" ") || "contradiction") : [];
     const findings = found.length ? "THE CONSISTENCY CHECK FOUND:\n" + found.map(f => `- (${f.sev === "error" ? "certain" : "possible"}) ${f.title}: ${f.why}`).join("\n") + "\n\n" : I.kind === "check" ? "THE CONSISTENCY CHECK FOUND: nothing bearing on this.\n\n" : "";
@@ -170,7 +179,7 @@
 
 ${asks}${again ? `\n\nGive something different from this: "${again.slice(0, 600)}"` : ""}
 
-${findings}${who ? "THE PEOPLE:\n" + who + "\n\n" : ""}WHAT HAS HAPPENED AT THE TABLE LATELY:\n${lately() || "(nothing recorded)"}
+${findings}${remembered}${who ? "THE PEOPLE:\n" + who + "\n\n" : ""}WHAT HAS HAPPENED AT THE TABLE LATELY:\n${lately() || "(nothing recorded)"}
 
 THE CAMPAIGN'S OWN WORDS:
 ${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n") || "(nothing found)"}`;
