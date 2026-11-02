@@ -99,15 +99,18 @@
   const dueAt = e => whenOf(e.when);
   // (the line the game master set here, else the campaign's own (campaign.js approve, from the app's form), else major)
   const askNow = () => opts().ask || A.config.approve || "major";
-  const needs = e => rank(e) >= ((ASK.find(a => a[0] === askNow()) || ASK[2])[2]);
+  // (what cannot be put right again by itself, a death or a war, waits for the game master however the line is set:
+  // the dashboard's safeguards, atlas-dashboard.js)
+  const needs = e => rank(e) >= ((ASK.find(a => a[0] === askNow()) || ASK[2])[2]) || !!(A.worldGuard && A.worldGuard(e));
   const tellable = e => !!(e.players || e.news);
 
   // it happens: recorded, the clock it moves moved, and the players told if the game master said so
   function happen(id, e, o) {
     // (recorded as done before the clock moves: moving it sets the watches off, and they must find it done)
-    const st = S(), s = evState(id) || {}, rec = Object.assign({}, s, { state: "done", at: now(), t: Date.now(), auto: !!o.auto, news: null, ticked: null, def: s.def });
+    // (one that happens by itself happened at its hour, though time was moved on past it: the history says when)
+    const st = S(), s = evState(id) || {}, w = dueAt(e), when = o.auto && w != null && w < now() && ![].concat(e.after || []).length ? w : now(), rec = Object.assign({}, s, { state: "done", at: when, t: Date.now(), auto: !!o.auto, news: null, ticked: null, def: s.def });
     if (o.tell && tellable(e)) rec.news = tell(e);
-    if (A.worldEffects && (e.effects || []).length) rec.fx = A.worldEffects.apply(e, at(now()).short);
+    if (A.worldEffects && (e.effects || []).length) rec.fx = A.worldEffects.apply(e, at(when).short);
     st.set("events", id, rec);
     if (e.tick) { const [cid, by] = [].concat(e.tick), cl = (A.clocksData || []).find(x => x.id === cid); if (cl) { const tot = +cl.segments || (cl.ticks || []).length || 4, was = api.clockAt(cl), to = Math.min(tot, was + (+by || 1)); if (to !== was) { st.set("events", id, Object.assign({}, rec, { ticked: [cid, to - was] })); st.set("clocks", cid, Object.assign({}, st.get("clocks", cid) || {}, { at: to, t: Date.now() })); } } }
   }
@@ -121,14 +124,17 @@
   // else an event already decided would be put again; and not while the world is paused.
   // (what it changes sets the store's watches off, which call it again: that call waits until this one is through)
   const WATCH = ["clock", "events", "eventdefs", "clues", "status", "clocks", "fog", "news"], loaded = new Set();
-  let running = false, again = false;
+  let running = false, again = false, held = 0;
   function evaluate() {
     if (running) { again = true; return; }
     running = true; try { evaluateNow(); } finally { running = false; }
     if (again) { again = false; setTimeout(evaluate, 0); }
   }
+  // (held while the world is put back as it was at a saved moment: until every collection is back, the store may show
+  // the old hour with the events already taken back, and they would happen again: atlas-history.js)
+  const hold = on => { held = Math.max(0, held + (on ? 1 : -1)); if (!held) setTimeout(evaluate, 50); };
   function evaluateNow() {
-    const st = S(); if (!st || WATCH.some(c => !loaded.has(c)) || opts().paused) return;
+    const st = S(); if (!st || held || WATCH.some(c => !loaded.has(c)) || opts().paused) return;
     const said = [];
     for (let pass = 0; pass < 6; pass++) {
       let changed = false; const t = now();
@@ -154,7 +160,10 @@
   // each notable, so it happens by itself unless the game master asked to see everything first)
   function advance(mins) {
     if (opts().paused) return;
-    const st = S(), to = Math.max(0, now() + mins), o = opts(); setNow(to);
+    const st = S(), to = Math.max(0, now() + mins), o = opts();
+    // (a day or more at once: the world is saved as it was first, to go back to: atlas-history.js)
+    if (mins >= 1440 && A.history) A.history.snapshot(`Before moving on to ${at(to).short}`, true);
+    setNow(to);
     if (o.random && mins >= 720) {
       const tables = Object.entries(A.tablesData || {}), pick = tables.find(([k]) => k === o.table) || tables.find(([k]) => /event|rumou?r|street|encounter|weather|news/i.test(k)) || tables[0], p = (FREQ.find(f => f[0] === o.freq) || FREQ[1])[2];
       for (let d = 0; d < Math.min(3, Math.round(mins / 1440) || 1); d++) if (pick && Math.random() < p) {
@@ -387,6 +396,8 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
   document.addEventListener("click", e => {
     const b = e.target.closest && e.target.closest("[data-tw]"); if (!b || ["INPUT", "FORM", "SELECT", "TEXTAREA"].includes(b.tagName)) return;
     const k = b.dataset.tw, id = b.dataset.id, f = b.closest("form[data-tw='save']");
+    // (the rows of what an event changes are drawn in other forms too, the consequences': those keep their own)
+    if (!f && b.closest("form") && !b.closest("form[data-tw]")) return;
     // (the form is drawn again with the row added or taken away: a field keeping the focus would stop that)
     if (f && UI.edit && (k === "addcond" || k === "delcond" || k === "addfx" || k === "delfx")) { readForm(f); if (document.activeElement && f.contains(document.activeElement)) document.activeElement.blur(); }
     switch (k) {
@@ -422,7 +433,7 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
   });
   document.addEventListener("change", e => {
     // (a change in the world: its kind chosen, the form shows what that kind needs)
-    if (e.target.dataset && e.target.dataset.twfx === "kind" && UI.edit) { const f = e.target.closest("form"); readForm(f); e.target.blur(); paint(); return; }
+    if (e.target.dataset && e.target.dataset.twfx === "kind" && UI.edit && e.target.closest("form[data-tw='save']")) { const f = e.target.closest("form"); readForm(f); e.target.blur(); paint(); return; }
     const t = e.target; if (!t.dataset || !t.dataset.tw) return; const o = Object.assign({}, opts());
     if (t.dataset.tw === "random") o.random = t.checked; else if (t.dataset.tw === "table") o.table = t.value; else if (t.dataset.tw === "freq") o.freq = t.value; else if (t.dataset.tw === "ask") o.ask = t.value; else return;
     S().set("clock", "opts", o); if (t.dataset.tw === "ask") setTimeout(evaluate, 60);
@@ -464,7 +475,7 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
   if (TU.addDock) TU.addDock("time", "Time", "time", head => head("time", "The world's time", "time", "Everything") + nowHTML(true) + (pending().length ? pending().map(x => pendingCard(x, true)).join("") : `<p class="t-small">Nothing waits for you. ${coming()[0] ? `Next: ${esc(coming()[0].title)}, ${esc(at(dueAt(coming()[0])).short)}.` : ""}</p>`));
 
   // the copilot and the consistency check are told of the world's time and what has happened in it
-  A.worldTime = { now, at, whenOf, pending, coming, evaluate, advance, decide, events: evDefs, councilPrompt, cleanSugg,
+  A.worldTime = { now, at, whenOf, pending, coming, evaluate, advance, decide, hold, events: evDefs, councilPrompt, cleanSugg,
     recent: () => allDone().filter(([, s]) => s.state === "done").sort((a, b) => b[1].at - a[1].at).slice(0, 6).map(([e, s]) => `${at(s.at).short}: ${e.title}${e.what ? " (" + e.what + ")" : ""}`) };
   if (A.consistency) A.consistency.add("time-events", () => {
     const out = [], ids = new Set(evDefs().map(e => e.id));

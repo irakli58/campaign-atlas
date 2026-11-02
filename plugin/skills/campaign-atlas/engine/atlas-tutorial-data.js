@@ -178,6 +178,29 @@
         { say: "Each faction: who leads it, what it holds, what it has to act with, what it wants, and the step its plan is on. It can do no more than it has.", sel: "#tvBody .fa-card", act: "look" },
         { say: "How they stand toward each other, and toward the party. Change it when the story does; the world's events change it too, and undo it if you take them back.", sel: "#tvBody .fa-rels", act: "look" },
         { say: "And the people, now: where each one is at this hour of the world's time, by their day and their week. Move someone, or mark them missing, hurt or dead.", sel: "#tvBody .fa-people", act: "look" }
+      ] },
+      { id: "dashboard", title: "The world at a glance", summary: "The date, what waits for you, what is coming and has happened; how much the world does by itself.", features: ["dashboard"], needs: has("[data-t='tab'][data-tab='dash']"), steps: [
+        { say: "The world at a glance: the date, what waits for your word, what is coming, what has happened lately, and what the factions and people are doing, on one page.", sel: "[data-t='tab'][data-tab='dash']", act: "click", try: "Click The world at a glance.", wait: 600 },
+        { say: "How much the world does by itself. By hand: everything waits for you. Helped: small things happen, the big ones wait. On its own: only the critical waits.", sel: "#tvBody .db-modes", act: "look" },
+        { say: "Whatever you choose, the safeguards hold: a death, a war or a place lost always waits for you, nothing reaches the players unless you tell them, and the world is saved before time moves on a day.", sel: "#tvBody .db-safe", act: "look" },
+        { say: "Move time on from here, and answer what waits for you without leaving the page.", sel: "#tvBody .db-now .tw-adv", act: "look" }
+      ] },
+      { id: "history", title: "The world's history", summary: "Everything that has happened, who knows of it; the world saved and gone back to.", features: ["history"], needs: has("[data-t='tab'][data-tab='history']"), steps: [
+        { say: "The world's history: everything that has happened, newest first, with when, why, who, what came of it, and whether the players know.", sel: "[data-t='tab'][data-tab='history']", act: "click", try: "Click The world's history.", wait: 600 },
+        { say: "Narrow it to one kind, one person or faction, one place, or what the players know.", sel: "#tvBody .hs-f", act: "look" },
+        { say: "As the players know it: what they have seen, found and been told, in the words they heard it.", sel: "#tvBody .hs-pub", act: "look" },
+        { say: "Save the world as it is before a big moment, and go back to it if the night goes wrong. Going back can be undone too, and what the party has found stays as it is.", sel: "#tvBody form[data-hs='snap']", act: "look" }
+      ] },
+      { id: "deeds", title: "Consequences", summary: "What the party did, and what comes of it: at once, in days, weeks later.", features: ["deeds"], needs: has("[data-t='tab'][data-tab='deeds']"), steps: [
+        { say: "Consequences: when the party does something that matters, write it here.", sel: "[data-t='tab'][data-tab='deeds']", act: "click", try: "Click Consequences.", wait: 600 },
+        { say: "What they did, where, who it touched and how it went. The council works out what follows at once, within days and weeks later, from who saw it and what they can do.", sel: "#tvBody form[data-dd='deed']", act: "look" },
+        { say: "You let each one happen, change it, or say no. What follows later becomes an event of the world's time, and anything can be taken back.", sel: "#tvBody .dd-deed, #tvBody form[data-dd='deed'] .t-row", act: "look" }
+      ] },
+      { id: "money", title: "Money and goods", summary: "The purse, what the party carries, loot, prices and merchants.", features: ["money"], needs: has("[data-t='tab'][data-tab='money']"), steps: [
+        { say: "Money and goods: the party's purse, what they carry, loot, and prices, in the money of the story's age.", sel: "[data-t='tab'][data-tab='money']", act: "click", try: "Click Money and goods.", wait: 600 },
+        { say: "Roll loot: coins, and things of the story's age, each common, uncommon, rare or legendary, made well or badly, whole or broken.", sel: "#tvBody [data-ec='roll']", act: "click", try: "Click Roll loot.", wait: 400 },
+        { say: "The party takes it, or leaves it. What they take goes into the purse and what they carry, and into the world's history.", sel: "#tvBody .ec-loot", act: "look" },
+        { say: "Simple keeps the usual prices. Full adds prices by place, merchants whose stock comes back as time passes, and what moves prices: a war, a famine, an event.", sel: "#tvBody [data-ec='mode']", act: "look" }
       ] }
     ] },
     { id: "story", title: "The story", lessons: [
@@ -211,6 +234,8 @@
     worldtime: ["The world's time", "clock calendar date day hour time pause"], events: ["World events", "event plan happens approve due notification council suggest called off"], news: ["News for the players", "news told players notification"], facility: ["A facility's systems", "power oxygen pressure temperature contamination security structure comms emergency station ship lab survival"],
     journal: ["The players' journal", "journal notes theories quests hints summaries manual assisted full"],
     factions: ["Factions", "faction power house guild government corporation stance allies enemies territory plan"], lives: ["Where everyone is", "schedule day week home work where now status missing"],
+    dashboard: ["The world at a glance", "dashboard overview glance mode manual assisted autonomous by hand helped on its own safeguards approve waiting"], history: ["The world's history", "history timeline record past filter snapshot save moment go back rollback players know"],
+    deeds: ["Consequences", "consequence deed party did reaction follows simulator council days weeks"], money: ["Money and goods", "money loot treasure purse stash prices merchant shop buy sell economy rarity quality condition coins gold credits"],
     investigation: ["The investigation", "clues connections"], clues: ["Clues", "clue evidence"], knowledge: ["Who knows what", "knowledge"], autoconnect: ["Auto-Connect", "connect suggest"],
     consistency: ["Consistency", "contradiction check fits"], bible: ["The story bible", "story council tolkien"], music: ["Music", "music theme sound"],
     tablehome: ["Start here", "game night overview tools"], combat: ["Combat and dice", "initiative wounds sanity combat"], make: ["Make it up", "random tables person place"], board: ["The board", "corkboard string conspiracy"],
@@ -220,13 +245,13 @@
   // map's buttons. dev/tutorial-coverage.js finds every one of these in the engine; one with no feature here, or a feature
   // no lesson teaches, fails it: a new tool is not finished until it has its lesson.
   const COVERS = {
-    tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", factions: "factions" },
+    tab: { home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", factions: "factions", dash: "dashboard", history: "history", deeds: "deeds", money: "money" },
     dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
     view: { gaz: "gazetteer", table: "views", world: "worldmap", galaxy: "galaxy", story: "bible", music: "music" },
     tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues", marks: "mapmarks" },
     world: { currents: "oceancurrents", curnames: "oceancurrents", coasts: "geocoasts", askloc: "askchange", newworld: "worldbuild", brush: "worldbuild", base: "worldbuild", river: "worldbuild", realm: "worldbuild", label: "worldbuild", finish: "worldbuild", undo: "worldbuild", redo: "worldbuild", editfeat: "worldbuild", dupfeat: "worldbuild", delfeat: "worldbuild", resetfeat: "worldbuild", duploc: "worldedit", edit: "worldedit", addloc: "worldedit", addroute: "worldedit", export: "worldedit", copy: "worldedit", editloc: "worldedit", editroute: "worldedit", delloc: "worldedit", delroute: "worldedit", resetloc: "worldedit", resetroute: "worldedit", plan: "worldedit", setoff: "worldedit", arrive: "worldedit", cancel: "worldedit", partyhere: "worldedit", enter: "worldmap", make: "worldmap", drawn: "maplook", close: "worldmap", dlgclose: "worldmap" }
   };
   // where in the page each feature lives, for the little ? beside it (contextual help): [selector, feature]
-  const ANCHORS = [[".lmap-sec .lm-bar", "mapviews"], ["#meDlg .me-tools", "mapeditor"], [".wm-bar", "worldmap"], ["#tablev .tv-acts", "players-screen"], [".cp-host", "copilot"], [".cc-top", "consistency"], ["#tvBody .tw-now", "worldtime"]];
+  const ANCHORS = [[".lmap-sec .lm-bar", "mapviews"], ["#meDlg .me-tools", "mapeditor"], [".wm-bar", "worldmap"], ["#tablev .tv-acts", "players-screen"], [".cp-host", "copilot"], [".cc-top", "consistency"], ["#tvBody .tw-now", "worldtime"], ["#tvBody .db-modes", "dashboard"]];
   A.tutorialData = { version: 1, chapters, FEATURES, ANCHORS, COVERS };
 })(window.ATLAS || (window.ATLAS = {}));

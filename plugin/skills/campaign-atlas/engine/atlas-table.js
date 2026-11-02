@@ -25,6 +25,8 @@
   A.events = list => { A.eventsData = (A.eventsData || []).concat(list || []); return A; };
   // the powers that act in the world (atlas-factions.js; the user's master plan, part 6): { id: { n, kind, leader, members, hq, territory, has, wants, plan, rels, ... } }
   A.factions = obj => { A.factionsData = Object.assign({}, A.factionsData || {}, obj || {}); return A; };
+  // money and goods (atlas-economy.js; the user's master plan, part 19): { mode, currency, goods, treasure, regions, merchants, purse }
+  A.economy = obj => { A.economyData = Object.assign({}, A.economyData || {}, obj || {}); return A; };
 
   /* ---- a map as the referee redrew it (the map editor, atlas-mapedit.js; the user asked, 21 Oct 2026, to get a place's
           map exactly as they want it). An edit replaces the place's floors (rooms, doors, stairs, markers, hand-placed
@@ -783,6 +785,10 @@
     tables: `<path d="M9 6.5h11M9 12h11M9 17.5h11"/><rect x="3.5" y="4.5" width="3.5" height="3.5" rx=".6"/><rect x="3.5" y="10.2" width="3.5" height="3.5" rx=".6"/><rect x="3.5" y="15.8" width="3.5" height="3.5" rx=".6"/>`,
     play: `<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 3v6.5M4 7.5l8 2 8-2M12 9.5 7 17h10z"/>`,
     open: `<path d="M14 4h6v6M20 4l-8.5 8.5M18 14v5.5H4.5V6H10"/>`,
+    history: `<path d="M6 3.5v17M6 6.5h11l-2 2.5 2 2.5H6"/><circle cx="6" cy="15" r="1.4" fill="currentColor"/><circle cx="6" cy="19.5" r="1.4" fill="currentColor"/><path d="M9 15h8M9 19.5h5"/>`,
+    deeds: `<path d="M12 4v16M7 20h10M5 7h14"/><path d="M5 7 2.5 13a3 3 0 0 0 5 0zM19 7l-2.5 6a3 3 0 0 0 5 0z"/>`,
+    coin: `<ellipse cx="10" cy="7" rx="6" ry="2.5"/><path d="M4 7v4c0 1.4 2.7 2.5 6 2.5M16 7v2.5"/><ellipse cx="14" cy="13.5" rx="6" ry="2.5"/><path d="M8 13.5v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4"/>`,
+    dash: `<path d="M3.5 16a8.5 8.5 0 1 1 17 0"/><path d="M12 16l4-5.5M6 16h1.5M16.5 16H18M7.5 9.5l1 1M12 6.5v1.5"/><circle cx="12" cy="16" r="1.4" fill="currentColor"/>`,
     close: `<path d="M6 6l12 12M18 6 6 18"/>`
   };
   const icon = (k, cls) => `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${IC[k] || ""}</svg>`;

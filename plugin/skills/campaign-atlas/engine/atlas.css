@@ -1989,6 +1989,71 @@ button.ho-b:hover { color: var(--ink); }
 .t-err { color: #b0161b; font-size: 14px; margin: 4px 0 8px; }
 .t-danger { border-color: #b0161b; color: #b0161b; }
 #tDock [data-dock="time"] { position: relative; }
+/* the world's history (atlas-history.js) */
+.hs-f { gap: 6px; }
+.hs-f .t-in { margin: 0; }
+.hs-l { list-style: none; margin: 0; padding: 0; }
+.hs-e { border-top: 1px solid var(--rule); padding: 7px 0 7px 12px; position: relative; }
+.hs-e:first-child { border-top: 0; }
+.hs-e::before { content: ""; position: absolute; left: 0; top: 13px; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.hs-e p { margin: 3px 0; }
+.hs-e .t-small > .kn, .dd-c .t-small > .kn { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
+.hs-kind { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.hs-k-deed::before, .hs-k-conseq::before { background: var(--accent); }
+.hs-k-found::before, .hs-k-reached::before, .hs-k-heard::before, .hs-k-settled::before { background: #3f8a4f; }
+.hs-k-off { opacity: .75; }
+.hs-major::before { background: #c9a227; }
+.hs-critical::before { background: #b0161b; }
+.hs-know { color: #3f8a4f; }
+.hs-tags { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 4px 0; }
+.hs-chip { font-size: 12.5px; border: 1px solid var(--rule); border-radius: 999px; padding: 0 8px; }
+.hs-fa { border-style: dashed; }
+.hs-snaps { list-style: none; margin: 8px 0 0; padding: 0; }
+.hs-snaps li { border-top: 1px solid var(--rule); padding: 6px 0; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.hs-snaps .t-row { margin-left: auto; }
+/* consequences (atlas-deeds.js) */
+.dd-f .t-row { margin-top: 4px; }
+.dd-c { border-top: 1px solid var(--rule); padding: 8px 0; }
+.dd-c p { margin: 3px 0; }
+.dd-when { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.dd-proposed { border-left: 3px solid var(--accent); padding-left: 10px; }
+.dd-no { opacity: .55; }
+.dd-ed { border: 1px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
+.dd-acts { margin-top: 8px; }
+/* money and goods (atlas-economy.js) */
+.ec-purse { font-family: var(--f-display); font-size: 24px; }
+.ec-l { list-style: none; margin: 0; padding: 0; }
+.ec-l li { display: flex; gap: 8px; align-items: baseline; border-top: 1px dotted var(--rule); padding: 4px 0; }
+.ec-l li:first-child { border-top: 0; }
+.ec-l li > span { flex: 1; min-width: 0; }
+.ec-l li > b { font-family: var(--f-mono); font-weight: 500; font-size: 13px; white-space: nowrap; }
+.ec-up { color: #b0161b; }
+.ec-dn { color: #3f8a4f; }
+.ec-log { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
+.ec-log b { font-family: var(--f-mono); font-weight: 500; font-size: 12.5px; }
+.ec-loot { border: 1px solid var(--rule); border-radius: 8px; padding: 8px 12px; margin-top: 8px; }
+.ec-r-uncommon > span:first-child { color: #2f6b3a; }
+.ec-r-rare > span:first-child { color: #2b5d8a; font-weight: 600; }
+.ec-r-legendary > span:first-child { color: #9a6a12; font-weight: 600; }
+.ec-mf, .ec-cf { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.ec-mf .t-in, .ec-cf .t-in { width: auto; flex: 1 1 140px; margin: 0; }
+.ec-mf select[multiple] { flex-basis: 100%; }
+.ec-mf .t-in.t-n, .ec-cf .t-in.t-n { flex: 0 0 70px; }
+.ec-moves { border: 1px dashed var(--rule); border-radius: 8px; padding: 2px 10px 10px; margin: 8px 0 4px; }
+/* the world at a glance (atlas-dashboard.js) */
+.db-now { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; justify-content: space-between; }
+.db-now .tw-adv { margin: 0; }
+.db-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0 6px; }
+@media (max-width: 640px) { .db-modes { grid-template-columns: minmax(0, 1fr); } }
+.db-mode { text-align: left; border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; background: transparent; color: inherit; font: inherit; cursor: pointer; display: grid; gap: 2px; }
+.db-mode span { font-size: 13px; color: var(--muted); }
+.db-mode[aria-checked="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.db-safe summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+.db-safe ul { margin: 6px 0 0; padding-left: 20px; font-size: 14px; }
+.db-l { list-style: none; margin: 0; padding: 0; }
+.db-l li { border-top: 1px solid var(--rule); padding: 5px 0; }
+.db-l li:first-child { border-top: 0; }
+.db-guard { font-size: 12.5px; color: #b0161b; border: 1px solid #b0161b; border-radius: 999px; padding: 0 8px; }
 /* the players' window: the date in the corner, and the news */
 .ps-date { position: absolute; top: 14px; left: 18px; z-index: 7; display: flex; flex-direction: column; gap: 1px; padding: 7px 12px; border-radius: 8px; background: rgba(15, 16, 18, .72); border: 1px solid #2c2f31; color: #e8e4da; pointer-events: none; }
 .ps-date b { font-family: var(--f-display); font-weight: 400; font-size: 18px; }
