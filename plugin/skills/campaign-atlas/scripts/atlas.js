@@ -53,13 +53,17 @@
                                                  a map the game master DREW: the picture under the world map, its coasts traced
    node atlas.js world <dir> --real "England" [--km 800] [--unit mile|km] [--look ...]
                                                  the REAL world: true coasts, lakes, rivers, seas and mountains; places found by name
+   node atlas.js roads <dir> [--era medieval|ancient|modern|future] [--seed N] [--levels 3]
+                                                 the ROAD NETWORK grown over the ages (on trial): towns and villages, roads by
+                                                 rank, sea lanes, river routes, crossings, passes, states; at each level of
+                                                 development 1 to 5 (3, the default, as first made); writes world-roads.js
 */
 "use strict";
 const fs = require("fs"), path = require("path");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare", "sea", "river", "roads", "hills"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare", "sea", "river", "roads", "hills", "levels"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -70,7 +74,7 @@ function sources(dir) {
   const cd = path.join(dir, "cities");                                                       // its other cities, each with its own id
   if (fs.existsSync(cd)) for (const f of fs.readdirSync(cd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(cd, f));
   if (fs.existsSync(path.join(dir, "kit.js"))) files.push(path.join(dir, "kit.js"));       // buildings made for this place (ATLAS.kit)
-  for (const f of ["world.js", "world-terrain.js"]) if (fs.existsSync(path.join(dir, f))) files.push(path.join(dir, f));   // the world map
+  for (const f of ["world.js", "world-terrain.js", "world-roads.js"]) if (fs.existsSync(path.join(dir, f))) files.push(path.join(dir, f));   // the world map (and its road network, atlas.js roads, on trial)
   if (fs.existsSync(path.join(dir, "galaxy.js"))) files.push(path.join(dir, "galaxy.js"));  // the galaxy's settings (atlas.js galaxy)
   if (fs.existsSync(path.join(dir, "table.js"))) files.push(path.join(dir, "table.js"));   // for the table: clocks, sessions, the players' characters, tables, handouts
   if (fs.existsSync(pd)) for (const f of fs.readdirSync(pd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(pd, f));
@@ -466,6 +470,13 @@ function checkWorld(A) {
   if (W0.shape) { const SB = ["land", "sea", "mountains", "hills", "flat", "forest", "desert", "swamp", "grass"]; if (W0.shape.base && !["sea", "land"].includes(W0.shape.base)) P(`shape.base is "sea" or "land"`); (W0.shape.strokes || []).forEach((s, i) => { if (!s || !SB.includes(s.m) || !Array.isArray(s.p) || !s.p.every(pt)) P(`shape stroke ${i + 1} needs m: (${SB.join(", ")}), r: and p: [[x, y], ...]`); }); }
   const routes = D.routes, c3 = D.locs.filter(l => l.city && (A.cities || {})[l.city]).length;
   if (!routes.length && D.locs.length > 1) N("no routes between the locations: add routes: in world.js, or run atlas.js world to have them suggested");
+  // the road network (atlas.js roads, on trial): made for these locations where they stand now
+  const RN = A.worldRoadsData;
+  if (RN) {
+    if (!RN.levels || !RN.levels[RN.level]) N("world-roads.js was made before the levels of development: run atlas.js roads again");
+    const moved = D.locs.filter(l => { const p = (RN.places || []).find(q => q.story && q.id === l.id); return !p || !Array.isArray(l.at) || Math.hypot(p.at[0] - l.at[0], p.at[1] - l.at[1]) > 2; });
+    if (moved.length) N(`the road network was made before ${moved.length === 1 ? moved[0].id + " was added or moved" : moved.length + " locations were added or moved"}: run atlas.js roads again`);
+  }
   const line = `world map: ${D.look} · ${D.locs.length} location${D.locs.length === 1 ? "" : "s"} (${c3} with a 3D map) · ${routes.length} route${routes.length === 1 ? "" : "s"}${own.length ? "" : routes.length ? " (suggested)" : ""}${D.scale ? ` · 1 unit = ${D.scale.per} ${D.scale.unit || ""}` : " · no scale"}${D.party.at ? ` · the party at ${D.party.at}` : ""}`;
   return { line, out, problems, notes };
 }
@@ -502,6 +513,38 @@ async function cmdWorld(dir) {
   if (flags.across && !(A.worldData || {}).scale) console.log("  (--across sets the scale only when it starts a world.js: add scale: { unit, per } to world.js by hand)");
   A = load(dir); const r = checkWorld(A); console.log("\n" + r.line + (r.problems ? "" : " OK")); for (const l of r.out) console.log(l);
   console.log(`\nNext: node atlas.js build ${dir}   (the page shows it under "World map")`);
+}
+// the road network of the world map, grown over the ages (the user, 3 Nov 2026; ON TRIAL until they approve it:
+// scripts/world-roads.js, the research in the app's docs/research/2026-11-03-road-networks.md). Writes world-roads.js
+// beside world-terrain.js and changes nothing else; the page draws it when "Road network (trial)" is turned on.
+function eraOf(A) {
+  const c = A.config || {}, inv = (A.cityData || {}).invented || {}, look = typeof (A.cityData || {}).look === "string" ? A.cityData.look : ((A.cityData || {}).look || {}).base || "";
+  const w = [c.era, c.setting, c.genre, inv.era, look].filter(Boolean).join(" ").toLowerCase();
+  return /ancient|roman|classical|antiqu/.test(w) ? "ancient" : /scifi|sci-fi|science|future|space|alien|moonbase|station/.test(w) ? "future" : /modern|industrial|victorian|1920|19th|20th|cthulhu/.test(w) ? "modern" : "medieval";
+}
+function cmdRoads(dir) {
+  if (!dir || !fs.existsSync(path.join(dir, "campaign.js"))) die("Which campaign folder? node atlas.js roads <dir>");
+  const A = load(dir), T = A.worldTerrainData;
+  if (!T || !T.height) die(`no land under the world map yet: run node atlas.js world ${dir} first`);
+  if (T.stars) die("a star chart has no roads (its routes are lanes between the stars)");
+  const WD = A.worldKit.prepareWorld(A.worldData, T, {});
+  let currents = null;
+  if (T.currents && T.currents.u) { const c = T.currents, dec = s => { const b = Buffer.from(s, "base64"); return new Int8Array(b.buffer, b.byteOffset, b.length); }; currents = { cols: c.cols, rows: c.rows, cell: (T.cell || 4) * (c.f || 1), u: dec(c.u), v: dec(c.v), max: 100 }; }
+  const era = flags.era && flags.era !== true ? String(flags.era) : eraOf(A);
+  console.log(`the road network of ${A.config.title || dir}:`);
+  // (every level of development, 1 tribal to 5 modern, the default 3 first: the page's slider moves between them; --levels
+  // 3 makes the default alone, quicker)
+  const only = flags.levels && flags.levels !== true ? String(flags.levels).split(",").map(Number).filter(n => n >= 1 && n <= 5) : null;
+  const RM = require("./world-roads.js"), R = RM.roads(WD, { seed: flags.seed != null && flags.seed !== true ? +flags.seed : T.seed || 1, era, currents, levels: only }, require("../engine/atlas-world-biomes.js"), m => console.log(m));
+  fs.writeFileSync(path.join(dir, "world-roads.js"), `// The road network of the world map${A.config.title ? " of " + A.config.title : ""}, grown over the ages by atlas.js roads (on trial),\n// at each level of development (1 tribal to 5 modern; 3, the default, as first approved). Not for editing by hand: run\n// atlas.js roads again (after atlas.js world). The story's own routes, places and the land are not changed by it; the page\n// draws it when "Road network (trial)" is on, at the level its slider is set to.\nATLAS.worldRoads(${JSON.stringify(R)});\n`);
+  const s0 = R.levels[R.level].stats;
+  console.log(`wrote ${path.join(dir, "world-roads.js")}: ${s0.places.cities} cities, ${s0.places.towns} towns, ${s0.places.villages} villages; ${R.states.length} states`);
+  for (const [n, lv] of Object.entries(R.levels).sort((a, b) => a[0] - b[0])) {
+    const s = lv.stats, roadKm = Object.entries(s.km).filter(([k]) => k !== "old").reduce((t, [, v]) => t + v, 0);
+    console.log(`  level ${n}, ${lv.name}${+n === R.level ? " (the default)" : ""}: ${roadKm} km of road (${s.density} per km²; main ${Math.round(s.mainShare * 100)}%), junctions ${s.junctions.three}+${s.junctions.four}, detour ${s.detour ? s.detour.median : "-"}, villages within a day of a market ${Math.round((s.villagesInDay || 0) * 100)}%; ${s.crossings.bridge} bridges, ${s.crossings.ford} fords, ${s.crossings.ferry} ferries, ${s.passes} passes${(lv.marks || []).some(m => m.k === "tunnel") ? `, ${lv.marks.filter(m => m.k === "tunnel").length} tunnels` : ""}; ${s.waterKm} km by water`);
+  }
+  console.log(`  (real networks: the medieval main roads of England and Wales about 0.03 km per km², the Roman roads known today 0.075, England's 1830s turnpikes about 0.2; main roads about a third of the length; detours 1.2 to 1.4)`);
+  console.log(`\nNext: node atlas.js build ${dir}   (World map, Road network (trial), and its Development slider)`);
 }
 // music: every place plays a theme; a theme it names must exist
 function checkMusic(A) {
@@ -1235,5 +1278,6 @@ switch (cmd) {
   case "catalogue": case "catalog": cmdCatalogue(pos[0]); break;
   case "kit": cmdKit(pos[0], pos[1], pos[2]); break;
   case "world": cmdWorld(pos[0]).catch(e => die("world: " + e.message)); break;
+  case "roads": cmdRoads(pos[0]); break;
   default: console.log(fs.readFileSync(__filename, "utf8").split("*/")[0].replace(/^#!.*\n\/\* ?/, ""));
 }

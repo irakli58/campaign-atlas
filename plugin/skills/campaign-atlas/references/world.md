@@ -187,6 +187,27 @@ ATLAS.world({
   - in the Atlas app the referee can make it there and then;
   - on a published page the panel says how (ask Claude, or `atlas.js city <dir> --invent "Name" --id <id>`).
 
+## The road network (on trial)
+
+`atlas.js roads <dir>` grows a road network over an invented or generated world (not a star chart), and writes `world-roads.js`. It changes nothing else: the land, the story's places and routes stay as they are. It is on trial until the user approves it (3 Nov 2026); the research behind it is in the app's `docs/research/2026-11-03-road-networks.md`.
+
+- **What it makes:**
+  - towns and villages between the story's places, spaced as real market towns are;
+  - roads by what they join: major roads between cities, regional roads between towns, local roads to market, paths between villages;
+  - caravan routes, sea lanes and river routes;
+  - bridges, fords, ferries, passes and switchbacks, tunnels at level 5;
+  - states with their borders and customs posts.
+- **How it grows them:** over four ages, the biggest trade first, each road reused by the next, on the land's real slopes, rivers, forests, swamps and deserts.
+- **Levels of development:** it is made at five levels, 1 tribal, 2 early, 3 medieval, 4 industrialising, 5 modern, with the same land, towns, villages and borders at each.
+  - Level 3 is the default: the network as first made, with the world's own age's engineering (`--era`, else from the campaign).
+  - On the page, **Road network (trial)** shows it, and its **Development** slider moves between the levels.
+  - The game master's choice is kept with the map's look, so the players see the same level; **Default** goes back.
+- **Speed:** `--levels 3` makes the default level alone. A large world takes about two and a half minutes for all five levels.
+- **The story's routes** run along the network while it is shown. A route drawn or changed by the game master keeps its own way.
+- **Entering a place:** a town of the network opens in 3D like the story's own places, laid out by the city generator with the roads that reach it.
+- Run it again after `atlas.js world`, since the land changed.
+- `dev/roads-view.js` (in the workspace) draws a network over its land without the page; `dev/roads-shots.js` photographs it in the page.
+
 ## Check
 
 `check` checks:

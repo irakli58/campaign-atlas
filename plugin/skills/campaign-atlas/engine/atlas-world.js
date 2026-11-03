@@ -217,6 +217,8 @@
   // (the players' copy, atlas-share.js, works out from it which places the players know)
   A.worldPrepare = (W, T, OV) => prepareWorld(W, T, OV);
   A.worldTerrain = data => { A.worldTerrainData = data || {}; return A; };
+  // the road network grown over the ages (atlas.js roads, on trial: drawn when "Road network (trial)" is on)
+  A.worldRoads = data => { A.worldRoadsData = data || null; return A; };
   const unb64 = s => {
     if (!s) return null; if (typeof s !== "string") return Uint8Array.from(s);
     const bin = typeof atob === "function" ? atob(s) : Buffer.from(s, "base64").toString("binary"), u = new Uint8Array(bin.length);
@@ -699,6 +701,8 @@
       const pts = Array.isArray(r.pts) && r.pts.length > 1 ? (r.from === L.id ? r.pts : r.pts.slice().reverse()) : null, to = pts ? pts.find(p => Math.hypot(p[0] - x, p[1] - y) > R * .5) || o.at : o.at;
       roads.push([Math.round(bearing(to[0] - x, to[1] - y)), String(o.name || o.id).replace(/[,:]/g, " ").trim()]);
     }
+    // (the road network's roads that reach it, while the network is shown: atlas.js roads, on trial)
+    for (const [b, n] of L.netRoads || []) if (!roads.some(r => Math.abs(((r[0] - b + 540) % 360) - 180) < 20)) roads.push([b, String(n).replace(/[,:]/g, " ").trim()]);
     if (roads.length) { geo.roads = roads.slice(0, 6).map(([b, n]) => b + ":" + n).join(","); geo.words.push(`roads to ${roads.slice(0, 6).map(r => r[1]).join(", ")}`); }
     return geo;
   }
@@ -765,10 +769,12 @@
         ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
         <button type="button" class="wm-btn" data-w="currents" aria-pressed="false" hidden title="The ocean's currents: warm and cold, the gyres, the equator and the lines of latitude">Ocean currents</button>
         <button type="button" class="wm-btn" data-w="coasts" aria-pressed="false" hidden title="What kind each coast is and why it formed there: fjords, rias, deltas, barrier islands, cliffs, reefs">Coasts</button>
+        <button type="button" class="wm-btn" data-w="roadnet" aria-pressed="false" hidden title="The roads, sea lanes, river routes, towns, villages and borders grown over the ages from the land and its trade (on trial: atlas.js roads)">Road network (trial)</button>
+        <span class="wm-dev" hidden><label><span class="kn">Development</span> <input type="range" min="1" max="5" step="1" value="3" aria-label="How developed the land's roads are: 1 tribal, 2 early, 3 medieval, 4 industrialising, 5 modern"></label> <span class="wm-devn"></span> <button type="button" class="wm-btn" data-w="devreset" hidden title="Back to the network as it was made">Default</button></span>
         <button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -910,8 +916,11 @@
     }
     const routeShown = r => routeSeen(r) && filt.routes[r.kind] !== false && passes(WD.byId[r.from]) && passes(WD.byId[r.to]);
     function wayFor(r) {
-      const a = WD.byId[r.from], b = WD.byId[r.to], k = [r.kind, a.at, b.at, JSON.stringify(r.via || "")].join("|"), c = ways.get(r.id);
+      const a = WD.byId[r.from], b = WD.byId[r.to], k = [r.kind, a.at, b.at, JSON.stringify(r.via || ""), netOn(), netLvN()].join("|"), c = ways.get(r.id);
       if (c && c.k === k) return c.way;
+      // (along the road network while it is shown; a route the game master drew or changed keeps its own way)
+      const nw = netOn() && !(r.via && r.via.length) && !r.edited && !r.added && (netL().routes || {})[r.id];
+      if (nw && nw.length > 1) { const way = nw.slice(); way[0] = a.at; way[way.length - 1] = b.at; ways.set(r.id, { k, way }); return way; }
       if (!PG && WD.G) PG = pathGrid(WD);
       const way = wayOf(WD, PG, r) || [a.at, b.at]; ways.set(r.id, { k, way }); return way;
     }
@@ -977,6 +986,109 @@
       let pins = "";
       (T.coastNotes || []).forEach((nt, i) => { const kd = nt.form && T.coastKinds[nt.form]; if (!kd || !Array.isArray(nt.at)) return; pins += `<g class="wco-pin" transform="translate(${r1(nt.at[0])} ${r1(nt.at[1])}) scale(${r1(k * 100) / 100})" tabindex="0"><circle r="8" style="fill:${kd[1]}"/><text y="3.6" text-anchor="middle">${i + 1}</text><title>${esc(nt.text)}</title></g>`; });
       g.innerHTML = COA.lines + pins;
+    }
+    /* ---- the road network grown over the ages (the user, 3 Nov 2026; atlas.js roads, ON TRIAL until they approve it):
+            its roads by rank, the water's routes, the borders, and the towns and villages between the story's places,
+            the finer things as the map comes closer [an atlas: major roads and cities far out, minor roads and villages
+            close]. While it is shown the story's routes run along its roads. */
+    const NET = { on: (() => { try { return ctx.store.get("world-roadnet") === "1"; } catch (e) { return false; } })(), sel: null };
+    const netData = () => A.worldRoadsData && A.worldRoadsData.places && WD.G && WD.look !== "stars" && !drawn() ? A.worldRoadsData : null;
+    const netOn = () => !!(NET.on && netData());
+    // (how developed the land's roads are: the game master's slider, 1 tribal to 5 modern, kept with the map's look so
+    // the players see the same; the network's own default, level 3, until it is moved: the user, 3 Nov 2026)
+    const netLvN = () => { const R = netData(); if (!R || !R.levels) return null; const want = OV.style && +OV.style.roaddev; return R.levels[want] ? want : R.level; };
+    const netL = () => { const R = netData(); return R ? (R.levels ? R.levels[netLvN()] || {} : R) : null; };
+    // what each rank of road is called at each level (and on a colony world)
+    const NNAMES = {
+      1: { local: "Trail (between the chief places)", path: "Footpath", caravan: "Desert trail", old: "Old trail, overgrown" },
+      2: { regional: "Road (between the chief places)", caravan: "Caravan route", local: "Track", path: "Footpath", old: "Old track, no longer used" },
+      3: { trade: "Trade corridor (crosses a border)", major: "Major road (city to city)", regional: "Regional road (town to town)", caravan: "Caravan route", local: "Local road (to market)", path: "Path (village to village)", old: "Old road, no longer used" },
+      4: { trade: "Trunk road (crosses a border)", major: "Main road, graded (city to city)", regional: "Regional road", caravan: "Caravan route", local: "Local road", path: "Lane", old: "Old road, no longer used" },
+      5: { trade: "Motorway (crosses a border)", major: "Highway (city to city)", regional: "Main road", caravan: "Desert highway", local: "Road", path: "Lane", old: "Old road, abandoned" },
+      future: { trade: "Interstate corridor (crosses a border)", major: "Trunk highway and maglev (city to city)", regional: "Highway (town to town)", caravan: "Desert convoy route", local: "Road (to the hub)", path: "Track (outpost to outpost)", old: "Abandoned road" }
+    };
+    // [colour, width, dashes, the pale edge's width], as the story's routes are drawn (RSTY)
+    const NSTY = { trade: ["#7c2414", 2.6, "", 4.8], major: ["#93351c", 2.1, "", 3.8], regional: ["#9c4a2a", 1.45, "", 2.4], caravan: ["#9a6a2a", 1.45, "5 2.5", 0], local: ["#6e5233", 1, "", 0], path: ["#6e5233", .8, "2 2.2", 0], old: ["#8a7a66", .8, "1 2.6", 0] };
+    const NWS = { sea: ["#2a5f8a", 1.3, "7 5"], coast: ["#4a7fa8", .9, "4 4"], river: ["#2e6a96", 1.3, "5 2.5"] };
+    const NTIER = { city: "City", town: "Town", village: "Village", site: "Place" }, NMAKES = { grain: "grain", herds: "herds and wool", timber: "timber", ore: "ore", "fish and salt": "fish and salt", caravans: "the caravans' trade" };
+    function drawNet() {
+      const g = $(".wm-net"), R = netData(), btn = $('[data-w="roadnet"]'), dev = $(".wm-dev");
+      if (btn) { btn.hidden = !R; btn.setAttribute("aria-pressed", netOn()); }
+      root.classList.toggle("wm-neton", netOn());
+      // (where trails are the best ways there are, they show from afar as roads would)
+      root.classList.toggle("wm-devlow", netOn() && (netLvN() || 3) <= 2);
+      // the development slider, while the network is shown (the game master moves it; the players see where it is)
+      if (dev) { const n = netLvN(); dev.hidden = !(netOn() && R.levels); if (!dev.hidden) { const inp = dev.querySelector("input"); if (document.activeElement !== inp) inp.value = n; inp.disabled = !gm(); dev.querySelector(".wm-devn").textContent = `${n} · ${(R.levels[n] || {}).name || ""}`; dev.querySelector('[data-w="devreset"]').hidden = !gm() || n === R.level; dev.title = (R.levels[n] || {}).say || ""; } }
+      if (!g) return; if (!netOn()) { g.innerHTML = ""; $(".wm-netp").innerHTML = ""; NET.k = 0; return; }
+      const LD = netL(), lv = netLvN();
+      if (NET.R !== R || NET.lv !== lv || !g.firstChild) {
+        NET.R = R; NET.lv = lv; const P = pts => pts.map((p, i) => (i ? "L" : "M") + p[0] + " " + p[1]).join(""), ve = ' vector-effect="non-scaling-stroke"';
+        let s = `<g class="wn-borders">${(R.border || []).map(b => `<path d="${P(b)}" class="wn-border"${ve}/>`).join("")}</g>`;
+        s += (LD.water || []).map(w => { const [c, wd, da] = NWS[w.c] || NWS.coast; return `<path d="${P(w.pts)}" class="wn-w wn-${w.c}" fill="none" stroke="${c}" stroke-width="${wd}" stroke-dasharray="${da}" stroke-linecap="round"${ve}/>`; }).join("");
+        // (every pale edge first, then the lines, so a road drawn in pieces runs on unbroken where the pieces meet)
+        const RK = ["old", "path", "local", "caravan", "regional", "major", "trade"], roads = LD.roads || [];
+        for (const c of RK) { const cs = NSTY[c][3]; if (cs) for (const r of roads) if (r.c === c) s += `<path d="${P(r.pts)}" class="wn-${c} wr-case" fill="none" stroke-width="${cs}" stroke-linecap="round" stroke-linejoin="round"${ve}/>`; }
+        for (const c of RK) { const [col, wd, da] = NSTY[c]; for (const r of roads) if (r.c === c) s += `<path d="${P(r.pts)}" class="wn-${c}" fill="none" stroke="${col}" stroke-width="${wd}"${da ? ` stroke-dasharray="${da}"` : ""} stroke-linecap="round" stroke-linejoin="round"${ve}/>`; }
+        g.innerHTML = s;
+      }
+      drawNetPlaces();
+    }
+    // the game master moves the slider: kept with the map's look (undone as any change to the map is)
+    function setDev(n) { const R = netData(); if (!R || !R.levels || !gm()) return; n = R.levels[n] ? n : R.level; if (n === netLvN()) return; const st = Object.assign({}, OV.style || {}); if (n === R.level) delete st.roaddev; else st.roaddev = n; save("style", Object.keys(st).length ? st : null); }
+    // the settlements, the crossings and passes, and the states' names: kept their size on the screen, drawn again as the
+    // map comes closer or further; names that would crowd each other or the story's places are left out
+    function drawNetPlaces() {
+      const R = NET.R, gp = $(".wm-netp"); if (!R || !gp) return;
+      const k = V.k || 1, z = k / (V.k0 || 1), u = 1 / k; NET.k = k;
+      const boxes = [], free = b => !boxes.some(o => b[0] < o[0] + o[2] && o[0] < b[0] + b[2] && b[1] < o[1] + o[3] && o[1] < b[1] + b[3]);
+      for (const L of WD.locs) if (passes(L)) boxes.push([L.at[0] - 6 * u, L.at[1] - 9 * u, (L.name.length * 7.4 + 22) * u, 18 * u]);
+      let s = "", t = "";
+      const MK = {
+        bridge: m => `<path d="M${-3.4} ${-1.6}h6.8M${-3.4} ${1.6}h6.8" class="wn-mk wn-br"/>`, ford: m => `<path d="M-3 -1.2q1.5 1.2 3 0t3 0M-3 1.6q1.5 1.2 3 0t3 0" class="wn-mk wn-fd"/>`, ferry: m => `<circle r="2.4" class="wn-mk wn-fe"/>`,
+        pass: m => `<path d="M-4 2.4L0 -2.6 4 2.4" class="wn-mk wn-ps"/>`, customs: m => `<rect x="-2.4" y="-2.4" width="4.8" height="4.8" class="wn-mk wn-cu ${m.rel || ""}"/>`, zigzag: m => `<path d="M-3.5 -1.6l1.75 3.2 1.75-3.2 1.75 3.2 1.75-3.2" class="wn-mk wn-zz"/>`, well: m => `<circle r="1.6" class="wn-mk wn-we"/>`
+      };
+      MK.tunnel = () => `<path d="M-1.6 -3.4q-2.2 3.4 0 6.8M1.6 -3.4q2.2 3.4 0 6.8" class="wn-mk wn-tu"/>`;
+      const MZ = { bridge: 1.5, pass: 1.5, tunnel: 1.5, customs: 2.8, ford: 2.8, ferry: 2.8, zigzag: 2.8, well: 2.8 };
+      for (const m of (netL() || {}).marks || []) if (MK[m.k] && z >= MZ[m.k]) s += `<g transform="translate(${m.at[0]} ${m.at[1]}) scale(${r1(u * 100) / 100})${(m.k === "zigzag" || m.k === "tunnel") && m.a ? ` rotate(${m.k === "tunnel" ? m.a + 90 : m.a})` : ""}" class="wn-m"><title>${esc({ bridge: "A bridge", ford: "A ford", ferry: "A ferry", pass: `A pass${m.h ? `, about ${m.h} m` : ""}`, tunnel: `A tunnel${m.h ? ` under ground about ${m.h} m high` : ""}`, customs: `A customs post (${m.rel === "hostile" ? "an enemy's border" : m.rel === "friendly" ? "a friend's border" : "a wary border"})`, zigzag: "The road climbs in switchbacks", well: "A well: the caravans' stop" }[m.k])}</title>${MK[m.k](m)}</g>`;
+      const SHOW = { city: 0, town: 1.5, village: 2.8 }, DOT = { city: 3.4, town: 2.5, village: 1.6 }, NAMEZ = { city: 0, town: 1.9, village: 3.6 };
+      const order = R.places.map((p, i) => [p, i]).filter(([p]) => !p.story && SHOW[p.tier] != null && z >= SHOW[p.tier]).sort((a, b) => (b[0].seat ? 1 : 0) - (a[0].seat ? 1 : 0) || SHOW[a[0].tier] - SHOW[b[0].tier] || b[0].pop - a[0].pop);
+      for (const [p, i] of order) {
+        const r = DOT[p.tier] * u, sel = NET.sel === i;
+        s += `<circle cx="${p.at[0]}" cy="${p.at[1]}" r="${r1(r * 100) / 100}" class="wn-p wn-${p.tier}${p.seat ? " seat" : ""}${sel ? " sel" : ""}" data-net="${i}"/>`;
+        if (z < NAMEZ[p.tier] && !sel) continue;
+        const fs = (p.tier === "city" ? 12.5 : p.tier === "town" ? 11 : 10) * u, b = [p.at[0] + r + 2 * u, p.at[1] - fs * .8, (p.name.length * fs * .56) + 2 * u, fs * 1.15];
+        if (!sel && !free(b)) continue; boxes.push(b);
+        t += `<text x="${r1((p.at[0] + r + 3 * u) * 10) / 10}" y="${r1((p.at[1] + fs * .36) * 10) / 10}" class="wn-t wn-t-${p.tier}" style="font-size:${r1(fs * 100) / 100}px;stroke-width:${r1(2.6 * u * 100) / 100}px" data-net="${i}">${esc(p.name)}</text>`;
+      }
+      // the states' names over their capitals, while the map is far
+      if (z < 2.4) for (const st of R.states || []) { const c = R.places.find(p => p.id === st.capital || p.name === st.capital); if (c) t += `<text x="${c.at[0]}" y="${r1(c.at[1] - 16 * u)}" class="wn-st" style="font-size:${r1(14 * u * 100) / 100}px;stroke-width:${r1(3 * u * 100) / 100}px" text-anchor="middle">${esc(st.name)}</text>`; }
+      gp.innerHTML = s + t;
+    }
+    // the roads of the network that leave a point, as bearings and where they lead (what a city laid out there is told)
+    function netRoadsAt(at) {
+      const R = netData(); if (!R) return null; const near = (WD.G ? WD.G.cell : 4) * 2.2, out = [];
+      for (const r of netL().roads || []) {
+        if (!/trade|major|regional|local|caravan/.test(r.c)) continue;
+        for (const [pts, far] of [[r.pts, r.pts[r.pts.length - 1]], [r.pts.slice().reverse(), r.pts[0]]]) {
+          if (Math.hypot(pts[0][0] - at[0], pts[0][1] - at[1]) > near) continue;
+          if (Math.hypot(far[0] - at[0], far[1] - at[1]) <= near) continue;
+          const to = pts.find(p => Math.hypot(p[0] - at[0], p[1] - at[1]) > near) || far, dest = R.places.reduce((b, p) => { const d = Math.hypot(p.at[0] - far[0], p.at[1] - far[1]); return d < b[1] && Math.hypot(p.at[0] - at[0], p.at[1] - at[1]) > near ? [p, d] : b; }, [null, near])[0];
+          out.push([Math.round(bearing(to[0] - at[0], to[1] - at[1])), dest ? dest.name : "the road"]);
+        }
+      }
+      return out.slice(0, 6);
+    }
+    function netPanel(i) {
+      const R = NET.R, p = R && R.places[i]; if (!p) return "";
+      const st = (R.states || []).find(s => s.id === p.state), sitew = { ford: "at a ford", bridge: "at a bridge", mouth: "where a river meets the sea", coast: "on the coast", river: "on a river", hill: "in the hills", high: "high in the mountains", oasis: "at an oasis", pass: "on the way over a pass", market: "where roads meet", plain: "in open country" }[p.site] || "";
+      const ways = netRoadsAt(p.at) || [], can = A.worldCity.can(WD);
+      return `<button type="button" class="wm-x" data-w="close" aria-label="Close">×</button>
+        <p class="kl">${esc(NTIER[p.tier] || p.tier)}${p.seat ? " · a capital" : ""}${p.port ? " · a port" : p.river ? " · a river port" : ""}</p><h3>${esc(p.name)}</h3>
+        <p>${esc(`${NTIER[p.tier] || "A place"} ${sitew}; it lives by ${NMAKES[p.makes] || "its fields"}${p.grew ? ", and grew with the trade through it" : ""}.`)}</p>
+        ${st ? `<p class="kn">${esc(st.name)}</p>` : ""}
+        ${ways.length ? `<p class="kn">Roads to ${esc([...new Set(ways.map(w => w[1]))].join(", "))}.</p>` : ""}
+        ${can ? `<button type="button" class="prim wm-enter" data-w="netenter">Enter ${esc(p.name)} · 3D map</button><p class="kn">Its streets are laid out as you enter, by the city generator, for where it lies and the roads that reach it.</p>` : ""}
+        <p class="kn">Grown with the road network (on trial), not one of the story's places.</p>`;
     }
     function drawRoutes() {
       let s = "";
@@ -1059,6 +1171,7 @@
       cam.setAttribute("transform", `matrix(${k} 0 0 ${k} ${r1(V.tx)} ${r1(V.ty)})`);
       if (CUR.on && CUR.k && (k / CUR.k > 1.3 || k / CUR.k < .77)) drawCurrents();
       if (COA.on && COA.k && (k / COA.k > 1.3 || k / COA.k < .77)) drawCoasts();
+      if (NET.k && (k / NET.k > 1.25 || k / NET.k < .8)) drawNetPlaces();
       if (S.draft || (S.edit && S.selFeat) || $(".wm-hdl").firstChild) drawHandles();
       for (const t of cam.querySelectorAll(".wm-rl")) t.style.opacity = z > 5 ? 0 : z > 3 ? (5 - z) / 2 : 1;
       const sc = $(".wm-scale");
@@ -1222,6 +1335,7 @@
       if (L && seen(L)) { panel.hidden = false; panel.innerHTML = locPanel(L); }
       else if (r && routeSeen(r)) { panel.hidden = false; panel.innerHTML = routePanel(r); }
       else if (f && (gm() || !f.hidden)) { panel.hidden = false; panel.innerHTML = featPanel(fk, f); }
+      else if (NET.sel != null && netOn()) { panel.hidden = false; panel.innerHTML = netPanel(NET.sel); }
       else { panel.hidden = true; panel.innerHTML = ""; }
     }
 
@@ -1259,6 +1373,14 @@
         : S.tool === "label" ? "Click where the name goes."
         : S.edit ? "Drag a place, a river, a realm's border or a name to move it. Click one to change it." : `Drag to pan · scroll or pinch to zoom · click a place for what is there${Object.keys(A.cities || {}).length ? " and to enter its 3D map" : ""}.`;
       $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(k === "trade" ? "Trade road" : ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
+      // (the road network's key, while it is shown: the ranks of road it has, the water's routes, the signs)
+      if (netOn()) {
+        const R = netData(), LD = netL(), lv = netLvN(), has = new Set((LD.roads || []).map(r => r.c)), hasW = new Set((LD.water || []).map(w => w.c)), mk = new Set((LD.marks || []).map(m => m.k));
+        const line = ([c, w, d, cs]) => `<svg width="28" height="10" aria-hidden="true">${cs ? `<line x1="1" y1="5" x2="27" y2="5" stroke="var(--wm-halo)" stroke-width="${cs}" stroke-linecap="round"/>` : ""}<line x1="1" y1="5" x2="27" y2="5" stroke="${c}" stroke-width="${w}" stroke-dasharray="${d}" stroke-linecap="round"/></svg>`;
+        const NAME = Object.assign({ sea: "Sea lane", coast: "Coastal shipping", river: "River route" }, NNAMES[3], R.era === "future" && (lv || 3) >= 3 ? NNAMES.future : NNAMES[lv] || {}, R.era === "future" ? { sea: "Shipping lane", river: "River barge route" } : {});
+        const SIGN = { bridge: ["Bridge", '<path d="M3 3h12M3 8h12" stroke="var(--wm-ink)" stroke-width="1.4"/>'], ford: ["Ford", '<path d="M3 4q3 2 6 0t6 0M3 8q3 2 6 0t6 0" fill="none" stroke="#2e6a96" stroke-width="1.2"/>'], ferry: ["Ferry", '<circle cx="9" cy="5.5" r="3" fill="#2e6a96"/>'], pass: ["Pass", '<path d="M4 9L9 2l5 7" fill="none" stroke="var(--wm-ink)" stroke-width="1.4"/>'], tunnel: ["Tunnel", '<path d="M6 1.5q-2.6 4 0 8M12 1.5q2.6 4 0 8" fill="none" stroke="var(--wm-ink)" stroke-width="1.4"/>'], customs: ["Customs post", '<rect x="6" y="2.5" width="6" height="6" fill="#c9a23a" stroke="#222" stroke-width=".7"/>'] };
+        $(".wm-hint").insertAdjacentHTML("afterbegin", `<span class="lg kn"><strong>Road network (trial)</strong> · ${lv ? `development ${lv}, ${esc((LD.name || "").toLowerCase())}: ` : ""}${esc(LD.say || R.eraName || "")} · grown over ${(LD.ages || R.ages || []).length || 4} ages</span>` + ["trade", "major", "regional", "caravan", "local", "path", "old"].filter(c => has.has(c)).map(c => `<span class="lg">${line(NSTY[c])}${esc(NAME[c])}</span>`).join("") + ["sea", "coast", "river"].filter(c => hasW.has(c)).map(c => `<span class="lg">${line(NWS[c])}${esc(NAME[c])}</span>`).join("") + ((R.border || []).length ? `<span class="lg"><svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" class="wn-border" style="stroke-width:1.4px"/></svg>Border</span>` : "") + Object.entries(SIGN).filter(([k]) => mk.has(k)).map(([, [nm, g]]) => `<span class="lg"><svg width="18" height="11" aria-hidden="true">${g}</svg>${esc(nm)}</span>`).join("") + `<span class="lg kn">Zoom in for the towns, then the villages, local roads and paths</span>`);
+      }
       // (the coasts' key, while their layer is shown: the kinds this world has, the most common first)
       if (COA.on && WD.T && WD.T.coastKinds) { const F = WD.T._formU8 || (WD.T._formU8 = unb64(WD.T.coastForm)), cnt = {}; if (F) for (const v of F) if (v) cnt[v] = (cnt[v] || 0) + 1; $(".wm-hint").insertAdjacentHTML("afterbegin", Object.entries(WD.T.coastKinds).sort((a, b) => (cnt[b[0]] || 0) - (cnt[a[0]] || 0)).map(([f, [nm, col]]) => `<span class="lg"><svg width="22" height="10" aria-hidden="true"><line x1="1" y1="5" x2="21" y2="5" class="wco-l" style="stroke:${col};stroke-width:4px"/></svg>${esc(nm)}</span>`).join("") + `<span class="lg kn">Point at a numbered pin for why that coast formed</span>`); }
       // (the currents' key, while their layer is shown)
@@ -1435,7 +1557,7 @@
       if (WD.size[0] !== W || WD.size[1] !== H) { [W, H] = WD.size; size(); home(true); }
       if (WD.look !== was || lk !== lastLand) { lastLand = lk; PG = null; ways.clear(); drawLand(); }
       if (keepSel && !WD.byId[keepSel]) S.sel = null; if (keepR && !WD.rById[keepR]) S.selRoute = null; if (S.selFeat && !featOf(S.selFeat)[1]) S.selFeat = null;
-      drawCurrents(); drawCoasts(); drawRoutes(); drawMarkers(); drawFx(); renderPanel(); renderBars();
+      drawCurrents(); drawCoasts(); drawNet(); drawRoutes(); drawMarkers(); drawFx(); renderPanel(); renderBars();
     }
     function note(t) { const n = $(".wm-note"); n.textContent = t; n.hidden = !t; clearTimeout(note.t); if (t) note.t = setTimeout(() => { n.hidden = true; }, 5000); }
 
@@ -1739,7 +1861,11 @@
         if (m.dataset.loc === S.first) return;
         const a = S.first; S.first = null; S.tool = null; renderBars(); routeForm(null, a, m.dataset.loc); return;
       }
-      if (m) { select(m.dataset.loc); return; }
+      if (m) { NET.sel = null; select(m.dataset.loc); return; }
+      // (a settlement of the road network: what it is, and its city to enter)
+      const nt = !r && netOn() && target && target.closest ? target.closest("[data-net]") : null;
+      if (nt) { NET.sel = +nt.dataset.net; S.sel = null; S.selRoute = null; S.selFeat = null; S.journey = null; drawMarkers(); drawRoutes(); drawNetPlaces(); renderPanel(); return; }
+      if (NET.sel != null) { NET.sel = null; drawNetPlaces(); renderPanel(); }
       if (r) { selectRoute(r.dataset.route); return; }
       const fe = target && target.closest ? target.closest("[data-feat]") : null;
       if (fe) { selectFeat(fe.dataset.feat); return; }
@@ -1750,7 +1876,9 @@
       const m = e.target.closest && e.target.closest(".wl"), r = !m && e.target.closest && e.target.closest("[data-route]");
       const id = m ? m.dataset.loc : null;
       if (id !== S.hover) { S.hover = id; place(); }
-      if (m) {
+      const nt = !m && !r && NET.R && netOn() && e.target.closest && e.target.closest("[data-net]"), np = nt && NET.R.places[+nt.dataset.net];
+      if (np) { tip.innerHTML = `<strong>${esc(np.name)}</strong> · ${esc(NTIER[np.tier] || np.tier)}${np.port ? " · a port" : ""} · ${esc(NMAKES[np.makes] || "")}`; }
+      else if (m) {
         const L = WD.byId[id], pl = placesOf(L).length;
         tip.innerHTML = `<strong>${esc(L.name)}</strong> · ${esc((KINDS[L.kind] || [0, L.kind])[1])}${L.state !== "known" ? " · " + esc((STATES.find(s => s[0] === L.state) || [0, ""])[1]) : ""}${L.city && ctx.hasCity(L.city) ? " · 3D map" : ""}${pl ? ` · ${pl} place${pl > 1 ? "s" : ""}` : ""}${L.desc ? `<br><span>${esc(L.desc.length > 120 ? L.desc.slice(0, 117) + "…" : L.desc)}</span>` : ""}`;
       } else if (r) {
@@ -1790,7 +1918,10 @@
       const b = t.closest("[data-w]"); if (!b) return;
       const L = S.sel && WD.byId[S.sel], R = S.selRoute && WD.rById[S.selRoute], P = WD.party;
       switch (b.dataset.w) {
-        case "close": S.sel = null; S.selRoute = null; S.selFeat = null; S.journey = null; drawMarkers(); drawRoutes(); drawFx(); renderPanel(); break;
+        case "close": S.sel = null; S.selRoute = null; S.selFeat = null; S.journey = null; if (NET.sel != null) { NET.sel = null; drawNetPlaces(); } drawMarkers(); drawRoutes(); drawFx(); renderPanel(); break;
+        case "roadnet": NET.on = !NET.on; NET.sel = null; try { ctx.store.set("world-roadnet", NET.on ? "1" : "0"); } catch (_) {} drawNet(); drawRoutes(); drawMarkers(); renderPanel(); renderBars(); break;
+        case "devreset": { const R = netData(); if (R) setDev(R.level); break; }
+        case "netenter": { const p = NET.R && NET.R.places[NET.sel]; if (!p) break; const NL = { id: "net-" + p.id, name: p.name, kind: p.tier === "city" ? (p.port ? "port" : "city") : p.tier === "town" ? (p.port ? "port" : "town") : "village", at: p.at, netRoads: netRoadsAt(p.at) || [] }; const cid = A.worldCity.can(WD) ? A.worldCity.make(WD, NL) : null; if (cid && ctx.hasCity(cid)) ctx.enter(cid, null); break; }
         case "brush": case "river": case "realm": case "label": { const w = b.dataset.w; S.tool = S.tool === w ? null : w; S.first = null; S.draft = null; S.cur = null; if (S.tool) { S.sel = null; S.selRoute = null; S.selFeat = null; renderPanel(); } renderBars(); drawFx(); break; }
         case "base": save("shape", { base: b.dataset.base, strokes: (OV.shape && OV.shape.strokes) || [] }); break;
         case "finish": finishDraft(); break;
@@ -1801,7 +1932,7 @@
         case "delfeat": { const [, f] = featOf(S.selFeat); if (f) twice(b, () => { S.selFeat = null; save("f-" + f.id, f.added ? null : { gone: true }); }); break; }
         case "resetfeat": if (S.selFeat) save("f-" + S.selFeat, null); break;
         case "duploc": if (L) { let id = L.id + "-2"; while (WD.byId[id] || OV.loc[id]) id = L.id + "-" + Math.floor(Math.random() * 900 + 100); const c = {}; for (const k of ["name", "kind", "state", "region", "owner", "desc", "gm"]) if (L[k] != null) c[k] = L[k]; c.name = L.name + " (copy)"; c.at = [r1(clamp(L.at[0] + 22, 0, W)), r1(clamp(L.at[1] + 16, 0, H))]; S.sel = id; save("l-" + id, c); } break;
-        case "enter": if (L) { const cid = L.city || L.id; if (!ctx.hasCity(cid) && A.worldCity.can(WD)) A.worldCity.make(WD, L); if (ctx.hasCity(cid)) ctx.enter(cid, L.id); } break;
+        case "enter": if (L) { const cid = L.city || L.id; if (!ctx.hasCity(cid) && A.worldCity.can(WD)) { if (netOn()) L.netRoads = netRoadsAt(L.at) || []; A.worldCity.make(WD, L); delete L.netRoads; } if (ctx.hasCity(cid)) ctx.enter(cid, L.id); } break;
         case "make": if (L && ctx.makeCity) { b.disabled = true; b.textContent = "Making the map…"; Promise.resolve(ctx.makeCity(L, WD)).catch(err => { b.disabled = false; b.textContent = "Make its 3D map now"; note("The map could not be made: " + ((err && err.message) || err)); }); } break;
         case "edit": S.edit = !S.edit; S.tool = null; S.first = null; S.draft = null; S.cur = null; root.classList.toggle("editing", S.edit); renderBars(); renderPanel(); drawFx(); break;
         case "addloc": S.tool = S.tool === "loc" ? null : "loc"; S.first = null; renderBars(); break;
@@ -1876,8 +2007,12 @@
       drawMarkers();
     }
 
+    // the development slider: its name follows the thumb, the network changes where it is let go
+    const devIn = $(".wm-dev input");
+    if (devIn) { devIn.addEventListener("input", () => { const R = netData(), n = +devIn.value; $(".wm-devn").textContent = `${n} · ${((R && R.levels && R.levels[n]) || {}).name || ""}`; }); devIn.addEventListener("change", () => setDev(+devIn.value)); }
+
     /* ---- first paint */
-    drawLand(); drawCurrents(); drawCoasts(); renderBars();
+    drawLand(); drawCurrents(); drawCoasts(); drawNet(); renderBars();
     if (DRAW) {
       // trace the picture once it has loaded; the map is drawn again from what was found
       const img = new Image();

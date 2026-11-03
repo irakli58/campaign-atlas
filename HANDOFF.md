@@ -30,6 +30,22 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
 
 ## Done (newest first)
 
+- **The road network, on trial** (3 Nov; the user's request docs/requests/2026-11-03-road-networks.md; the research and design in docs/research/2026-11-03-road-networks.md).
+  - The generator is scripts/world-roads.js in the skill. `atlas.js roads <dir>` writes world-roads.js and changes nothing else.
+  - **What it makes:**
+    - towns and villages by central-place spacing;
+    - roads grown over four ages, the biggest trade first and each road reused by the next (the sequential road model);
+    - costs from Tobler's slope speeds, switchbacks over a cart's grade, rivers crossed by ford, ferry or bridge, the sea and navigable rivers far cheaper;
+    - states round the capitals by travel cost, with a toll at their borders;
+    - road ranks by what they join.
+  - **On the page:** the world map's **Road network (trial)** button (atlas-world.js NET). Finer things show as the map comes closer; the story's routes run along the network; a network town opens in 3D, its city told the roads that reach it.
+  - **Development slider:** the user liked the generation and asked for a slider of how advanced the civilisation is, the default being "what ever the current one is". The network is made at levels 1 tribal to 5 modern on the same land, settlements and borders; level 3 is the default and identical to the network first shown. The choice is kept in the map's style (OV.style.roaddev).
+  - **Science fiction:** era future gives colony names, colonial states and sci-fi road names.
+  - The rest of their road-development paste (drawing roads by hand, density setting, per-country levels, preview and regenerate) was narrowed by the user to the slider alone: not to be built unless asked.
+  - **Not yet replacing the old route drawing:** that waits for the user's approval.
+  - Tests in the workspace: dev/roads-view.js, dev/roads-shots.js, dev/roads-gallery.js (six worlds, measured against real networks).
+- **Modular features: approved** (3 Nov), with the user's answers in reviews/2026-11-03-modules.md. Safety is always on; there are both a Start here card and a gear button; a sixth preset, Science fiction, was added for "dont forget scifi too". To build: item 6c below.
+
 - **Recorded sessions and the table's memory, a prototype** (3 Nov; the user asked to see the architecture and a working recording-to-memory prototype before major changes). The user added that the recorder will usually be a separate phone, or a laptop, maybe a Mac.
   - The tab **Recorded sessions** (engine/atlas-sessions.js) records on the page in ten-second pieces kept in IndexedDB: consent read and ticked; pause, go on, stop; a banner on every page; wake lock; the microphone taken up again after a lock; an interrupted recording offered back.
   - The app's **recorder link** (lib/recorder-lan.js) is https on the app's port + 2, with the app's own EC certificate (lib/selfsigned.js; phones allow the microphone only over https). The phone's page is ui/recorder.html. The sound reaches the campaign's recordings/ folder as it is recorded, and a phone recorder app's file can be sent whole.
@@ -86,9 +102,10 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
      10. pacing from the words (15);
      11. the table, projected (13);
      12. one world, many campaigns (14).
-   - Each one taught, tested, committed. The review's items (reviews/2026-11-03-review.md) and the modular-features
-     proposal (reviews/2026-11-03-modules.md) still wait for the user's answers.
-6c. **Modular features** (the user's request of 3 Nov, docs/requests/2026-11-03-modular-features.md): inventory every feature, propose the module structure, levels, presets and the Campaign Features settings, and show the user before major architectural changes; then implement per campaign (data never deleted, background work really stopped).
+   - Each one taught, tested, committed. The review's items (reviews/2026-11-03-review.md) still wait for the user's answers.
+6c. **Modular features: APPROVED 3 Nov, to build** (docs/requests/2026-11-03-modular-features.md; the plan and the user's answers in the workspace's reviews/2026-11-03-modules.md): the 17 modules with their levels, safety always on, the presets (plus Science fiction), the settings on a Start here card AND a gear button at the top of the page; per campaign in campaign.js `features` and the page's database; off means off (tabs, tools, watchers, background work, and the files left out of the build); data never deleted; tested on the presets with the database compared before and after; lessons follow the switches.
+6d. **The road network** (on trial, see Done): waits for the user's word on replacing the old route drawing.
+6e. **Science-fiction planets** (docs/requests/2026-11-03-scifi-planets.md) and **fantasy dimensions and planes** (docs/requests/2026-11-03-fantasy-dimensions.md): researched, and their plans written for the user to approve (the workspace's reviews/2026-11-03-planets.md and reviews/2026-11-03-dimensions.md). Both rest on one foundation, **many maps per campaign** (a planet's surface and moons, a plane's layers). The recommended order: modules, then that foundation, then planets or dimensions. **Nothing to be built before the user answers the plans' questions.**
 7. **Finally, the UI/UX polish** across the app: make a checkpoint branch first, keep the identity, test every workflow and screen size, update the lessons. **At its start, remind the user** to review the narrator's voice, the voice quality and every sound effect with them (they said some are "really bad"); change nothing there before then.
 
 Open-ended: the asset library; expedition planning for planets.
