@@ -198,7 +198,7 @@
     paintChoices();
     paintConnect();
     // the world and the kind, as last chosen
-    if (!form.dataset.world) { form.dataset.world = 1; const g = store.get("genre"), gi = g && form.querySelector(`input[name=genre][value="${g}"]`); if (gi) gi.checked = true; }
+    if (!form.dataset.world) { form.dataset.world = 1; const g = store.get("genre"), gi = g && form.querySelector(`input[name=genre][value="${g}"]`); if (gi) gi.checked = true; const u = store.get("uses"); if (u && form.uses && form.uses.querySelector(`option[value="${u}"]`)) form.uses.value = u; }
     paintWorld();
     // a draft survives a reload
     for (const n of DRAFT) { const v = store.get("draft-" + n); if (v && !form[n].value) form[n].value = v; }
@@ -339,6 +339,8 @@
     o.world = (form.querySelector("input[name=world]:checked") || {}).value || "auto";
     o.maps = (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d";
     o.genre = genreNow(); o.kind = kindNow(); o.subgenre = form.subgenre.value; o.period = genreNow() === "modern" ? form.period.value.trim() : ""; o.council = councilOut(); o.more = moreOut();
+    // (what the campaign uses: a preset of the skill's engine/atlas-modules.js, kept for the next campaign too)
+    o.uses = form.uses ? form.uses.value : "everything"; store.set("uses", o.uses);
     if (o.world === "drawing") { if (!DRAWING) { err.textContent = "Choose the picture of your map (World map, From my own map)."; return; } o.drawing = DRAWING; }
     if (o.world === "real") { o.worldplace = form.worldplace.value.trim(); if (!o.worldplace) { err.textContent = "Say which part of the real world the map should show."; form.worldplace.focus(); return; } }
     const btn = $("#gobtn"); btn.disabled = true;

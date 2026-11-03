@@ -104,7 +104,9 @@
 
   /* ---- the purse, the stash, the merchants */
   const econ = k => (S() && S().get("econ", k)) || {};
-  const mode = () => econ("opts").mode || D().mode || "simple";
+  // (simple or full is Money and goods' own level in What this campaign uses, where the campaign has chosen; else as before)
+  const chosen = () => A.modules && A.config && (A.config.features || (S() && S().get("features", "now")));
+  const mode = () => chosen() ? (A.modules.on("money", "full") ? "full" : "simple") : econ("opts").mode || D().mode || "simple";
   const purse = () => econ("purse").n != null ? +econ("purse").n : parse(D().purse || 0);
   function spend(by, what) {
     const p = econ("purse"), n = purse() + by, log = (p.log || []).concat({ m: nowM(), by, what: String(what || "").slice(0, 120) }).slice(-40);
@@ -253,7 +255,8 @@
   });
   document.addEventListener("change", e => {
     const t = e.target; if (!t.dataset || !t.dataset.ec) return;
-    if (t.dataset.ec === "mode") S().set("econ", "opts", Object.assign({}, econ("opts"), { mode: t.value }));
+    // (the same choice as Money and goods' level in What this campaign uses, once the campaign has chosen there)
+    if (t.dataset.ec === "mode") { if (chosen()) A.modules.set("money", t.value === "full" ? "full" : "simple"); else S().set("econ", "opts", Object.assign({}, econ("opts"), { mode: t.value })); }
     else if (t.dataset.ec === "place") UI.place = t.value; else if (t.dataset.ec === "merchant") UI.merchant = t.value; else if (t.dataset.ec === "size") UI.size = t.value; else return;
     t.blur(); paint();
   });

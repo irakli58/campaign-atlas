@@ -126,6 +126,8 @@
   const WATCH = ["clock", "events", "eventdefs", "clues", "status", "clocks", "fog", "news"], loaded = new Set();
   let running = false, again = false, held = 0;
   function evaluate() {
+    // (the living world switched off: a still world, nothing happens of itself; atlas-modules.js)
+    if (A.modules && !A.modules.on("living")) return;
     if (running) { again = true; return; }
     running = true; try { evaluateNow(); } finally { running = false; }
     if (again) { again = false; setTimeout(evaluate, 0); }

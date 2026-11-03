@@ -20,7 +20,8 @@
   const VIDEO = params.get("video") === "1";
 
   /* ---- the lessons this page can teach (a lesson whose feature the page lacks is left out) */
-  const ok = l => { try { return !l.needs || l.needs(); } catch (e) { return false; } };
+  // (a lesson of a module switched off in What this campaign uses is not offered: atlas-modules.js)
+  const ok = l => { try { if (l.module && A.modules && !A.modules.on(l.module[0], l.module[1])) return false; return !l.needs || l.needs(); } catch (e) { return false; } };
   const all = () => D.chapters.flatMap(c => c.lessons.map(l => Object.assign({ chapter: c }, l)));
   const avail = () => all().filter(ok);
   const byId = id => all().find(l => l.id === id);

@@ -29,7 +29,8 @@
       ${c.summaries ? `<h4 class="tw-sub">"Previously on…"</h4><div class="t-row"><button type="button" class="t-mini" data-tj="recap">Give them the last "Previously on…"</button><span class="kn">${Object.keys(S().get("recaps") || {}).length} given</span></div>` : ""}
       ${c.people ? `<h4 class="tw-sub">People they have met</h4><p class="t-small">Kept when you show someone's face on their screen: their name, the plain part of who they are, and how they look.</p>${m.length ? `<ul class="tj-list">${m.map(([id, x]) => `<li>${esc(x.name)}${x.role ? ` <span class="kn">${esc(x.role)}</span>` : ""} <button type="button" class="t-link" data-tj="mdel" data-id="${esc(id)}">take back</button></li>`).join("")}</ul>` : `<p class="kn">Nobody yet.</p>`}` : ""}</section>`;
   }
-  TU.addCard("screen", card);
+  // (the players' journal is part of their own copy: The players' side at "The screen and their own copy"; atlas-modules.js)
+  TU.addCard("screen", () => A.modules && !A.modules.on("players", "copy") ? "" : card());
 
   // the people they met: kept when the game master shows a face on their screen (only what the screen showed)
   let lastFace = 0;

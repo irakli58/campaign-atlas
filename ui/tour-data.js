@@ -13,6 +13,7 @@
         { say: "...and paste your story: the plot, the people, the places, as much or as little as you have. The council fills out the rest.", sel: "#newform [name='story']", act: "look" },
         { say: "Then your choices. The world it is set in: fantasy, science fiction, or our world in any period. Or leave it to your story.", sel: "#newform input[name=genre]", act: "look" },
         { say: "The kind of campaign: a detective mystery, a living world to roam with no set path, or a world with mysteries in it.", sel: "#kinds", act: "look" },
+        { say: "What it uses: everything, or only the parts this campaign needs, such as Detective, Sandbox world, Traditional fantasy or Science fiction. Its page leaves out the rest, and the gear at the top of the page changes it any time.", sel: "#f-uses", act: "look" },
         { say: "The council that writes it suits the world: mystery writers for a mystery, fantasy writers for fantasy, science fiction writers for science fiction. Open it to see them, swap a writer, add a specialist, or keep your own council.", sel: "#council summary", act: "look" },
         { say: "How freely the council may change your story, and how long the story they write should be.", sel: "#freedom", act: "look" },
         { say: "More choices, if you want them: the tone, how much horror or magic, how big a world, how many factions and events, and when it begins. Each is chosen to suit your story unless you set it.", sel: "#more summary", act: "look" },

@@ -428,6 +428,13 @@
   // a card another file adds to one of the tabs (atlas-journal.js: the players' journal, on The players' screen)
   const CARDS = {}, addCard = (tab, html) => { (CARDS[tab] = CARDS[tab] || []).push(html); }, cardsFor = tab => (CARDS[tab] || []).map(f => { try { return f(); } catch (e) { console.warn("atlas", e); return ""; } }).join("");
   function addTab(p) { TPLUGS.push(p); const at = p.after ? TABS.findIndex(t => t[0] === p.after) + 1 : TABS.length; TABS.splice(at > 0 ? at : TABS.length, 0, [p.key, p.label, p.icon, p.group, p.desc]); }
+  // which module each tab and quick tool belongs to, and from which level (atlas-modules.js; the user, 3 Nov 2026): a
+  // module off draws neither, and its tab's work does not start. Home, Tonight, the clocks, the party and safety are the
+  // core, always there
+  const KMOD = { screen: ["players"], combat: ["fights"], make: ["makeup"], ask: ["copilot"], board: ["investigation"], export: ["print"], clues: ["investigation"], consistency: ["consistency"], copilot: ["copilot"], dash: ["living", "advanced"], deeds: ["living", "advanced"], factions: ["living", "advanced"], time: ["living"], history: ["living"], money: ["money"], recorded: ["recorded"] };
+  const DMOD = { dice: ["fights"], person: ["makeup"], ask: ["copilot"], screen: ["players"], talk: ["copilot"], time: ["living"] };
+  const modOn = r => !r || !A.modules || A.modules.on(r[0], r[1]);
+  const shownTab = k => modOn(KMOD[k]), shownDock = k => modOn(DMOD[k]);
   const navBtn = ([k, l, ic, , desc]) => `<button type="button" role="tab" data-t="tab" data-tab="${k}" aria-selected="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>`;
   function view() {
     const box = $("#tablev"); if (!box) return;
@@ -437,7 +444,7 @@
       box.innerHTML = `<div class="tv">
         <div class="tv-head"><div><div class="st-kicker">${esc(gmName())} only</div><h2 class="tv-h">At the table</h2><p class="tv-lead">Everything for game night: what your players see, tonight's sheet, the villains' clocks, fights and dice, people and places made up on the spot.</p></div>
           <div class="tv-acts"><button type="button" class="t-btn prim" data-t="openscreen">${T.icon("open")}Open the players' screen</button><button type="button" class="t-btn" data-t="tablet" aria-pressed="${app().dataset.tablet === "1"}" title="Bigger buttons, and the tools along the bottom: for a tablet beside you at the table">${app().dataset.tablet === "1" ? "Table-side view: on" : "Table-side view"}</button></div></div>
-        <div class="tv-wrap"><nav class="tv-nav" role="tablist" aria-label="At the table">${navBtn(TABS[0])}${Object.entries(GROUPS).map(([g, gl]) => `<div class="tvn-g">${esc(gl)}</div>${TABS.filter(t => t[3] === g).map(navBtn).join("")}`).join("")}</nav>
+        <div class="tv-wrap"><nav class="tv-nav" role="tablist" aria-label="At the table">${navBtn(TABS[0])}${Object.entries(GROUPS).map(([g, gl]) => `<div class="tvn-g">${esc(gl)}</div>${TABS.filter(t => t[3] === g && shownTab(t[0])).map(navBtn).join("")}`).join("")}</nav>
         <div class="tv-main"><div class="tv-body" id="tvBody" role="tabpanel"></div><p class="tv-note" id="tvNote" aria-live="polite"></p></div></div></div>`;
     }
     box.querySelectorAll(".tv-nav [data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === UI.tab));
@@ -449,6 +456,7 @@
     const body = $("#tvBody"); if (!body) return;
     const a = document.activeElement; if (a && body.contains(a) && /^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName) && a.type !== "button") { UI.dirty = true; return; }
     UI.dirty = false;
+    if (!shownTab(UI.tab)) UI.tab = "home";
     const plug = TPLUGS.find(p => p.key === UI.tab);
     const f = plug ? plug.html : { home: homeHTML, tonight: tonightHTML, screen: screenHTML, clocks: clocksHTML, combat: combatHTML, make: makeHTML, board: boardHTML, party: partyHTML, safety: safetyHTML, ask: askHTML, export: exportHTML }[UI.tab] || homeHTML;
     body.innerHTML = f();
@@ -489,8 +497,9 @@
         <article class="th-big">${T.icon("tonight", "big")}<div><h3>Tonight</h3><p>${s ? `Session ${esc(s.n)}${s.title ? ": " + esc(s.title) : ""}. ` : ""}${plural(places.length, "place")} they are likely to visit, ${plural(left, "clue")} still to find there.</p>${s && s.start ? `<p class="th-quote">${esc(s.start)}</p>` : ""}
           <div class="t-row"><button type="button" class="t-btn prim" data-t="tab" data-tab="tonight">Open tonight's sheet</button><button type="button" class="t-btn" data-t="printsheet">Print it</button></div></div></article>
       </div>
-      <h3 class="th-h">During the game</h3><div class="th-grid">${["clocks", "combat", "make", "ask", "board"].concat(TPLUGS.filter(p => p.group === "play").map(p => p.key)).map(card).join("")}</div>
-      <h3 class="th-h">Before and after</h3><div class="th-grid">${["party", "safety", "export"].concat(TPLUGS.filter(p => p.group === "prep").map(p => p.key)).map(card).join("")}</div>
+      <h3 class="th-h">During the game</h3><div class="th-grid">${["clocks", "combat", "make", "ask", "board"].concat(TPLUGS.filter(p => p.group === "play").map(p => p.key)).filter(shownTab).map(card).join("")}</div>
+      <h3 class="th-h">Before and after</h3><div class="th-grid">${["party", "safety", "export"].concat(TPLUGS.filter(p => p.group === "prep").map(p => p.key)).filter(shownTab).map(card).join("")}</div>
+      ${A.modules ? (() => { const su = A.modules.summary(); return `<section class="th-mods"><h3>What this campaign uses</h3><p><b>${esc(su.name)}</b> · ${su.n} of ${su.of} parts of Atlas in use. Switch off what this campaign does not need: it is hidden and stops its work, and nothing is deleted.</p><div class="t-row"><button type="button" class="t-btn" data-mf-open>Choose what it uses</button></div></section>`; })() : ""}
       <section class="th-how"><h3>How a game night goes</h3><ol>
         <li><b>Before the first game.</b> Ask the table what must stay out of the story and what may only happen off screen, and write it under ${go("safety", "Safety")}. See how the players' characters are woven in under ${go("party", "The party")}.</li>
         <li><b>Before each game.</b> Read ${go("tonight", "tonight's sheet")}. Print it, or the handouts, if you like paper (${go("export", "Print and export")}).</li>
@@ -1031,7 +1040,7 @@
   function dockInit() {
     if ($("#tDock") || !app()) return;
     const dock = document.createElement("div"); dock.id = "tDock"; dock.className = "t-dock keeper"; dock.setAttribute("role", "toolbar"); dock.setAttribute("aria-label", "Table tools");
-    dock.innerHTML = DOCK.map(([k, l, ic]) => `<button type="button" data-dock="${k}" aria-expanded="false" title="${esc(l)}">${T.icon(ic)}<span>${esc(l)}</span>${k === "screen" ? `<i class="t-dot" aria-hidden="true"></i>` : ""}</button>`).join("");
+    dock.innerHTML = DOCK.map(([k, l, ic]) => `<button type="button" data-dock="${k}" aria-expanded="false" title="${esc(l)}"${shownDock(k) ? "" : " hidden"}>${T.icon(ic)}<span>${esc(l)}</span>${k === "screen" ? `<i class="t-dot" aria-hidden="true"></i>` : ""}</button>`).join("");
     const pop = document.createElement("div"); pop.id = "tPop"; pop.className = "t-pop keeper"; pop.hidden = true; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Table tool");
     const msg = document.createElement("p"); msg.id = "tDockNote"; msg.className = "t-docknote keeper"; msg.setAttribute("aria-live", "polite");
     app().append(pop, msg, dock);
@@ -1093,9 +1102,22 @@
       if (A.locations) A.locations.init(S, ctx);
       // the cities of the world map already laid out on the page come back (atlas-world.js)
       if (A.worldCitiesInit) A.worldCitiesInit(S);
-      // the players' copy: what the players have been shown, kept for it as the table changes (atlas-share.js)
-      if (A.share) A.share.start(S, ctx.prefs);
-      for (const p of TPLUGS) if (p.init) p.init(S, ctx);
+      // the players' copy: what the players have been shown, kept for it as the table changes (atlas-share.js); only with
+      // The players' side at "The screen and their own copy", and from the moment it is switched there (atlas-modules.js)
+      let shareOn = false;
+      const shareStart = () => { if (!shareOn && A.share && (!A.modules || A.modules.on("players", "copy"))) { shareOn = true; A.share.start(S, ctx.prefs); } };
+      shareStart(); if (A.modules) A.modules.watch(shareStart);
+      // (each tool's work starts only while its module is on, and when it is switched on later; atlas-modules.js)
+      const startPlugs = () => { for (const p of TPLUGS) if (p.init && !p._started && shownTab(p.key)) { p._started = true; try { p.init(S, ctx); } catch (e) { console.warn("atlas: " + p.key, e); } } };
+      if (A.modules) {
+        A.modules.connect(S);
+        A.modules.watch(() => {
+          startPlugs();
+          const box = $("#tablev"); if (box && box.dataset.done) { box.dataset.done = ""; if (visible()) view(); }
+          for (const b of document.querySelectorAll("#tDock [data-dock]")) { b.hidden = !shownDock(b.dataset.dock); if (b.hidden && UI.dock === b.dataset.dock) dockClose(); }
+        });
+      }
+      startPlugs();
       const MAP = { screen: ["screen", "home"], fog: ["screen"], clocks: ["clocks", "tonight", "home"], log: ["tonight", "home"], combat: ["combat", "home"], board: ["board", "home"], journal: ["party", "home"], safety: ["safety", "tonight", "home"], fly: ["make", "screen", "home"], clues: ["tonight", "board", "home"], status: ["tonight", "board"] };
       for (const f of Object.keys(MAP)) S.watch(f, () => {
         if (f === "fly") for (const x of Object.values(S.get("fly") || {})) if (x.kind && x.kind !== "person") flyPlace(x);

@@ -146,6 +146,8 @@
   // (the words alone, without the sound, are a recording too: the user wants what was said written down, 3 Nov 2026)
   const canStart = () => !why() && (UI.sound || (UI.live && !!SR));
   async function start() {
+    // (Recorded sessions at "The words": the words only, never the sound; atlas-modules.js)
+    if (A.modules && !A.modules.on("recorded", "sound")) UI.sound = false;
     if (R || !canStart()) return;
     const n = +UI.sess || +api.session() || 1, id = uid("r");
     const meta = { session: n, started: Date.now(), state: "recording", dur: 0, parts: [], where: UI.sound ? "here" : "none", noSound: !UI.sound || undefined, device: device(), live: !!(UI.live && SR), lang: UI.lang || "", consent: { t: Date.now(), text: CONSENT }, wm: W() ? W().now() : null, speakers: {} };
@@ -257,6 +259,8 @@
      call to Claude, nothing interrupts) */
   const HINTS = [];
   function hintsFor(rec, seg) {
+    // (reminders unasked only with the copilot at "Also unasked"; atlas-modules.js)
+    if (A.modules && !A.modules.on("copilot", "unasked")) return;
     if (!memList().length) return;
     const t = seg[0], heard = (hintsFor.heard = hintsFor.heard || {});
     for (const ref of entitiesIn(seg[3])) {
@@ -499,7 +503,7 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
         <label class="t-fogck"><input type="checkbox" data-sm="consent"${UI.consent ? " checked" : ""}> Everyone at the table knows and has agreed</label></div>
       ${SR ? `<label class="t-fogck"><input type="checkbox" data-sm="live"${UI.live ? " checked" : ""}> Write the words down as we play</label> <select class="t-in tw-sel" data-sm="lang" aria-label="In which language">${LANGS.map(([k, l]) => opt(k, l, UI.lang)).join("")}</select>
         <p class="t-small kn">The words are written by the browser's own speech service${/Chrome|Edg/.test(navigator.userAgent) ? " (Google's, over the internet" + (opts().local ? ", or on this device where it can" : "") + ")" : /Safari/.test(navigator.userAgent) ? " (Apple's)" : ""}, as they are said; who said them is not told apart.</p>` : `<p class="t-small kn">This browser cannot write the words as you play (Chrome, Edge and Safari can); keep the sound, and add its words afterwards.</p>`}
-      <label class="t-fogck"><input type="checkbox" data-sm="sound"${UI.sound ? " checked" : ""}> Keep the sound too</label>
+      ${A.modules && !A.modules.on("recorded", "sound") ? `<p class="t-small kn">The words only: keeping the sound too is switched off in What this campaign uses.</p>` : `<label class="t-fogck"><input type="checkbox" data-sm="sound"${UI.sound ? " checked" : ""}> Keep the sound too</label>`}
       <div class="t-row sm-big"><button type="button" class="t-btn prim" data-sm="start"${UI.consent && canStart() ? "" : " disabled"}>${T.icon("mic")}Start recording</button></div>`}
       ${UI.err ? `<p class="t-err">${esc(UI.err)}</p>` : ""}</section>`;
   }

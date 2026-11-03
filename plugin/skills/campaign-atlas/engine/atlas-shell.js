@@ -88,6 +88,7 @@
       <input id="q" class="search" type="search" placeholder="Search places, people, clues" aria-label="Search places, people and clues">
       ${ACTS.length ? `<select id="act" class="actsel" aria-label="Filter by act"><option value="all">All acts</option>${ACTS.map(a => `<option value="${a}">${esc(actTitle(a))}</option>`).join("")}</select>` : ""}
       <div class="mode" role="group" aria-label="View mode"><button id="m-keeper" type="button" aria-pressed="${state.mode === "gm"}">${esc(gm)}</button><button id="m-player" type="button" aria-pressed="${state.mode === "player"}">Player-safe</button></div>
+      ${A.modules ? `<button type="button" class="featbtn keeper" data-mf-open title="What this campaign uses: switch parts of Atlas on and off" aria-label="What this campaign uses"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>` : ""}
     </div>
   </header>
   ${A.music ? `<div class="musicbar">${A.music.html()}</div>` : ""}
@@ -341,7 +342,12 @@
       ${story.map((c, i) => `<section class="st-act" id="st-${i}"><h3>${esc(c.title)}</h3>${md(c.md.replace(/^\s*#\s+.*\n/, ""))}</section>`).join("")}
     </div>`;
   }
+  // (a view switched off while it is open: back to the gazetteer)
+  if (A.modules) A.modules.watch(() => { if (state.view && state.view !== "gaz" && ((state.view === "world" && !A.modules.on("world")) || (state.view === "galaxy" && !A.modules.on("stars")) || (state.view === "music" && !A.modules.on("music")))) setView("gaz"); });
   function setView(v) {
+    // (a view whose module is switched off is not opened: atlas-modules.js)
+    const M = A.modules;
+    if (M && ((v === "world" && !M.on("world")) || (v === "galaxy" && !M.on("stars")) || (v === "music" && !M.on("music")))) v = "gaz";
     if (v === "story" && (!story.length || state.mode !== "gm")) v = "gaz";
     if (v === "music" && !$("#v-music")) v = "gaz";
     if (v === "world" && !$("#v-world")) v = "gaz";

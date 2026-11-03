@@ -408,3 +408,53 @@ The user asked (3 Nov 2026; the app's docs/requests/2026-11-03-session-memory.md
 - **Privacy.** The consent is kept with the recording; the sound, the words, or all of it can be deleted, and how long the sound is kept is chosen. Nothing of this reaches the players' screen, their copy or their phones.
 
 **Where it is kept**: collections `recs` (each recording: session, start, length, parts, where the sound is, the speakers' names, the consent; and `opts`: how long to keep the sound, the people at the table), `transcript` (the words, three hundred lines a document: time, length, speaker, words, the words as first written), `memory` (the notes), `sessmem` (each session's summary); the sound in the browser's storage (IndexedDB) or, from the recorder link, in the campaign's `recordings/` folder.
+
+## 24. What this campaign uses
+
+Atlas is made of 17 parts that a campaign can switch off or use less of. The game master chooses with the gear at the top of the page, or the card on At the table's Start here; a campaign can set them in campaign.js. The plan the user approved, with their answers, is in the workspace's reviews/2026-11-03-modules.md.
+
+**The core** is always there:
+- the gazetteer, its places and maps;
+- saving, search and help;
+- Tonight, the clocks and the party;
+- safety: lines and veils, the X-card (the user's choice: never switched off).
+
+**The parts and their levels** (the lowest is always off):
+
+| Part | Levels |
+|---|---|
+| World map | off, to look at, to edit |
+| Cities in 3D | off, to look at, to edit |
+| Map editor and 3D rooms | off, on, with the model library |
+| Caves | off, on |
+| The stars | off, on |
+| Investigation | off, basic, advanced |
+| People | notes only, basic, advanced |
+| Copilot | off, when asked, also unasked |
+| Consistency check | off, on |
+| Fights and dice | off, on |
+| Make it up | off, on |
+| Recorded sessions | off, the words, the words and the sound |
+| Print and export | off, on |
+| The living world | off, basic (time, events, news, history), advanced (factions, consequences, the dashboard) |
+| Money and goods | off, simple, full (merchants, prices that move) |
+| The players' side | off, the screen, the screen and their own copy |
+| Music and voice | off, music, music and narration |
+
+**Presets:** `minimal`, `detective`, `sandbox`, `fantasy`, `scifi`, `everything`, and the game master's own. In campaign.js:
+
+```js
+ATLAS.configure({ features: { preset: "detective" } });          // a preset
+ATLAS.configure({ features: { preset: "fantasy", caves: "off" } }); // a preset, one part changed
+```
+
+**What follows from a choice:**
+- A campaign that never chose keeps everything as before.
+- The page's own choice (collection `features`, doc `now`) wins over campaign.js, at once.
+- **Off means off:** the part's tabs, tools, views and buttons are not drawn, and its work does not start (the world's time does not move, nothing records, no reminders).
+- **Smaller pages:** the build leaves out the files of parts switched off in campaign.js (recorded sessions, money, the dashboard, consequences, factions, the world's time, history, the copilot, the consistency check, the star chart, the caves' tools). The page's settings say a part switched on again comes back when the page is built again.
+- **Nothing is deleted** by switching off; switching back on picks up where it was.
+- **The lessons follow the switches:** a lesson of a part switched off is not offered.
+
+The test is dev/modules-test.js in the workspace (every preset built and opened, everything switched off and on with the saved data compared). It must end "all well".
+

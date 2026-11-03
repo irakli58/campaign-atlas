@@ -28,6 +28,13 @@
         { say: "You are reading your own view: secrets, the room-by-room guide, who knows what.", sel: "#m-keeper", act: "look" },
         { say: "Player-safe hides every secret, so you can show the page itself to the table if you like.", sel: "#m-player", act: "click", try: "Click Player-safe." },
         { say: "And back to your own view.", sel: "#m-keeper", act: "click", try: "Click your own view again." }
+      ] },
+      { id: "modules", title: "What this campaign uses", summary: "Switch off the parts of Atlas a campaign does not need; nothing is deleted.", features: ["modules"], needs: has(".featbtn[data-mf-open]"), steps: [
+        { say: "The gear at the top chooses what this campaign uses. Switch off what it does not need: it is hidden and its work stops. Nothing is deleted, and switching it back on picks up where it was.", sel: ".featbtn[data-mf-open]", act: "click", try: "Click the gear.", wait: 700 },
+        { say: "A preset sets them all at once: Minimal, Detective, Sandbox world, Traditional fantasy, Science fiction or Everything. As before keeps everything as it was.", sel: ".mf-dlg .mf-pres", act: "look" },
+        { say: "Or choose each part yourself: off, or how much of it. A line under a part tells you when it leans on another. Safety is always on.", sel: ".mf-dlg .mf-seg", act: "look" },
+        { say: "Save these as my own keeps your choices as a preset of your own, for the other campaigns you open here.", sel: ".mf-dlg [data-mf-save]", act: "look" },
+        { say: "Done closes it. The same choices are on At the table, under Start here.", sel: ".mf-dlg [data-mf-close]", act: "click", auto: true }
       ] }
     ] },
     { id: "places", title: "Places and their maps", lessons: [
@@ -47,20 +54,20 @@
         { say: "Close it again when you have looked.", sel: "#lmDlg[open] .lm-dlg-x", act: "click", auto: true },
         { say: "And here the floor in 3D, seen from one fixed angle so you never lose your way. Slide and zoom; it never turns.", sel: ".lmap-sec [data-m3d], .lmap-sec [data-lm3d]", act: "look" }
       ] },
-      { id: "editor", title: "Editing a map", summary: "Redraw any map: rooms, doors, stairs, furniture and models, in 2D or 3D.", features: ["mapeditor", "furnish", "models", "mapmarks"], needs: has(".lmap-sec [data-medit]"), steps: [
+      { id: "editor", module: ["mapedit"], title: "Editing a map", summary: "Redraw any map: rooms, doors, stairs, furniture and models, in 2D or 3D.", features: ["mapeditor", "furnish", "models", "mapmarks"], needs: has(".lmap-sec [data-medit]"), steps: [
         { say: "Edit this map opens the map editor. Nothing is kept until you save.", sel: ".lmap-sec [data-medit]", act: "click", try: "Click Edit this map." },
         { say: "Its tools: draw rooms, doors and stairs; furnish with models from the library; place clues.", sel: "#meDlg .me-tools", act: "look", wait: 600 },
         { say: "And put people, dangers and secrets on the map where they are, each with its words.", sel: "#meDlg [data-tool='marks']", act: "look" },
         { say: "Switch between the flat map and 3D: it is the same map.", sel: "#meDlg [data-r3v]", act: "look" },
         { say: "Close it without saving: your map stays as it was.", sel: "#meDlg [data-me='close']", act: "click", auto: true }
       ] },
-      { id: "caves", title: "Caves, riddles and traps", summary: "Generate a cave, mend it, and the riddles and traps it holds.", features: ["caves", "riddles", "traps"], needs: () => !!(window.ATLAS && Object.values(ATLAS.maps || {}).some(M => (M.floors || []).some(F => F.cave))), steps: [
+      { id: "caves", module: ["caves"], title: "Caves, riddles and traps", summary: "Generate a cave, mend it, and the riddles and traps it holds.", features: ["caves", "riddles", "traps"], needs: () => !!(window.ATLAS && Object.values(ATLAS.maps || {}).some(M => (M.floors || []).some(F => F.cave))), steps: [
         { say: "A cave's page has its traps and riddles in its guide: how they are set off, the signs, how to disarm them, and the riddle's answer folded away.", sel: ".lm-ref", act: "look" },
         { say: "In the map editor, Generate a cave makes one from your settings: chambers, water, chasms, secrets, every chamber reachable. Check and Mend keep it so.", sel: ".lmap-sec [data-medit]", act: "look" }
       ] }
     ] },
     { id: "world", title: "The world", lessons: [
-      { id: "worldmap", title: "The world map", summary: "The lands between your places, drawn in a style fitting your setting; each city opens in 3D.", features: ["worldmap", "maplook", "worldedit", "oceancurrents", "geocoasts", "roadnet", "askchange"], needs: has("#v-world"), steps: [
+      { id: "worldmap", module: ["world"], title: "The world map", summary: "The lands between your places, drawn in a style fitting your setting; each city opens in 3D.", features: ["worldmap", "maplook", "worldedit", "oceancurrents", "geocoasts", "roadnet", "askchange"], needs: has("#v-world"), steps: [
         { say: "The world map shows the land between your places.", sel: "#v-world", act: "click", try: "Click World map.", wait: 1600 },
         { say: "Choose how it is drawn: a painted fantasy map, fantasy parchment, an engraved atlas, a modern atlas or a science-fiction survey. The players see the same.", sel: ".wm-look", act: "look" },
         { say: "Zoom in: finer things appear as you come closer.", sel: ".wm-ctl [data-z='in']", act: "click", try: "Click + to zoom in.", wait: 700 },
@@ -76,7 +83,7 @@
         { say: "Edit map moves places, adds places and routes, shapes the land itself, and marks the party's journey.", sel: "[data-w='edit']", act: "look" },
         { say: "Back to the Gazetteer.", sel: "#v-gaz", act: "click", auto: true }
       ] },
-      { id: "worldbuild", title: "Shaping the world", summary: "Paint the land, draw rivers, kingdoms and territories, write names on the map; undo any of it.", features: ["worldbuild", "worldedit", "worldland"], needs: has("#v-world"), steps: [
+      { id: "worldbuild", module: ["world", "edit"], title: "Shaping the world", summary: "Paint the land, draw rivers, kingdoms and territories, write names on the map; undo any of it.", features: ["worldbuild", "worldedit", "worldland"], needs: has("#v-world"), steps: [
         { say: "The world map can be changed as much as you like, or made from nothing.", sel: "#v-world", act: "click", try: "Click World map.", wait: 1600 },
         { say: "Edit map opens the tools.", sel: "[data-w='edit']", act: "click", try: "Click Edit map.", wait: 500 },
         { say: "Shape the land paints the land itself: raise land from the sea, carve out a sea or a lake, raise mountains and hills, plant forest, dry it to desert or wet it to swamp.", sel: "[data-w='brush']", act: "click", try: "Click Shape the land.", wait: 500 },
@@ -92,7 +99,7 @@
         { say: "Edit map again puts the tools away.", sel: "[data-w='edit']", act: "click", auto: true, wait: 400 },
         { say: "Back to the Gazetteer.", sel: "#v-gaz", act: "click", auto: true }
       ] },
-      { id: "cityedit", title: "Changing a city", summary: "Move, turn, change or remove buildings; add houses, roads, walls and gates, parks, squares and districts; put people in the streets; make a building one of your places.", features: ["cityedit", "citypeople", "askchange", "realplaces"], needs: has("[data-editcity]"), steps: [
+      { id: "cityedit", module: ["cities", "edit"], title: "Changing a city", summary: "Move, turn, change or remove buildings; add houses, roads, walls and gates, parks, squares and districts; put people in the streets; make a building one of your places.", features: ["cityedit", "citypeople", "askchange", "realplaces"], needs: has("[data-editcity]"), steps: [
         { say: "A city made for your story can be changed as much as you like. A real city keeps its real streets.", sel: "#v-gaz", act: "click", try: "Click Gazetteer.", wait: 900 },
         { say: "Edit the city opens its tools.", sel: "[data-editcity]", act: "click", try: "Click Edit the city.", wait: 500 },
         { say: "Choose a building: then move it, turn it, change its kind, its floors and its roof, or remove it.", sel: ".cebar [data-t='select']", act: "look" },
@@ -106,7 +113,7 @@
         { say: "Done puts the tools away.", sel: ".cebar [data-ce='done']", act: "click", auto: true },
         { say: "+ Add location makes a place of your own anywhere in the city, with its maps, people and clues. In a real city nothing new is built: you click which of its own buildings the place is in, the one under the pointer lights up, and it stays as it stands.", sel: "[data-addloc]", act: "look" }
       ] },
-      { id: "galaxy", title: "The star chart", summary: "A galaxy of hundreds of systems: open a system and its worlds, plot a course, keep the players' charts.", features: ["galaxy", "systems", "starship", "charts"], needs: has("#v-galaxy"), steps: [
+      { id: "galaxy", module: ["stars"], title: "The star chart", summary: "A galaxy of hundreds of systems: open a system and its worlds, plot a course, keep the players' charts.", features: ["galaxy", "systems", "starship", "charts"], needs: has("#v-galaxy"), steps: [
         { say: "A campaign among the stars has its galaxy: every system grown from one seed, the same every time.", sel: "#v-galaxy", act: "click", try: "Click Star chart.", wait: 900 },
         { say: "Drag to move and scroll to come closer: sectors, the powers' territories, the lanes, charted space, and the dangerous and restricted regions.", sel: "#galaxyv .gx-canvas", act: "look" },
         { say: "The ship: where it is, its fuel and how far it can jump.", sel: "#galaxyv [data-gx='ship']", act: "click", try: "Click The ship.", wait: 700 },
@@ -114,7 +121,7 @@
         { say: "Plot a course and Atlas gives the jumps, the fuel, the days and the dangers on the way; making the jump moves the world's time on.", sel: "#galaxyv .gx-side", act: "look" },
         { say: "And what the players' charts show of each system: charted, rumoured, visited, or kept from them. Their screen shows only what is on their charts.", sel: "#galaxyv .gx-side", act: "look" }
       ] },
-      { id: "galaxybuild", title: "Changing the galaxy", summary: "Add and move systems, draw regions, lanes and trade routes, paint territories, change any world; undo any of it.", features: ["galaxyedit", "askchange"], needs: has("#v-galaxy"), steps: [
+      { id: "galaxybuild", module: ["stars"], title: "Changing the galaxy", summary: "Add and move systems, draw regions, lanes and trade routes, paint territories, change any world; undo any of it.", features: ["galaxyedit", "askchange"], needs: has("#v-galaxy"), steps: [
         { say: "The galaxy grows from its seed, and then it is yours to change.", sel: "#v-galaxy", act: "click", try: "Click Star chart.", wait: 900 },
         { say: "Edit the galaxy opens its tools.", sel: "#galaxyv [data-gx='tools']", act: "click", try: "Click Edit the galaxy.", wait: 500 },
         { say: "Add a system, a region (dangerous, restricted, charted or unexplored), a lane, a trade route or a corridor with a length of its own, or a sector. Paint territory gives stars to a power: drag over them.", sel: "#galaxyv .gx-tools", act: "look" },
@@ -127,7 +134,7 @@
       ] }
     ] },
     { id: "table", title: "Game night", lessons: [
-      { id: "screen", title: "The players' screen", summary: "A window for the players: maps a room at a time, handouts, faces, the fog of war.", features: ["players-screen", "fog", "fog3d", "players-copy", "phones", "journal"], needs: has("#v-table"), steps: [
+      { id: "screen", module: ["players"], title: "The players' screen", summary: "A window for the players: maps a room at a time, handouts, faces, the fog of war.", features: ["players-screen", "fog", "fog3d", "players-copy", "phones", "journal"], needs: has("#v-table"), steps: [
         { say: "At the table holds the tools for game night.", sel: "#v-table", act: "click", try: "Click At the table.", wait: 500 },
         { say: "The players' screen is a window of its own for the television or a second screen, with nothing of yours on it.", sel: "[data-t='tab'][data-tab='screen']", act: "click", try: "Click Players' screen.", wait: 500 },
         { say: "Open it, drag it onto the television, and choose what they see from here.", sel: "[data-t='openscreen']", act: "look" },
@@ -143,7 +150,7 @@
         { say: "A question about the campaign, answered from its own words.", sel: "#tDock [data-dock='ask']", act: "click", try: "Click Ask.", wait: 500 },
         { say: "Close the panel with the toolbar button again, or Escape.", sel: "#tDock [data-dock='ask']", act: "click", auto: true }
       ] },
-      { id: "copilot", title: "The copilot", summary: "A person's answer to what a player said, in their voice and from only what they know.", features: ["copilot", "talk", "improvise", "memory"], needs: has("#tDock [data-dock='talk']"), steps: [
+      { id: "copilot", module: ["copilot"], title: "The copilot", summary: "A person's answer to what a player said, in their voice and from only what they know.", features: ["copilot", "talk", "improvise", "memory"], needs: has("#tDock [data-dock='talk']"), steps: [
         { say: "Talk is the copilot, for when a player says something you did not plan for.", sel: "#tDock [data-dock='talk']", act: "click", try: "Click Talk.", wait: 500 },
         { say: "Choose who they are talking to.", sel: "#tPop select[data-cp='who']", act: "look" },
         { say: "Type what the player said. The answer comes in that person's voice, from only what they know: they may lie, dodge or bargain. Change it, ask for another or a different tone, and keep it in their memory only if you say so.", sel: "#tPop .cp-ask, #tPop .cp-talk", act: "look" },
@@ -151,7 +158,7 @@
         { say: "And What do we remember?: anything from earlier sessions, answered from what the table remembers, with the session and the time where each thing was said, and what is fact, a claim, or only the players' idea.", sel: "#tPop .cp-host", act: "look" },
         { say: "Close it from the toolbar.", sel: "#tDock [data-dock='talk']", act: "click", auto: true }
       ] },
-      { id: "recorded", title: "Recorded sessions", summary: "Record the table; its words; what the campaign remembers of every session.", features: ["sessions", "tablememory"], needs: has("[data-t='tab'][data-tab='recorded']"), steps: [
+      { id: "recorded", module: ["recorded"], title: "Recorded sessions", summary: "Record the table; its words; what the campaign remembers of every session.", features: ["sessions", "tablememory"], needs: has("[data-t='tab'][data-tab='recorded']"), steps: [
         { say: "Recorded sessions: the table's own notes, which remember everything that matters, session after session.", sel: "[data-t='tab'][data-tab='recorded']", act: "click", try: "Click Recorded sessions.", wait: 600 },
         { say: "Read the table the few words about recording, tick that everyone agreed, and start. The sound is kept ten seconds at a time, so an interruption loses seconds, not the evening. A banner shows it is recording on every page, with Stop one click away.", sel: "#tvBody .sm-rec", act: "look" },
         { say: "In the Atlas app, a phone of its own can be the recorder: open the recorder link and point the phone at the code. It sends the sound to this computer as it records.", sel: "#tvBody [data-sm='linkon']", act: "look", optional: true },
@@ -174,7 +181,7 @@
         { say: "Clocks: what each villain is doing while the party investigates. Tick them as the world moves.", sel: "[data-t='tab'][data-tab='clocks']", act: "click", try: "Click Clocks and stuck.", wait: 500 },
         { say: "Handouts, drawn as the letters and newspapers they are, go to the players' screen with one click.", sel: "[data-t='tab'][data-tab='screen']", act: "click", auto: true }
       ] },
-      { id: "time", title: "The world's time", summary: "The date in the story, events that wait for your yes, and news for the players.", features: ["worldtime", "events", "news"], needs: has("[data-t='tab'][data-tab='time']"), steps: [
+      { id: "time", module: ["living"], title: "The world's time", summary: "The date in the story, events that wait for your yes, and news for the players.", features: ["worldtime", "events", "news"], needs: has("[data-t='tab'][data-tab='time']"), steps: [
         { say: "The world moves while the party investigates.", sel: "#v-table", act: "click", auto: true, wait: 400 },
         { say: "The world's time: the date in the story, what is coming, and what waits for you.", sel: "[data-t='tab'][data-tab='time']", act: "click", try: "Click The world's time.", wait: 500 },
         { say: "Move time on as the story does: a conversation, a night's rest, a day's journey.", sel: "#tvBody .tw-adv", act: "look" },
@@ -186,30 +193,30 @@
         { say: "Time is in the quick tools as well, with a count of what waits for you.", sel: "#tDock [data-dock='time']", act: "click", try: "Click Time.", wait: 500 },
         { say: "Close it from the toolbar.", sel: "#tDock [data-dock='time']", act: "click", auto: true }
       ] },
-      { id: "factions", title: "Factions and people", summary: "Who holds power, what they have and want, how they stand; where everyone is now.", features: ["factions", "lives"], needs: has("[data-t='tab'][data-tab='factions']"), steps: [
+      { id: "factions", module: ["living", "advanced"], title: "Factions and people", summary: "Who holds power, what they have and want, how they stand; where everyone is now.", features: ["factions", "lives"], needs: has("[data-t='tab'][data-tab='factions']"), steps: [
         { say: "Factions and people: the powers that act in your world, and where each important person is.", sel: "[data-t='tab'][data-tab='factions']", act: "click", try: "Click Factions and people.", wait: 600 },
         { say: "Each faction: who leads it, what it holds, what it has to act with, what it wants, and the step its plan is on. It can do no more than it has.", sel: "#tvBody .fa-card", act: "look" },
         { say: "How they stand toward each other, and toward the party. Change it when the story does; the world's events change it too, and undo it if you take them back.", sel: "#tvBody .fa-rels", act: "look" },
         { say: "And the people, now: where each one is at this hour of the world's time, by their day and their week. Move someone, or mark them missing, hurt or dead.", sel: "#tvBody .fa-people", act: "look" }
       ] },
-      { id: "dashboard", title: "The world at a glance", summary: "The date, what waits for you, what is coming and has happened; how much the world does by itself.", features: ["dashboard"], needs: has("[data-t='tab'][data-tab='dash']"), steps: [
+      { id: "dashboard", module: ["living", "advanced"], title: "The world at a glance", summary: "The date, what waits for you, what is coming and has happened; how much the world does by itself.", features: ["dashboard"], needs: has("[data-t='tab'][data-tab='dash']"), steps: [
         { say: "The world at a glance: the date, what waits for your word, what is coming, what has happened lately, and what the factions and people are doing, on one page.", sel: "[data-t='tab'][data-tab='dash']", act: "click", try: "Click The world at a glance.", wait: 600 },
         { say: "How much the world does by itself. By hand: everything waits for you. Helped: small things happen, the big ones wait. On its own: only the critical waits.", sel: "#tvBody .db-modes", act: "look" },
         { say: "Whatever you choose, the safeguards hold: a death, a war or a place lost always waits for you, nothing reaches the players unless you tell them, and the world is saved before time moves on a day.", sel: "#tvBody .db-safe", act: "look" },
         { say: "Move time on from here, and answer what waits for you without leaving the page.", sel: "#tvBody .db-now .tw-adv", act: "look" }
       ] },
-      { id: "history", title: "The world's history", summary: "Everything that has happened, who knows of it; the world saved and gone back to.", features: ["history"], needs: has("[data-t='tab'][data-tab='history']"), steps: [
+      { id: "history", module: ["living"], title: "The world's history", summary: "Everything that has happened, who knows of it; the world saved and gone back to.", features: ["history"], needs: has("[data-t='tab'][data-tab='history']"), steps: [
         { say: "The world's history: everything that has happened, newest first, with when, why, who, what came of it, and whether the players know.", sel: "[data-t='tab'][data-tab='history']", act: "click", try: "Click The world's history.", wait: 600 },
         { say: "Narrow it to one kind, one person or faction, one place, or what the players know.", sel: "#tvBody .hs-f", act: "look" },
         { say: "As the players know it: what they have seen, found and been told, in the words they heard it.", sel: "#tvBody .hs-pub", act: "look" },
         { say: "Save the world as it is before a big moment, and go back to it if the night goes wrong. Going back can be undone too, and what the party has found stays as it is.", sel: "#tvBody form[data-hs='snap']", act: "look" }
       ] },
-      { id: "deeds", title: "Consequences", summary: "What the party did, and what comes of it: at once, in days, weeks later.", features: ["deeds"], needs: has("[data-t='tab'][data-tab='deeds']"), steps: [
+      { id: "deeds", module: ["living", "advanced"], title: "Consequences", summary: "What the party did, and what comes of it: at once, in days, weeks later.", features: ["deeds"], needs: has("[data-t='tab'][data-tab='deeds']"), steps: [
         { say: "Consequences: when the party does something that matters, write it here.", sel: "[data-t='tab'][data-tab='deeds']", act: "click", try: "Click Consequences.", wait: 600 },
         { say: "What they did, where, who it touched and how it went. The council works out what follows at once, within days and weeks later, from who saw it and what they can do.", sel: "#tvBody form[data-dd='deed']", act: "look" },
         { say: "You let each one happen, change it, or say no. What follows later becomes an event of the world's time, and anything can be taken back.", sel: "#tvBody .dd-deed, #tvBody form[data-dd='deed'] .t-row", act: "look" }
       ] },
-      { id: "money", title: "Money and goods", summary: "The purse, what the party carries, loot, prices and merchants.", features: ["money"], needs: has("[data-t='tab'][data-tab='money']"), steps: [
+      { id: "money", module: ["money"], title: "Money and goods", summary: "The purse, what the party carries, loot, prices and merchants.", features: ["money"], needs: has("[data-t='tab'][data-tab='money']"), steps: [
         { say: "Money and goods: the party's purse, what they carry, loot, and prices, in the money of the story's age.", sel: "[data-t='tab'][data-tab='money']", act: "click", try: "Click Money and goods.", wait: 600 },
         { say: "Roll loot: coins, and things of the story's age, each common, uncommon, rare or legendary, made well or badly, whole or broken.", sel: "#tvBody [data-ec='roll']", act: "click", try: "Click Roll loot.", wait: 400 },
         { say: "The party takes it, or leaves it. What they take goes into the purse and what they carry, and into the world's history.", sel: "#tvBody .ec-loot", act: "look" },
@@ -217,11 +224,11 @@
       ] }
     ] },
     { id: "story", title: "The story", lessons: [
-      { id: "investigation", title: "The investigation", summary: "Clues on the map, what joins them, who knows what.", features: ["investigation", "clues", "knowledge", "autoconnect"], needs: has("[data-t='tab'][data-tab='clues']"), steps: [
+      { id: "investigation", module: ["investigation"], title: "The investigation", summary: "Clues on the map, what joins them, who knows what.", features: ["investigation", "clues", "knowledge", "autoconnect"], needs: has("[data-t='tab'][data-tab='clues']"), steps: [
         { say: "The investigation: every clue, what joins it to the story, and who knows what.", sel: "[data-t='tab'][data-tab='clues']", act: "click", try: "Click Investigation.", wait: 600 },
         { say: "Each person's page records what they know and how they learned it, and Speak as them answers from only that.", sel: "#tvBody", act: "look" }
       ] },
-      { id: "consistency", title: "Is it consistent?", summary: "What does not fit together, with its evidence and how to mend it.", features: ["consistency"], needs: has("[data-t='tab'][data-tab='consistency']"), steps: [
+      { id: "consistency", module: ["consistency"], title: "Is it consistent?", summary: "What does not fit together, with its evidence and how to mend it.", features: ["consistency"], needs: has("[data-t='tab'][data-tab='consistency']"), steps: [
         { say: "Consistency checks the campaign for what does not fit together: clues that lead nowhere, rooms nobody can reach, someone who knows what they were never told.", sel: "[data-t='tab'][data-tab='consistency']", act: "click", try: "Click Consistency.", wait: 600 },
         { say: "Each finding has its evidence. Mend it, ask Claude for a fix, or mark it intentional: a lie or a mystery on purpose.", sel: "#tvBody", act: "look" }
       ] },
@@ -239,7 +246,7 @@
     fullsize: ["Full size", "big map"], room3d: ["Rooms in 3D", "3d room view"], mapeditor: ["The map editor", "edit map rooms doors stairs"], mapmarks: ["People, dangers and secrets on the map", "npc marker person encounter danger secret place map editor"], furnish: ["Furnishing rooms", "furniture models furnish"], models: ["The model library", "models 3d library glb"],
     caves: ["Caves", "cave generator dungeon mine"], riddles: ["Riddles and puzzles", "riddle puzzle answer"], traps: ["Traps", "trap disarm"],
     worldland: ["Kinds of land", "biome terrain forest jungle savanna desert dunes tundra glacier volcano mesa canyon marsh swamp reef lake lava enchanted corrupted floating mountains alien brush size slider climate new world generate size planet paint painter sketch drawing picture upload colour key preset landmasses islands archipelago pangaea continents land share"],
-    worldmap: ["The world map", "world map realm travel"], oceancurrents: ["The ocean's currents", "ocean currents warm cold gyre equator latitude upwelling sea temperature"], geocoasts: ["Coasts shaped by their history", "coasts coastline fjord skerry ria estuary delta dalmatian cliff barrier island dune marsh mangrove reef atoll beach why"], roadnet: ["The road network and its development", "roads road network trade routes towns villages paths bridges fords ferries passes tunnels borders states development slider tribal medieval modern highways"], galaxy: ["The star chart", "galaxy stars sectors space map"], systems: ["Star systems and worlds", "system planet world star moon gravity atmosphere habitable"], starship: ["The ship, courses and fuel", "ship fuel jump warp course travel refuel"], charts: ["The players' star charts", "charts charted explored scanned rumoured"], galaxyedit: ["Changing the galaxy", "edit galaxy system region lane trade route corridor sector power territory paint world planet station belt undo"], maplook: ["How the world map is drawn", "style painted colour parchment atlas survey engraved hydrographic relief print paper streams valleys shaded"], worldedit: ["Editing the world map", "places routes journey duplicate"], cityedit: ["Editing the city", "city edit building move turn remove house shop tavern church road wall gate park square plaza district faction undo"], askchange: ["Asking for a change", "ask change claude regenerate replace redraw inside interior building place rename outside words confirm what it replaces keeps undo bring back"], trail: ["Where a place is, and back up", "trail breadcrumb back up parent map world city stars system where navigation"], citypeople: ["People in a city, a building made a place", "people person npc cast street city where make place building location"], realplaces: ["Places in a real city", "real city modern add location own building existing streets unchanged london new york tbilisi"], worldbuild: ["Shaping the world", "land brush sea lake mountains forest desert swamp river realm kingdom territory province faction name label undo redo"],
+    worldmap: ["The world map", "world map realm travel"], oceancurrents: ["The ocean's currents", "ocean currents warm cold gyre equator latitude upwelling sea temperature"], geocoasts: ["Coasts shaped by their history", "coasts coastline fjord skerry ria estuary delta dalmatian cliff barrier island dune marsh mangrove reef atoll beach why"], modules: ["What this campaign uses", "modules features parts switch off on preset minimal detective sandbox fantasy science fiction everything gear settings my own"], roadnet: ["The road network and its development", "roads road network trade routes towns villages paths bridges fords ferries passes tunnels borders states development slider tribal medieval modern highways"], galaxy: ["The star chart", "galaxy stars sectors space map"], systems: ["Star systems and worlds", "system planet world star moon gravity atmosphere habitable"], starship: ["The ship, courses and fuel", "ship fuel jump warp course travel refuel"], charts: ["The players' star charts", "charts charted explored scanned rumoured"], galaxyedit: ["Changing the galaxy", "edit galaxy system region lane trade route corridor sector power territory paint world planet station belt undo"], maplook: ["How the world map is drawn", "style painted colour parchment atlas survey engraved hydrographic relief print paper streams valleys shaded"], worldedit: ["Editing the world map", "places routes journey duplicate"], cityedit: ["Editing the city", "city edit building move turn remove house shop tavern church road wall gate park square plaza district faction undo"], askchange: ["Asking for a change", "ask change claude regenerate replace redraw inside interior building place rename outside words confirm what it replaces keeps undo bring back"], trail: ["Where a place is, and back up", "trail breadcrumb back up parent map world city stars system where navigation"], citypeople: ["People in a city, a building made a place", "people person npc cast street city where make place building location"], realplaces: ["Places in a real city", "real city modern add location own building existing streets unchanged london new york tbilisi"], worldbuild: ["Shaping the world", "land brush sea lake mountains forest desert swamp river realm kingdom territory province faction name label undo redo"],
     "players-screen": ["The players' screen", "television second screen players window"], fog: ["Fog of war", "fog brush reveal"], fog3d: ["Fog of war in 3D", "3d fog"], "players-copy": ["The players' copy", "players copy secrets"], phones: ["Players' phones", "phone qr wifi"],
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
