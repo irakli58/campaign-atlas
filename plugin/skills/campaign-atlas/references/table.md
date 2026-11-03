@@ -425,7 +425,7 @@ Atlas is made of 17 parts that a campaign can switch off or use less of. The gam
 |---|---|
 | World map | off, to look at, to edit |
 | Cities in 3D | off, to look at, to edit |
-| Map editor and 3D rooms | off, on, with the model library |
+| Map editor, 3D rooms and furnishing | off, on (furnishing caves, houses and rooms from the model library comes with it) |
 | Caves | off, on |
 | The stars | off, on |
 | Investigation | off, basic, advanced |

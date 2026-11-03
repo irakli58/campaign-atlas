@@ -2359,7 +2359,6 @@ html[data-m-world="look"] .wm-btn[data-w="edit"], html[data-m-world="look"] .wm-
 html[data-m-cities="off"] section.atlas { display: none !important; }
 html[data-m-cities="off"] [data-addloc], html[data-m-cities="off"] [data-editcity], html[data-m-cities="look"] [data-addloc], html[data-m-cities="look"] [data-editcity] { display: none !important; }
 html[data-m-mapedit="off"] [data-medit], html[data-m-mapedit="off"] [data-r3d] { display: none !important; }
-html[data-m-mapedit="on"] .me-tools [data-tool="furnish"], html[data-m-mapedit="on"] [data-pf="lib"] { display: none !important; }
 html[data-m-investigation="basic"] .ic-auto, html[data-m-investigation="basic"] [data-clx="auto"], html[data-m-investigation="basic"] .ic-rev { display: none !important; }
 html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[data-m-music="off"] [data-narrate], html[data-m-music="music"] [data-narrate], html[data-m-music="off"] .nar-row, html[data-m-music="music"] .nar-row { display: none !important; }
 .featbtn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; margin-left: .4rem; border: 1px solid var(--line, #c9b98f); border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }

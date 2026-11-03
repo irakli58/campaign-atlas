@@ -19,7 +19,9 @@
   const MODULES = [
     { id: "world", group: "world", name: "World map", say: "The land between your places: coasts, mountains, roads and realms; its editor", levels: [["off", "Off"], ["look", "To look at"], ["edit", "To edit"]] },
     { id: "cities", group: "world", name: "Cities in 3D", say: "The city in 3D, people in its streets, places of your own; the city editor", levels: [["off", "Off"], ["look", "To look at"], ["edit", "To edit"]] },
-    { id: "mapedit", group: "world", name: "Map editor and 3D rooms", say: "Redrawing a place's maps, rooms in 3D, furnishing them from the model library", levels: [["off", "Off"], ["on", "On"], ["models", "With the model library"]] },
+    // (furnishing is part of making a place, a cave or a house: it comes with the editor, never as a level of its own;
+    // the user, 3 Nov 2026)
+    { id: "mapedit", group: "world", name: "Map editor, 3D rooms and furnishing", say: "Redrawing a place's maps, rooms in 3D, furnishing caves, houses and rooms from the model library", levels: [["off", "Off"], ["on", "On"]] },
     { id: "caves", group: "world", name: "Caves, riddles, traps", say: "Generated caves, their riddles and traps, the fog over them", levels: [["off", "Off"], ["on", "On"]] },
     { id: "stars", group: "world", name: "The stars", say: "The star chart, systems, the ship and its fuel, the players' charts", levels: [["off", "Off"], ["on", "On"]] },
     { id: "investigation", group: "story", name: "Investigation", say: "Clues found and the board; then connections, who knows what, Auto-Connect", levels: [["off", "Off"], ["basic", "Basic"], ["advanced", "Advanced"]] },
@@ -46,7 +48,7 @@
     fantasy: ["Traditional fantasy", P("look", "look", "on", "on", "off", "basic", "basic", "basic", "simple", "asked", "off", "off", "on", "on", "screen", "music", "on")],
     scifi: ["Science fiction", P("look", "look", "on", "off", "on", "basic", "basic", "basic", "simple", "asked", "off", "off", "on", "on", "screen", "music", "on")],
     // (Everything: the stars as the setting has them)
-    everything: ["Everything", P("edit", "edit", "models", "on", "setting", "advanced", "advanced", "advanced", "full", "unasked", "on", "words", "on", "on", "copy", "voice", "on")]
+    everything: ["Everything", P("edit", "edit", "on", "on", "setting", "advanced", "advanced", "advanced", "full", "unasked", "on", "words", "on", "on", "copy", "voice", "on")]
   };
   // what leans on what: [module, from level, needs module, at least, what happens without it]
   const NEEDS = [
