@@ -47,6 +47,12 @@
   const SETTLED = ["capital", "city", "town", "village", "hamlet", "port", "castle", "keep", "fort", "camp", "base", "station", "outpost", "planet", "moon", "monastery"];
   const ROUTES = { road: "Road", trail: "Trail", pass: "Mountain pass", river: "River", sea: "Sea route", rail: "Railway", air: "Air route", tunnel: "Tunnel", portal: "Portal", lane: "Space lane", jump: "Jump route" };
   const OVERLAND = { road: 1, trail: 1, pass: 1, river: 1, rail: 1, tunnel: 1 };
+  // the routes as an atlas draws them (the user, 3 Nov 2026): a road a clean line on a pale edge, a great trade road
+  // heavier, a path a fine dash, a pass dash and dot, water in blue; [colour, width, dash, the pale edge's width]. A route
+  // says how much it matters by its class (major, regional, local: the road network gives it) or trade: true, else by kind
+  const RSTY = { trade: ["#7c2414", 2.7, "", 5], road: ["#93351c", 1.8, "", 3.6], local: ["#6e5233", 1.15, "3 2.4", 0], trail: ["#6e5233", 1.15, "3 2.4", 0],
+    pass: ["#5a3a22", 1.5, "5 2 1.4 2", 0], river: ["#2e6a96", 1.6, "6 3", 0], sea: ["#2a5f8a", 1.4, "7 5", 0] };
+  const rankOf = r => r.class === "major" || r.trade || r.major ? "trade" : r.class === "regional" ? "road" : r.class === "local" ? "local" : r.kind || "road";
 
   // each look's colours, its route lines [colour, width, dashes] and its type
   const STYLE = {
@@ -175,9 +181,29 @@
     monastery: '<path class="s" d="M-8 7V0h16v7Z"/>' + ROOF("M-9.4.6L0-5l9.4 5.6Z") + '<path class="s" d="M3-5V-10h3v5"/>'
   });
   ICONS.relief = ICONS.painted; ICONS.hydro = ICONS.painted;
+  // settlements as a geographical atlas marks them (the user, 3 Nov 2026: "simple dots or circles with their names", the
+  // capital a star or a circle with a special outline): a dot that grows with the place, a star in a ring for a capital,
+  // small plain signs for what is not a settlement. Every look of land wears them; a world that wants the pictures above
+  // says so (world.js markers: "pictures"); a star chart keeps its own.
+  const star = (R, r) => Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r : R; return `${i ? "L" : "M"}${(q * Math.cos(a)).toFixed(2)} ${(q * Math.sin(a)).toFixed(2)}`; }).join("") + "Z";
+  const DOT = r => `<circle class="d" r="${r}"/>`, SQ = s => `<rect class="d" x="${-s}" y="${-s}" width="${2 * s}" height="${2 * s}"/>`;
+  const DOTS = {
+    capital: `<circle class="o" r="7.6"/><path class="d" d="${star(5.8, 2.4)}"/>`, city: `<circle class="d" r="5.4"/><circle class="o2" r="2"/>`,
+    port: DOT(4.2), town: DOT(3.9), base: SQ(3.4), station: SQ(3.4), airport: SQ(3.4), outpost: SQ(3), village: DOT(2.7), hamlet: DOT(2.1),
+    manor: DOT(1.9), farm: DOT(1.7), inn: DOT(1.9), camp: `<path class="dl" d="M0-3.6L3.4 2.8H-3.4Z"/>`,
+    castle: SQ(3.3), keep: SQ(3), fort: SQ(3.3), tower: `<path class="d" d="M0-4.4L3.2 3H-3.2Z"/>`, lighthouse: `<path class="d" d="M0-4.4L3.2 3H-3.2Z"/>`,
+    monastery: `<circle class="o" r="3.8"/><path class="dl" d="M0-2.6v5.2M-2.6 0h5.2"/>`, temple: `<circle class="o" r="3.8"/><path class="dl" d="M0-2.6v5.2M-2.6 0h5.2"/>`, shrine: `<path class="dl" d="M0-3.4v6.8M-2.6-1h5.2"/>`,
+    ruin: `<circle class="d" cx="0" cy="-2.4" r="1.25"/><circle class="d" cx="-2.3" cy="1.7" r="1.25"/><circle class="d" cx="2.3" cy="1.7" r="1.25"/>`,
+    mine: `<path class="dl" d="M-3-3l6 6M3-3l-6 6"/>`, dungeon: `<path class="dl" d="M-3.6 3V-.6a3.6 3.6 0 0 1 7.2 0V3"/>`, cave: `<path class="dl" d="M-3.6 3a3.6 3.6 0 0 1 7.2 0"/>`,
+    lair: `<path class="d" d="M0-4L3.8 3H-3.8Z"/><circle class="o2" cy=".8" r="1"/>`, battlefield: `<path class="dl" d="M-3-3l6 6M3-3l-6 6"/>`,
+    stones: `<circle class="o" r="3"/><circle class="d" r="1.1"/>`, landmark: `<circle class="o" r="3"/>`, grove: `<circle class="o" r="3"/>`, bridge: `<path class="dl" d="M-3.6 1.6q3.6-4.4 7.2 0"/>`,
+    wreck: `<path class="dl" d="M-3.6 1h7.2M-2 1l1.2 2.4h1.6L2 1"/>`, site: `<circle class="o" r="2.6"/>`, gate: SQ(3), _: DOT(2.4)
+  };
+  // how far a place's name stands from its mark
+  const DOTR = { capital: 7.6, city: 5.4, port: 4.2, town: 3.9, village: 2.7, hamlet: 2.1, monastery: 3.8, temple: 3.8 };
   const PLANETS = ["#c97b4a", "#5f8fc9", "#8fbf6a", "#c9b36a", "#9b6ac9", "#6ac9c0", "#d9d2c4", "#c96a7e"];
-  const iconOf = (look, L) => {
-    const set = ICONS[look] || ICONS.parchment, k = String(L.kind || "").toLowerCase();
+  const iconOf = (look, L, pictures) => {
+    const set = look !== "stars" && !pictures ? DOTS : ICONS[look] || ICONS.parchment, k = String(L.kind || "").toLowerCase();
     let s = set[k] || set._;
     if (look === "stars" && /class="pf"/.test(s)) s = s.replace(/class="pf"/g, `class="pf" style="fill:${PLANETS[Math.floor(strHash(L.id) * PLANETS.length)]}"`);
     return s;
@@ -956,9 +982,11 @@
       let s = "";
       for (const r of WD.routes) {
         if (!routeShown(r)) continue;
-        const way = wayFor(r), d = pathD(way), [col, wd, dash] = st.routes[r.kind] || st.routes.road, sel = S.selRoute === r.id;
+        // (on land, as an atlas draws them: by how much the road matters, the minor ones left out when the map is far)
+        const rk = rankOf(r), sty = WD.look !== "stars" && WD.W.markers !== "pictures" ? RSTY[rk] : null;
+        const way = wayFor(r), d = pathD(way), [col, wd, dash] = sty || st.routes[r.kind] || st.routes.road, sel = S.selRoute === r.id;
         const blocked = !!r.blocked, hid = r.hidden ? " hid" : "";
-        s += `<g class="wr${sel ? " sel" : ""}${hid}" data-route="${esc(r.id)}">${sel ? `<path d="${d}" class="wr-under"/>` : ""}${WD.look === "stars" ? `<path d="${d}" fill="none" stroke="${col}" stroke-opacity=".18" stroke-width="${wd + 5}" vector-effect="non-scaling-stroke"/>` : WD.look === "atlas" && r.kind === "road" ? `<path d="${d}" fill="none" stroke="#fff" stroke-width="${wd + 2.2}" vector-effect="non-scaling-stroke"/>` : ""}<path d="${d}" fill="none" stroke="${blocked ? "#b3261e" : col}" stroke-width="${wd}" stroke-dasharray="${dash}" stroke-linecap="round" vector-effect="non-scaling-stroke"/><path d="${d}" class="wr-hit"/></g>`;
+        s += `<g class="wr wr-${esc(rk)}${sel ? " sel" : ""}${hid}" data-route="${esc(r.id)}">${sel ? `<path d="${d}" class="wr-under"/>` : ""}${WD.look === "stars" ? `<path d="${d}" fill="none" stroke="${col}" stroke-opacity=".18" stroke-width="${wd + 5}" vector-effect="non-scaling-stroke"/>` : sty && sty[3] ? `<path d="${d}" fill="none" class="wr-case" stroke-width="${sty[3]}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>` : WD.look === "atlas" && r.kind === "road" ? `<path d="${d}" fill="none" stroke="#fff" stroke-width="${wd + 2.2}" vector-effect="non-scaling-stroke"/>` : ""}<path d="${d}" fill="none" stroke="${blocked ? "#b3261e" : col}" stroke-width="${wd}" stroke-dasharray="${dash}" stroke-linecap="round" vector-effect="non-scaling-stroke"/><path d="${d}" class="wr-hit"/></g>`;
       }
       $(".wm-routes").innerHTML = s;
       drawJourney();
@@ -992,9 +1020,11 @@
       let s = "";
       for (const L of WD.locs) {
         if (!passes(L)) continue;
-        const imp = impOf(L), here = WD.party.at === L.id, has3d = ctx.hasCity(L.city || L.id);
-        const cls = ["wl", "i" + imp, L.state === "rumoured" ? "rum" : "", L.state === "unknown" ? "unk" : "", L.state === "done" ? "dn" : "", S.sel === L.id ? "sel" : "", here ? "here" : "", S.hits ? (S.hits.has(L.id) ? "hit" : "dim") : "", L.unplaced ? "unp" : ""].filter(Boolean).join(" ");
-        s += `<g class="${cls}" data-loc="${esc(L.id)}" tabindex="0" role="button" aria-label="${esc(L.name)}, ${esc((KINDS[L.kind] || [0, L.kind])[1])}${has3d ? ", has a 3D map" : ""}"><circle class="wl-ring" r="14"/><g class="wi">${iconOf(WD.look, L)}</g>${has3d ? `<g class="wl-3d" transform="translate(${imp === 1 ? 10 : 8} -17)"><rect width="15" height="10" rx="2"/><text x="7.5" y="7.6">3D</text></g>` : ""}${gm() && L.state !== "known" ? `<circle class="wl-st st-${esc(L.state)}" cx="-10" cy="-9" r="3"/>` : ""}${here ? `<g class="wl-party" transform="translate(-13 -9)"><path d="M0 10V-8"/><path d="M0-8h9l-2.5 3.5L9-1H0Z"/></g>` : ""}<text class="wl-t" x="${imp === 1 ? 14 : 12}" y="4.5">${esc(L.name)}${L.state === "rumoured" ? "?" : ""}</text></g>`;
+        const imp = impOf(L), here = WD.party.at === L.id, has3d = ctx.hasCity(L.city || L.id), dots = WD.look !== "stars" && WD.W.markers !== "pictures";
+        // (the name beside its dot: as close as the dot is big; beside a picture, as before)
+        const lx = dots ? (DOTR[String(L.kind || "").toLowerCase()] || 2.8) + 4 : imp === 1 ? 14 : 12;
+        const cls = ["wl", "i" + imp, dots ? "dot" : "", L.kind === "capital" ? "cap" : "", L.state === "rumoured" ? "rum" : "", L.state === "unknown" ? "unk" : "", L.state === "done" ? "dn" : "", S.sel === L.id ? "sel" : "", here ? "here" : "", S.hits ? (S.hits.has(L.id) ? "hit" : "dim") : "", L.unplaced ? "unp" : ""].filter(Boolean).join(" ");
+        s += `<g class="${cls}" data-loc="${esc(L.id)}" tabindex="0" role="button" aria-label="${esc(L.name)}, ${esc((KINDS[L.kind] || [0, L.kind])[1])}${has3d ? ", has a 3D map" : ""}"><circle class="wl-ring" r="14"/><g class="wi">${iconOf(WD.look, L, !dots)}</g>${has3d ? `<g class="wl-3d" transform="translate(${imp === 1 ? 10 : 8} -17)"><rect width="15" height="10" rx="2"/><text x="7.5" y="7.6">3D</text></g>` : ""}${gm() && L.state !== "known" ? `<circle class="wl-st st-${esc(L.state)}" cx="-10" cy="-9" r="3"/>` : ""}${here ? `<g class="wl-party" transform="translate(-13 -9)"><path d="M0 10V-8"/><path d="M0-8h9l-2.5 3.5L9-1H0Z"/></g>` : ""}<text class="wl-t" x="${lx}" y="4.5">${esc(L.name)}${L.state === "rumoured" ? "?" : ""}</text></g>`;
       }
       for (const r of WD.routes) if (routeShown(r) && (r.blocked || r.danger)) s += `<g class="wr-warn${r.blocked ? " blk" : ""}" data-route="${esc(r.id)}"><circle r="7.5"/><text y="4">${r.blocked ? "✕" : "!"}</text></g>`;
       over.innerHTML = s;
@@ -1218,14 +1248,17 @@
       // how the map is drawn: the game master chooses among the looks this world can wear
       const lk = $(".wm-look"), opts = A.worldArt ? A.worldArt.looksFor(WD) : [];
       if (lk) { lk.hidden = !gm() || opts.length < 2 || drawn(); lk.innerHTML = opts.map(([v, l]) => `<option value="${v}"${v === WD.look ? " selected" : ""}>${esc(l)}</option>`).join(""); }
-      const sw = (k) => { const [c, w, d] = st.routes[k] || st.routes.road; return `<svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" stroke="${c}" stroke-width="${w}" stroke-dasharray="${d}" stroke-linecap="round"/></svg>`; };
+      // (the key draws each route as the map does: on land, as an atlas draws it, the great trade roads first when there are any)
+      const atlasR = WD.look !== "stars" && WD.W.markers !== "pictures";
+      const sw = (k) => { const sty = atlasR && RSTY[k], [c, w, d] = sty || st.routes[k] || st.routes.road; return `<svg width="28" height="10" aria-hidden="true">${sty && sty[3] ? `<line x1="1" y1="5" x2="27" y2="5" stroke="var(--wm-halo)" stroke-width="${sty[3]}" stroke-linecap="round"/>` : ""}<line x1="1" y1="5" x2="27" y2="5" stroke="${c}" stroke-width="${w}" stroke-dasharray="${d}" stroke-linecap="round"/></svg>`; };
+      if (atlasR && WD.routes.some(r => rankOf(r) === "trade") && !rk.includes("trade")) rk.unshift("trade");
       const how = S.tool === "loc" ? "Click the map where the new place stands." : S.tool === "route" ? (S.first ? `Now click where the route from ${esc(WD.byId[S.first] ? WD.byId[S.first].name : "")} goes.` : "Click the place the route starts from.")
         : S.tool === "brush" ? (WD.G ? `Drag over the map with the brush (${esc(brushName(S.brush))}). Scroll to zoom; press Shape the land again to stop.` : "Choose how the land begins.")
         : S.tool === "river" ? (S.draft && S.draft.pts.length > 1 ? `Click to go on, from its source to its mouth. <button type="button" class="wm-btn" data-w="finish">Finish the river</button> (or Enter) · Esc stops` : "Click where the river rises, then along its way to the sea or a lake.")
         : S.tool === "realm" ? (S.draft && S.draft.pts.length > 2 ? `Click round its border. <button type="button" class="wm-btn" data-w="finish">Close the border</button> (or click the first corner, or Enter) · Esc stops` : "Click round the border of the realm, corner by corner.")
         : S.tool === "label" ? "Click where the name goes."
         : S.edit ? "Drag a place, a river, a realm's border or a name to move it. Click one to change it." : `Drag to pan · scroll or pinch to zoom · click a place for what is there${Object.keys(A.cities || {}).length ? " and to enter its 3D map" : ""}.`;
-      $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
+      $(".wm-hint").innerHTML = rk.map(k => `<span class="lg">${sw(k)}${esc(k === "trade" ? "Trade road" : ROUTES[k] || k)}</span>`).join("") + `<span class="lg"><svg width="17" height="11" aria-hidden="true"><rect x=".5" y=".5" width="16" height="10" rx="2" fill="#8a2432"/><text x="8.5" y="8.4" text-anchor="middle" font-size="7.5" font-weight="700" fill="#fff" font-family="monospace">3D</text></svg>has a 3D map: click it, then Enter</span>` + (WD.scale ? "" : `<span class="lg kn">No scale given: distances are not shown</span>`) + (WD.T.credit ? `<span class="credit">${esc(WD.T.credit)}</span>` : "") + `<span class="how">${how}</span>${S.edit && gm() ? `<span class="credit">${DB ? "Changes are saved in this page's database." : "Changes are saved in this browser only."}</span>` : ""}`;
       // (the coasts' key, while their layer is shown: the kinds this world has, the most common first)
       if (COA.on && WD.T && WD.T.coastKinds) { const F = WD.T._formU8 || (WD.T._formU8 = unb64(WD.T.coastForm)), cnt = {}; if (F) for (const v of F) if (v) cnt[v] = (cnt[v] || 0) + 1; $(".wm-hint").insertAdjacentHTML("afterbegin", Object.entries(WD.T.coastKinds).sort((a, b) => (cnt[b[0]] || 0) - (cnt[a[0]] || 0)).map(([f, [nm, col]]) => `<span class="lg"><svg width="22" height="10" aria-hidden="true"><line x1="1" y1="5" x2="21" y2="5" class="wco-l" style="stroke:${col};stroke-width:4px"/></svg>${esc(nm)}</span>`).join("") + `<span class="lg kn">Point at a numbered pin for why that coast formed</span>`); }
       // (the currents' key, while their layer is shown)

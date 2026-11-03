@@ -69,6 +69,25 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
 6. (done 3 Nov: modern real cities. On a real city (city.js `real: true`) + Add location asks which of the city's own buildings the place is in, lights up the one under the pointer, and the place takes it as it stands (atlas-city.js `realAt`, `outlineOf`, `setCustom(C, list, real)`; atlas-locations.js placing in `real` mode; no outside asked, Ask for a change offers no outside); a place with no building within reach keeps a model. The city editor stays off real cities. London regression exact; tested on a New York copy)
 6a. (prototype done 3 Nov, shown to the user: **Session recording and memory**, docs/requests/2026-11-03-session-memory.md, design docs/research/2026-11-03-session-memory.md. Engine: atlas-sessions.js, the tab Recorded sessions, `A.memory`; app: lib/recorder-lan.js, lib/selfsigned.js, ui/recorder.html, server routes recorder / rec-audio / rec-drop, ATLAS_APP.recorder / audioUrl / dropAudio. The user chose (3 Nov) the browser's live words: who spoke does not matter to them, so no Whisper download. Live words are on by default on the page and the phone; the sound is optional ("Keep the sound too"); a phone that cannot do both offers "Keep the words instead of the sound". Possible later: the optional live check by Claude, search by meaning, a "Recording" sign on the players' screen)
 6b. **Every city on the world map opens a city from the existing generator** (the user's request of 3 Nov, docs/requests/2026-11-03-world-cities.md): click any settlement, its city is made by atlas-city.js shaped by its river, coast, mountains and routes, buildings open their interiors as they already do; manual edits kept.
+6b'. **Approved by the user, 3 Nov** (the ideas in the workspace's reviews/2026-11-03-ideas.md; not wanted: 1, 10, 12, 16):
+   - **Writing instead of tick-boxes everywhere it fits:** wherever the game master or the players say what they are going
+     to do, they write it in their own words (the consequences' "how it went", the players' intentions from their phones,
+     journeys, the campaign's features described in words).
+   - **Build, in this order:**
+     1. weather from the world's own climate (3);
+     2. journeys along the world map's routes (2);
+     3. the rumour mill (4);
+     4. the world's newspaper (7);
+     5. a timeline to scroll (8);
+     6. the players' chronicle, with their own written intentions (5);
+     7. people living their days in the 3D city (6);
+     8. the relationship web (11);
+     9. "What if we wait a month?" (9);
+     10. pacing from the words (15);
+     11. the table, projected (13);
+     12. one world, many campaigns (14).
+   - Each one taught, tested, committed. The review's items (reviews/2026-11-03-review.md) and the modular-features
+     proposal (reviews/2026-11-03-modules.md) still wait for the user's answers.
 6c. **Modular features** (the user's request of 3 Nov, docs/requests/2026-11-03-modular-features.md): inventory every feature, propose the module structure, levels, presets and the Campaign Features settings, and show the user before major architectural changes; then implement per campaign (data never deleted, background work really stopped).
 7. **Finally, the UI/UX polish** across the app: make a checkpoint branch first, keep the identity, test every workflow and screen size, update the lessons. **At its start, remind the user** to review the narrator's voice, the voice quality and every sound effect with them (they said some are "really bad"); change nothing there before then.
 
