@@ -765,8 +765,11 @@ function writeTerrain(dir, T, title) {
 // a world.js to start from: the campaign's cities as its first locations
 function starter(dir, A, flags, size) {
   const look = (flags.look && flags.look !== true ? flags.look : lookOfCity(A)), K = A.worldKit, lk = K.LOOK_OF[String(look).toLowerCase()] || "parchment";
-  const title = (A.config && A.config.title) || "The world";
-  const locs = Object.entries(A.cities || {}).map(([id, c]) => ({ id: id === "main" ? slug((c && c.title) || title) : id, name: (c && c.title) || title, kind: lk === "stars" ? "station" : "city", city: id, desc: "" }));
+  // (another of the campaign's worlds, --id: its own name, and no places until they are added: the campaign's cities are
+  // the main world's)
+  const other = flags.id && flags.id !== true && String(flags.id) !== "main";
+  const title = other ? String(flags.name && flags.name !== true ? flags.name : flags.id) : (A.config && A.config.title) || "The world";
+  const locs = other ? [] : Object.entries(A.cities || {}).map(([id, c]) => ({ id: id === "main" ? slug((c && c.title) || title) : id, name: (c && c.title) || title, kind: lk === "stars" ? "station" : "city", city: id, desc: "" }));
   let scale = null, speeds = null;
   const m = flags.across && flags.across !== true ? /^([\d.]+)\s*([a-z-]+)?/i.exec(String(flags.across)) : null;
   const [w] = size || SIZES[flags.size] || SIZES.medium;

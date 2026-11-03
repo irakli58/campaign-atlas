@@ -2388,3 +2388,4 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 @media (max-width: 620px) { .mf-row { flex-direction: column; align-items: stretch; } .mf-seg { align-self: flex-start; } }
 .th-mods { margin-top: 1.2rem; padding: .8rem 1rem; border: 1px solid rgba(0, 0, 0, .12); border-radius: 10px; }
 .th-mods h3 { margin: 0 0 .3rem; }
+.v-worldsel { font: inherit; font-size: 13px; padding: .2rem .4rem; margin-left: -.2rem; border-radius: 6px; border: 1px solid rgba(0, 0, 0, .2); background: transparent; color: inherit; }

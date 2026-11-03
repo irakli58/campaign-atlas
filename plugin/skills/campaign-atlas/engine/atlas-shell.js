@@ -94,7 +94,7 @@
   ${A.music ? `<div class="musicbar">${A.music.html()}</div>` : ""}
   <nav class="views" aria-label="View">
     <button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
-    ${A.worldData && A.worldMount ? `<button type="button" id="v-world" aria-pressed="false">World map</button>` : ""}
+    ${A.worldMount && A.worldList && A.worldList().length ? `<button type="button" id="v-world" aria-pressed="false">World map</button>${A.worldList().length > 1 ? `<select id="v-worldsel" class="v-worldsel" aria-label="Which world" title="This campaign's worlds: its own, and the others it holds (a planet, a moon, a plane's layer)">${A.worldList().map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")}</select>` : ""}` : ""}
     ${A.galaxyParams && A.galaxyMount ? `<button type="button" id="v-galaxy" class="keeper" aria-pressed="false">Star chart</button>` : ""}
     ${A.tableUI ? `<button type="button" id="v-table" class="keeper v-play" aria-pressed="false" title="Everything for game night: the players' screen, handouts, clocks, dice and more">${A.table.icon("play")}At the table</button>` : ""}
     ${(A.storyData || []).length ? `<button type="button" id="v-story" class="keeper" aria-pressed="false">The story</button>` : ""}
@@ -108,7 +108,7 @@
     <details id="trk"><summary><span class="trh">Investigation tracker</span><span class="trs" id="trk-sum"></span></summary><div id="trk-body"></div></details>
   </section>
   <dialog id="keyDlg" class="kedlg" aria-label="Key editor"></dialog>
-  ${A.worldData && A.worldMount ? `<section class="worldv" id="worldv" aria-label="World map"></section>` : ""}
+  ${A.worldMount && A.worldList && A.worldList().length ? `<section class="worldv" id="worldv" aria-label="World map"></section>` : ""}
   ${A.galaxyParams && A.galaxyMount ? `<section class="galaxyv keeper" id="galaxyv" aria-label="The galaxy"></section>` : ""}
   ${A.cityData && A.cityMount ? `<section class="atlas" aria-label="Plan of the whole"><div class="citybar" id="citybar" hidden></div><div class="cmap" id="citybox"></div></section>` : ""}
   <div class="layout">
@@ -189,6 +189,14 @@
   /* ---- the world map (atlas-world.js): the level above the cities. It is drawn the first time it is shown and kept,
           so it is where it was left (its view, its choice) when the referee comes back from a city. */
   let WORLD = null;
+  // which of the campaign's worlds is shown (A.worlds: its own, a planet's surface, a plane's layer...): the main one
+  // first, else the first there is; A.openWorld(id) opens another, as the selector beside World map does
+  let WSEL = A.worldList && A.worldList().length ? (A.worlds.main && A.worlds.main.data ? "main" : A.worldList()[0].id) : "main";
+  A.openWorld = id => {
+    if (!A.worlds || !A.worlds[id] || !A.worlds[id].data) return false;
+    if (id !== WSEL) { if (WORLD) { try { WORLD.dispose(); } catch (e) {} WORLD = null; } WSEL = id; const s = $("#v-worldsel"); if (s) s.value = id; }
+    setView("world"); return true;
+  };
   // the campaign's places in a world location: those that say location: "<its id>", or stand in the city it names
   const inLoc = (pid, L) => { const m = A.meta[pid] || {}, c = L.city || (CITIES[L.id] ? L.id : null); if (m.location) return m.location === L.id; return !!c && cityOf(pid) === c; };
   const WORLD_CTX = {
@@ -356,7 +364,7 @@
     state.view = v; app.dataset.view = v;
     $("#v-gaz").setAttribute("aria-pressed", v === "gaz");
     if ($("#v-world")) $("#v-world").setAttribute("aria-pressed", v === "world");
-    if (v === "world") { if (!WORLD) WORLD = A.worldMount($("#worldv"), WORLD_CTX); else WORLD.wake(); WORLD.search(state.q); renderCityBar(); }
+    if (v === "world") { if (!WORLD) WORLD = A.worldMount($("#worldv"), Object.assign({}, WORLD_CTX, { world: WSEL })); else WORLD.wake(); WORLD.search(state.q); renderCityBar(); }
     if ($("#v-galaxy")) $("#v-galaxy").setAttribute("aria-pressed", v === "galaxy");
     if (v === "galaxy") A.galaxyMount($("#galaxyv"));
     if ($("#v-story")) $("#v-story").setAttribute("aria-pressed", v === "story");
@@ -656,6 +664,7 @@
   });
   document.addEventListener("change", e => {
     const t = e.target; if (!t.matches) return;
+    if (t.matches("#v-worldsel")) { A.openWorld(t.value); return; }
     if (t.matches("#act")) { state.act = t.value; renderList(); renderMap(); paintStatusDots(); }
     if (t.matches("#cityPick")) mountCity(t.value);
     if (t.matches("[data-found]")) { const k = TR.keys.find(x => x.id === t.dataset.found); if (!k) return; const on = t.checked; trWrite(db => db.collection("keys").doc(k.id).update(on ? { found: true } : { found: false, heldBy: [] })); }

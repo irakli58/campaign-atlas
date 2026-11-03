@@ -187,6 +187,21 @@ ATLAS.world({
   - in the Atlas app the referee can make it there and then;
   - on a published page the panel says how (ask Claude, or `atlas.js city <dir> --invent "Name" --id <id>`).
 
+## Many worlds in one campaign
+
+A campaign can hold more than one world map: a planet's surface, its moons, the layers of a plane. Each world has an id.
+
+- **Where they live:**
+  - The campaign's own world is "main": world.js, world-terrain.js and world-roads.js beside campaign.js, as always.
+  - Each other world is in `worlds/<id>/`, with the same three files, which register under their folder's id by themselves.
+- **Making one:** `atlas.js world <dir> --id <id> --name "The Ash Moon" [the usual options]` makes another world. It starts with no places; add them to its world.js as for any world. `atlas.js roads <dir> --id <id>` grows its roads.
+- **On the page:**
+  - A selector beside **World map** chooses which world is shown.
+  - Each world keeps its own changes (collection `world`, or `world_<id>`), its own view, its own cities (a city entered on another world is kept as `<id>-<location>`) and its own road network.
+  - `ATLAS.openWorld(id)` opens one from anywhere on the page.
+- **The check** checks every world. A place's `location:` may name a location on any of them; the campaign's 3D cities are asked for on the main world only.
+- **The test** is `dev/worlds-test.js` in the workspace. It must end "all well".
+
 ## The road network (on trial)
 
 `atlas.js roads <dir>` grows a road network over an invented or generated world (not a star chart), and writes `world-roads.js`. It changes nothing else: the land, the story's places and routes stay as they are. It is on trial until the user approves it (3 Nov 2026); the research behind it is in the app's `docs/research/2026-11-03-road-networks.md`.

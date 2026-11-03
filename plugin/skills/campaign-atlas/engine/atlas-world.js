@@ -210,15 +210,23 @@
   };
   const impOf = L => (KINDS[L.kind] || [3])[0];
 
-  /* ---- registering a world, and laying the referee's changes over it */
-  A.world = data => { A.worldData = data || {}; return A; };
+  /* ---- registering a world, and laying the referee's changes over it.
+          A campaign may hold many worlds (3 Nov 2026, the foundation the approved plans for planets and planes rest on: a
+          planet's surface, its moons, the layers of a plane): each has an id, "main" being the campaign's own world map
+          (world.js beside campaign.js); the others live in worlds/<id>/ and register with their id. A.worldData and its
+          kin stay the main world's, as before. */
+  A.worlds = A.worlds || {};
+  const wslot = id => { id = id && /^[\w-]{1,40}$/.test(id) ? id : "main"; return A.worlds[id] || (A.worlds[id] = { id, data: null, terrain: null, roads: null }); };
+  A.world = (data, id) => { const w = wslot(id || (data && data.id)); w.data = data || {}; if (w.id === "main") A.worldData = w.data; return A; };
   // what the map's art draws with (atlas-world-art.js)
   A.worldDraw = { sampler: G => sampler(G), coastRings: G => coastRings(G), chaikin: (p, n, c) => chaikin(p, n, c), rdpRing: (r, e) => rdpRing(r, e), pathD: (p, c) => pathD(p, c), hash, ramp, mix, hex, clamp, vnoise: s => vnoise(s) };
   // (the players' copy, atlas-share.js, works out from it which places the players know)
   A.worldPrepare = (W, T, OV) => prepareWorld(W, T, OV);
-  A.worldTerrain = data => { A.worldTerrainData = data || {}; return A; };
+  A.worldTerrain = (data, id) => { const w = wslot(id); w.terrain = data || {}; if (w.id === "main") A.worldTerrainData = w.terrain; return A; };
   // the road network grown over the ages (atlas.js roads, on trial: drawn when "Road network (trial)" is on)
-  A.worldRoads = data => { A.worldRoadsData = data || null; return A; };
+  A.worldRoads = (data, id) => { const w = wslot(id); w.roads = data || null; if (w.id === "main") A.worldRoadsData = w.roads; return A; };
+  // the worlds this campaign has, the main one first; a world's name is its world.js title, else its id
+  A.worldList = () => Object.values(A.worlds).filter(w => w.data).sort((a, b) => (a.id === "main" ? -1 : b.id === "main" ? 1 : 0) || String(a.data.title || a.id).localeCompare(String(b.data.title || b.id))).map(w => ({ id: w.id, name: w.data.title || (w.id === "main" ? "The world" : w.id), kind: w.data.kind || "" }));
   const unb64 = s => {
     if (!s) return null; if (typeof s !== "string") return Uint8Array.from(s);
     const bin = typeof atob === "function" ? atob(s) : Buffer.from(s, "base64").toString("binary"), u = new Uint8Array(bin.length);
@@ -727,7 +735,8 @@
     can: canInvent, flags: cityFlags, where: whereItLies,
     // the city of a place, laid out now (once: after that it is the one kept)
     make(WD, L) {
-      const id = L.city || L.id, st = tstore(), had = st && st.get("worldcities", id);
+      // (a city of another of the campaign's worlds is kept under its world's id too, so two worlds' places never meet)
+      const id = L.city || (WD.wid && WD.wid !== "main" ? WD.wid + "-" : "") + L.id, st = tstore(), had = st && st.get("worldcities", id);
       const d = had && had.flags ? had : Object.assign({ name: L.name, loc: L.id, t: Date.now() }, cityFlags(WD, L));
       inventCity(id, d); if (st && !had) st.set("worldcities", id, d);
       if ((A.cities || {})[id]) L.city = id;
@@ -738,14 +747,19 @@
   A.worldCitiesInit = store => store.watch("worldcities", docs => { for (const [id, d] of Object.entries(docs || {})) if (d && d.flags && d.name) inventCity(id, d); });
 
   A.worldMount = function (box, ctx) {
+    // which of the campaign's worlds (A.worlds; ctx.world, else the main one): its own land, places and roads, its own
+    // changes (collection "world", or "world_<id>" for another world) and its own saved view (keys "...@<id>")
+    const WID = ctx.world && A.worlds[ctx.world] && A.worlds[ctx.world].data ? ctx.world : "main", WCOLL = WID === "main" ? "world" : "world_" + WID;
+    const wData = () => (A.worlds[WID] || {}).data, wTerrain = () => (A.worlds[WID] || {}).terrain, wRoads = () => (A.worlds[WID] || {}).roads;
+    if (WID !== "main") { const st0 = ctx.store; ctx = Object.assign({}, ctx, { store: { get: k => st0.get(k + "@" + WID), set: (k, v) => st0.set(k + "@" + WID, v) } }); }
     const uid = "w" + Math.floor(Math.random() * 1e6).toString(36);
     const OV = ovFrom([]);
     // a world made in the page (Make a new world): its recipe is kept among the referee's changes, the land itself made
     // from it in the background and kept in this browser; until it is ready, and without one, the campaign's own land
     const GEN = { key: null, T: null, busy: null, ver: 0 };
     const genKey = g => g ? JSON.stringify(g) : null;
-    const terrainNow = () => OV.gen && GEN.T && GEN.key === genKey(OV.gen) ? GEN.T : A.worldTerrainData;
-    let WD = prepareWorld(A.worldData, terrainNow(), OV);
+    const terrainNow = () => OV.gen && GEN.T && GEN.key === genKey(OV.gen) ? GEN.T : wTerrain();
+    let WD = prepareWorld(wData(), terrainNow(), OV); WD.wid = WID;
     // the game master's own drawing, shown as drawn, or redrawn from its traced coasts (the choice is kept)
     const DRAW = WD.T.drawing && A.worldDrawingSrc ? { src: A.worldDrawingSrc, trace: null, mode: ctx.store.get("world-drawn") || "" } : null;
     const drawn = () => DRAW && (DRAW.mode === "drawn" || !DRAW.trace || WD.look === "stars");
@@ -992,7 +1006,7 @@
             the finer things as the map comes closer [an atlas: major roads and cities far out, minor roads and villages
             close]. While it is shown the story's routes run along its roads. */
     const NET = { on: (() => { try { return ctx.store.get("world-roadnet") === "1"; } catch (e) { return false; } })(), sel: null };
-    const netData = () => A.worldRoadsData && A.worldRoadsData.places && WD.G && WD.look !== "stars" && !drawn() ? A.worldRoadsData : null;
+    const netData = () => wRoads() && wRoads().places && WD.G && WD.look !== "stars" && !drawn() ? wRoads() : null;
     const netOn = () => !!(NET.on && netData());
     // (how developed the land's roads are: the game master's slider, 1 tribal to 5 modern, kept with the map's look so
     // the players see the same; the network's own default, level 3, until it is moved: the user, 3 Nov 2026)
@@ -1531,7 +1545,7 @@
     }
     function genRun(g) {
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
-      const W0 = JSON.parse(JSON.stringify(A.worldData || {})); delete W0.size;
+      const W0 = JSON.parse(JSON.stringify(wData() || {})); delete W0.size;
       const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
       flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.currents && g.rules !== "classic") { flags.currents = true; if (g.currents === "retro") flags.spin = "retrograde"; } else flags.currents = "off"; flags.coast = (g.coast === "natural" || g.coast === "geologic") && g.rules !== "classic" ? g.coast : "plain"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
       const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
@@ -1546,7 +1560,7 @@
       const keepSel = S.sel, keepR = S.selRoute, was = WD.look;
       const keepG = WD.G;
       genCheck();
-      WD = prepareWorld(A.worldData, terrainNow(), OV); traced();
+      WD = prepareWorld(wData(), terrainNow(), OV); WD.wid = WID; traced();
       // a new look: its colours, its icons, its land
       const lk = landKey();
       // (the land itself unchanged: the same grid kept, so what was worked out from it, the climate's colours and the
@@ -1573,7 +1587,7 @@
       const all = DB ? null : localAll();
       if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc === "shape") OV.shape = data; else if (doc === "gen") OV.gen = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; } else if (doc.startsWith("f-")) { if (data) OV.feat[doc.slice(2)] = data; else delete OV.feat[doc.slice(2)]; }
       rebuild();
-      if (DB) { const ref = DB.collection("world").doc(doc); return Promise.resolve(data ? ref.set(data) : ref.delete()).catch(e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); }); }
+      if (DB) { const ref = DB.collection(WCOLL).doc(doc); return Promise.resolve(data ? ref.set(data) : ref.delete()).catch(e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); }); }
       if (data) all[doc] = data; else delete all[doc];
       ctx.store.set("world-edits", JSON.stringify(all));
       return Promise.resolve();
@@ -1589,7 +1603,7 @@
     (async function connect() {
       let db = null; try { db = ctx.db ? await ctx.db : null; } catch (e) { db = null; }
       if (gone) return;
-      if (db) { DB = db; try { db.collection("world").onSnapshot(s => { if (gone) return; fromDocs(s.docs.map(d => [d.id, d.data() || {}])); rebuild(); }, e => console.warn("world map", e)); } catch (e) { console.warn("world map", e); } }
+      if (db) { DB = db; try { db.collection(WCOLL).onSnapshot(s => { if (gone) return; fromDocs(s.docs.map(d => [d.id, d.data() || {}])); rebuild(); }, e => console.warn("world map", e)); } catch (e) { console.warn("world map", e); } }
       else { fromDocs(Object.entries(localAll())); rebuild(); }
     })();
 
@@ -1754,7 +1768,7 @@
     }
     // the world as the referee has left it, written as world.js, to give back to the campaign
     function exportJS() {
-      const W0 = A.worldData || {}, keep = (o, ks) => { const x = {}; for (const k of ks) if (o[k] != null && o[k] !== "") x[k] = o[k]; return x; };
+      const W0 = wData() || {}, keep = (o, ks) => { const x = {}; for (const k of ks) if (o[k] != null && o[k] !== "") x[k] = o[k]; return x; };
       const out = Object.assign(keep(W0, ["title", "look", "size", "scale", "speeds"]), {
         locations: WD.locs.map(l => keep(Object.assign({}, l, { at: [r1(l.at[0]), r1(l.at[1])] }), ["id", "name", "kind", "at", "city", "state", "region", "owner", "desc", "gm", "people", "events", "tags"])),
         routes: WD.routes.map(r => keep(r, ["id", "from", "to", "kind", "name", "via", "days", "danger", "blocked", "hidden", "desc", "gm", "enc"])),
@@ -1763,7 +1777,7 @@
       // the land as reshaped, and the rivers and names: those the land came with (world-terrain.js) stay there, so the
       // ones removed or changed on the page are named in hide: and the changed ones written here as the campaign's own
       const fromLand = f => /^t/.test(f.id) && !f.added, hide = [...new Set([].concat(W0.hide || []))];
-      const T0 = A.worldTerrainData || {};
+      const T0 = wTerrain() || {};
       for (const [k, list] of [["t", T0.rivers], ["tl", T0.labels]]) (list || []).forEach((f, i) => { const id = (f && f.id) || k + i, now = (k === "t" ? WD.rivers : WD.labels).find(x => x.id === id); if ((!now || now.edited) && !hide.includes(id)) hide.push(id); });
       const own = (list, ks) => list.filter(f => f.id && (!fromLand(f) || f.edited)).map(f => keep(Object.assign({}, f, fromLand(f) ? { id: "w-" + f.id } : {}), ks));
       const rivers = own(WD.rivers, ["id", "name", "pts", "w", "desc", "gm"]), labels = own(WD.labels, ["id", "name", "kind", "at", "angle", "size"]), realms = WD.realms.map(g => keep(g, ["id", "name", "kind", "pts", "owner", "colour", "hidden", "at", "desc", "gm"]));
@@ -1932,7 +1946,7 @@
         case "delfeat": { const [, f] = featOf(S.selFeat); if (f) twice(b, () => { S.selFeat = null; save("f-" + f.id, f.added ? null : { gone: true }); }); break; }
         case "resetfeat": if (S.selFeat) save("f-" + S.selFeat, null); break;
         case "duploc": if (L) { let id = L.id + "-2"; while (WD.byId[id] || OV.loc[id]) id = L.id + "-" + Math.floor(Math.random() * 900 + 100); const c = {}; for (const k of ["name", "kind", "state", "region", "owner", "desc", "gm"]) if (L[k] != null) c[k] = L[k]; c.name = L.name + " (copy)"; c.at = [r1(clamp(L.at[0] + 22, 0, W)), r1(clamp(L.at[1] + 16, 0, H))]; S.sel = id; save("l-" + id, c); } break;
-        case "enter": if (L) { const cid = L.city || L.id; if (!ctx.hasCity(cid) && A.worldCity.can(WD)) { if (netOn()) L.netRoads = netRoadsAt(L.at) || []; A.worldCity.make(WD, L); delete L.netRoads; } if (ctx.hasCity(cid)) ctx.enter(cid, L.id); } break;
+        case "enter": if (L) { let cid = L.city || L.id; if (!ctx.hasCity(cid) && A.worldCity.can(WD)) { if (netOn()) L.netRoads = netRoadsAt(L.at) || []; A.worldCity.make(WD, L); delete L.netRoads; cid = L.city || cid; } if (ctx.hasCity(cid)) ctx.enter(cid, L.id); } break;
         case "make": if (L && ctx.makeCity) { b.disabled = true; b.textContent = "Making the map…"; Promise.resolve(ctx.makeCity(L, WD)).catch(err => { b.disabled = false; b.textContent = "Make its 3D map now"; note("The map could not be made: " + ((err && err.message) || err)); }); } break;
         case "edit": S.edit = !S.edit; S.tool = null; S.first = null; S.draft = null; S.cur = null; root.classList.toggle("editing", S.edit); renderBars(); renderPanel(); drawFx(); break;
         case "addloc": S.tool = S.tool === "loc" ? null : "loc"; S.first = null; renderBars(); break;

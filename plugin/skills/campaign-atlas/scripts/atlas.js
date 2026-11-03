@@ -75,6 +75,9 @@ function sources(dir) {
   if (fs.existsSync(cd)) for (const f of fs.readdirSync(cd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(cd, f));
   if (fs.existsSync(path.join(dir, "kit.js"))) files.push(path.join(dir, "kit.js"));       // buildings made for this place (ATLAS.kit)
   for (const f of ["world.js", "world-terrain.js", "world-roads.js"]) if (fs.existsSync(path.join(dir, f))) files.push(path.join(dir, f));   // the world map (and its road network, atlas.js roads, on trial)
+  // the campaign's other worlds (worlds/<id>/: a planet's surface, a moon, a plane's layer), each with its own files
+  const wd = path.join(dir, "worlds");
+  if (fs.existsSync(wd)) for (const id of fs.readdirSync(wd).filter(x => /^[\w-]{1,40}$/.test(x) && fs.existsSync(path.join(wd, x, "world.js"))).sort()) for (const f of ["world.js", "world-terrain.js", "world-roads.js"]) if (fs.existsSync(path.join(wd, id, f))) files.push(path.join(wd, id, f));
   if (fs.existsSync(path.join(dir, "galaxy.js"))) files.push(path.join(dir, "galaxy.js"));  // the galaxy's settings (atlas.js galaxy)
   if (fs.existsSync(path.join(dir, "table.js"))) files.push(path.join(dir, "table.js"));   // for the table: clocks, sessions, the players' characters, tables, handouts
   if (fs.existsSync(pd)) for (const f of fs.readdirSync(pd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(pd, f));
@@ -83,6 +86,14 @@ function sources(dir) {
   const md = path.join(dir, "models");                                                      // models the game master brought in (ATLAS.models.addCustom)
   if (fs.existsSync(md)) for (const f of fs.readdirSync(md).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(md, f));
   return files;
+}
+// a file of another of the campaign's worlds (worlds/<id>/world.js and its kin) registers under that world's id
+// (atlas-world.js A.worlds), without saying so itself
+function worldIdOf(dir, f) { const r = path.relative(dir, f).split(/[\\/]/); return r[0] === "worlds" && r.length === 3 ? r[1] : null; }
+function campaignSrc(dir, f) {
+  const src = fs.readFileSync(f, "utf8"), id = dir && worldIdOf(dir, f); if (!id) return src;
+  const q = JSON.stringify(id);
+  return `(function (ATLAS) {\n${src}\n})(Object.assign(Object.create(ATLAS), { world: d => ATLAS.world(d, ${q}), worldTerrain: d => ATLAS.worldTerrain(d, ${q}), worldRoads: d => ATLAS.worldRoads(d, ${q}) }));`;
 }
 // the model library (engine/atlas-models*.js) and the story's web (atlas-story.js): loaded before the campaign's own
 // files, which may add to them (ATLAS.models.addCustom, ATLAS.storyEdit)
@@ -136,7 +147,7 @@ function load(dir) {
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-table.js"), "utf8"))(A);  // gives campaigns ATLAS.clocks(), sessions(), pcs(), tables(), handouts(), rescues(), calendar(), events()
   new Function("ATLAS", fs.readFileSync(path.join(ENGINE, "atlas-modules.js"), "utf8"))(A);  // what the campaign uses (campaign.js features), for the build and the checker
   for (const f of MODEL_FILES) new Function("ATLAS", fs.readFileSync(path.join(ENGINE, f), "utf8"))(A);  // the model library, for the checker
-  for (const f of sources(dir)) { try { new Function("ATLAS", fs.readFileSync(f, "utf8"))(A); } catch (e) { die(`${path.relative(dir, f)}: ${e.message}`); } }
+  for (const f of sources(dir)) { try { new Function("ATLAS", campaignSrc(dir, f))(A); } catch (e) { die(`${path.relative(dir, f)}: ${e.message}`); } }
   Object.defineProperty(A, "__dir", { value: dir });
   return A;
 }
@@ -416,7 +427,7 @@ function checkCity(A, rid) {
 }
 // the world map: every location known and standing on the map, every route between two of them, every 3D city it names
 // made, every place that says it stands in a location in one
-function checkWorld(A) {
+function checkWorld(A, wid) {
   const out = [], K = A.worldKit, W0 = A.worldData || {}; let problems = 0, notes = 0;
   const P = m => { out.push("   ! " + m); problems++; }, N = m => { out.push("   - " + m); notes++; };
   if (W0.look && !K.LOOK_OF[String(W0.look).toLowerCase()]) P(`unknown look "${W0.look}": parchment, engraved, atlas, holo or stars`);
@@ -442,10 +453,13 @@ function checkWorld(A) {
     else if (r.kind && !K.ROUTES[r.kind]) P(`route ${r.from} to ${r.to}: unknown kind "${r.kind}" (${Object.keys(K.ROUTES).join(", ")})`);
     else if (r.days != null && !(typeof r.days === "number" && r.days >= 0)) P(`route ${r.from} to ${r.to}: days must be a number`);
   });
-  for (const cid of Object.keys(A.cities || {})) if (!(W0.locations || []).some(l => l && (l.city === cid || (!l.city && l.id === cid)))) N(`the 3D city "${cid}" stands nowhere on the world map: give a location city: "${cid}"`);
-  for (const id of A.order) {
+  // (the campaign's 3D cities stand on its own world; another world, wid, is not asked for them)
+  if (!wid || wid === "main") for (const cid of Object.keys(A.cities || {})) if (!(W0.locations || []).some(l => l && (l.city === cid || (!l.city && l.id === cid)))) N(`the 3D city "${cid}" stands nowhere on the world map: give a location city: "${cid}"`);
+  // (a place may stand in a location of any of the campaign's worlds; the places are checked once, with the main world)
+  const anyLoc = new Set([...ids, ...Object.values(A.worlds || {}).flatMap(w => ((w.data || {}).locations || []).map(l => l && l.id).filter(Boolean))]);
+  for (const id of (!wid || wid === "main" ? A.order : [])) {
     const m = A.meta[id];
-    if (m.location && !ids.has(m.location)) P(`${id} stands in the location "${m.location}", which the world map does not have`);
+    if (m.location && !anyLoc.has(m.location)) P(`${id} stands in the location "${m.location}", which no world map of the campaign has`);
     if (m.city && !(A.cities || {})[m.city]) P(`${id} stands in the city "${m.city}", which has not been made (atlas.js city <dir> ... --id ${m.city})`);
   }
   if (W0.party && W0.party.at && !ids.has(W0.party.at)) P(`the party stands at "${W0.party.at}", which is not one of the locations`);
@@ -482,17 +496,25 @@ function checkWorld(A) {
   return { line, out, problems, notes };
 }
 // the world map's land: made, or made again keeping the land and every location already placed
+// --id <id>: another of the campaign's worlds (a planet's surface, a moon, a plane's layer), in worlds/<id>/; without
+// it, the campaign's own world beside campaign.js. pickWorld makes A's world that one, for the generators.
+function worldTarget(dir) {
+  const wid = flags.id && flags.id !== true && String(flags.id) !== "main" ? String(flags.id) : null;
+  if (wid && !/^[\w-]{1,40}$/.test(wid)) die("--id: letters, digits, - and _ only, up to 40");
+  const wdir = wid ? path.join(dir, "worlds", wid) : dir; if (wid) fs.mkdirSync(wdir, { recursive: true });
+  return { wid, wdir, pick: A => { if (wid) { const w = (A.worlds || {})[wid] || {}; A.worldData = w.data || null; A.worldTerrainData = w.terrain || {}; A.worldRoadsData = w.roads || null; } return A; } };
+}
 async function cmdWorld(dir) {
   if (!dir || !fs.existsSync(path.join(dir, "campaign.js"))) die("Which campaign folder? node atlas.js world <dir>");
-  const WI = require("./world-invent.js");
-  if (!hasWorld(dir)) {
+  const WI = require("./world-invent.js"), WT = worldTarget(dir);
+  if (!hasWorld(WT.wdir)) {
     let size = null;
     if (flags.drawing && flags.drawing !== true && fs.existsSync(flags.drawing)) { const z = WI.imageSize(fs.readFileSync(flags.drawing)); if (z) size = z.w >= z.h ? [1000, Math.round(1000 * z.h / z.w)] : [Math.round(1000 * z.w / z.h), 1000]; }
-    const n = WI.starter(dir, load(dir), flags, size);
+    const n = WI.starter(WT.wdir, load(dir), flags, size);
     const next = flags.drawing ? "Look at the drawing and add every place on it, at: [x, y] where it is drawn, its roads as routes and its mountains, forests, rivers and lakes as features (references/world.md, \"From a drawing\")" : flags.real ? "Add the story's other places to it: each is found on the real map by its name (or geo: \"Place, Country\")" : "Add the story's other places to it (references/world.md), then run this again to place them";
-    console.log(`wrote ${path.join(dir, "world.js")}: ${n ? `a location for each of the campaign's ${n} cit${n === 1 ? "y" : "ies"}` : "no locations yet"}. ${next}.`);
+    console.log(`wrote ${path.join(WT.wdir, "world.js")}: ${n ? `a location for each of the campaign's ${n} cit${n === 1 ? "y" : "ies"}` : "no locations yet"}. ${next}.`);
   }
-  let A = load(dir);
+  let A = WT.pick(load(dir));
   const old = A.worldTerrainData || {}, log = m => console.log(m);
   // a world drawn by hand, generated: the picture's land and mountains guide the plates, the rivers and the climate
   // (engine/atlas-world-sketch.js); the map takes the picture's shape at the size asked (a whole planet stays 2 by 1)
@@ -508,11 +530,11 @@ async function cmdWorld(dir) {
     log(`  the sketch (${flags.sketch.how === "colour" ? "a coloured map: its blue is the sea" : "a line drawing: the sea is the paper outside the coasts"}): ${Math.round(l / flags.sketch.land.length * 100)}% land, ${m ? Math.round(m / Math.max(1, l) * 100) + "% of it drawn as mountains" : "no mountains drawn (the plates make them)"}`);
   }
   const mode = flags.sketch ? "invent" : flags.drawing ? "drawing" : flags.real ? "real" : flags.land || flags.seed || flags.replace ? "invent" : old.drawing ? "drawing" : old.real ? "real" : "invent";
-  const { T, summary } = mode === "drawing" ? WI.fromDrawing(dir, A, flags.drawing, flags, log) : mode === "real" ? await require("./world-real.js").realWorld(dir, A, flags, log) : WI.invent(A, flags, log);
-  WI.writeTerrain(dir, T, A.config.title);
-  console.log(`wrote ${path.join(dir, "world-terrain.js")}: ${summary}`);
+  const { T, summary } = mode === "drawing" ? WI.fromDrawing(WT.wdir, A, flags.drawing, flags, log) : mode === "real" ? await require("./world-real.js").realWorld(WT.wdir, A, flags, log) : WI.invent(A, flags, log);
+  WI.writeTerrain(WT.wdir, T, WT.wid ? (A.worldData || {}).title || WT.wid : A.config.title);
+  console.log(`wrote ${path.join(WT.wdir, "world-terrain.js")}: ${summary}`);
   if (flags.across && !(A.worldData || {}).scale) console.log("  (--across sets the scale only when it starts a world.js: add scale: { unit, per } to world.js by hand)");
-  A = load(dir); const r = checkWorld(A); console.log("\n" + r.line + (r.problems ? "" : " OK")); for (const l of r.out) console.log(l);
+  A = WT.pick(load(dir)); const r = checkWorld(A, WT.wid); console.log("\n" + r.line + (r.problems ? "" : " OK")); for (const l of r.out) console.log(l);
   console.log(`\nNext: node atlas.js build ${dir}   (the page shows it under "World map")`);
 }
 // the road network of the world map, grown over the ages (the user, 3 Nov 2026; ON TRIAL until they approve it:
@@ -525,7 +547,7 @@ function eraOf(A) {
 }
 function cmdRoads(dir) {
   if (!dir || !fs.existsSync(path.join(dir, "campaign.js"))) die("Which campaign folder? node atlas.js roads <dir>");
-  const A = load(dir), T = A.worldTerrainData;
+  const WT = worldTarget(dir), A = WT.pick(load(dir)), T = A.worldTerrainData;
   if (!T || !T.height) die(`no land under the world map yet: run node atlas.js world ${dir} first`);
   if (T.stars) die("a star chart has no roads (its routes are lanes between the stars)");
   const WD = A.worldKit.prepareWorld(A.worldData, T, {});
@@ -537,9 +559,9 @@ function cmdRoads(dir) {
   // 3 makes the default alone, quicker)
   const only = flags.levels && flags.levels !== true ? String(flags.levels).split(",").map(Number).filter(n => n >= 1 && n <= 5) : null;
   const RM = require("./world-roads.js"), R = RM.roads(WD, { seed: flags.seed != null && flags.seed !== true ? +flags.seed : T.seed || 1, era, currents, levels: only }, require("../engine/atlas-world-biomes.js"), m => console.log(m));
-  fs.writeFileSync(path.join(dir, "world-roads.js"), `// The road network of the world map${A.config.title ? " of " + A.config.title : ""}, grown over the ages by atlas.js roads (on trial),\n// at each level of development (1 tribal to 5 modern; 3, the default, as first approved). Not for editing by hand: run\n// atlas.js roads again (after atlas.js world). The story's own routes, places and the land are not changed by it; the page\n// draws it when "Road network (trial)" is on, at the level its slider is set to.\nATLAS.worldRoads(${JSON.stringify(R)});\n`);
+  fs.writeFileSync(path.join(WT.wdir, "world-roads.js"), `// The road network of the world map${A.config.title ? " of " + A.config.title : ""}, grown over the ages by atlas.js roads (on trial),\n// at each level of development (1 tribal to 5 modern; 3, the default, as first approved). Not for editing by hand: run\n// atlas.js roads again (after atlas.js world). The story's own routes, places and the land are not changed by it; the page\n// draws it when "Road network (trial)" is on, at the level its slider is set to.\nATLAS.worldRoads(${JSON.stringify(R)});\n`);
   const s0 = R.levels[R.level].stats;
-  console.log(`wrote ${path.join(dir, "world-roads.js")}: ${s0.places.cities} cities, ${s0.places.towns} towns, ${s0.places.villages} villages; ${R.states.length} states`);
+  console.log(`wrote ${path.join(WT.wdir, "world-roads.js")}: ${s0.places.cities} cities, ${s0.places.towns} towns, ${s0.places.villages} villages; ${R.states.length} states`);
   for (const [n, lv] of Object.entries(R.levels).sort((a, b) => a[0] - b[0])) {
     const s = lv.stats, roadKm = Object.entries(s.km).filter(([k]) => k !== "old").reduce((t, [, v]) => t + v, 0);
     console.log(`  level ${n}, ${lv.name}${+n === R.level ? " (the default)" : ""}: ${roadKm} km of road (${s.density} per km²; main ${Math.round(s.mainShare * 100)}%), junctions ${s.junctions.three}+${s.junctions.four}, detour ${s.detour ? s.detour.median : "-"}, villages within a day of a market ${Math.round((s.villagesInDay || 0) * 100)}%; ${s.crossings.bridge} bridges, ${s.crossings.ford} fords, ${s.crossings.ferry} ferries, ${s.passes} passes${(lv.marks || []).some(m => m.k === "tunnel") ? `, ${lv.marks.filter(m => m.k === "tunnel").length} tunnels` : ""}; ${s.waterKm} km by water`);
@@ -824,6 +846,14 @@ function cmdCheck(dir, want) {
     if (A.galaxyParams) { const c = checkGalaxy(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
     if (A.worldData) { const c = checkWorld(A); console.log(c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes; }
     else for (const id of A.order) { const m = A.meta[id]; if (m.location) { console.log(`   ! ${id} stands in the world location "${m.location}", but the campaign has no world map (world.js)`); problems++; } }
+    // (the campaign's other worlds, worlds/<id>/, each checked as the main one is)
+    const mainW = [A.worldData, A.worldTerrainData, A.worldRoadsData];
+    for (const [wid, w] of Object.entries(A.worlds || {})) {
+      if (wid === "main" || !w.data) continue;
+      A.worldData = w.data; A.worldTerrainData = w.terrain || {}; A.worldRoadsData = w.roads || null;
+      const c = checkWorld(A, wid); console.log(`[${wid}] ` + c.line + (c.problems || c.notes ? "" : "  OK")); c.out.forEach(l => console.log(l)); problems += c.problems; notes += c.notes;
+    }
+    [A.worldData, A.worldTerrainData, A.worldRoadsData] = mainW;
     if (flags.names) nameReview(A);
   }
   console.log(problems ? `${problems} problem(s), ${notes} note(s)` : notes ? `no problems, ${notes} note(s)` : "all clear");
@@ -948,7 +978,7 @@ function pageParts(dir) {
   const FILE_MOD = { "atlas-sessions.js": ["recorded"], "atlas-economy.js": ["money"], "atlas-dashboard.js": ["living", "advanced"], "atlas-deeds.js": ["living", "advanced"], "atlas-factions.js": ["living", "advanced"], "atlas-worldtime.js": ["living"], "atlas-history.js": ["living"], "atlas-copilot.js": ["copilot"], "atlas-consistency.js": ["consistency"], "atlas-galaxy.js": ["stars"], "atlas-facility.js": ["stars"], "atlas-caveui.js": ["caves"] };
   const MODS = A.modules, outMods = new Set();
   const keep = f => { const r = FILE_MOD[f]; if (r && MODS && !MODS.on(r[0], r[1])) { outMods.add(r[0]); return `/* ${f}: left out (${r[0]} is switched off in campaign.js features) */`; } return fs.readFileSync(path.join(ENGINE, f), "utf8"); };
-  const raw = [path.join(ENGINE, "atlas-engine.js"), path.join(ENGINE, "atlas-modules.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-biomes.js"), path.join(ENGINE, "atlas-world-nature.js"), path.join(ENGINE, "atlas-world-art.js"), path.join(ENGINE, "atlas-world-sketch.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-galaxy-gen.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir, A), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapmarks.js"), "utf8"), keep("atlas-copilot.js"), keep("atlas-consistency.js"), keep("atlas-worldtime.js"), keep("atlas-factions.js"), fs.readFileSync(path.join(ENGINE, "atlas-journal.js"), "utf8"), ...["atlas-history.js", "atlas-deeds.js", "atlas-economy.js", "atlas-dashboard.js", "atlas-sessions.js"].map(keep), keep("atlas-galaxy.js"), keep("atlas-facility.js"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), keep("atlas-caveui.js"), fs.readFileSync(path.join(ENGINE, "atlas-ask.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), ...(city ? [fs.readFileSync(path.join(ENGINE, "atlas-cityedit.js"), "utf8")] : []), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), path.join(ENGINE, "atlas-modules.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-biomes.js"), path.join(ENGINE, "atlas-world-nature.js"), path.join(ENGINE, "atlas-world-art.js"), path.join(ENGINE, "atlas-world-sketch.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-galaxy-gen.js"), ...sources(dir), path.join(ENGINE, "atlas-voice.js")].map(f => { const src = campaignSrc(dir, f); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir, A), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapmarks.js"), "utf8"), keep("atlas-copilot.js"), keep("atlas-consistency.js"), keep("atlas-worldtime.js"), keep("atlas-factions.js"), fs.readFileSync(path.join(ENGINE, "atlas-journal.js"), "utf8"), ...["atlas-history.js", "atlas-deeds.js", "atlas-economy.js", "atlas-dashboard.js", "atlas-sessions.js"].map(keep), keep("atlas-galaxy.js"), keep("atlas-facility.js"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), keep("atlas-caveui.js"), fs.readFileSync(path.join(ENGINE, "atlas-ask.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), ...(city ? [fs.readFileSync(path.join(ENGINE, "atlas-cityedit.js"), "utf8")] : []), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
   // (a page with a world map can make a new world itself: the generator rides along, for a worker)
   const js = ((world ? raw + "\n;\n" + worldGenJS() + "\n;\n" + cityGenJS() : raw) + "\n;\nATLAS.config.featuresBuilt = " + JSON.stringify({ out: [...outMods] }) + ";").replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
