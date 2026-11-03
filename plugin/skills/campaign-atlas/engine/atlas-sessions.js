@@ -27,7 +27,7 @@
   const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const hms = s => { s = Math.max(0, Math.round(+s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
   const r1 = v => Math.round(v * 10) / 10;
-  const UI = { rec: "", sub: "words", q: "", busy: "", stop: false, prog: null, err: "", edit: "", consent: false, live: true, lang: "", focus: null, filter: "", from: 0, lost: [], link: null, tq: "" };
+  const UI = { rec: "", sub: "words", q: "", busy: "", stop: false, prog: null, err: "", edit: "", consent: false, live: true, sound: true, lang: "", focus: null, filter: "", from: 0, lost: [], link: null, tq: "" };
 
   /* ---- what is remembered: its kinds, and what kind of truth each note is */
   const KINDS = [["did", "What the party did"], ["decision", "A decision"], ["talk", "A conversation"], ["promise", "A promise or agreement"], ["threat", "A threat"], ["clue", "A clue found"], ["visit", "A place reached"], ["item", "A thing gained, lost or used"], ["fate", "Someone's fate"], ["bond", "A bond or a rivalry"], ["theory", "The players' theory"], ["mystery", "An open question"], ["change", "The world changed"], ["later", "To come back later"]];
@@ -142,13 +142,17 @@
   const elapsed = () => !R ? 0 : R.acc + (R.running && !R.paused ? (performance.now() - R.t0) / 1000 : 0);
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const why = () => !window.isSecureContext ? "This page is not a secure one (https, or this computer itself), and browsers give the microphone only to secure pages."
-    : !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !window.MediaRecorder ? "This browser cannot record from a web page." : "";
+    : UI.sound && (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || !window.MediaRecorder) ? "This browser cannot keep the sound from a web page." : "";
+  // (the words alone, without the sound, are a recording too: the user wants what was said written down, 3 Nov 2026)
+  const canStart = () => !why() && (UI.sound || (UI.live && !!SR));
   async function start() {
-    if (R || why()) return;
+    if (R || !canStart()) return;
     const n = +UI.sess || +api.session() || 1, id = uid("r");
-    const meta = { session: n, started: Date.now(), state: "recording", dur: 0, parts: [], where: "here", device: device(), live: !!(UI.live && SR), lang: UI.lang || "", consent: { t: Date.now(), text: CONSENT }, wm: W() ? W().now() : null, speakers: {} };
-    R = { id, meta, acc: 0, part: -1, seq: 0, segs: [], dirty: new Set(), saved: 0, hints: [], heard: {}, running: false, paused: false };
-    try { await newPart(); } catch (e) { R = null; UI.err = e && e.name === "NotAllowedError" ? "The microphone was not allowed. Allow it for this page (the lock or camera sign beside the address) and start again." : "The microphone could not be started: " + (e && e.message || e); paint(); return; }
+    const meta = { session: n, started: Date.now(), state: "recording", dur: 0, parts: [], where: UI.sound ? "here" : "none", noSound: !UI.sound || undefined, device: device(), live: !!(UI.live && SR), lang: UI.lang || "", consent: { t: Date.now(), text: CONSENT }, wm: W() ? W().now() : null, speakers: {} };
+    if (!meta.noSound) delete meta.noSound;
+    R = { id, meta, acc: 0, part: -1, seq: 0, segs: [], dirty: new Set(), saved: 0, hints: [], heard: {}, running: false, paused: false, soundOff: !UI.sound };
+    if (UI.sound) { try { await newPart(); } catch (e) { R = null; UI.err = e && e.name === "NotAllowedError" ? "The microphone was not allowed. Allow it for this page (the lock or camera sign beside the address) and start again." : "The microphone could not be started: " + (e && e.message || e); paint(); return; } }
+    else { R.running = true; R.t0 = performance.now(); }
     putRec(id, meta); idbPut("recs", { id, state: "recording", session: n, started: meta.started, parts: meta.parts, dur: 0 }).catch(() => {});
     wake(); if (meta.live) words(true);
     R.timer = setInterval(tick, 1000); banner(); paint();
@@ -168,8 +172,16 @@
   }
   // the microphone stopped (a phone locked its screen, a call came, it was unplugged): the time stops with it, and it is
   // taken up again as soon as the page is seen again
-  function lost() { if (!R || !R.running) return; R.acc = elapsed(); R.running = false; R.lost = true; R.meta.state = "lost"; save(true); tick(); }
-  async function again() { if (!R || !R.lost) return; try { await newPart(); R.meta.state = R.paused ? "paused" : "recording"; save(true); tick(); } catch (e) { UI.err = "The microphone could not be started again: " + (e && e.message || e); paint(); } }
+  function lost() { if (!R || !R.running || R.soundOff) return; R.acc = elapsed(); R.running = false; R.lost = true; R.meta.state = "lost"; save(true); tick(); }
+  // (some phones cannot write the words and keep the sound at once: the words are kept, the sound so far kept, the rest let go)
+  function wordsOnly() {
+    if (!R || R.soundOff) return; R.soundOff = true;
+    try { R.mr.stop(); } catch (e) {} try { R.stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    R.mr = null; R.stream = null; R.an = null; R.meta.noSound = true; R.wordsOff = "";
+    if (!R.running) { R.lost = false; R.running = true; R.t0 = performance.now(); R.meta.state = R.paused ? "paused" : "recording"; }
+    R.meta.live = true; words(true); save(true); paint();
+  }
+  async function again() { if (!R || !R.lost || R.soundOff) return; try { await newPart(); R.meta.state = R.paused ? "paused" : "recording"; save(true); tick(); } catch (e) { UI.err = "The microphone could not be started again: " + (e && e.message || e); paint(); } }
   function pause() { if (!R || R.paused) return; R.acc = elapsed(); R.paused = true; try { R.mr.pause(); } catch (e) {} R.meta.state = "paused"; words(false); save(true); paint(); }
   function resume() { if (!R || !R.paused) return; R.t0 = performance.now(); R.paused = false; try { R.mr.resume(); } catch (e) {} R.meta.state = "recording"; if (R.meta.live) words(true); save(true); paint(); }
   async function stop() {
@@ -181,7 +193,7 @@
     r.meta.state = "stopped"; r.meta.dur = r1(r.acc); flush(true); save(true);
     idbPut("recs", { id: r.id, state: "stopped", session: r.meta.session, started: r.meta.started, parts: r.meta.parts, dur: r.meta.dur }).catch(() => {});
     R = null; banner(); UI.rec = r.id; UI.sub = segsOf(r.id).length ? "words" : "add"; paint();
-    api.note(`Recorded: ${hms(r.meta.dur)} of ${sessionTitle(r.meta.session).toLowerCase()}, kept on this device.`);
+    api.note(r.meta.noSound && !(r.meta.parts || []).length ? `Written down: ${segsOf(r.id).length} lines said in ${hms(r.meta.dur)} of ${sessionTitle(r.meta.session).toLowerCase()}.` : `Recorded: ${hms(r.meta.dur)} of ${sessionTitle(r.meta.session).toLowerCase()}, kept on this device.`);
   }
   function save(now) { if (!R) return; R.meta.dur = r1(elapsed()); if (now || Date.now() - (R.lastMeta || 0) > 30000) { R.lastMeta = Date.now(); putRec(R.id, R.meta); idbPut("recs", { id: R.id, state: R.meta.state, session: R.meta.session, started: R.meta.started, parts: R.meta.parts, dur: R.meta.dur }).catch(() => {}); } }
   async function wake() { try { if (R && navigator.wakeLock && document.visibilityState === "visible") R.wl = await navigator.wakeLock.request("screen"); } catch (e) {} }
@@ -194,8 +206,8 @@
   function tick() {
     if (!R) return;
     let lvl = 0; if (R.an && R.running && !R.paused) { R.an.getFloatTimeDomainData(R.buf); let s = 0; for (const v of R.buf) s += v * v; lvl = Math.sqrt(s / R.buf.length); }
-    R.quiet = lvl < .004 && R.running && !R.paused ? (R.quiet || 0) + 1 : 0;
-    const mic = R.lost ? "The microphone stopped: the screen may have locked. It starts again when this page is open." : R.paused ? "Paused." : R.quiet > 25 ? "No sound for a while: is the microphone covered or muted?" : "Hearing the table.";
+    R.quiet = R.soundOff ? (R.running && !R.paused && Date.now() - (R.lastWords || R.meta.started) > 90000 ? 99 : 0) : lvl < .004 && R.running && !R.paused ? (R.quiet || 0) + 1 : 0;
+    const mic = R.lost ? "The microphone stopped: the screen may have locked. It starts again when this page is open." : R.paused ? "Paused." : R.soundOff ? (R.quiet ? "No words heard for a while: is the browser still listening? Keep this page open." : "Listening, and writing down what is said.") : R.quiet > 25 ? "No sound for a while: is the microphone covered or muted?" : "Hearing the table.";
     const set = (sel, f) => document.querySelectorAll(sel).forEach(f);
     set(".sm-dur", e => { e.textContent = hms(elapsed()); }); set(".sm-lvl i", e => { e.style.width = Math.min(100, Math.round(lvl * 900)) + "%"; });
     set(".sm-mic", e => { e.textContent = mic; e.classList.toggle("bad", !!(R.lost || R.quiet > 25)); });
@@ -223,13 +235,19 @@
         if (r.isFinal) { const x = String(r[0].transcript || "").trim(); if (x) addSeg([r1(st[i]), r1(Math.max(.5, elapsed() - st[i])), "", x]); delete st[i]; }
       }
     };
-    sr.onerror = e => { R && (R.wordErr = e.error); if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") { if (R) { R.wantWords = false; R.wordsOff = e.error === "audio-capture" ? "This device cannot write the words while it records." : "The browser did not allow the live words."; } } };
-    sr.onend = () => { if (!R) return; R.sr = null; if (R.wantWords && !R.paused && R.running) setTimeout(() => R && R.wantWords && words(true), 300); };
+    // (no speech for a while ends a listening, and it starts again; without the internet it waits a few seconds first; a
+    // device that cannot listen while it keeps the sound offers to keep the words instead)
+    sr.onerror = e => {
+      if (!R) return; R.wordErr = e.error; R.wordWait = Date.now() + (e.error === "network" ? 5000 : 0);
+      if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") { R.wantWords = false; R.wordsOff = e.error === "audio-capture" ? (R.soundOff ? "The microphone is busy: the words cannot be written." : "This device cannot write the words while it keeps the sound.") : "The browser did not allow the live words."; paint(); }
+      else if (e.error === "network") document.querySelectorAll(".sm-mic").forEach(x => { x.textContent = "The words need the internet: waiting for it."; });
+    };
+    sr.onend = () => { if (!R) return; R.sr = null; if (R.wantWords && !R.paused && R.running) setTimeout(() => R && R.wantWords && words(true), Math.max(300, (R.wordWait || 0) - Date.now())); };
     R.sr = sr; try { sr.start(); } catch (e) { R.sr = null; }
   }
   function addSeg(seg) {
     if (!R) return; if (!R.segs.length) R.segs = segsOf(R.id).slice();
-    R.segs.push(seg); R.dirty.add(Math.floor((R.segs.length - 1) / PART));
+    R.segs.push(seg); R.dirty.add(Math.floor((R.segs.length - 1) / PART)); R.lastWords = Date.now();
     hintsFor(R.id, seg);
     document.querySelectorAll(".sm-last").forEach(e => { e.innerHTML = R.segs.slice(-3).map(s => `<p><span class="kn">${hms(s[0])}</span> ${esc(s[3])}</p>`).join(""); });
   }
@@ -466,10 +484,10 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
   function recorderHTML() {
     if (R) {
       return `<section class="t-card sm-rec on"><div class="sm-recnow"><span class="sm-dot${R.paused ? " paused" : ""}"></span><b>${R.paused ? "Paused" : R.lost ? "Waiting for the microphone" : "Recording"}</b><span class="sm-dur">${hms(elapsed())}</span></div>
-        <p class="kn">${esc(sessionTitle(R.meta.session))} · on ${esc(R.meta.device)} · kept here, ten seconds at a time</p>
-        <div class="sm-lvl" aria-hidden="true"><i></i></div><p class="sm-mic t-small" aria-live="polite">Hearing the table.</p>
+        <p class="kn">${esc(sessionTitle(R.meta.session))} · on ${esc(R.meta.device)} · ${R.soundOff ? "the words written down as they are said" : "kept here, ten seconds at a time"}</p>
+        ${R.soundOff ? "" : `<div class="sm-lvl" aria-hidden="true"><i></i></div>`}<p class="sm-mic t-small" aria-live="polite">${R.soundOff ? "Listening, and writing down what is said." : "Hearing the table."}</p>
         <div class="t-row sm-big">${R.paused ? `<button type="button" class="t-btn prim" data-sm="resume">Go on</button>` : `<button type="button" class="t-btn" data-sm="pause">Pause</button>`}<button type="button" class="t-btn sm-stop" data-sm="stop">Stop</button>${R.lost ? `<button type="button" class="t-btn" data-sm="again">Start the microphone again</button>` : ""}</div>
-        ${R.meta.live ? `<h4 class="tw-sub">The words, as they are said${R.wordsOff ? "" : ""}</h4>${R.wordsOff ? `<p class="t-small">${esc(R.wordsOff)} The sound is still recorded.</p>` : `<div class="sm-last t-small"><p class="kn">Listening…</p></div>`}` : ""}
+        ${R.meta.live ? `<h4 class="tw-sub">The words, as they are said</h4>${R.wordsOff ? `<p class="t-small">${esc(R.wordsOff)}${R.soundOff ? "" : " The sound is still recorded."}</p>${!R.soundOff && SR ? `<div class="t-row"><button type="button" class="t-btn" data-sm="wordsonly">Keep the words instead of the sound</button></div>` : ""}` : `<div class="sm-last t-small">${R.segs.length ? R.segs.slice(-3).map(s => `<p><span class="kn">${hms(s[0])}</span> ${esc(s[3])}</p>`).join("") : `<p class="kn">Listening…</p>`}</div>`}` : ""}
         <h4 class="tw-sub">Remembered, as you play (yours only)</h4><div class="sm-hints t-small">${hintsHTML()}</div>
         <p class="t-small kn">Keep this page open and the screen on${/phone|iPad/.test(R.meta.device) ? ", the phone plugged in" : ""}. If the screen locks, most phones stop the microphone; it starts again when the page is open.</p></section>`;
     }
@@ -480,8 +498,9 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
       <div class="sm-consent"><p class="t-small">Read this to the table first:</p><blockquote>${esc(CONSENT)}</blockquote>
         <label class="t-fogck"><input type="checkbox" data-sm="consent"${UI.consent ? " checked" : ""}> Everyone at the table knows and has agreed</label></div>
       ${SR ? `<label class="t-fogck"><input type="checkbox" data-sm="live"${UI.live ? " checked" : ""}> Write the words down as we play</label> <select class="t-in tw-sel" data-sm="lang" aria-label="In which language">${LANGS.map(([k, l]) => opt(k, l, UI.lang)).join("")}</select>
-        <p class="t-small kn">The live words are made by the browser's own speech service${/Chrome|Edg/.test(navigator.userAgent) ? " (Google's, over the internet" + (opts().local ? ", or on this device where it can" : "") + ")" : /Safari/.test(navigator.userAgent) ? " (Apple's)" : ""}; they do not tell who spoke. A better transcript can be added afterwards.</p>` : `<p class="t-small kn">This browser cannot write the words as you play; add a transcript afterwards.</p>`}
-      <div class="t-row sm-big"><button type="button" class="t-btn prim" data-sm="start"${UI.consent ? "" : " disabled"}>${T.icon("mic")}Start recording</button></div>`}
+        <p class="t-small kn">The words are written by the browser's own speech service${/Chrome|Edg/.test(navigator.userAgent) ? " (Google's, over the internet" + (opts().local ? ", or on this device where it can" : "") + ")" : /Safari/.test(navigator.userAgent) ? " (Apple's)" : ""}, as they are said; who said them is not told apart.</p>` : `<p class="t-small kn">This browser cannot write the words as you play (Chrome, Edge and Safari can); keep the sound, and add its words afterwards.</p>`}
+      <label class="t-fogck"><input type="checkbox" data-sm="sound"${UI.sound ? " checked" : ""}> Keep the sound too</label>
+      <div class="t-row sm-big"><button type="button" class="t-btn prim" data-sm="start"${UI.consent && canStart() ? "" : " disabled"}>${T.icon("mic")}Start recording</button></div>`}
       ${UI.err ? `<p class="t-err">${esc(UI.err)}</p>` : ""}</section>`;
   }
   function lostHTML() {
@@ -608,8 +627,9 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
     const dur = r1(ch.reduce((a, c) => Math.max(a, c.t || 0), r.dur || 0)), meta = Object.assign({ session: r.session, started: r.started, where: "here", device: device(), speakers: {} }, recOf(id) || {}, { parts: r.parts || [], dur });
     UI.lost = UI.lost.filter(x => x.id !== id);
     if (go && !R && !why()) {
-      R = { id, meta: Object.assign(meta, { state: "recording" }), acc: dur, part: (r.parts || []).length - 1, seq: 0, segs: [], dirty: new Set(), saved: 0, running: false, paused: false };
-      try { await newPart(); } catch (e) { R = null; UI.err = "The microphone could not be started: " + (e && e.message || e); paint(); return; }
+      R = { id, meta: Object.assign(meta, { state: "recording" }), acc: dur, part: (r.parts || []).length - 1, seq: 0, segs: [], dirty: new Set(), saved: 0, running: false, paused: false, soundOff: !!meta.noSound };
+      if (meta.noSound) { R.running = true; R.t0 = performance.now(); }
+      else try { await newPart(); } catch (e) { R = null; UI.err = "The microphone could not be started: " + (e && e.message || e); paint(); return; }
       putRec(id, R.meta); wake(); if (R.meta.live) words(true); R.timer = setInterval(tick, 1000); banner(); paint(); return;
     }
     meta.state = "stopped"; putRec(id, meta); idbPut("recs", { id, state: "stopped", session: meta.session, started: meta.started, parts: meta.parts, dur }).catch(() => {});
@@ -636,6 +656,7 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
       case "resume": resume(); banner(); return;
       case "stop": stop(); return;
       case "again": again(); return;
+      case "wordsonly": wordsOnly(); return;
       case "openrec": api.open("recorded"); UI.rec = ""; paint(); return;
       case "lostkeep": finishLost(id, false); return;
       case "lostgo": finishLost(id, true); return;
@@ -677,7 +698,7 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
   });
   document.addEventListener("change", e => {
     const t = e.target; if (!t.dataset || !t.dataset.sm) return; const k = t.dataset.sm;
-    if (k === "consent") { UI.consent = t.checked; } else if (k === "live") UI.live = t.checked; else if (k === "lang") UI.lang = t.value; else if (k === "sess") UI.sess = t.value; else if (k === "filter") UI.filter = t.value;
+    if (k === "consent") { UI.consent = t.checked; } else if (k === "live") UI.live = t.checked; else if (k === "sound") UI.sound = t.checked; else if (k === "lang") UI.lang = t.value; else if (k === "sess") UI.sess = t.value; else if (k === "filter") UI.filter = t.value;
     else if (k === "q") UI.q = t.value.trim(); else if (k === "tq") { UI.tq = t.value.trim(); UI.focus = null; }
     else if (k === "keep" || k === "local") S().set("recs", "opts", Object.assign({}, opts(), k === "keep" ? { keep: t.value } : { local: t.checked }));
     else if (k === "audio" && t.files[0]) { const sel = document.querySelector('[data-sm="addsess"]'); addAudio(t.files[0], +(sel ? sel.value : api.session()) || 1); return; }

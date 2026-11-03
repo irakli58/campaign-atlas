@@ -53,8 +53,9 @@
       <p class="muted">Read this to the table first:</p>
       <blockquote id="consentText">We would like to record tonight's game so Atlas can keep notes of what happens in our story. The recording stays with the game master. Say if you'd rather not; we can pause or stop at any time, and delete it afterwards.</blockquote>
       <label class="ck"><input type="checkbox" id="consent"> Everyone at the table knows and has agreed</label>
-      <label class="ck" id="liveRow"><input type="checkbox" id="live"> Write the words down as we play <span class="muted">(the phone's own speech service; who spoke is not told apart)</span></label>
+      <label class="ck" id="liveRow"><input type="checkbox" id="live" checked> Write the words down as we play <span class="muted">(the phone's own speech service, over the internet; who spoke is not told apart)</span></label>
       <p id="langRow"><select id="lang" aria-label="Language of the words"></select></p>
+      <label class="ck" id="soundRow"><input type="checkbox" id="sound" checked> Keep the sound too <span class="muted">(sent to the computer as it is recorded)</span></label>
       <button class="go" id="start" disabled>● Start recording</button>
       <p id="cant" class="bad hide"></p>
     </div>
@@ -96,9 +97,13 @@
   $("title").textContent = REC.title || "The session"; $("sess").value = REC.session || 1;
   $("lang").innerHTML = LANGS.map(function (l) { return '<option value="' + l[0] + '">' + l[1] + "</option>"; }).join("");
   if (!SR) { $("liveRow").classList.add("hide"); $("langRow").classList.add("hide"); }
-  var cant = !window.isSecureContext ? "This page did not open securely, so the phone will not give it the microphone. Open the link as https, and say to go on when the phone warns." : !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder) ? "This browser cannot record from a web page: use the phone's own recorder app and send the file below." : "";
+  var cant = !window.isSecureContext ? "This page did not open securely, so the phone will not give it the microphone. Open the link as https, and say to go on when the phone warns." : "";
+  // (the sound needs a recorder in the browser; the words alone need only its speech service)
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) { $("sound").checked = false; $("soundRow").classList.add("hide"); }
+  if (!cant && !SR && $("sound").checked === false) cant = "This browser can neither keep the sound nor write the words: use the phone's own recorder app and send the file below.";
   if (cant) { $("cant").textContent = cant; $("cant").classList.remove("hide"); }
-  $("consent").onchange = function () { $("start").disabled = !this.checked || !!cant; };
+  var ready = function () { $("start").disabled = !$("consent").checked || !!cant || !($("sound").checked || (SR && $("live").checked)); };
+  $("consent").onchange = ready; $("sound").onchange = ready; $("live").onchange = ready;
 
   /* ---- what is not yet on the computer, kept here */
   var dbp = new Promise(function (ok, no) { var r = indexedDB.open("atlas-recorder", 1); r.onupgradeneeded = function () { r.result.createObjectStore("recs", { keyPath: "id" }); r.result.createObjectStore("chunks", { keyPath: ["rec", "part", "seq"] }); r.result.createObjectStore("words", { keyPath: ["rec", "n"] }); }; r.onsuccess = function () { ok(r.result); }; r.onerror = function () { no(r.error); }; });
@@ -128,10 +133,11 @@
   /* ---- recording */
   var R = null;
   var elapsed = function () { return !R ? 0 : R.acc + (R.running && !R.paused ? (performance.now() - R.t0) / 1000 : 0); };
-  function state(now) { if (!R) return; var o = { rec: R.id, state: R.lost ? "lost" : R.paused ? "paused" : "recording", dur: r1(elapsed()), parts: R.parts }; put("recs", Object.assign({ session: R.session, started: R.started, lang: R.lang, live: R.live }, o, { id: R.id })); if (now || Date.now() - (R.st || 0) > 15000) { R.st = Date.now(); post("state", o).catch(function () {}); } }
+  function state(now) { if (!R) return; var o = { rec: R.id, state: R.lost ? "lost" : R.paused ? "paused" : "recording", dur: r1(elapsed()), parts: R.parts }; put("recs", Object.assign({ session: R.session, started: R.started, lang: R.lang, live: R.live, sound: R.sound }, o, { id: R.id })); if (now || Date.now() - (R.st || 0) > 15000) { R.st = Date.now(); post("state", o).catch(function () {}); } }
   function begin(id, o) {
-    R = { id: id, session: o.session, started: o.started || Date.now(), acc: o.dur || 0, part: (o.parts || []).length - 1, parts: o.parts || [], seq: 0, live: o.live, lang: o.lang, running: false, paused: false, n: Date.now() };
-    return part().then(function () {
+    R = { id: id, session: o.session, started: o.started || Date.now(), acc: o.dur || 0, part: (o.parts || []).length - 1, parts: o.parts || [], seq: 0, live: o.live, lang: o.lang, sound: o.sound !== false, running: false, paused: false, n: Date.now() };
+    // (the words alone: no sound kept, the time and the words only)
+    return (R.sound ? part() : Promise.resolve().then(function () { R.running = true; R.t0 = performance.now(); })).then(function () {
       $("setup").classList.add("hide"); $("done").classList.add("hide"); $("rec").classList.remove("hide"); $("lost").classList.add("hide");
       wake(); if (R.live) words(true); R.timer = setInterval(tick, 1000); state(true); paint();
     });
@@ -149,8 +155,8 @@
       mr.start(10000); R.t0 = performance.now(); R.running = true;
     });
   }
-  function lost() { if (!R || !R.running) return; R.acc = elapsed(); R.running = false; R.lost = true; state(true); paint(); }
-  function again() { if (!R || !R.lost) return; part().then(function () { state(true); paint(); }, function (e) { $("mic").textContent = "The microphone could not start again: " + e.message; }); }
+  function lost() { if (!R || !R.running || !R.sound) return; R.acc = elapsed(); R.running = false; R.lost = true; state(true); paint(); }
+  function again() { if (!R || !R.lost || !R.sound) return; part().then(function () { state(true); paint(); }, function (e) { $("mic").textContent = "The microphone could not start again: " + e.message; }); }
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible" && R) { wake(); if (R.lost && !R.paused) again(); } });
   function wake() { try { if (navigator.wakeLock && R) navigator.wakeLock.request("screen").then(function (w) { R.wl = w; }, function () {}); } catch (e) {} }
   function tick() {
@@ -158,10 +164,10 @@
     if (R.an && R.running && !R.paused) { R.an.getFloatTimeDomainData(R.buf); var s = 0; for (var i = 0; i < R.buf.length; i++) s += R.buf[i] * R.buf[i]; lvl = Math.sqrt(s / R.buf.length); }
     R.quiet = lvl < .004 && R.running && !R.paused ? (R.quiet || 0) + 1 : 0;
     $("time").textContent = hms(elapsed()); $("lvl").style.width = Math.min(100, Math.round(lvl * 900)) + "%";
-    var m = $("mic"); m.textContent = R.lost ? "The microphone stopped: the screen may have locked. Tap below, or it starts again when the page is open." : R.paused ? "Paused." : R.quiet > 25 ? "No sound for a while: is the microphone covered?" : "Hearing the table."; m.className = R.lost || R.quiet > 25 ? "bad" : "muted";
+    var dumb = !R.sound && R.running && !R.paused && Date.now() - (R.lastWords || R.n) > 90000; var m = $("mic"); if (!R.sound) { m.textContent = R.paused ? "Paused." : dumb ? "No words heard for a while: keep this page open, with the internet on." : "Listening, and writing down what is said."; m.className = dumb ? "bad" : "muted"; state(false); return; } m.textContent = R.lost ? "The microphone stopped: the screen may have locked. Tap below, or it starts again when the page is open." : R.paused ? "Paused." : R.quiet > 25 ? "No sound for a while: is the microphone covered?" : "Hearing the table."; m.className = R.lost || R.quiet > 25 ? "bad" : "muted";
     state(false);
   }
-  function paint() { if (!R) return; $("state").textContent = R.lost ? "Waiting for the microphone" : R.paused ? "Paused" : "Recording"; $("dot").className = "dot" + (R.paused || R.lost ? " paused" : ""); $("pause").textContent = R.paused ? "Go on" : "Pause"; $("again").classList.toggle("hide", !R.lost); $("wordsBox").classList.toggle("hide", !R.live); }
+  function paint() { if (!R) return; $("state").textContent = R.lost ? "Waiting for the microphone" : R.paused ? "Paused" : "Recording"; $("dot").className = "dot" + (R.paused || R.lost ? " paused" : ""); $("pause").textContent = R.paused ? "Go on" : "Pause"; $("again").classList.toggle("hide", !R.lost); $("wordsBox").classList.toggle("hide", !R.live); $("lvl").parentNode.classList.toggle("hide", !R.sound); $("sent").classList.toggle("hide", !R.sound && !R.live); }
   $("pause").onclick = function () { if (!R) return; if (R.paused) { R.t0 = performance.now(); R.paused = false; try { R.mr.resume(); } catch (e) {} if (R.live) words(true); } else { R.acc = elapsed(); R.paused = true; try { R.mr.pause(); } catch (e) {} words(false); } state(true); paint(); };
   $("again").onclick = again;
   $("stop").onclick = function () {
@@ -176,7 +182,8 @@
   $("start").onclick = function () {
     if (cant || !$("consent").checked) return;
     $("start").disabled = true;
-    var o = { session: +$("sess").value || 1, consent: $("consentText").textContent, device: device, live: !!(SR && $("live").checked), lang: $("lang").value };
+    var o = { session: +$("sess").value || 1, consent: $("consentText").textContent, device: device, live: !!(SR && $("live").checked), lang: $("lang").value, sound: $("sound").checked };
+    if (!o.sound && !o.live) return;
     post("start", o).then(function (d) { return begin(d.id, Object.assign(o, { started: Date.now() })); }).catch(function (e) { $("start").disabled = false; $("cant").textContent = e.name === "NotAllowedError" ? "The microphone was not allowed: allow it for this page and start again." : "Could not start: " + e.message + " (is the computer still running Atlas, on the same Wi-Fi?)"; $("cant").classList.remove("hide"); });
   };
 
@@ -186,10 +193,23 @@
     if (!on) { R.want = false; try { R.sr && R.sr.stop(); } catch (e) {} return; }
     R.want = true; if (R.sr) return;
     var sr = new SR(), st = {}; sr.continuous = true; sr.interimResults = true; sr.lang = R.lang || navigator.language || "en-US";
-    sr.onresult = function (e) { for (var i = e.resultIndex; i < e.results.length; i++) { var r = e.results[i]; if (st[i] == null) st[i] = elapsed(); if (r.isFinal) { var x = String(r[0].transcript || "").trim(); if (x) { var seg = [r1(st[i]), r1(Math.max(.5, elapsed() - st[i])), "", x]; put("words", { rec: R.id, n: Date.now() + Math.random(), seg: seg }); var w = $("words"); w.insertAdjacentHTML("beforeend", "<p></p>"); w.lastChild.textContent = hms(seg[0]) + "  " + x; while (w.children.length > 4) w.removeChild(w.firstChild); } delete st[i]; } } };
-    sr.onerror = function (e) { if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") { R.want = false; $("words").textContent = "The words cannot be written on this phone while it records; the sound is recorded."; } };
-    sr.onend = function () { if (!R) return; R.sr = null; if (R.want && !R.paused && R.running) setTimeout(function () { if (R && R.want) words(true); }, 300); };
+    sr.onresult = function (e) { for (var i = e.resultIndex; i < e.results.length; i++) { var r = e.results[i]; if (st[i] == null) st[i] = elapsed(); if (r.isFinal) { var x = String(r[0].transcript || "").trim(); if (x) { R.lastWords = Date.now(); var seg = [r1(st[i]), r1(Math.max(.5, elapsed() - st[i])), "", x]; put("words", { rec: R.id, n: Date.now() + Math.random(), seg: seg }); var w = $("words"); w.insertAdjacentHTML("beforeend", "<p></p>"); w.lastChild.textContent = hms(seg[0]) + "  " + x; while (w.children.length > 4) w.removeChild(w.firstChild); } delete st[i]; } } };
+    // (no speech for a while ends a listening, and it starts again; without the internet it waits a little first; a phone that
+    // cannot listen while it keeps the sound offers to keep the words instead)
+    sr.onerror = function (e) {
+      if (!R) return; R.wait = Date.now() + (e.error === "network" ? 5000 : 0);
+      if (e.error === "network") $("mic").textContent = "The words need the internet: waiting for it.";
+      if (e.error === "not-allowed" || e.error === "service-not-allowed" || e.error === "audio-capture") { R.want = false; var w = $("words"); w.textContent = e.error === "audio-capture" && R.sound ? "This phone cannot write the words while it keeps the sound. The sound is still recorded." : "The phone did not allow the words to be written."; if (e.error === "audio-capture" && R.sound) { var b = document.createElement("button"); b.textContent = "Keep the words instead of the sound"; b.style.width = "100%"; b.style.marginTop = "8px"; b.onclick = wordsOnly; w.appendChild(b); } }
+    };
+    sr.onend = function () { if (!R) return; R.sr = null; if (R.want && !R.paused && R.running) setTimeout(function () { if (R && R.want) words(true); }, Math.max(300, (R.wait || 0) - Date.now())); };
     R.sr = sr; try { sr.start(); } catch (e) { R.sr = null; }
+  }
+
+  function wordsOnly() {
+    if (!R || !R.sound) return; R.sound = false;
+    try { R.mr.stop(); } catch (e) {} try { R.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    R.mr = null; R.stream = null; R.an = null; R.live = true; if (!R.running) { R.lost = false; R.running = true; R.t0 = performance.now(); }
+    $("words").textContent = ""; words(true); state(true); paint();
   }
 
   /* ---- a recording made elsewhere, sent whole */
