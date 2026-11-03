@@ -26,7 +26,8 @@
       ${(d.regions || []).map(g => `<circle cx="${g.x}" cy="${g.y}" r="${g.r}" class="gx-reg gx-${esc(g.kind)}"><title>${esc(g.name || "")}</title></circle>`).join("")}
       ${(d.lanes || []).map(([a, b]) => by[a] && by[b] ? `<line x1="${by[a].x}" y1="${by[a].y}" x2="${by[b].x}" y2="${by[b].y}" class="gx-lane"/>` : "").join("")}
       ${S.map(s => `<g class="gx-sys${s.state === "visited" ? " v" : ""}"><circle cx="${s.x}" cy="${s.y}" r="${s.state === "rumoured" ? 2.4 : 3.6}" fill="${s.state === "rumoured" ? "none" : esc(s.color || "#fff")}" stroke="${esc(s.color || "#fff")}"/><text x="${s.x + 6}" y="${s.y + 3}" style="font-size:${Math.max(7, w / 70)}px">${esc(s.name)}</text></g>`).join("")}
-      ${d.ship && by[d.ship] ? `<g class="gx-ship"><circle cx="${by[d.ship].x}" cy="${by[d.ship].y}" r="${Math.max(6, w / 60)}"/></g>` : ""}</svg>`;
+      ${d.ship && by[d.ship] ? `<g class="gx-ship"><circle cx="${by[d.ship].x}" cy="${by[d.ship].y}" r="${Math.max(6, w / 60)}"/></g>` : ""}</svg>${(d.worlds || []).length ? `
+      <details class="gx-pworlds"><summary>The worlds you have scanned (${d.worlds.length})</summary>${d.worlds.map(x => `<section><h4>${esc(x.name)} <span>${esc(x.sys)} · ${esc(x.level)}</span></h4><table class="gx-pt">${(x.rows || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table></section>`).join("")}</details>` : ""}`;
   };
 
   const Gg = A.galaxyGen; if (!Gg) return;
@@ -134,7 +135,7 @@
 
   /* ---- the view */
   // tools: the editor's row (UI.tools), and the tool in hand: region, lane, terr (painting territory), sector
-  const UI = { sel: null, sys: null, planet: null, plan: null, z: 1, cx: 500, cy: 500, edit: null, adding: false, moving: null, filter: "", tools: false, tool: null, first: null, paint: "", selReg: null, selLane: null, panel: null, pedit: null, movingReg: null };
+  const UI = { sel: null, sys: null, planet: null, plan: null, z: 1, cx: 500, cy: 500, edit: null, adding: false, moving: null, filter: "", tools: false, tool: null, first: null, paint: "", selReg: null, selLane: null, panel: null, pedit: null, phys: null, movingReg: null };
   let host = null, svg = null, drag = null;
   const HIST = [], REDO = [];   // the game master's changes to the galaxy this visit, to undo and do again
   function setG(id, data, how) {
@@ -154,6 +155,8 @@
     host.addEventListener("keydown", e => { if (e.target.closest("input, textarea, select")) return; if ((e.ctrlKey || e.metaKey) && /^[zy]$/i.test(e.key)) { e.preventDefault(); undo(!(e.key.toLowerCase() === "y" || e.shiftKey)); } else if (e.key === "Escape" && (UI.tool || UI.adding || UI.moving || UI.movingReg)) { UI.tool = null; UI.adding = false; UI.moving = null; UI.movingReg = null; UI.first = null; tools(); over(); } });
     host.querySelector(".gx-find").addEventListener("input", e => { UI.filter = e.target.value.trim().toLowerCase(); over(); });
     host.addEventListener("click", onClick); host.addEventListener("change", onChange); host.addEventListener("submit", onSubmit);
+    // (the planet editor shows what its changes would do as they are made)
+    host.addEventListener("input", e => { const f = e.target.closest && e.target.closest("form.gx-phys"); if (f) physPreview(f); });
   }
   const viewW = () => 1000 / UI.z, viewH = () => viewW() * .62;
   function view() { if (!svg) return; svg.setAttribute("viewBox", `${UI.cx - viewW() / 2} ${UI.cy - viewH() / 2} ${viewW()} ${viewH()}`); host.querySelector(".gx-canvas").dataset.z = UI.z >= 3.5 ? "near" : UI.z >= 1.8 ? "mid" : "far"; labels(); }
@@ -252,6 +255,7 @@
       ${rule[2] ? `<div class="gx-fuel" title="${Math.round(sh.fuel)} of ${sh.cap}"><i style="width:${pct.toFixed(1)}%"></i></div><div class="gx-f"><span class="kn">Fuel</span> ${Math.round(sh.fuel)} of ${sh.cap}${at && at.f.fuel && sh.fuel < sh.cap ? ` <button type="button" class="t-mini" data-gx="refuel">Refuel here</button>` : ""}</div>` : ""}
       <div class="gx-f"><span class="kn">Reach</span> ${round1(sh.range)} light years a jump · <span class="kn">Speed</span> ${round1(sh.speed)} light years a day</div>
       <div class="gx-f"><span class="kn">Condition</span> <select class="t-in gx-sel" data-gx="cond">${COND.map(c => `<option${c === sh.condition ? " selected" : ""}>${c}</option>`).join("")}</select> <span class="kn">Cargo</span> ${sh.cargo} of ${sh.cargoCap}</div>
+      <div class="gx-f"><span class="kn">Sensors</span> <select class="t-in gx-sel" data-gx="sens">${SENS.map(([k, l]) => `<option value="${k}"${k === (sh.sensors || "good") ? " selected" : ""}>${l}</option>`).join("")}</select> <span class="kn">how fast they learn a world by scanning it</span></div>
       ${sh.crew ? `<div class="gx-f"><span class="kn">Crew</span> ${esc(sh.crew)}</div>` : ""}${(sh.equipment || []).length ? `<div class="gx-f"><span class="kn">Equipment</span> ${esc(sh.equipment.join(", "))}</div>` : ""}${(sh.upgrades || []).length ? `<div class="gx-f"><span class="kn">Upgrades</span> ${esc(sh.upgrades.join(", "))}</div>` : ""}
       <div class="gx-f"><span class="kn">Fuel</span> <select class="t-in gx-sel" data-gx="rule">${FUEL.map(([k, l]) => `<option value="${k}"${k === rule[0] ? " selected" : ""}>${l}</option>`).join("")}</select></div>
       ${(sh.log || []).length ? `<details class="fa-more"><summary>Its log (${sh.log.length})</summary><ol class="tw-hist" reversed>${sh.log.slice().reverse().slice(0, 30).map(l => `<li><span class="kn">${esc(l.when || "")}</span> ${esc(l.what)}</li>`).join("")}</ol></details>` : ""}</section>`;
@@ -327,7 +331,9 @@
   const SITEK = [["station", "A station"], ["orbital", "An orbital facility"], ["colony", "A colony"], ["settlement", "A settlement"], ["mining", "A mining installation"], ["research", "A research facility"], ["derelict", "A derelict ship"], ["anomaly", "An anomaly"], ["ruin", "Ruins"], ["other", "Something else"]];
   function bodiesOf(s) {
     const g = G(), info = (s.i >= 0 && Gg.system(g, s.i)) || { star: { name: Gg.STAR_NAME[s.cls] || "", color: (Gg.STARS[s.cls] || Gg.STARS.G)[0] }, planets: [], belts: [], sites: [] }, B = s.bodies || {};
-    info.planets = info.planets.map(p => { const e = (B.p || {})[p.n]; return e ? (e.gone ? null : Object.assign({}, p, e, { edited: true })) : p; }).filter(Boolean).concat((B.add || []).map(p => Object.assign({ own: true }, p))).sort((a, b) => a.a - b.a);
+    // (a world the game master worked out again in the planet editor, e.phys: its whole profile from their changes; the
+    // world as it was made is kept beside it, p.made, for the editor to start from)
+    info.planets = info.planets.map(p => { const e = (B.p || {})[p.n]; if (!e) return p; if (e.gone) return null; const q = e.phys && p.inputs && Gg.rework ? Object.assign(Gg.rework(g, info, p, e.phys), { made: p }) : p; return Object.assign({}, q, e, { edited: true }); }).filter(Boolean).concat((B.add || []).map(p => Object.assign({ own: true }, p))).sort((a, b) => a.a - b.a);
     info.belts = info.belts.map((b, k) => (B.b || {})[k] ? null : Object.assign({ k }, b)).filter(Boolean).concat((B.addB || []).map(b => Object.assign({ own: true }, b)));
     info.sites = info.sites.map((t, k) => { const e = (B.s || {})[k]; return e ? (e.gone ? null : Object.assign({ k }, t, e)) : Object.assign({ k }, t); }).filter(Boolean).concat((B.addS || []).map(t => Object.assign({ own: true }, t)));
     return info;
@@ -372,11 +378,189 @@
       ${sel("land", "Landing", LAND, p.land)}${sel("hab", "For people", HAB, p.hab)}${f("moons", "Moons", p.moons, "n")}${sel("owner", "Held by", owners, p.owner || "")}${f("gm", "Only you", p.gm)}
       <div class="t-row"><button class="t-btn prim">Keep it</button><button type="button" class="t-mini" data-gx="pedit" data-n="">Cancel</button>${p.edited && !p.own ? `<button type="button" class="t-mini" data-gx="unworld" data-id="${esc(s.id)}" data-n="${p.n}">As it was</button>` : ""}<span class="t-sp"></span><button type="button" class="t-mini t-danger" data-gx="delworld" data-id="${esc(s.id)}" data-n="${p.n}">Take it away</button></div></form>`;
   }
+  /* ---- the planet editor (the approved planets plan, 3.3: "randomise, or lock a type"; each change shows its
+          consequences before it is kept): the game master changes what the world is made of and where it lies, or sets
+          its crust, its air or its life, and the rest is worked out from that by the planetary layer, as it was when the
+          world was made (atlas-planet.js rework); what would change is listed, with why, before anything is kept */
+  const WATER = [["", "As it was made"], ["0.000001", "Bone dry"], ["0.00003", "A little, deep down"], ["0.00023", "As much as the Earth"], ["0.002", "Ten times the Earth's"], ["0.02", "So much it would cover it"], ["0.3", "Ice and rock, half water"]];
+  const IRON = [["", "As its system's"], ["0.15", "Little iron: light for its size"], ["0.3", "As the Earth"], ["0.5", "Iron-rich, dense, as Mercury"]];
+  const TECTS = [["", "As its physics gives"], ["plates", "Moving plates"], ["squishy", "A thick, broken lid"], ["stagnant", "One rigid lid"], ["tidal", "Heated by tides"], ["iceshell", "An ice shell over an ocean"], ["frozen", "Frozen through"]];
+  const GASES = [["", "Its own mix"], ["co2", "Mostly carbon dioxide"], ["n2", "Mostly nitrogen"], ["ch4", "Mostly methane"]];
+  const LIVES = [["", "As its physics gives"], ["none", "None"], ["simple", "Simple life"], ["complex", "Complex life"], ["people", "A people of its own"]];
+  const ROCKY = ["rocky", "desert", "ocean", "garden", "ice", "barren", "toxic", "lava", "dwarf"];
+  function physOf(f) {
+    const v = n => f.elements[n] ? String(f.elements[n].value).trim() : "", n = k => { const x = parseFloat(v(k)); return Number.isFinite(x) ? x : null; }, ch = {};
+    if (n("a") != null) ch.a = Math.max(.005, n("a")); if (n("mass") != null) ch.mass = Math.max(.0005, Math.min(50, n("mass")));
+    if (v("wf")) ch.wf = +v("wf"); if (v("fe")) ch.fe = +v("fe"); if (v("tect")) ch.tect = v("tect");
+    if (n("pressure") != null) ch.pressure = Math.max(0, Math.min(500, n("pressure"))); if (v("gas") && ch.pressure != null) ch.gas = v("gas");
+    if (v("life")) ch.life = v("life"); if (v("seed")) ch.seed = +v("seed");
+    return ch;
+  }
+  function physForm(s, p) {
+    const m = p.made || p, ph = p.phys || {}, i0 = m.inputs || {}, f = (k, l, v, x) => `<label class="tw-l"><span>${l}</span><input class="t-in" name="${k}" type="number" step="any" value="${esc(v == null ? "" : v)}"${x || ""}></label>`;
+    const sel = (k, l, opts, v) => `<label class="tw-l"><span>${l}</span><select class="t-in" name="${k}">${opts.map(([a, b]) => `<option value="${esc(a)}"${String(a) === String(v == null ? "" : v) ? " selected" : ""}>${esc(b)}</option>`).join("")}</select></label>`;
+    return `<form class="gx-wform gx-phys" data-gx="savephys" data-id="${esc(s.id)}" data-n="${p.n}"><h4>Work out ${esc(p.name)} again</h4>
+      <p class="t-small">Change what it is made of or where it lies, or set its crust, its air or its life: the rest follows from its physics. What would change is listed below before you keep it.</p>
+      ${f("a", "Orbit (AU from its star)", ph.a != null ? ph.a : i0.a)}${f("mass", "Mass (the Earth is 1)", ph.mass != null ? ph.mass : i0.mass)}${sel("wf", "Water", WATER, ph.wf)}${sel("fe", "Iron", IRON, ph.fe)}
+      ${sel("tect", "Its insides", TECTS, ph.tect)}${f("pressure", "Air pressure, bar (empty: as its physics gives)", ph.pressure, ' min="0"')}${sel("gas", "Its air is", GASES, ph.gas)}${sel("life", "Life", LIVES, ph.life)}
+      <input type="hidden" name="seed" value="${ph.seed != null ? esc(ph.seed) : ""}">
+      <div class="t-row"><button type="button" class="t-mini" data-gx="physrand" data-id="${esc(s.id)}" data-n="${p.n}">Randomise</button>${sel("lock", "keeping it", [["", "any kind"], ...ROCKY.map(k => [k, (Gg.KINDS[k] || k).toLowerCase()])], "")}</div>
+      <div class="gx-cons" aria-live="polite"></div>
+      <div class="t-row"><button class="t-btn prim">Keep it</button><button type="button" class="t-mini" data-gx="phys" data-n="">Cancel</button>${p.phys ? `<button type="button" class="t-mini" data-gx="unphys" data-id="${esc(s.id)}" data-n="${p.n}">As it was made</button>` : ""}</div></form>`;
+  }
+  // the preview: the world worked out with the form's changes, against the world as it stands now
+  function physPreview(f) {
+    const box = f.querySelector(".gx-cons"), s = findSys(f.dataset.id); if (!box || !s) return null;
+    const info = bodiesOf(s), p = info.planets.find(x => x.n === +f.dataset.n); if (!p) return null;
+    const q = Gg.rework(G(), info, p.made || p, physOf(f)), L = A.planets.consequences(p, q), bad = A.planets.check(q, info.star);
+    box.innerHTML = L.length ? `<h5>What would change</h5><ul class="gx-pw">${L.map(c => `<li><b>${esc(c.what)}:</b> ${esc(c.was)} → <b>${esc(c.now)}</b>${c.why ? `<br><span class="t-small kn">${esc(c.why)}</span>` : ""}</li>`).join("")}</ul>${bad.length ? `<p class="t-small">Not quite consistent: ${esc(bad.join("; "))}</p>` : ""}` : `<p class="t-small kn">Nothing would change.</p>`;
+    return q;
+  }
+  // a new world for this orbit or near it, of the kind asked if its star allows one (tried a few hundred times)
+  function physRandom(f) {
+    const s = findSys(f.dataset.id), info = bodiesOf(s), p = info.planets.find(x => x.n === +f.dataset.n), base = p.made || p, want = f.elements.lock.value, a0 = (base.inputs || {}).a || base.a;
+    const R = Gg.rng(Date.now() + "|" + Math.random()), set = (k, v) => { if (f.elements[k]) f.elements[k].value = v; };
+    for (let t = 0; t < 400; t++) {
+      const ch = { a: +(a0 * (t < 150 ? 1 : .6 + R() * .9)).toPrecision(3), mass: +Math.pow(10, -2.2 + R() * 2.9).toPrecision(2), wf: +WATER[1 + Math.floor(R() * (WATER.length - 1))][0], fe: +IRON[1 + Math.floor(R() * (IRON.length - 1))][0], seed: Math.floor(R() * 1e9) };
+      const q = Gg.rework(G(), info, base, ch);
+      if (!want || q.kind === want) { set("a", ch.a); set("mass", ch.mass); set("wf", String(ch.wf)); set("fe", String(ch.fe)); set("tect", ""); set("pressure", ""); set("gas", ""); set("life", ""); set("seed", ch.seed); physPreview(f); return true; }
+    }
+    const box = f.querySelector(".gx-cons"); if (box) box.innerHTML = `<p class="t-small">No ${esc((Gg.KINDS[want] || want).toLowerCase())} came out near this orbit: its star does not make one there. Try another orbit, or set its air or water yourself.</p>`;
+    return false;
+  }
+
+  /* ---- the approved extras of the planets plan (3 Nov 2026): scanning as play, the weather for tonight, a world's own
+          day and year, its history, and a survey sheet to hand the players */
+  // scanning: what the players know of a world grows step by step, from afar, from orbit, on the ground; each step takes
+  // hours by the ship's sensors. Kept with the system's chart (collection "charts": scans { world: 0..3 })
+  const SCAN = ["Nothing yet", "Seen from afar", "Scanned from orbit", "Surveyed on the ground"];
+  const SENS = [["basic", "Basic sensors", 2], ["good", "Good sensors", 1], ["military", "Military sensors", .5]];
+  const SCAN_H = [0, 1, 8, 48];
+  const scanOf = (sid, n) => +((((S() && S().get("charts", sid)) || {}).scans || {})[n] || 0);
+  function setScan(sid, n, lv) { const c = Object.assign({}, S().get("charts", sid) || {}); c.scans = Object.assign({}, c.scans || {}, { [n]: Math.max(0, Math.min(3, lv)) }); c.t = Date.now(); S().set("charts", sid, c); }
+  const sensors = () => SENS.find(x => x[0] === (ship().sensors || "good")) || SENS[1];
+  const hrsSay = h => h >= 48 ? `${Math.round(h / 24)} days` : h >= 1 ? `${Math.round(h)} hour${Math.round(h) === 1 ? "" : "s"}` : `${Math.round(h * 60)} minutes`;
+  // a world as the players know it at a level: from afar its size, orbit and moons; from orbit its air, warmth, seas and
+  // day; on the ground its life, dangers, minerals and whether one can land
+  function seenRows(p, lv) {
+    const giant = /gas|ice|mini/.test(p.env || ""), rows = [];
+    if (lv >= 1) rows.push(["What it is", giant ? p.kname : p.size > 1.6 ? "A large rocky world" : p.size < .4 ? "A small rocky world" : "A rocky world"], ["Size", `${p.size} times the Earth`], ["Orbit", `${p.a} AU${p.year != null ? `, a year of ${p.year < 1 ? Math.round(p.year * 365.25) + " Earth days" : p.year + " Earth years"}` : ""}`], ["Moons", p.moons ? String(p.moons) : "none seen"]);
+    if (lv >= 1 && p.rings) rows.push(["Rings", p.rings.say]);
+    if (lv >= 2) rows.push(["Kind", p.kname], ["Gravity", `${p.grav} g`], ["Its day", p.locked ? "none: one side always faces its star" : p.day ? `${Math.round(p.day * 10) / 10} hours` : ""], ["Air", `${p.air}${p.pres != null ? `, ${p.pres} bar` : ""}`], ["Warmth", `${p.temp} °C on average`], ["Liquids", p.water || "none seen"], ["Weather", p.climate]);
+    if (lv >= 3) rows.push(["Life", p.life || "none found"], ["Dangers", (p.hazards || []).join(", ") || "none found"], ["Minerals", p.minerals || ""], ["Radiation", p.radiation || ""], ["Landing", p.land], ["For people", p.hab]);
+    return rows.filter(r => r[1]);
+  }
+  // the weather for tonight, from the world's own air and winds: its wind, what that wind does in air so thick or thin,
+  // what falls, how cold the night, how far one sees; the same night always the same, the next one another
+  function weather(p, night) {
+    const r = Gg.rng(`${p.name}|wx|${night}`), W = p.winds || {}, P = p.pressure || 0, T = p.tempC, giant = /gas|ice|mini/.test(p.env || "");
+    if (giant) return "No ground to stand on: winds of hundreds of metres a second in the cloud decks.";
+    if (P < .001) return `No weather: no air. The night falls at once and hard${p.tempNight != null ? `, to ${p.tempNight - 273} °C` : ""}; the stars stand sharp and do not twinkle. Dust lies where it fell.`;
+    const gust = r() < .22, kmh = Math.round((W.typical || 1) * (gust ? 2.2 + r() * 2 : .5 + r() * .9) * 3.6), feel = W.typical ? Math.round(kmh * Math.sqrt((W.push || 0) * 100) / W.typical) : kmh;
+    const night0 = p.tempNight != null ? p.tempNight - 273 : Math.round(T - (p.dayNight || 10) / 2), cold = Math.round(night0 + (r() - .5) * 8);
+    const falls = p.liquid === "water" ? (cold < 0 ? (r() < .4 ? "snow" : "") : r() < .45 ? (gust && T > 20 ? "a thunderstorm" : "rain") : r() < .3 ? "mist" : "") : p.liquid === "methane" ? (r() < .3 ? "a slow drizzle of methane, drops as big as coins" : "an orange haze") : p.kind === "toxic" ? "an acid haze; sulphuric rain high above that never reaches the ground" : p.liquid === "ice" || p.liquid === "subsurface" ? (r() < .3 ? "frost settling out of the air" : "") : "";
+    const dust = /dust/.test(W.storms || "") && gust, see = dust ? "a few hundred metres in the dust" : falls === "mist" || /haze/.test(falls) ? "a few kilometres" : P > 20 ? "short: the thick air bends and dims the light" : "far";
+    const does = feel >= 60 ? "dangerous: it can throw a person down and tear at anything not secured" : kmh >= 60 && feel < 30 ? "fast, but the air is thin: it lifts dust and blinds, it does not knock anyone down" : feel >= 30 ? "strong: hard going on foot" : "light";
+    return `${p.locked && !p.host ? `A steady wind from the night side, ${gust ? "gusting to" : "about"} ${kmh} km/h` : `Wind ${gust ? "gusting to" : "about"} ${kmh} km/h`}${feel !== kmh ? ` (it pushes like ${feel} km/h on Earth)` : ""}: ${does}. ${falls ? falls[0].toUpperCase() + falls.slice(1) + ". " : ""}${dust ? "A dust front comes through. " : ""}Down to ${cold} °C in the night. Visibility ${see}.`;
+  }
+  // its own day and year: how long its sun takes to come round again (the solar day, from its turning and its orbit),
+  // how many of those in its year, and the date there now if the campaign keeps the world's time
+  function calendar(p) {
+    if (/gas|ice|mini/.test(p.env || "") || !p.day) return null;
+    const yearH = p.year != null ? p.year * 365.25 * 24 : (p.period || 0) * 24;
+    if (p.locked && !p.host) return { say: `No days: its star stands still in its sky, high over one side, never rising on the other. Its year is ${Math.round(yearH / 24 * 10) / 10} Earth days.`, sol: 0, yearH };
+    const sol = yearH && p.day < yearH ? 1 / (1 / p.day - 1 / yearH) : p.day, per = yearH ? yearH / sol : 0;
+    let now = "";
+    if (A.worldTime && per) { const hrs = A.worldTime.now() / 60, y = Math.floor(hrs / yearH), d = Math.floor((hrs - y * yearH) / sol), h = (hrs - y * yearH - d * sol) / sol * 24; now = ` By its own reckoning it is now day ${d + 1} of year ${y + 1}, ${Math.floor(h)}:${String(Math.floor((h % 1) * 60)).padStart(2, "0")} in 24 of its hours.`; }
+    return { say: `Its sun comes round every ${sol >= 48 ? Math.round(sol / 24 * 10) / 10 + " Earth days" : Math.round(sol * 10) / 10 + " hours"}${p.host ? ` (it faces ${p.host.name || "its planet"} always)` : ""}${per ? `; ${Math.round(per)} of its days make its year` : ""}. People living there would keep ${sol > 30 && sol < 48 ? "its day as theirs, a little longer than Earth's" : sol >= 48 ? "Earth's hours, as its days are too long to live by" : "a day of its own"}.${now}`, sol, yearH };
+  }
+  // its history, worked out from what it is: when it formed, its seas, its loss of air or water, its locking, its life
+  // (rough times; the council and the copilot read it as background)
+  function history(p, star) {
+    const age = star.age || 4.6, L = [], at = (ago, what) => L.push([Math.max(0, Math.min(age, ago)), what]), W = p.why || {};
+    if (/gas|ice|mini/.test(p.env || "")) { at(age, "formed with its star, beyond the frost line, gathering the disc's gas"); return L; }
+    at(age, "formed with its star, from the dust and rock of its disc");
+    if (/runaway/.test(W.air || "")) at(age * .8, "its oceans boiled away; their hydrogen escaped to space and left carbon dioxide behind");
+    if (p.liquid === "water") at(age - .15, "its first seas gathered as it cooled");
+    if (p.liquid === "subsurface") at(age - .2, "its surface froze over an ocean that stayed liquid beneath");
+    if (/lose|lost|keeps only a thin/.test(W.air || "") && (p.pressure || 0) < .1) at(age * .6, "most of its air was lost to space, stripped by its star's wind and light");
+    if (p.locked && !p.host && A.planets.lockYears && p.inputs) { const t = A.planets.lockYears(p.inputs.a, p.mass, p.radius, star.mass || 1) / 1e9; if (t < age) at(age - t, "its star's tides slowed it until one side faced the star for good"); }
+    if (p.tectonics === "stagnant" && age > 2) at(age * .4, "its insides cooled; its volcanoes went quiet and its crust set into one rigid shell");
+    if (/simple|microb/.test(p.life || "")) at(Math.max(0, age - 1), "life began, in its seas");
+    if (/complex|people/.test(p.life || "")) { at(Math.max(0, age - 1), "life began, in its seas"); at(Math.min(age * .4, 1.5), "complex life arose and its plants filled the air with oxygen"); }
+    if (/people/.test(p.life || "")) at(.0003, "a people of its own arose");
+    return L.sort((a, b) => b[0] - a[0]);
+  }
+  const agoSay = g => g >= 1 ? `${Math.round(g * 10) / 10} billion years ago` : g >= .001 ? `${Math.round(g * 1000)} million years ago` : `${Math.round(g * 1e6).toLocaleString("en")} years ago`;
+  // the survey sheet: what the players know of it, its globe if they have seen it, from their ship, on today's date
+  function surveySheet(s, p, lv) {
+    const R = seenRows(p, lv), when = A.worldTime ? A.worldTime.at(A.worldTime.now()).short : new Date().toLocaleDateString();
+    const svg = lv >= 1 ? `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">${globe(p, 50, 50, 44, "sv-" + s.id).replace(/data-gx="[^"]*"/g, "")}</svg>` : "";
+    return { kind: "survey", title: `Survey: ${p.name}`, date: when, svg, rows: R.length ? R : [["What is known", "nothing yet: it has not been scanned"]], from: `${SCAN[lv]}, by ${ship().name || "the ship"}` };
+  }
+  // the extras in a world's card: what the players know and the next scan, tonight's weather, its day and year, its history
+  function extrasHTML(s, p, info) {
+    const lv = scanOf(s.id, p.n), next = lv < 3 ? SCAN_H[lv + 1] * sensors()[2] : 0, cal = calendar(p), hist = history(p, info.star), night = (A.worldTime ? Math.floor(A.worldTime.now() / 1440) : 0) + (UI.wxo || 0);
+    return `<div class="gx-extra">
+      <div class="gx-f"><span class="kn">The players know</span> <select class="t-in gx-sel" data-gx="scan" data-id="${esc(s.id)}" data-n="${p.n}" aria-label="What the players know of ${esc(p.name)}">${SCAN.map((l, k) => `<option value="${k}"${k === lv ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>${lv < 3 ? ` <button type="button" class="t-mini" data-gx="scanup" data-id="${esc(s.id)}" data-n="${p.n}">${lv === 2 ? "Survey it" : "Scan it"}</button> <span class="kn">about ${hrsSay(next)}${lv === 2 ? ", on the ground" : ""}</span>` : ""}</div>
+      <div class="t-row"><button type="button" class="t-mini" data-gx="survey" data-id="${esc(s.id)}" data-n="${p.n}">Show them the survey sheet</button></div>
+      <details class="gx-how"><summary class="t-small">The weather tonight</summary><p class="t-small">${esc(weather(p, night))}</p><button type="button" class="t-mini" data-gx="wxnext">Another night</button></details>
+      ${cal ? `<details class="gx-how"><summary class="t-small">Its day and year</summary><p class="t-small">${esc(cal.say)}</p></details>` : ""}
+      <details class="gx-how"><summary class="t-small">Its history</summary><ul class="gx-pw">${hist.map(([g, w]) => `<li><b>${esc(agoSay(g))}</b>: ${esc(w)}</li>`).join("")}</ul><p class="t-small kn">Rough times, worked out from what it is.</p></details></div>`;
+  }
+  // a moon's name, as astronomers number them: its planet's name and a Roman numeral, outward from the planet
+  // (the council's or the game master's own name, when the moon was given one: p.moonNames)
+  const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+  function moonName(p, m) { return (p.moonNames || {})[m.n] || `${p.name} ${ROMAN[m.n] || m.n + 1}`; }
+  // a world's whole profile, worked out from its physics (engine/atlas-planet.js; the user's approved plan of 3 Nov 2026):
+  // physical, atmosphere, environment, astronomy, each with why it is so, and its colours
+  function profileHTML(p, info, sid) {
+    if (p.radius == null) return "";
+    const R = (k, v) => v == null || v === "" ? "" : `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`, giant = /gas|ice|mini/.test(p.env || "");
+    const hrs = h => h == null ? "" : h > 48 ? `${Math.round(h / 24 * 10) / 10} Earth days` : `${Math.round(h * 10) / 10} hours`;
+    const S = info.star, W = p.winds || {}, why = p.why || {};
+    const g1 = R("Mass", `${p.mass} Earth masses`) + R("Radius", `${p.radius} Earth radii`) + R("Density", `${p.density} g/cm³`) + R("Gravity", `${p.gravity} g${giant ? " (at the cloud tops)" : ""}`) + R("Escape velocity", `${p.vesc} km/s`)
+      + R("Day", p.locked ? `locked: ${hrs(p.day)}` : hrs(p.day)) + R("Year", p.year != null ? (p.year < 1 ? `${Math.round(p.year * 365.25 * 10) / 10} Earth days` : `${p.year} Earth years`) : "") + R("Axial tilt", `${p.tilt}°`) + R("Orbit", `${p.a} AU, eccentricity ${p.ecc}`)
+      + (giant ? "" : R("Insides", ({ plates: "moving plates", squishy: "a thick, broken lid", stagnant: "one rigid lid", tidal: "tidally heated", iceshell: "an ice shell over an ocean", frozen: "frozen through" })[p.tectonics] || p.tectonics)) + R("Magnetic field", p.field);
+    const g2 = R("Composition", p.composition || p.air) + (p.pressure != null ? R("Pressure", `${p.pressure} bar`) : "") + (giant ? "" : R("Breathable", p.breathable ? "yes" : "no")) + (p.greenhouse != null ? R("Greenhouse", `+${p.greenhouse} K`) : "")
+      + R("Circulation", W.regime) + (W.typical ? R("Winds", `typically ${W.typical} m/s, up to ${W.extreme} m/s`) : "") + R("Storms", W.storms);
+    // (the star chart keeps temp in °C; the profile's own warmth is tempC, and kelvin from it)
+    const g3 = R("Average", p.tempC != null ? `${p.tempC} °C (${p.tempC + 273} K)` : "") + (p.tempDay != null ? R("Day side, night side", `${p.tempDay - 273} °C, ${p.tempNight - 273} °C`) : p.dayNight != null ? R("Day to night", `about ${p.dayNight} K`) : "") + (p.equatorPole != null && !p.locked ? R("Equator to pole", `about ${p.equatorPole} K`) : "")
+      + R("Seasons", p.seasons) + R("Radiation at the surface", p.radiation) + R("Liquids", p.water) + (p.ice ? R("Ice", `${Math.round(p.ice * 100)}% of it`) : "") + R("Life", p.life ? `${p.life}` : "none known") + R("For people", p.habitable) + R("Landing", p.landing);
+    const g4 = R("Its star", `${S.name || S.cls} (${S.cls}), ${S.teff ? S.teff + " K, " : ""}${S.lum} times the Sun's light${S.age ? `, ${S.age} billion years old` : ""}`) + R("Light it gets", `${p.insolation} times what the Earth gets`)
+      + R("Moons", p.moons ? `${p.moons}: ${p.moonsWhy || ""}` : p.moonsWhy || "none") + R("Rings", p.rings ? p.rings.say : "");
+    // (a large moon with ground to stand on opens as a world of its own, as a planet does)
+    const moons = (p.moonList || []).filter(m => !m.small).map(m => `<li><b>${esc(moonName(p, m))}</b>, ${esc((Gg.KINDS[m.kind] || m.kind || "").toLowerCase())} moon, ${m.distance ? m.distance.toLocaleString("en") + " km out" : ""}: ${esc(m.air)}, ${m.tempC} °C${m.water ? ", " + esc(m.water.toLowerCase()) : ""}${m.life ? ", " + esc(m.life) : ""}${m.landable && sid && A.worldGenerate ? ` <button type="button" class="t-mini" data-gx="surface" data-id="${esc(sid)}" data-n="${p.n}" data-m="${m.n}">Open its surface</button>` : ""}</li>`).join("");
+    const whys = Object.entries(why).filter(([, v]) => v).map(([k, v]) => `<li><b>${esc({ gravity: "Gravity", spin: "Its turning", tectonics: "Its insides", air: "Its air", temp: "Its warmth", locked: "Locked", liquid: "Its liquids", winds: "Its winds", class: "What kind of world" }[k] || k)}:</b> ${esc(v)}</li>`).join("");
+    const pal = p.palette || {}, sw = (c, l) => c ? `<span class="gx-sw"><i style="background:${esc(c)}"></i>${esc(l)}</span>` : "";
+    const cols = (pal.bands || []).map((c, i) => sw(c, i ? "" : "its bands")).join("") + sw(pal.ground, "ground") + sw(pal.sea, "seas") + sw(pal.plant, pal.plantSay ? "plants: " + pal.plantSay : "") + sw(pal.sky, "sky") + sw(pal.clouds, "clouds");
+    return `<details class="gx-prof"><summary>The whole profile, and why it is so</summary>
+      <h5>Physical</h5><table class="gx-pt">${g1}</table><h5>Atmosphere</h5><table class="gx-pt">${g2}</table><h5>Environment</h5><table class="gx-pt">${g3}</table><h5>In its system</h5><table class="gx-pt">${g4}</table>
+      ${moons ? `<h5>Its large moons</h5><ul class="gx-pm">${moons}</ul>` : ""}${whys ? `<h5>Why it is so</h5><ul class="gx-pw">${whys}</ul>` : ""}${cols ? `<h5>Its colours</h5><p class="gx-sws">${cols}</p>` : ""}
+      <p class="t-small kn">Worked out from its star, orbit, mass and make-up. Where science is not settled (life elsewhere, the colour of alien plants) it says so.</p></details>`;
+  }
+  // a world as a small globe in its own colours (atlas-planet.js palette): a giant's bands and rings; a rocky world's
+  // ground, seas, ice at its poles and a rim of air if it has one; its night side away from its star
+  function globe(p, x, y, r, sid) {
+    const P = p.palette || {}, id = `gl-${String(sid).replace(/[^\w-]/g, "")}-${p.n}`, X = x.toFixed(1), Y = y.toFixed(1), R = r.toFixed(1), on = UI.planet === p.n, oc = p.ocean || 0;
+    let body = "";
+    if (P.bands) { const n = P.bands.length, h = 2 * r / (n * 2); for (let i = 0; i < n * 2; i++) body += `<rect x="${(x - r).toFixed(1)}" y="${(y - r + i * h).toFixed(2)}" width="${(2 * r).toFixed(1)}" height="${(h + .2).toFixed(2)}" fill="${esc(P.bands[i % n])}"/>`; }
+    else if (P.clouds && (p.pressure || 0) > 20) body = `<circle cx="${X}" cy="${Y}" r="${R}" fill="${esc(P.clouds)}"/>`;
+    else {
+      body = `<circle cx="${X}" cy="${Y}" r="${R}" fill="${esc(P.sea && oc > .5 ? P.sea : P.ground || "#8a7a5a")}"/>`;
+      if (P.sea && oc > .05 && oc <= .5) body += `<circle cx="${(x - r * .25).toFixed(1)}" cy="${(y + r * .15).toFixed(1)}" r="${(r * .55).toFixed(1)}" fill="${esc(P.sea)}"/>`;
+      if (P.sea && oc > .5 && oc < .97) body += `<circle cx="${(x + r * .3).toFixed(1)}" cy="${(y - r * .2).toFixed(1)}" r="${(r * .4).toFixed(1)}" fill="${esc(P.plant || P.ground)}"/>`;
+      if ((p.ice || 0) > .05) { const ih = r * Math.min(1, .25 + p.ice); body += `<rect x="${(x - r).toFixed(1)}" y="${(y - r).toFixed(1)}" width="${(2 * r).toFixed(1)}" height="${ih.toFixed(1)}" fill="${esc(P.ice)}"/><rect x="${(x - r).toFixed(1)}" y="${(y + r - ih).toFixed(1)}" width="${(2 * r).toFixed(1)}" height="${ih.toFixed(1)}" fill="${esc(P.ice)}"/>`; }
+    }
+    const rings = p.rings ? `<ellipse cx="${X}" cy="${Y}" rx="${(r * 2).toFixed(1)}" ry="${(r * .55).toFixed(1)}" fill="none" stroke="${p.rings.icy ? "#e8e2d0" : "#9a8f80"}" stroke-width="${(r * .25).toFixed(1)}" opacity=".8"/>` : "";
+    const air = P.sky && (p.pressure || 0) > .05 && !P.bands ? `<circle cx="${X}" cy="${Y}" r="${(r + .8).toFixed(1)}" fill="none" stroke="${esc(P.sky)}" stroke-width=".9" opacity=".7"/>` : "";
+    return `<g class="gx-planet gx-p-${esc(p.kind)}${on ? " on" : ""}" data-gx="planet" data-n="${p.n}"><title>${esc(p.name)}: ${esc(p.kname)}</title><clipPath id="${id}"><circle cx="${X}" cy="${Y}" r="${R}"/></clipPath><g clip-path="url(#${id})">${body}<circle cx="${(x + r * .35).toFixed(1)}" cy="${Y}" r="${(r * 1.05).toFixed(1)}" fill="#000" opacity=".35"/></g>${air}${rings}${on ? `<circle cx="${X}" cy="${Y}" r="${(r + 2.5).toFixed(1)}" fill="none" stroke="#fff" stroke-width="1"/>` : ""}</g>`;
+  }
   // the system: its star in the middle, each world on its orbit, belts, and what people put there
   function systemHTML(s, info, places) {
     const W = 320, H = 200, n = info.planets.length + info.belts.length, maxA = Math.max(1, ...info.planets.map(p => p.a), ...info.belts.map(b => b.a));
     const rx = a => 22 + Math.log(1 + a * 6) / Math.log(1 + maxA * 6) * (W / 2 - 34), ang = k => -Math.PI / 2 + k * 2.399;
-    const orbits = info.planets.map((p, k) => { const r = rx(p.a), a = ang(k), x = W / 2 + Math.cos(a) * r, y = H / 2 + Math.sin(a) * r * .6, pr = p.kind === "gas" ? 7 : p.kind === "icegiant" ? 5.5 : Math.max(2.2, 2 + p.size * 1.6); return `<ellipse cx="${W / 2}" cy="${H / 2}" rx="${r}" ry="${r * .6}" class="gx-orbit"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${pr.toFixed(1)}" class="gx-planet gx-p-${p.kind}${UI.planet === p.n ? " on" : ""}" data-gx="planet" data-n="${p.n}"><title>${esc(p.name)}: ${esc(p.kname)}</title></circle>`; }).join("");
+    const orbits = info.planets.map((p, k) => { const r = rx(p.a), a = ang(k), x = W / 2 + Math.cos(a) * r, y = H / 2 + Math.sin(a) * r * .6, pr = p.kind === "gas" || p.kind === "hotjupiter" ? 7 : p.kind === "icegiant" || p.kind === "mini" ? 5.5 : Math.max(2.2, 2 + p.size * 1.6); return `<ellipse cx="${W / 2}" cy="${H / 2}" rx="${r}" ry="${r * .6}" class="gx-orbit"/>${globe(p, x, y, pr, s.id)}`; }).join("");
     const belts = info.belts.map(b => { const r = rx(b.a); return `<ellipse cx="${W / 2}" cy="${H / 2}" rx="${r}" ry="${r * .6}" class="gx-belt"/>`; }).join("");
     const p = UI.planet != null ? info.planets.find(x => x.n === UI.planet) : null, ed = UI.tools;
     const onP = n => info.sites.filter(t => t.on === n), here = places.filter(id => (A.meta[id] || {}).planet == null);
@@ -388,12 +572,14 @@
       <p class="t-small">${info.planets.length ? info.planets.length + " world" + (info.planets.length > 1 ? "s" : "") : "No worlds"}${info.belts.length ? ", " + info.belts.length + " belt" + (info.belts.length > 1 ? "s" : "") : ""}. Click a world to see it.</p>
       ${info.belts.map(b => `<div class="gx-f"><span class="kn">Belt</span> ${esc(b.name)} at ${b.a} AU${b.rich ? ", rich" : ""}${ed ? ` <button type="button" class="t-mini" data-gx="delbelt" data-id="${esc(s.id)}" data-k="${b.k}" aria-label="Take away the belt">×</button>` : ""}</div>`).join("")}
       ${info.sites.filter(t => t.on == null).map(t => siteRow("In orbit", t)).join("")}${here.length ? `<div class="gx-f"><span class="kn">Your places</span> ${here.map(id => `<button type="button" class="t-go" data-go="${esc(id)}">${esc(A.meta[id].name || id)}</button>`).join(" ")}</div>` : ""}
-      ${p ? (ed && UI.pedit === p.n ? worldForm(s, p) : `<div class="gx-world"><h4>${esc(p.name)}: ${esc(p.kname || Gg.KINDS[p.kind] || "")}</h4>${row("Size", p.size + " times the Earth")}${row("Gravity", p.grav + " g")}${row("Warmth", p.temp + " °C at the surface, on average")}${row("Air", p.air)}${p.pres != null ? row("Pressure", p.pres + " atmospheres") : ""}${row("Climate", p.climate)}${row("Surface", p.geo)}${row("Liquids", p.water)}${row("Life", p.life || "None found")}${row("Minerals", p.minerals)}${row("Dangers", (p.hazards || []).join(", "))}${row("Landing", p.land)}${row("For people", p.hab)}${row("Moons", p.moons ? String(p.moons) : "")}${row("To be found", p.chance)}
+      ${p ? (ed && UI.pedit === p.n ? worldForm(s, p) : ed && UI.phys === p.n ? physForm(s, p) : `<div class="gx-world"><h4>${esc(p.name)}: ${esc(p.kname || Gg.KINDS[p.kind] || "")}</h4>${row("Size", p.size + " times the Earth")}${row("Gravity", p.grav + " g")}${row("Warmth", p.temp + " °C at the surface, on average")}${row("Air", p.air)}${p.pres != null ? row("Pressure", p.pres + " atmospheres") : ""}${row("Climate", p.climate)}${row("Surface", p.geo)}${row("Liquids", p.water)}${row("Life", p.life || "None found")}${row("Minerals", p.minerals)}${row("Dangers", (p.hazards || []).join(", "))}${row("Landing", p.land)}${row("For people", p.hab)}${row("Moons", p.moons ? String(p.moons) : "")}${row("To be found", p.chance)}${profileHTML(p, info, s.id)}
         ${p.owner ? row("Held by", (G().powers.find(x => x.id === p.owner) || {}).name || ((A.factionsData || {})[p.owner] || {}).n || p.owner) : ""}${p.gm ? `<p class="gx-gm"><span class="kn">Only you</span> ${esc(p.gm)}</p>` : ""}
         ${onP(p.n).map(t => siteRow("Here", t)).join("")}${places.filter(id => (A.meta[id] || {}).planet === p.n).map(id => `<div class="gx-f"><span class="kn">Your place</span> <button type="button" class="t-go" data-go="${esc(id)}">${esc(A.meta[id].name || id)}</button></div>`).join("")}
         ${wn.length ? `<ul class="gx-risks gx-wn">${wn.map(w => `<li>${esc(w)}</li>`).join("")}</ul><p class="t-small">Allowed: it is your setting. Atlas only says what would not hang together.</p>` : ""}
+        ${extrasHTML(s, p, info)}
+        ${p.landable && A.worldGenerate ? `<div class="t-row"><button type="button" class="t-btn prim" data-gx="surface" data-id="${esc(s.id)}" data-n="${p.n}">Open its surface</button></div><p class="t-small kn">The whole globe, made from this world's own physics the first time (a few minutes), then kept.</p>` : ""}
         ${canLand && !placeHere ? `<details class="gx-how"><summary class="t-small">Its surface as a map to explore</summary><p class="t-small">Ask Claude: “make the surface of ${esc(p.name)} as a place”, or: <code>node atlas.js wild &lt;campaign&gt; ${esc(String(p.name).toLowerCase().replace(/[^a-z0-9]+/g, "-"))} --system ${esc(s.id)} --planet ${p.n}</code></p></details>` : ""}
-        ${ed ? `<div class="t-row"><button type="button" class="t-mini" data-gx="pedit" data-n="${p.n}">Change this world</button></div>` : ""}</div>`) : ""}
+        ${ed ? `<div class="t-row"><button type="button" class="t-mini" data-gx="pedit" data-n="${p.n}">Change this world</button>${(p.made || p).inputs && Gg.rework ? `<button type="button" class="t-mini" data-gx="phys" data-n="${p.n}">Work it out again</button>` : ""}</div>` : ""}</div>`) : ""}
       ${ed ? `<details class="gx-add"><summary>Add to the system</summary>
         <form class="t-row" data-gx="addworld" data-id="${esc(s.id)}"><select class="t-in" name="kind" aria-label="What kind of world">${kinds}</select><label class="kn">at <input class="t-in t-n" type="number" name="a" min="0.01" step="any" value="${Math.round((Math.max(0, ...info.planets.map(x => x.a)) * 1.6 || 1) * 100) / 100}"> AU</label><button class="t-mini">+ A world</button></form>
         <form class="t-row" data-gx="addsite" data-id="${esc(s.id)}"><select class="t-in" name="kind" aria-label="What">${SITEK.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select><input class="t-in" name="name" placeholder="Its name" maxlength="60"><select class="t-in" name="on" aria-label="Where"><option value="">In orbit</option>${info.planets.map(x => `<option value="${x.n}">On ${esc(x.name)}</option>`).join("")}</select><button class="t-mini">+ Add it</button></form>
@@ -432,6 +618,7 @@
     if (!host) return; const sd = host.querySelector(".gx-side"), s = UI.sel && findSys(UI.sel);
     const g = G(), rg = UI.selReg && g.regions.find(r => r.id === UI.selReg);
     sd.innerHTML = (UI.panel === "sp" ? spHTML() : "") + shipHTML() + (s ? sysHTML(s) : rg ? regHTML(rg) : UI.selLane ? laneHTML(UI.selLane) : `<section class="gx-card"><p class="t-small">Click a star to see its system, plot a course there, or change what the players' charts show. Drag to move; scroll to come closer. Edit the galaxy adds and changes systems, regions, lanes, sectors, powers and their territories.</p></section>`);
+    { const pf = sd.querySelector("form.gx-phys"); if (pf) physPreview(pf); }
   }
   function refresh() { A._galaxy = null; if (host) { base(); over(); side(); tools(); } }
 
@@ -460,7 +647,13 @@
       case "delreg": { if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Take it away? Click again"; return; } const R = doc("~regions"); if ((R.add || []).some(a => a.id === id)) R.add = R.add.filter(a => a.id !== id); else { R.edit = R.edit || {}; R.edit[id] = Object.assign(R.edit[id] || {}, { gone: true }); } setG("~regions", R); UI.selReg = null; refresh(); return; }
       case "cutlane": { const L = doc("~lanes"), a = b.dataset.a, c = b.dataset.b, same = x => (x[0] === a && x[1] === c) || (x[0] === c && x[1] === a); L.add = (L.add || []).filter(x => !same(x)); L.cut = (L.cut || []).filter(x => !same(x)).concat([[a, c]]); setG("~lanes", L); UI.selLane = null; refresh(); return; }
       case "delsec": case "delpw": { const key = k === "delsec" ? "~sectors" : "~powers", X = doc(key); if ((X.add || []).some(a => a.id === id)) X.add = X.add.filter(a => a.id !== id); else { X.edit = X.edit || {}; X.edit[id] = Object.assign(X.edit[id] || {}, { gone: true }); } setG(key, X); refresh(); return; }
-      case "pedit": UI.pedit = b.dataset.n === "" ? null : +b.dataset.n; break;
+      case "pedit": UI.pedit = b.dataset.n === "" ? null : +b.dataset.n; UI.phys = null; break;
+      case "phys": UI.phys = b.dataset.n === "" ? null : +b.dataset.n; UI.pedit = null; break;
+      case "scanup": { const sid = b.dataset.id, n = +b.dataset.n, lv = scanOf(sid, n); if (lv >= 3) return; const h = SCAN_H[lv + 1] * sensors()[2]; setScan(sid, n, lv + 1); if (A.worldTime) A.worldTime.advance(Math.round(h * 60)); if (A.tableUI) A.tableUI.api.note(`${SCAN[lv + 1]}: ${hrsSay(h)}${A.worldTime ? " passed" : ""}.`); break; }
+      case "survey": { const s = findSys(b.dataset.id), info = s && bodiesOf(s), p = info && info.planets.find(x => x.n === +b.dataset.n); if (!p || !A.tableUI) return; A.tableUI.api.show({ kind: "handout", id: "survey-" + s.id + "-" + p.n, h: surveySheet(s, p, scanOf(s.id, p.n)) }); return; }
+      case "wxnext": UI.wxo = (UI.wxo || 0) + 1; break;
+      case "physrand": { const f = b.closest("form"); if (f) physRandom(f); return; }
+      case "unphys": { const id = b.dataset.id, n = +b.dataset.n, D = doc(id), e = D.bodies && D.bodies.p && D.bodies.p[n]; if (e) { delete e.phys; setG(id, D); } UI.phys = null; break; }
       case "ask": { const s = findSys(id); if (s && A.askChange) A.askChange(askSys(s)); return; }
       case "delworld": case "unworld": case "delsite": case "delbelt": {
         const n = +(b.dataset.n != null ? b.dataset.n : b.dataset.k), D = doc(id), B = D.bodies = D.bodies || {};
@@ -483,6 +676,8 @@
       }
       case "refuel": { const sh = ship(); setShip({ fuel: sh.cap }, `Refuelled at ${(findSys(sh.at) || {}).name || sh.at}`); break; }
       case "open": UI.sys = UI.sys === id ? null : id; UI.planet = null; break;
+      // (a world's surface: made the first time, then opened in the world map)
+      case "surface": { const sid = b.dataset.id, n = b.dataset.n, mo = b.dataset.m; b.disabled = true; const say = t => { b.textContent = t; }; planetSurface(sid, n, say, mo).then(wid => { b.disabled = false; b.textContent = "Open its surface"; if (A.openWorld) A.openWorld(wid); }).catch(e => { b.disabled = false; b.textContent = "Open its surface"; const m = host && host.querySelector(".gx-note"); if (m) m.textContent = e.message; else alert(e.message); }); return; }
       case "planet": UI.planet = +b.dataset.n; UI.pedit = null; break;
       case "edit": UI.edit = UI.edit === id ? null : id; break;
       case "move": UI.moving = id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); return;
@@ -498,6 +693,8 @@
     if (k === "secname" || k === "pwname") { const key = k === "secname" ? "~sectors" : "~powers", X = doc(key), id = t.dataset.id, v = t.value.trim(); if (!v) return; const own = (X.add || []).find(a => a.id === id); if (own) own.name = v; else { X.edit = X.edit || {}; X.edit[id] = Object.assign(X.edit[id] || {}, { name: v }); } setG(key, X); t.blur(); refresh(); return; }
     if (k === "chart" || k === "how") { const c = Object.assign({}, S().get("charts", t.dataset.id) || {}, k === "chart" ? { state: t.value } : { how: t.value }, { t: Date.now() }); S().set("charts", t.dataset.id, c); refresh(); }
     else if (k === "cond") setShip({ condition: t.value }, `Now ${t.value.toLowerCase()}`);
+    else if (k === "sens") setShip({ sensors: t.value }, `Sensors: ${t.value}`);
+    else if (k === "scan") { setScan(t.dataset.id, +t.dataset.n, +t.value); refresh(); }
     else if (k === "rule") S().set("ship", "rule", { fuel: t.value });
     if (UI.plan) UI.plan = Object.assign({ to: UI.plan.to }, course(ship().at, UI.plan.to));
     over(); side();
@@ -528,6 +725,13 @@
       const own = (B.add || []).find(x => x.n === n);
       if (own) Object.assign(own, p); else { B.p = B.p || {}; B.p[n] = p; }
       setG(id, D); UI.pedit = null;
+    } else if (k === "savephys") {
+      // (the world worked out again: its changes kept, and only the names and notes the game master gave it beside them;
+      // its other fields come from its physics now)
+      const n = +f.dataset.n, D = doc(id), B = D.bodies = D.bodies || {}, e = (B.p = B.p || {})[n] || {}, keep = {};
+      for (const q of ["name", "owner", "gm", "moonNames", "minerals", "chance"]) if (e[q] != null) keep[q] = e[q];
+      B.p[n] = Object.assign(keep, { phys: physOf(f), t: Date.now() });
+      setG(id, D); UI.phys = null;
     } else if (k === "addworld") {
       const s = findSys(id), D = doc(id), B = D.bodies = D.bodies || {}, info = bodiesOf(s), n = Math.max(99, ...info.planets.map(x => x.n)) + 1;
       B.add = (B.add || []).concat(newWorld(s, v("kind"), Math.max(.01, num("a", 1)), n)); setG(id, D); UI.planet = n; UI.pedit = n;
@@ -556,12 +760,75 @@
     const g = G(), L = allSys().filter(s => known(chartOf(s.id)) && chartOf(s.id) !== "hidden"), ids = new Set(L.map(s => s.id)), sh = ship();
     const lanes = g.lanes.map(([a, b]) => [g.systems[a].id, g.systems[b].id]).filter(([a, b]) => ids.has(a) && ids.has(b) && chartOf(a) !== "rumoured" && chartOf(b) !== "rumoured");
     const regions = g.regions.filter(r => r.kind === "explored" || L.some(s => Math.hypot(r.x - s.x, r.y - s.y) <= r.r && chartOf(s.id) === "visited")).map(r => ({ kind: r.kind, x: r.x, y: r.y, r: r.r, name: r.name }));
-    return { name: (A.galaxyParams || {}).name || "", systems: L.map(s => ({ id: s.id, name: chartOf(s.id) === "rumoured" ? s.name + "?" : s.name, x: s.x, y: s.y, color: (Gg.STARS[s.cls] || Gg.STARS.G)[0], state: chartOf(s.id) })), lanes, regions, ship: ids.has(sh.at) ? sh.at : null };
+    // (the worlds they have scanned, with only what they learned of each: seenRows)
+    const scannedWorlds = list => { const out = []; for (const s of list) { if (chartOf(s.id) === "rumoured" || !(((S().get("charts", s.id) || {}).scans))) continue; for (const p of bodiesOf(s).planets) { const lv = scanOf(s.id, p.n); if (lv > 0) out.push({ sys: s.name, name: p.name, level: SCAN[lv], rows: seenRows(p, lv) }); } } return out; };
+    return { name: (A.galaxyParams || {}).name || "", systems: L.map(s => ({ id: s.id, name: chartOf(s.id) === "rumoured" ? s.name + "?" : s.name, x: s.x, y: s.y, color: (Gg.STARS[s.cls] || Gg.STARS.G)[0], state: chartOf(s.id) })), lanes, regions, ship: ids.has(sh.at) ? sh.at : null, worlds: scannedWorlds(L) };
   };
 
   // the view, mounted by the page's shell when the game master opens it (atlas-shell.js)
   A.galaxyMount = el => { if (!host || host !== el) mount(el); else { refresh(); } return { wake: refresh }; };
+  /* ---- a world's surface (the user's approved plan of 3 Nov 2026: the whole globe made when a planet is first opened).
+          The world generator atlas.js world runs is given the planet's own physics: its gravity, its air, its seas or
+          their absence, its warmth, its kind of land and its colours. Made in the background, kept in this browser by
+          its recipe, the same every time, and opened in the world map as one of the campaign's worlds (A.worlds,
+          A.openWorld): places and changes made on it are kept as on any world. Which surfaces were opened is kept
+          (collection "planetworlds"), so they come back with the page. */
+  const surfId = (sid, n, m) => ("p-" + sid + "-" + n + (m != null && m !== "" ? "-m" + m : "")).replace(/[^\w-]/g, "-").slice(0, 40);
+  function surfaceFlags(p, seed) {
+    const share = Math.max(.03, Math.min(.97, 1 - (p.ocean || 0))), tc = p.tempC;
+    const climate = (p.liquid === "none" || p.liquid === "lava") && (p.pressure || 0) > .001 ? "arid" : tc > 26 ? "tropical" : tc > 16 ? "warm" : tc > 4 ? "temperate" : tc > -15 ? "cold" : "polar";
+    const word = { garden: "earthlike", ocean: "earthlike", desert: "desert", ice: "ice", dwarf: "ice", lava: "volcanic", toxic: "toxic", barren: "barren", rocky: "barren" }[p.kind] || "barren";
+    // (its warmth: the globe's mean brought to the planet's own temperature, world-invent.js --temp)
+    const f = { size: "planet", land: "masses", landmasses: p.tectonics === "plates" ? 4 : p.tectonics === "stagnant" ? 2 : 3, landshare: share, climate, realism: "alien", setting: "scifi", planet: word, gravity: p.gravity, air: Math.max(.02, Math.min(3, p.pressure || 0)), water: 1 - share, warmth: 0, temp: tc, look: "planet", seed, replace: true, regions: true, "climate-model": "earth" };
+    if (p.liquid === "water") { f.currents = true; f.coast = "geologic"; } else { f.currents = "off"; f.coast = "plain"; }
+    // rivers only where a liquid runs over the ground (water, or Titan's methane); craters where nothing wears them away:
+    // no air to burn up the stones and no rain to fill them, and no moving crust or fresh ice or lava to cover them
+    if (p.liquid !== "water" && p.liquid !== "methane") f.norivers = true;
+    f.liquid = p.liquid || "none";
+    const P = p.pressure || 0, fresh = p.tectonics === "tidal" || p.tectonics === "iceshell" || p.liquid === "lava";
+    const cr = P < .01 ? 1 : P < .1 ? .5 : P < 1 && p.tectonics === "stagnant" ? .25 : 0;
+    if (cr) f.craters = fresh ? +(cr * .15).toFixed(2) : cr;
+    // its crust: moving plates raise mountain belts; a rigid lid raises volcanic swells and rifts instead
+    // (scripts/world-geology.js o.lid)
+    if (p.tectonics && p.tectonics !== "plates") f.lid = p.tectonics;
+    // a world locked to its star: warm under the star, cold on the night side, evened out by its air
+    // (scripts/world-geology.js lockClimate); its slow turning drives no ocean gyres of Earth's kind
+    if (p.locked && !p.host) { f.locked = +(Math.min(.95, P / (P + 1))).toFixed(2); f["climate-model"] = "classic"; f.currents = "off"; }
+    // (the globe as large as the world is: a moon or a small planet is smaller than the Earth, and its map's scale says so)
+    if (p.radius && Math.abs(p.radius - 1) > .03) f.km = Math.round(40030 * p.radius);
+    return f;
+  }
+  // a planet, or one of its large moons (m, its number in the planet's list of moons)
+  function planetOf(sid, n, m) {
+    const s = findSys(sid); if (!s) return null; const info = bodiesOf(s); const p = info.planets.find(x => x.n === +n); if (!p) return null;
+    if (m == null || m === "") return { s, p };
+    const mo = (p.moonList || []).find(x => x.n === +m && !x.small); return mo ? { s, p: Object.assign({}, mo, { name: moonName(p, mo) }), planet: p } : null;
+  }
+  function registerSurface(sid, n, T, m) {
+    const o = planetOf(sid, n, m); if (!o) return null; const id = surfId(sid, n, m);
+    A.world({ title: o.p.name, look: "planet", kind: "planet", planet: Object.assign({ system: sid, n: +n }, m != null && m !== "" ? { moon: +m } : {}), locations: [], routes: [], regions: [] }, id);
+    if (T) A.worldTerrain(Object.assign({}, T, { look: "planet", planetPalette: o.p.palette || null }), id);
+    return id;
+  }
+  async function planetSurface(sid, n, say, m) {
+    const o = planetOf(sid, n, m); if (!o) throw new Error("that world is not in the chart");
+    if (!o.p.landable) throw new Error(`${o.p.name} has no surface to land on`);
+    const id = surfId(sid, n, m), have = A.worlds && A.worlds[id] && A.worlds[id].terrain && A.worlds[id].terrain.height;
+    if (have) return id;
+    const flags = surfaceFlags(o.p, (G().p.seed || 1) * 31 + (o.s.i || 0) * 17 + (+n) + (m != null && m !== "" ? 1000 * (+m + 1) : 0)), key = "planet|" + JSON.stringify(flags);
+    let T = A.worldGenCache ? await A.worldGenCache(key) : null;
+    if (!T) { if (say) say(`Making the whole globe of ${o.p.name}: about ${Math.round(A.worldGenSecs("planet") / 60)} minutes the first time, then it is kept.`); T = await A.worldGenerate(flags, { title: o.p.name, locations: [] }); if (A.worldGenCache) await A.worldGenCache(key, T); }
+    registerSurface(sid, n, T, m);
+    const st = S(); if (st) st.set("planetworlds", id, Object.assign({ system: sid, n: +n, key, t: Date.now() }, m != null && m !== "" ? { m: +m } : {}));
+    return id;
+  }
+  A.planetSurface = planetSurface;
+  // the surfaces opened before come back with the page: named at once, their land from this browser's keeping (or made
+  // again, the same, when opened)
+  A.planetSurfacesInit = st => st.watch("planetworlds", docs => { for (const [id, d] of Object.entries(docs || {})) { if (!d || !d.system || (A.worlds[id] && A.worlds[id].data)) continue; registerSurface(d.system, d.n, null, d.m); if (A.worldGenCache && d.key) A.worldGenCache(d.key).then(T => { if (T) registerSurface(d.system, d.n, T, d.m); }); } });
+  // a system opened from elsewhere on the page (and a world in it, by its number): the star chart's own selection
+  A.galaxyOpen = (id, n) => { if (!host) return false; UI.sel = id; UI.sys = id; UI.selReg = null; UI.selLane = null; UI.planet = n == null ? null : +n; refresh(); return true; };
   // (a system chosen from outside the chart: a place's trail back up to the stars)
   A.galaxyFocus = id => { if (!host) return; const s = findSys(id); if (!s) return; UI.sel = id; centreOn(s, 2.5); over(); side(); };
-  if (A.tableUI) { const iv = setInterval(() => { const st = A.tableUI.api.store(); if (!st) return; clearInterval(iv); ST = st; for (const c of ["charts", "ship", "gedits"]) st.watch(c, () => { if (host && host.isConnected && host.offsetParent) { if (c === "gedits" || c === "charts") refresh(); else { over(); side(); } } }); }, 200); setTimeout(() => clearInterval(iv), 120000); }
+  if (A.tableUI) { const iv = setInterval(() => { const st = A.tableUI.api.store(); if (!st) return; clearInterval(iv); ST = st; A.planetSurfacesInit(st); for (const c of ["charts", "ship", "gedits"]) st.watch(c, () => { if (host && host.isConnected && host.offsetParent) { if (c === "gedits" || c === "charts") refresh(); else { over(); side(); } } }); }, 200); setTimeout(() => clearInterval(iv), 120000); }
 })(ATLAS);

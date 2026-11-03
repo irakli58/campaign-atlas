@@ -27,7 +27,7 @@
   const washed = (look, c, I, x, y, nz, t, water, k) => { if (!I.mix) return c; for (const [q, a] of I.mix) { const b = BIO.BY[BIO.LIST[q][0]]; if (!!b.water !== water) continue; const g = NT.ground(look, b, x, y, I.d, nz, t); if (g) c = mix(c, g, a * (look === "painted" ? (NT.TINT[b.id] == null ? .5 : NT.TINT[b.id]) : k)); } return c; };
   const { sampler, coastRings, chaikin, rdpRing, pathD, hash, ramp, mix, hex, clamp, vnoise } = K;
   const r1 = v => Math.round(v * 10) / 10;
-  const LOOKS = [["hydro", "Hydrographic relief"], ["relief", "Shaded relief"], ["painted", "Fantasy: a painted map"], ["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["stars", "Science fiction: a star chart"]];
+  const LOOKS = [["hydro", "Hydrographic relief"], ["relief", "Shaded relief"], ["painted", "Fantasy: a painted map"], ["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["planet", "A planet in its own colours"], ["stars", "Science fiction: a star chart"]];
   // the looks a world may wear: a world with land may wear any but the star chart; a star chart only that
   const looksFor = WD => WD.G && !WD.stars && WD.look !== "stars" ? LOOKS.filter(l => l[0] !== "stars") : LOOKS.filter(l => l[0] === "stars");
 
@@ -468,11 +468,26 @@
   // valleys, tan and brown mountains, pale grey peaks; every stream drawn
   const HYDRO = { lights: LOW_SUN, shade: [64, 48, 36], dark: .9, bright: 1.1, rx: 1.75, paper: [241, 239, 234], ridged: 2.5, carve: 7, ve: 30 };
   function hydro(WD, uid, o) { return relief(WD, uid, o, HYDRO); }
+  // a planet seen as it is (the user's approved plan, 3 Nov 2026, "planet-specific colour palettes"): the shaded relief,
+  // its colours from the planet's own palette (atlas-planet.js: its rock, its seas or their absence, its ice, its plants
+  // as its star would colour them, speculative where science is not settled), so a desert world is ochre, a frozen one
+  // white and grey, a volcanic one black with glowing lava, a living one green, red or near-black by its star
+  function planetColours(P) {
+    if (!P) return null;
+    const g = hex(P.ground || "#8a7a5a"), lt = (c, f) => c.map(v => Math.min(255, v + (255 - v) * f)), dk = (c, f) => c.map(v => v * (1 - f));
+    // (a world with no water has no snow: its cold heights are bare rock; with no liquid its low basins are dark ground)
+    const sea = P.sea ? hex(P.sea) : dk(g, .45), ice = P.ice ? hex(P.ice) : lt(g, .3), plant = P.plant ? hex(P.plant) : null;
+    return { dry: lt(g, .12), dryCool: lt(g, .05), grass: plant ? mix(g, plant, .55) : lt(g, .02), wood: plant ? mix(g, plant, .75) : g, forest: plant || dk(g, .08), dense: plant ? dk(plant, .15) : dk(g, .12), jungle: plant ? dk(plant, .2) : dk(g, .14),
+      tundra: mix(g, ice, .45), rock: dk(g, .05), rockHi: lt(g, .3), snow: ice, marsh: plant ? mix(plant, sea, .4) : mix(g, sea, .3), beach: lt(g, .25), shelf: lt(sea, .35), mid: sea, deep: dk(sea, .3), lake: lt(sea, .2) };
+  }
+  function planet(WD, uid, o) { return relief(WD, uid, Object.assign({}, o, { colours: planetColours(WD.T && WD.T.planetPalette) })); }
   const RPREP = new WeakMap();
   function relief(WD, uid, o, P) {
     const [W, H] = WD.size, G = WD.G, pr = probe(WD), sea = G.sea, N = nat(WD);
+    // (a planet in its own colours: o.colours, worked out from what its surface is made of, atlas-planet.js)
     const C = { dry: hex("#ddc99c"), dryCool: hex("#cfc6a2"), grass: hex("#bfcd91"), wood: hex("#86a965"), forest: hex("#5d8a4b"), dense: hex("#3f6f38"), jungle: hex("#356a33"),
       tundra: hex("#b8bca6"), rock: hex("#b3a690"), rockHi: hex("#d2c9ba"), snow: hex("#f7f8f8"), marsh: hex("#8fa486"), beach: hex("#e3d6b0"), shelf: hex("#a7cde0"), mid: hex("#6f9fc2"), deep: hex("#3d6b92"), lake: hex("#8db7d0") };
+    if (o && o.colours) for (const [k, v] of Object.entries(o.colours)) if (v) C[k] = Array.isArray(v) ? v : hex(v);
     // (light from the north-west, the slopes exaggerated a little as relief maps are, a soft fill from the north)
     const ex = 5.5 * Math.min(2, Math.max(.6, 1400 / Math.max(W, H)));
     // (how much the relief is raised under the light: about the old look's strength, less on very large maps)
@@ -572,7 +587,7 @@
       // swamp: a dark olive green, wet and low
       if (swpAt) { const w = swpAt(x, y); if (w > .02) c = mix(c, [88, 112, 76], w * .7); }
       if (I.mix) c = washed("painted", c, Object.assign({}, I, { mix: I.mix.filter(([q]) => !["glacier", "icesheet", "snowforest", "snow"].includes(BIO.LIST[q][0])) }), x, y, nz, t, false);
-      if ((I.b && (I.b.id === "glacier" || I.b.id === "snow")) || (tm < .08 && t > .3)) c = mix(c, [245, 246, 248], .8);
+      if ((I.b && (I.b.id === "glacier" || I.b.id === "snow")) || (tm < .08 && t > .3)) c = mix(c, C.snow, .8);
       return lit(c, gx, gy, MPU ? 1 : P ? RX * P.rx : RX, P);
     }, { detail: 0, max: P ? 3200 : 2600, smooth: true, grain: P ? 0 : 3.5, ridged: P ? P.ridged : 0, carve: P ? P.carve : 0, rect: o && o.rect, k: o && o.k, fine: o && o.fine ? (P ? 5 : 4) : 0, metric: MPU ? { mpu: MPU, ve: P.ve } : null });
     if (o && o.only) return img;
@@ -1166,12 +1181,12 @@
     o = o || {};
     if (look === "stars" || !WD.G) return stars(WD, uid, o);
     coastDetail(WD);
-    return ({ hydro, relief, painted, parchment, engraved, atlas, holo })[look](WD, uid, o);
+    return ({ hydro, relief, painted, parchment, engraved, atlas, holo, planet })[look](WD, uid, o);
   }
   // the sharper picture of a window of the map, for the page to lay over the land when zoomed in (the shaded reliefs
   // only); base: how many pixels a unit the whole map's own picture has
-  const DETAIL = { hydro: 3200, relief: 2600, painted: 2000 };
+  const DETAIL = { hydro: 3200, relief: 2600, painted: 2000, planet: 2600 };
   const detailBase = (WD, look) => DETAIL[look] ? Math.min(2, DETAIL[look] / Math.max(WD.size[0], WD.size[1])) : 0;
-  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; if (look === "painted") return painted(WD, "d", { rect, k, only: true }); return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6 }, look === "hydro" ? HYDRO : undefined); }
+  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; if (look === "painted") return painted(WD, "d", { rect, k, only: true }); return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6, colours: look === "planet" ? planetColours(WD.T && WD.T.planetPalette) : null }, look === "hydro" ? HYDRO : undefined); }
   A.worldArt = { LOOKS, looksFor, draw, detail, detailBase };
 })(ATLAS);

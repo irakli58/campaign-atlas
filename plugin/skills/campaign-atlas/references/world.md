@@ -23,7 +23,11 @@ node atlas.js world <dir> [--look painted|parchment|engraved|atlas|holo|stars] [
     [--climate temperate|varied|cold|polar|warm|tropical|arid|wet] [--realism realistic|fantasy|alien]
     [--planet lush|jungle|desert|ice|volcanic|toxic|crystal|barren] [--gravity 0.5] [--air 0.6] [--water 0.7] [--warmth 0.1]
     [--regions none] [--geology classic] [--climate-model earth] [--currents] [--spin retrograde] [--coast natural|geologic]
+    [--temp -20] [--km 21000] [--liquid water|methane|lava|ice|none] [--norivers] [--craters 1]
+    [--lid stagnant|squishy|tidal|iceshell|frozen] [--locked 0.4]
 ```
+
+**A planet's own surface** (3 Nov 2026, the approved planets plan; the star chart's Open its surface passes these from the world's physics, `galaxy.md`): with `--size planet`, `--temp` sets the globe's mean warmth in °C and `--km` its size round the equator (a moon or small world). `--liquid` says what fills its low ground (`none`: dry basins and pans, named as such, no rain, no forests, no lakes; `ice`: frozen seas). `--norivers` makes no rivers. `--craters` (0 to 1, how thick) carves impact craters, many small and few great, with raised rims and central peaks on the largest. `--lid` is a crust that does not move: no mountain belts along plate borders, but volcanic swells crowned by shield volcanoes far larger than Earth's, split by rift valleys (Tharsis, Olympus Mons, Valles Marineris); `frozen` and `iceshell` lower and fewer. `--locked` (how much its air evens out day and night, 0 to 1) is a world locked to its star: warmth by how high its star stands (the map's middle under it), no seasons, the rain under the cloud deck at the point beneath the star and little on the night side, which freezes.
 
 **A world is big** (the user, 27 Oct 2026): a new world is `vast` (2600 by 1820, about 6000 km across) unless the story asks for a small land, a single coast or an island (`--size`). `world` is bigger still (3600 by 2520). The map knows its scale in miles (fantasy, the past) or km.
 

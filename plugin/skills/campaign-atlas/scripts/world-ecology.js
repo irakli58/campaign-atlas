@@ -65,7 +65,9 @@ function ecology(L, o, U) {
     const cont = 1 - Math.exp(-dOcean[n] * cellKm / 550), lapse = e * .0065 - (o.tempShift || 0) * 40 - (o.warmC || 0);
     // (a cold current keeps its coast cool and grey in summer: Lima, Walvis Bay, San Diego)
     const fg = earth && L.fog ? L.fog[n] : 0;
-    const cold = PT ? PT[3][n] * 16 : 0, tw = 30 - .0045 * a * a + 2 * cont - lapse - 6 * fg - cold, tc = 27 - .0085 * a * a - .35 * a * cont - lapse - fg - cold, t = (tw + tc) / 2;
+    // (a world locked to its star has no seasons: each place's warmth is fixed by how high its star stands there, as the
+    // climate worked it out, world-geology.js lockClimate)
+    const cold = PT ? PT[3][n] * 16 : 0, LT = o.lockedT, tw = LT ? LT[n] - cold : 30 - .0045 * a * a + 2 * cont - lapse - 6 * fg - cold, tc = LT ? LT[n] - cold : 27 - .0085 * a * a - .35 * a * cont - lapse - fg - cold, t = (tw + tc) / 2;
     T[n] = t; Tw[n] = tw; Tc[n] = tc;
     // the year's rain in mm, and when it falls (the share in the warm half of the year)
     P[n] = Math.max(5, (earth && L.mm ? L.mm[n] : L.rain[n] / (L.want || .55) * med) * (PT ? Math.max(.08, 1 + .9 * PT[0][n] + .8 * PT[2][n] - .85 * PT[1][n]) : 1));

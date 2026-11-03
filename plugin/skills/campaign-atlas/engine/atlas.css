@@ -1188,6 +1188,16 @@ details.ci[open] > summary.cn { margin-bottom: 4px; }
 .ho-datapad header, .ho-datapad footer { display: flex; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid #2c6b66; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #5fd2c0; }
 .ho-datapad footer { border-top: 1px solid #2c6b66; border-bottom: 0; }
 .ho-datapad .ho-body { padding: 14px 16px 8px; text-shadow: 0 0 6px rgba(120, 255, 230, .35); background-image: repeating-linear-gradient(transparent 0 2px, rgba(0, 0, 0, .18) 2px 3px); }
+/* a world's survey sheet (atlas-galaxy.js): the datapad's screen, its globe beside its readings */
+.ho-survey { background: #0c1a1f; color: #9ff3e1; font-family: "Share Tech Mono", ui-monospace, Consolas, monospace; font-size: 14px; border: 1px solid #2c6b66; border-radius: 10px; box-shadow: 0 0 0 6px #1b2a30, 0 14px 30px rgba(0, 0, 0, .5); }
+.ho-survey header, .ho-survey footer { display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #2c6b66; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #5fd2c0; }
+.ho-survey footer { border-top: 1px solid #2c6b66; border-bottom: 0; }
+.ho-sv { display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 14px; align-items: flex-start; }
+.ho-globe svg { width: 120px; height: 120px; display: block; }
+.ho-survey table { flex: 1 1 260px; border-collapse: collapse; }
+.ho-survey th { text-align: left; font-weight: 400; color: #5fd2c0; padding: 2px 10px 2px 0; vertical-align: top; width: 40%; }
+.ho-survey td { padding: 2px 0; }
+.ho-survey .ho-body { padding: 0 16px 10px; }
 .ho-scroll { background: #ead9ad; background-image: radial-gradient(ellipse at 50% 50%, rgba(255, 248, 225, .55), transparent 70%), linear-gradient(90deg, rgba(120, 80, 30, .25), transparent 10%, transparent 90%, rgba(120, 80, 30, .25)); padding: 18px 46px 22px; font-family: "IM Fell English", Georgia, serif; font-size: 18px; text-align: center; }
 .ho-scroll .ho-title { font-family: "UnifrakturMaguntia", "IM Fell English", serif; font-size: 30px; }
 .ho-scroll .ho-body { text-align: left; }
@@ -2306,6 +2316,11 @@ button.ho-b:hover { color: var(--ink); }
 .gx-wform { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
 .gx-wform h4, .gx-wform .t-row { grid-column: 1 / -1; }
 .gx-wform .tw-l span { font-size: 12px; }
+/* the planet editor: its notes, its preview and the Randomise row across the whole form */
+.gx-phys > p, .gx-phys .gx-cons { grid-column: 1 / -1; }
+.gx-phys .t-row .tw-l { display: inline-flex; align-items: center; gap: .4rem; margin: 0; }
+.gx-cons h5 { margin: .5rem 0 .2rem; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; opacity: .8; }
+.gx-cons li { margin-bottom: .25rem; }
 .gx-add summary, .gx-how summary { cursor: pointer; font-size: 13.5px; }
 .gx-add form { margin-top: 6px; flex-wrap: wrap; }
 .gx-add .t-in { width: auto; flex: 1 1 110px; min-width: 0; }
@@ -2389,3 +2404,21 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .th-mods { margin-top: 1.2rem; padding: .8rem 1rem; border: 1px solid rgba(0, 0, 0, .12); border-radius: 10px; }
 .th-mods h3 { margin: 0 0 .3rem; }
 .v-worldsel { font: inherit; font-size: 13px; padding: .2rem .4rem; margin-left: -.2rem; border-radius: 6px; border: 1px solid rgba(0, 0, 0, .2); background: transparent; color: inherit; }
+/* a world's whole profile in the star chart (atlas-planet.js) */
+.gx-prof { margin-top: .5rem; }
+.gx-prof summary { cursor: pointer; font-weight: 600; }
+.gx-prof h5 { margin: .6rem 0 .2rem; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; opacity: .8; }
+.gx-pt { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.gx-pt th { text-align: left; font-weight: 400; opacity: .75; padding: 1px 8px 1px 0; vertical-align: top; width: 38%; }
+.gx-pt td { padding: 1px 0; }
+.gx-pm, .gx-pw { margin: .2rem 0; padding-left: 1.1rem; font-size: 12.5px; }
+/* the worlds the players have scanned, under their star chart (atlas-galaxy.js galaxyDraw), and the extras in a world's card */
+.gx-pworlds { margin: 10px 0 0; font-size: 13px; }
+.gx-pworlds summary { cursor: pointer; }
+.gx-pworlds section { margin: 8px 0; }
+.gx-pworlds h4 { margin: 0 0 4px; font-size: 14px; }
+.gx-pworlds h4 span { font-weight: 400; opacity: .7; font-size: 12px; }
+.gx-extra { margin: 8px 0; border-top: 1px solid var(--line, rgba(127, 127, 127, .25)); padding-top: 6px; }
+.gx-sws { display: flex; flex-wrap: wrap; gap: .4rem .8rem; font-size: 12px; }
+.gx-sw { display: inline-flex; align-items: center; gap: .3rem; }
+.gx-sw i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .25); }

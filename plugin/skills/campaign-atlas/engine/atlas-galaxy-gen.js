@@ -98,36 +98,40 @@
   }
 
   /* ---- a system opened: its planets, belts, moons and what orbits them, grown from the seed and the system */
-  const KINDS = { lava: "Lava world", rocky: "Rocky world", desert: "Desert world", ocean: "Ocean world", garden: "Living world", ice: "Ice world", barren: "Barren world", toxic: "Toxic world", gas: "Gas giant", icegiant: "Ice giant", dwarf: "Dwarf planet" };
+  const KINDS = { lava: "Lava world", rocky: "Rocky world", desert: "Desert world", ocean: "Ocean world", garden: "Living world", ice: "Ice world", barren: "Barren world", toxic: "Hothouse world", gas: "Gas giant", icegiant: "Ice giant", dwarf: "Dwarf planet", hotjupiter: "Hot Jupiter", mini: "Mini-Neptune" };
+  // a worked-out world (atlas-planet.js) with the star chart's own fields beside its profile: its kind's name, size,
+  // gravity and warmth as the chart shows them, its dangers and its weather in a word (also for a world the game master
+  // worked out again in the planet editor, atlas-galaxy.js)
+  function chartPlanet(p) {
+    const giant = p.env === "gas" || p.env === "ice" || p.env === "mini", tc = p.tempC;
+    const hazards = [tc > 120 && "searing heat", tc < -120 && "killing cold", p.kind === "toxic" && "corrosive air", p.gravity > 1.6 && "crushing gravity", (p.kind === "lava" || p.tectonics === "tidal") && "eruptions", (p.pressure || 0) > 10 && "crushing pressure", /lethal|high/.test(p.radiation || "") && "radiation", p.winds && p.winds.extreme > 60 && (p.pressure || 0) > .05 && "violent storms", p.winds && /dust/.test(p.winds.storms || "") && "dust storms", p.locked && !giant && "a burning day side and a frozen night side"].filter(Boolean);
+    return Object.assign({}, p, {
+      kind: p.kind, kname: (p.super ? "Super-Earth: " : "") + (KINDS[p.kind] || p.kind), a: p.a, size: p.radius, grav: p.gravity, temp: tc,
+      air: p.air + (p.breathable ? ": breathable" : ""), pres: p.pressure, water: p.water || "", life: p.life || "", hab: p.hab, hazards, land: p.land, moons: p.moons || 0,
+      climate: giant ? "Storms the size of worlds" : (p.pressure || 0) < .001 ? "None: no air to carry weather" : tc > 60 ? "Scorching" : tc > 25 ? "Hot" : tc > 0 ? "Temperate" : tc > -60 ? "Cold" : "Frozen"
+    });
+  }
+  // a world of a system worked out again with the game master's changes (ch: orbit, mass, water, iron; its crust, air
+  // and life as they set them), its name and the chart's own notes kept; the same changes always give the same world
+  function rework(G, info, p, ch) {
+    const q = A.planets.rework(info.star, p, ch, rng(G.p.seed + "|edit|" + p.name + "|" + (ch.seed || 0)), { realism: G.p.realism || "balanced", tech: G.p.tech || "armoured" });
+    return Object.assign(chartPlanet(q), { n: p.n, name: p.name, minerals: p.minerals, chance: p.chance });
+  }
   function system(G, i) {
     const s = G.systems[i]; if (!s) return null;
-    const r = rng(G.p.seed + "|sys|" + i), st = STARS[s.cls], L = st[1], frost = 2.7 * Math.sqrt(Math.max(L, .0005));
-    const out = { star: { cls: s.cls, name: STAR_NAME[s.cls], color: st[0], lum: L, mass: st[2], binary: s.bin }, planets: [], belts: [], sites: [] };
-    const n = s.cls === "X" ? Math.floor(r() * 2) : s.cls === "N" || s.cls === "D" ? Math.floor(r() * 3) : 1 + Math.floor(r() * (s.cls === "M" ? 5 : 8));
-    let a = .08 + r() * .3 * Math.sqrt(Math.max(L, .01));
-    for (let k = 0; k < n; k++) {
-      a *= 1.45 + r() * .65;
-      if (r() < .12) { out.belts.push({ a: round(a, 2), name: k ? "An asteroid belt" : "A dust belt", rich: r() < .4 }); continue; }
-      const temp = Math.round(278 * Math.pow(Math.max(L, .0001), .25) / Math.sqrt(a)) - 273, beyond = a > frost;
-      let kind = beyond ? (r() < .55 ? "gas" : r() < .5 ? "icegiant" : r() < .5 ? "ice" : "dwarf") : r() < .18 ? "gas" : temp > 400 ? "lava" : temp > 90 ? (r() < .5 ? "toxic" : "barren") : temp > 45 ? (r() < .6 ? "desert" : "toxic") : temp > -15 ? weighted(r, [["ocean", 3], ["garden", s.cls === "G" || s.cls === "K" ? 2.2 : .5], ["desert", 2], ["rocky", 2], ["toxic", 1]]) : temp > -90 ? weighted(r, [["ice", 3], ["rocky", 2], ["barren", 2]]) : (r() < .6 ? "ice" : "dwarf");
-      const giant = kind === "gas" || kind === "icegiant";
-      const size = giant ? round(kind === "gas" ? 6 + r() * 7 : 3.5 + r() * 1.5, 1) : kind === "dwarf" ? round(.1 + r() * .2, 2) : round(.3 + r() * 1.6, 2);
-      const dens = giant ? .25 : kind === "ice" || kind === "dwarf" ? .55 : kind === "lava" ? 1.1 : 1, grav = round(size * dens * (giant ? 1.4 : 1), 2);
-      const air = giant ? "Deep hydrogen and helium" : kind === "dwarf" || size < .35 ? "None" : kind === "toxic" ? pick(r, ["Thick carbon dioxide, sulphur clouds", "Ammonia and methane", "Chlorine haze"]) : kind === "garden" ? "Nitrogen and oxygen: breathable" : kind === "ocean" ? (r() < .35 ? "Nitrogen and oxygen: breathable" : "Nitrogen, too little oxygen to breathe") : kind === "lava" ? "Thin, sulphurous" : size < .6 ? "Thin carbon dioxide" : pick(r, ["Thin nitrogen", "Carbon dioxide", "Nitrogen and argon"]);
-      const pres = giant ? null : air === "None" ? 0 : kind === "toxic" ? round(5 + r() * 85, 1) : round(Math.max(.01, size * (.3 + r() * 1.2)), 2);
-      const breath = /breathable/.test(air);
-      const water = giant ? "" : kind === "ocean" ? "A world ocean" : kind === "garden" ? "Seas, lakes and rivers" : kind === "ice" ? (r() < .4 ? "An ocean under the ice" : "Frozen water") : kind === "desert" ? (r() < .3 ? "Water deep underground" : "") : kind === "toxic" && temp < 100 ? "Seas of acid" : kind === "lava" ? "Seas of molten rock" : "";
-      const life = kind === "garden" ? weighted(r, [["Complex life: forests, beasts", 6], ["Simple life: mats, reefs, lichens", 3], ["A people of its own", .5]]) : kind === "ocean" && r() < .45 ? "Simple life in the seas" : /under the ice/.test(water) && r() < .3 ? "Microbes under the ice" : kind === "desert" && water && r() < .3 ? "Hardy microbes, deep in the wet rock" : "";
-      const hazards = [temp > 120 && "searing heat", temp < -120 && "killing cold", kind === "toxic" && "corrosive air", grav > 1.6 && "crushing gravity", kind === "lava" && "eruptions", pres > 10 && "crushing pressure", r() < .25 && pick(r, (giant ? ["radiation belts", "lightning storms"] : kind === "lava" ? ["quakes", "toxic fumes"] : kind === "ice" || kind === "dwarf" ? ["ice storms", "crevasses", "radiation"] : kind === "toxic" ? ["acid rain", "crushing storms"] : kind === "desert" ? ["dust storms", "radiation"] : ["quakes", "radiation", "storms"]).concat(/Complex life/.test(life) ? ["predators", "diseases"] : []))].filter(Boolean);
-      const land = giant ? "Impossible: no surface" : pres > 60 || temp > 380 ? "Impossible with ordinary equipment" : kind === "toxic" || grav > 1.5 || temp > 110 || temp < -150 ? "Only with specialised equipment" : breath && temp > -30 && temp < 45 ? "Open air" : "Suits needed";
-      const hab = breath && life && temp > -20 && temp < 40 && grav < 1.4 ? "Habitable" : land === "Suits needed" ? "Marginal: domes and suits" : land.startsWith("Impossible") ? "Uninhabitable" : "Hostile";
-      const minerals = pick(r, ["iron and nickel", "rare earths", "water ice", "silicates", "heavy metals", "platinum group metals", "radioactives", "carbon and graphite", "helium-3"]);
-      const moons = giant ? Math.floor(r() * 9) : r() < .4 ? 1 + Math.floor(r() * 2) : 0;
-      const name = `${s.name} ${"bcdefghijk"[out.planets.length]}`;
-      out.planets.push({ n: out.planets.length, name, kind, kname: KINDS[kind], a: round(a, 2), size, grav, temp, air, pres, water, life, hab, hazards, land, minerals, moons,
-        geo: giant ? "Banded storms over no surface at all" : pick(r, { lava: ["Lava fields and fresh volcanoes", "Rivers of molten rock between black crusts"], ice: ["Ice plains and cliffs", "Frozen geysers and crevasse fields"], dwarf: ["Old craters under frost", "A cracked ice crust"], desert: ["Dune seas", "Canyons cut by old rivers", "Salt flats and mesas"], ocean: ["A world ocean, few islands", "Archipelagos and deep trenches"], garden: ["Mountains, forests and plains", "River valleys and old mountains", "Jungles and inland seas"], toxic: ["Volcanic plains under the clouds", "Melted highlands"] }[kind] || ["Old craters", "Great rift valleys", "Mountains and basins", "Glass plains from ancient impacts"]),
-        climate: giant ? "Storms the size of worlds" : air === "None" ? "None: no air to carry weather" : temp > 60 ? "Scorching" : temp > 25 ? "Hot" : temp > 0 ? "Temperate" : temp > -60 ? "Cold" : "Frozen",
-        chance: pick(r, ["Ruins no survey has explained", "A crashed ship on the night side", "Rich deposits nobody has claimed", "Signals from below the surface", "An abandoned survey camp", "Caves that go further than they should", "Nothing yet found", "Nothing yet found", "Nothing yet found"]) });
+    // (the planets worked out from their physics by the planetary layer, engine/atlas-planet.js: the user's approved
+    // plan of 3 Nov 2026, "every galaxy upgraded"; the same seed always gives the same system; the star chart's own
+    // fields kept as they were, the whole profile beside them)
+    const r = rng(G.p.seed + "|sys|" + i), P = A.planets;
+    const SYS = P.system(s.cls, r, { realism: G.p.realism || "balanced", tech: G.p.tech || "armoured" });
+    const S = SYS.star, out = { star: { cls: s.cls, name: STAR_NAME[s.cls], color: S.color, lum: S.lum, mass: S.mass, teff: S.teff, age: S.age, flares: S.flares, metal: S.metal, binary: s.bin, frost: SYS.frost }, planets: [], belts: SYS.belts, sites: [] };
+    const MINERALS = ["iron and nickel", "rare earths", "water ice", "silicates", "heavy metals", "platinum group metals", "radioactives", "carbon and graphite", "helium-3"];
+    for (const p of SYS.planets) {
+      const name = `${s.name} ${"bcdefghijk"[out.planets.length] || out.planets.length + 1}`;
+      out.planets.push(Object.assign(chartPlanet(p), {
+        n: out.planets.length, name, minerals: pick(r, MINERALS),
+        chance: pick(r, ["Ruins no survey has explained", "A crashed ship on the night side", "Rich deposits nobody has claimed", "Signals from below the surface", "An abandoned survey camp", "Caves that go further than they should", "Nothing yet found", "Nothing yet found", "Nothing yet found"])
+      }));
     }
     // what people put there, by the system's own marks, on the world that suits each best
     const best = out.planets.slice().sort((a, b) => ({ Habitable: 0, "Marginal: domes and suits": 1, Hostile: 2, Uninhabitable: 3 }[a.hab] - { Habitable: 0, "Marginal: domes and suits": 1, Hostile: 2, Uninhabitable: 3 }[b.hab]))[0];
@@ -173,7 +177,7 @@
   }
   const inRegion = (G, i, kind) => { const s = G.systems[i]; return G.regions.filter(g => (!kind || g.kind === kind) && Math.hypot(g.x - s.x, g.y - s.y) <= g.r); };
 
-  A.galaxyGen = { hash, rng, grow, system, route, dist, inRegion, STARS, STAR_NAME, KINDS };
+  A.galaxyGen = { hash, rng, grow, system, route, dist, inRegion, STARS, STAR_NAME, KINDS, chartPlanet, rework };
   // the campaign's galaxy: its settings (galaxy.js, written by atlas.js galaxy) and the council's own names and changes
   // over it (ATLAS.galaxyEdit in table.js): { systems: { S12: { name, desc, gm, flags, state } }, territories, home, ship, fuel }
   A.galaxy = p => { A.galaxyParams = Object.assign({}, A.galaxyParams || {}, p || {}); A._galaxy = null; return A; };

@@ -29,7 +29,7 @@
   // (27 Oct 2026: fantasy is painted in colour by default, as the user asked; parchment stays one choice)
   const LOOK_OF = { hydro: "hydro", hydrographic: "hydro", print: "hydro", relief: "relief", shaded: "relief", natural: "relief", painted: "painted", fantasy: "hydro", colour: "painted", color: "painted", parchment: "parchment", medieval: "parchment",
     engraved: "engraved", old: "engraved", antique: "engraved", industrial: "engraved", historical: "engraved", victorian: "engraved", "1920s": "engraved",
-    atlas: "atlas", modern: "atlas", political: "atlas", holo: "holo", survey: "holo", planet: "holo", alien: "holo",
+    atlas: "atlas", modern: "atlas", political: "atlas", planet: "planet", holo: "holo", survey: "holo", alien: "holo",
     stars: "stars", star: "stars", scifi: "stars", future: "stars", space: "stars" };
   // what the party knows of a place. Unknown places are not shown on the players' map.
   const STATES = [["unknown", "Unknown to the party"], ["rumoured", "Rumoured"], ["known", "Known"], ["visited", "Visited"], ["done", "Done with"]];
@@ -69,6 +69,12 @@
       ink: "#2b2a24", paper: "#f3efe4", mk: "#fff8ec", river: "#4f7fa8", label: "#24211c",
       sea: [[0, hex("#9cc2d8")], [1, hex("#3f6e93")]], land: [[0, hex("#bccb8e")], [1, hex("#ffffff")]], wet: hex("#6f9a5a"), dry: hex("#dcc79a"), tree: "#5f8a4a",
       routes: { road: ["#7a2e1d", 2, "8 2.5"], trail: ["#4a3a26", 1.5, "2 3"], pass: ["#3a2a1a", 1.7, "5 2 1.6 2"], river: ["#2e5f86", 1.9, "6 3"], sea: ["#24506f", 1.6, "8 5"], rail: ["#2b2a24", 2.2, "10 3"], air: ["#4a4842", 1.3, "3 4"], tunnel: ["#4a4842", 1.7, "3 3"], portal: ["#6a3f9e", 1.9, "2 3"], lane: ["#24506f", 1.6, "8 4"], jump: ["#6a3f9e", 1.7, "2 4"] }
+    },
+    // (a planet in its own colours: the shaded relief's ink and routes; the land and sea from the planet's palette)
+    planet: {
+      ink: "#2b2a24", paper: "#14181c", mk: "#fff8ec", river: "#4f7fa8", label: "#f2efe6",
+      sea: [[0, hex("#3d5a70")], [1, hex("#1d3346")]], land: [[0, hex("#8a7a5a")], [1, hex("#e8e2d6")]], wet: hex("#6f8a5a"), dry: hex("#c8a878"), tree: "#5f7a4a",
+      routes: { road: ["#f0c060", 2, ""], trail: ["#e0d0a0", 1.4, "3 3"], pass: ["#e0d0a0", 1.6, "5 2 1.6 2"], river: ["#7fb0d8", 1.8, "6 3"], sea: ["#7fb0d8", 1.6, "8 5"], rail: ["#f0f0f0", 2, "10 3"], air: ["#c0c0c0", 1.3, "3 4"], tunnel: ["#c0c0c0", 1.7, "3 3"], portal: ["#c08aff", 1.9, "2 3"], lane: ["#5ad1e6", 1.6, "8 4"], jump: ["#e07ad8", 1.7, "2 4"] }
     },
     // (the hydrographic print: pale paper round the land, dark ink)
     hydro: {
@@ -313,6 +319,18 @@
   const GEN_SIZES = { small: [800, 560], medium: [1000, 700], large: [1400, 980], huge: [1800, 1260], vast: [2600, 1820], world: [3600, 2520], supercontinent: [4800, 3300], hemisphere: [5200, 3400], planet: [6400, 3200] };
   const GEN_KM = { supercontinent: 13000, hemisphere: 20000 };
   const GEN_SECS = { small: 4, medium: 6, large: 12, huge: 18, vast: 30, world: 50, supercontinent: 150, hemisphere: 130, planet: 200 };
+  // a world made in the background from atlas.js world's own flags (the generator put in the page by atlas.js,
+  // A.worldGenSrc), for a planet's surface (atlas-galaxy.js) and anything else that makes a world from a recipe
+  A.worldGenerate = (flags, W0) => new Promise((ok, no) => {
+    if (!A.worldGenSrc || typeof Worker === "undefined") { no(new Error("this page cannot make worlds (build it again with atlas.js build)")); return; }
+    const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0 || {}, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
+    let w; try { w = new Worker(URL.createObjectURL(new Blob([A.worldGenSrc], { type: "text/javascript" }))); } catch (e) { no(e); return; }
+    w.onmessage = e => { w.terminate(); if (e.data && e.data.ok) ok(e.data.T); else no(new Error(e.data && e.data.error || "the generator stopped")); };
+    w.onerror = e => { w.terminate(); no(new Error(e.message || "the generator failed")); };
+    w.postMessage(msg);
+  });
+  A.worldGenSecs = size => GEN_SECS[size] || 10;
+  A.worldGenCache = (key, T) => genCache(key, T);
   // a made world kept in this browser (IndexedDB), by its recipe, so it is made only once
   function genCache(key, T) {
     return new Promise(done => {

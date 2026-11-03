@@ -193,8 +193,15 @@
   // first, else the first there is; A.openWorld(id) opens another, as the selector beside World map does
   let WSEL = A.worldList && A.worldList().length ? (A.worlds.main && A.worlds.main.data ? "main" : A.worldList()[0].id) : "main";
   A.openWorld = id => {
-    if (!A.worlds || !A.worlds[id] || !A.worlds[id].data) return false;
-    if (id !== WSEL) { if (WORLD) { try { WORLD.dispose(); } catch (e) {} WORLD = null; } WSEL = id; const s = $("#v-worldsel"); if (s) s.value = id; }
+    if (!A.worlds || !A.worlds[id] || !A.worlds[id].data || !A.worldMount) return false;
+    // (a world made since the page was drawn, a planet's surface: its view, its button and its place in the selector)
+    if (!$("#worldv")) { const sec = document.createElement("section"); sec.className = "worldv"; sec.id = "worldv"; sec.setAttribute("aria-label", "World map"); const after = $("#galaxyv") || $("#story"); if (after) after.insertAdjacentElement("afterend", sec); else document.body.appendChild(sec); }
+    if (!$("#v-world")) { const b = document.createElement("button"); b.type = "button"; b.id = "v-world"; b.setAttribute("aria-pressed", "false"); b.textContent = "World map"; $("#v-gaz").insertAdjacentElement("afterend", b); }
+    let sel = $("#v-worldsel");
+    if (!sel && A.worldList().length > 1) { sel = document.createElement("select"); sel.id = "v-worldsel"; sel.className = "v-worldsel"; sel.setAttribute("aria-label", "Which world"); $("#v-world").insertAdjacentElement("afterend", sel); }
+    if (sel) for (const w of A.worldList()) if (![...sel.options].some(o => o.value === w.id)) sel.add(new Option(w.name, w.id));
+    if (id !== WSEL) { if (WORLD) { try { WORLD.dispose(); } catch (e) {} WORLD = null; } WSEL = id; }
+    if (sel) sel.value = id;
     setView("world"); return true;
   };
   // the campaign's places in a world location: those that say location: "<its id>", or stand in the city it names

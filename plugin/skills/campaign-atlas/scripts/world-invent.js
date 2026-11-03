@@ -41,7 +41,7 @@ class Heap {
 // ---- names for what the land has: the campaign's own first (world.js regions), then made-up ones in the same spirit
 const ADJ = ["Grey", "Silver", "Sunken", "Amber", "Bitter", "Pale", "Whispering", "Shivering", "Drowned", "Iron", "Ashen", "Hollow", "Weeping", "Copper", "Black", "Last", "Long", "Thorn", "Raven", "Salt", "Frost", "Ember", "Gloam", "Starless"];
 const SYL = [["Ash", "Bel", "Cor", "Dun", "El", "Fal", "Gar", "Hal", "Is", "Kel", "Lor", "Mor", "Nar", "Or", "Pel", "Ra", "Sar", "Tor", "Ul", "Var", "Wen", "Yr", "Bran", "Cael", "Dra", "Eth"], ["", "", "a", "e", "o", "an", "en", "ar", "or", "eth", "im", "ul"], ["dor", "mere", "wyn", "holt", "mar", "rin", "dell", "gard", "more", "vale", "thas", "lor", "mund", "ric"]];
-function namer(rnd, own) {
+function namer(rnd, own, dry) {
   const used = new Set(), pick = a => a[Math.floor(rnd() * a.length)];
   const word = () => { for (let g = 0; g < 50; g++) { const w = pick(SYL[0]) + pick(SYL[1]) + pick(SYL[2]); if (!used.has(w) && w.length < 11) { used.add(w); return w; } } return pick(SYL[0]) + pick(SYL[2]); };
   const mine = {}; for (const r of own || []) if (r && r.name) (mine[r.kind || "region"] = mine[r.kind || "region"] || []).push(r);
@@ -49,8 +49,9 @@ function namer(rnd, own) {
     desert: ["desert", "waste", "sands", "dunes", "badlands"], swamp: ["swamp", "marsh", "fen", "bog", "mire", "wetland"], glacier: ["glacier", "ice", "icefield"], volcano: ["volcano", "mount", "peak"], wood: ["wood", "grove", "enchanted"], blight: ["blight", "wasteland", "corruption"] };
   const own_ = kind => { for (const [k, list] of Object.entries(mine)) if ((KIND_SAYS[kind] || [kind]).includes(k) && list.length) return list.shift().name; return null; };
   return {
-    sea: (big, auto) => own_("sea") || (auto ? `The ${pick(ADJ)} ${big ? pick(["Sea", "Sea", "Ocean", "Deep"]) : pick(["Bay", "Gulf", "Sound", "Sea"])}` : null),
-    lake: auto => own_("lake") || (auto ? (rnd() < .5 ? `Lake ${word()}` : `${word()} Mere`) : null),
+    // (a world with no liquid, --liquid none: its low ground is dry basins and lowland plains, as on the Moon or Mercury)
+    sea: (big, auto) => own_("sea") || (auto ? dry ? `The ${pick(ADJ)} ${big ? pick(["Basin", "Lowlands", "Plains"]) : pick(["Basin", "Hollow", "Depression"])}` : `The ${pick(ADJ)} ${big ? pick(["Sea", "Sea", "Ocean", "Deep"]) : pick(["Bay", "Gulf", "Sound", "Sea"])}` : null),
+    lake: auto => own_("lake") || (auto ? dry ? `The ${word()} ${pick(["Basin", "Hollow", "Pan"])}` : rnd() < .5 ? `Lake ${word()}` : `${word()} Mere` : null),
     range: auto => own_("range") || (auto ? (rnd() < .5 ? `The ${word()} ${pick(["Mountains", "Peaks", "Heights"])}` : `The ${pick(ADJ)} ${pick(["Spine", "Teeth", "Crags", "Mountains"])}`) : null),
     forest: auto => own_("forest") || (auto ? `The ${rnd() < .5 ? word() : pick(ADJ)} ${pick(["Wood", "Forest", "Weald", "Holt"])}` : null),
     nebula: auto => own_("nebula") || (auto ? `The ${pick(ADJ)} ${pick(["Nebula", "Cloud", "Drift", "Veil"])}` : null),
@@ -241,6 +242,27 @@ function labelOf(p, cols, cell, best) {
 // the warmth of a cell (the page works it out the same way, from the world's climate)
 const warmthAt = (o, L, n) => BIO.warmth(o.climate, (((n / o.cols) | 0) + .5) / o.rows, Math.max(0, (L.H[n] - 128) / 127));
 // fjords: on a cold coast under mountains the sea runs far inland up narrow valleys the ice once carved
+// impact craters: many small, few great (sizes by a power law, as on the Moon and Mercury), each a bowl with a raised
+// rim and, for the largest, a central peak; on the land only, never deep enough to become a sea [cratered surfaces are
+// the oldest: where nothing renews or wears the ground]. density 1 is a heavily cratered world. Returns how many.
+function carveCraters(L, cols, rows, density, rnd) {
+  const H = L.H, N = cols * rows, count = Math.round(density * N / 600);
+  let made = 0;
+  for (let k = 0; k < count; k++) {
+    const r = Math.min(cols / 10, 1.2 * Math.pow(1 / (rnd() + .015), .62)), ci = Math.floor(rnd() * cols), cj = Math.floor(rnd() * rows);
+    if (H[cj * cols + ci] <= 128) continue;
+    const depth = Math.min(28, 3 + r * 1.6), rim = depth * .35, R = Math.ceil(r * 1.5);
+    for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+      const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= cols || j >= rows) continue;
+      const n = j * cols + i, d = Math.hypot(di, dj) / r; if (d > 1.5 || H[n] <= 128) continue;
+      let dh = d < 1 ? -depth * (1 - d * d) : rim * Math.max(0, 1 - Math.abs(d - 1.15) / .35);
+      if (r > 6 && d < .18) dh += depth * .6 * (1 - d / .18);   // a central peak
+      H[n] = Math.max(129, Math.min(255, Math.round(H[n] + dh))); if (L.Lo) L.Lo[n] = 0;
+    }
+    made++;
+  }
+  return made;
+}
 function carveFjords(o, L, rnd) {
   const { cols, rows } = o, N = cols * rows, H = L.H, high = distance(cols, rows, n => H[n] > 128 + 127 * .38), starts = [];
   for (let n = 0; n < N; n++) if (H[n] > 128 && L.coast[n] === 1 && high[n] < 9 && warmthAt(o, L, n) < .3 && rnd() < .06) starts.push(n);
@@ -391,9 +413,11 @@ function makeCover(o, L, R, rnd, log) {
     const p = eco ? lakes.reduce((b, q) => Math.max(...q.cells.map(c => H[c])) > Math.max(...b.cells.map(c => H[c])) ? q : b, lakes[0]) : lakes[Math.floor(rnd() * lakes.length)];
     if (!C[p.cells[0]]) { for (const c of p.cells) put(c, "glowwater"); if (eco) lore.push({ kind: "glowwater", at: [I(p.cells[0]), J(p.cells[0])], why: "the highest lake, a tarn among the peaks" }); }
   }
-  const P = alien ? BIO.PLANETS[o.planet] : null;
+  const P = alien ? BIO.PLANETS[o.planet] : null; let liquid = null;
   if (P) {
-    const liquid = P.liquid !== "water" ? P.liquid : null;
+    // (what fills its low ground: the kind of planet's own, or the planet's physics, --liquid: water, methane, lava, ice
+    // for frozen seas, none for dry basins as on the Moon or Mercury)
+    const lq = o.liquid ? { none: null, water: null, ice: "ice", subsurface: "ice" }[o.liquid] : undefined; liquid = lq !== undefined ? lq : o.liquid && BIO.BY[o.liquid] ? o.liquid : P.liquid !== "water" ? P.liquid : null;
     for (let n = 0; n < N; n++) {
       if (!land(n)) { if (liquid && !C[n]) put(n, liquid); continue; }
       if (C[n] && ![B.glacier, B.floodplain].includes(C[n])) continue;
@@ -402,7 +426,7 @@ function makeCover(o, L, R, rnd, log) {
       put(n, k);
     }
   }
-  return { C, made, lore: lore.map(l => Object.assign(l, { at: [Math.round((l.at[0] + .5) * o.cell), Math.round((l.at[1] + .5) * o.cell)] })), vols: vols.map(n => [I(n), J(n)]), liquid: P && P.liquid !== "water" ? P.liquid : null };
+  return { C, made, lore: lore.map(l => Object.assign(l, { at: [Math.round((l.at[0] + .5) * o.cell), Math.round((l.at[1] + .5) * o.cell)] })), vols: vols.map(n => [I(n), J(n)]), liquid: P ? liquid : null };
 }
 
 /* ---- how natural a land is: measured against the rules a real land keeps (references/world.md, "The rules of a
@@ -450,7 +474,7 @@ function invent(A, flags, log) {
   if (look !== "stars" && !SEA_SHARE[land]) throw new Error(`unknown land "${land}": masses (with --landmasses N and --landshare 0.1..0.9), continents (a whole planet's), continent, islands, archipelago, coast or inland`);
   const seed = flags.seed != null && flags.seed !== true ? parseInt(flags.seed, 10) : old.seed || 1000 + Math.floor(Math.random() * 9000);
   const cell = 4, cols = Math.round(w / cell), rows = Math.round(h / cell), N = cols * rows, rnd = mulberry32(seed + 77);
-  const autoNames = flags.names !== "none", name = namer(mulberry32(seed + 5), W0.regions);
+  const autoNames = flags.names !== "none", name = namer(mulberry32(seed + 5), W0.regions, flags.liquid === "none");
   // the climate and the setting (what the world gets by itself: fantasy's enchanted woods, an alien planet's strange land);
   // a land made before there were climates (the same seed, no cover) is made again exactly as it was, unless asked
   const setting = String(flags.setting && flags.setting !== true ? flags.setting : W0.setting || BIO.settingOf(look)).toLowerCase();
@@ -487,7 +511,7 @@ function invent(A, flags, log) {
     T.stars = { seed };
     for (const p of patches(cols, rows, n => M[n] > 185, true).filter(p => p.cells.length > N * .02).sort((a, b) => b.cells.length - a.cells.length).slice(0, 4)) { const nm = name.nebula(autoNames); if (nm) T.labels.push(Object.assign({ name: nm, kind: "nebula", size: 18 }, labelOf(p, cols, cell))); }
   } else {
-    const co = { cols, rows, cell, seed, climate, setting: realism === "realistic" && setting === "fantasy" ? "realistic" : realism === "alien" ? "scifi" : setting, planet: planetWord };
+    const co = { cols, rows, cell, seed, climate, setting: realism === "realistic" && setting === "fantasy" ? "realistic" : realism === "alien" ? "scifi" : setting, planet: planetWord, liquid: typeof flags.liquid === "string" ? flags.liquid : undefined };
     let geo = null;
     if (geoWord === "plates") {
       // an alien planet's own conditions: its gravity (mountains stand taller where it is weak), its air (the rain it
@@ -502,7 +526,7 @@ function invent(A, flags, log) {
       if (flags.sketch) { const SKM = require("../engine/atlas-world-sketch.js"), sk = typeof flags.sketch.land === "string" ? SKM.decode(flags.sketch) : flags.sketch; sketch = SKM.fit(sk, cols, rows, noiseFn(seed + 41), flags.loose != null && flags.loose !== true ? +flags.loose : .5); }
       // (how far across, and so which latitudes it spans: a great size reaches over as many degrees as its km do, about
       // its climate's middle; a whole planet from pole to pole)
-      const kmA = SIZE_KM[sizeWord] || num("km", Math.round(w * 2.3)), LATS = require("./world-ecology.js").LAT[climate] || [52, 38], midL = (LATS[0] + LATS[1]) / 2, spanL = h / w * kmA / 111;
+      const kmA = (whole && flags.km && flags.km !== true ? Math.max(1000, +flags.km) : 0) || SIZE_KM[sizeWord] || num("km", Math.round(w * 2.3)), LATS = require("./world-ecology.js").LAT[climate] || [52, 38], midL = (LATS[0] + LATS[1]) / 2, spanL = h / w * kmA / 111;
       const latA = whole ? [90, -90] : SIZE_KM[sizeWord] ? [Math.min(88, midL + spanL / 2), Math.max(-88, midL - spanL / 2)] : undefined;
       // (the ocean's currents, on trial until the user approves them, 28 Oct 2026: --currents; kept when the world is made
       // again; --spin retrograde for a planet that turns the other way)
@@ -517,7 +541,7 @@ function invent(A, flags, log) {
       const coastWord = flags.coast != null && flags.coast !== true ? String(flags.coast) : old.coastModel || (fresh ? "geologic" : "");
       if (coastWord && !["natural", "geologic", "plain"].includes(coastWord)) throw new Error(`unknown coast "${coastWord}": geologic (shaped by rock, ice, sea level, rivers and waves), natural (waves, drift and sand) or plain`);
       const spinV = flags.spin != null && flags.spin !== true ? (/^(retro|-1|back)/i.test(String(flags.spin)) ? -1 : 1) : old.currents && old.currents.spin < 0 ? -1 : 1;
-      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", shores: coastWord === "geologic", currents: currentsOn && climateModel === "earth", spin: spinV, climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
+      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", shores: coastWord === "geologic", currents: currentsOn && climateModel === "earth", spin: spinV, climateModel: climateModel === "earth" ? "earth" : undefined, lid: typeof flags.lid === "string" ? flags.lid : undefined, dry: flags.liquid === "none" || flags.liquid === "lava" ? true : undefined, plates: typeof flags.lid === "string" && flags.lid !== "plates" && flags.lid !== "squishy" ? 1 : undefined, locked: flags.locked != null && flags.locked !== "off" ? (flags.locked === true ? .3 : +flags.locked) : undefined, lat: latA, warmC: whole ? (flags.temp != null && flags.temp !== true ? +flags.temp - 13 : { cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
       if (G.ocean) T.currents = packCurrents(G.ocean, name, cell);
       // (the coasts as the waves, the drift and the sand made them: on trial until the user approves, 28 Oct 2026,
@@ -557,7 +581,10 @@ function invent(A, flags, log) {
     } else L = makeLand({ cols, rows, seed, land });
     // (the classic land gets its fjords cut; the geology's own coasts have their drowned valleys already)
     const fj = regions && !geo ? carveFjords(co, L, mulberry32(seed + 41)) : 0;
-    const R = makeRivers(Object.assign({ wetf: geo ? 1 : BIO.CLIMATES[climate][2], lakesFlow: !!geo }, co), L); T.rivers = R.rivers; riverMask = R.mask;
+    // (a planet's own surface, from the star chart's planetary layer, engine/atlas-planet.js: impact craters where no air,
+    // water or moving crust has worn them away, --craters N, how thick; and no rivers where no liquid runs, --norivers)
+    if (flags.craters && flags.craters !== true && +flags.craters > 0) T.craters = carveCraters(L, cols, rows, +flags.craters, mulberry32(seed + 61));
+    const R = flags.norivers ? { rivers: [], mask: new Uint8Array(N) } : makeRivers(Object.assign({ wetf: geo ? 1 : BIO.CLIMATES[climate][2], lakesFlow: !!geo }, co), L); T.rivers = R.rivers; riverMask = R.mask;
     if (L.drawnRiver) drawnRivers(co, L, R);
     if (regions) { CV = makeCover(Object.assign({ geo, rain: !!geo }, co), L, R, mulberry32(seed + 43), log); CV.fjords = fj; if (CV.liquid) T.liquid = CV.liquid; if (CV.lore && CV.lore.length) T.lore = CV.lore; }
     if (geo) CV = Object.assign(CV || { made: {}, vols: [] }, { geo });
@@ -683,7 +710,7 @@ function invent(A, flags, log) {
   const gi = CV && CV.geo;
   if (natural.length) log("  how natural the land is, rule by rule:\n" + natural.join("\n"));
   if (T.lore) log("  fantasy's places, and why each stands where it does:\n" + T.lore.map(l => `     ${BIO.BY[l.kind].name} at [${l.at}]: ${l.why}`).join("\n"));
-  return { T, summary: `${look === "stars" ? "a star map" : `the land: ${land}, ${sea}% sea,${gi ? ` ${gi.plates} tectonic plates (${gi.continental} continental), highest peak about ${gi.peak} m, ${gi.lakes ? "lakes, " : ""}${realism},` : ""} ${T.rivers.length} rivers, climate: ${BIO.CLIMATES[climate][3].toLowerCase()}${planetWord ? `, a ${planetWord} planet` : ""}${CV && CV.fjords ? `, ${CV.fjords} fjords` : ""}${regionsSaid.length ? `; regions: ${regionsSaid.join(", ")}` : ""}`}, ${w} by ${h} (seed ${seed}); ${T.labels.length} named features; ${placedN} location${placedN === 1 ? "" : "s"} placed${Object.keys(keepOld).length ? `, ${Object.keys(T.spots).length - placedN} kept where they stood` : ""}${routesN ? `; ${routesN} routes suggested (world.js has none of its own)` : ""}` };
+  return { T, summary: `${look === "stars" ? "a star map" : `the land: ${land}, ${sea}% sea,${gi ? ` ${gi.plates} tectonic plates (${gi.continental} continental), highest peak about ${gi.peak} m, ${gi.lakes ? "lakes, " : ""}${realism},` : ""} ${T.rivers.length} rivers,${T.craters ? ` ${T.craters} impact craters,` : ""} climate: ${BIO.CLIMATES[climate][3].toLowerCase()}${planetWord ? `, a ${planetWord} planet` : ""}${CV && CV.fjords ? `, ${CV.fjords} fjords` : ""}${regionsSaid.length ? `; regions: ${regionsSaid.join(", ")}` : ""}`}, ${w} by ${h} (seed ${seed}); ${T.labels.length} named features; ${placedN} location${placedN === 1 ? "" : "s"} placed${Object.keys(keepOld).length ? `, ${Object.keys(T.spots).length - placedN} kept where they stood` : ""}${routesN ? `; ${routesN} routes suggested (world.js has none of its own)` : ""}` };
 }
 // the look a campaign's world wears by itself (the game master may choose another on the page): a planet's surface a
 // survey, space a star chart, the modern world an atlas, the past an engraved plate, fantasy a painted map (27 Oct

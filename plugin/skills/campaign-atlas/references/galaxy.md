@@ -24,6 +24,38 @@ It writes `galaxy.js`, which holds only these settings: every page grows the sam
 
 What grows, from the seed alone: every system's place, star (from red dwarfs, most of them, to blue giants, white dwarfs, neutron stars and black holes; some double), name (spoken or a catalogue number) and sector; lanes to the nearest systems, joined so every system can be reached; colonies (likelier round yellow and orange stars), stations, fuel, mining, research, derelicts and anomalies; charted space round home, dangerous regions (nebulae, storms, pirate space) and restricted space; and a few powers grown out from their capitals along the lanes. A system's worlds grow only when it is opened (section 3).
 
+**The worlds are worked out from their physics** (since 3 Nov 2026, the user's approved plan in the workspace's reviews/2026-11-03-planets.md, every galaxy upgraded; `engine/atlas-planet.js`). Each step follows from the ones before:
+1. The star (its light, mass, temperature, age, flares).
+2. The system (its frost line, its disc, its orbits; giants mostly beyond the frost line; a hot Jupiter round about one Sun-like star in a hundred).
+3. Each world's mass and make-up, then its radius, gravity, escape velocity and density.
+4. Its spin (a day, its tilt, tidal locking to its star, or held off by thick air).
+5. Its insides (plates, a stagnant or broken lid, tidal heating, an ice shell; its magnetic field).
+6. Its air (kept or lost by the cosmic shoreline; carbon dioxide drawn down by seas and plates, or left in the air after a runaway greenhouse).
+7. Its warmth (its star's light, its albedo, its greenhouse; day and night, equator and pole, seasons).
+8. Its liquids (water, methane, lava, an ocean under ice).
+9. Its winds (cells and jets by its rotation; their force by the air's density).
+10. Radiation, then life, by the realism level.
+11. What kind of world it is, read from all the rest.
+12. Habitable and landable, kept apart.
+13. Its moons, inside half its Hill sphere and outside its Roche limit, and its rings.
+14. Its colours: from its rock, ice, seas and air; plants coloured by their star, marked as speculative.
+
+**Settings in galaxy.js:** `realism: "hard" | "balanced" | "creative"` (balanced by default), and `tech: "suits" | "armoured" | "deep"`, which decides what can be landed on (armoured landers by default).
+
+**On the page:**
+- **The whole profile:** each world's card has it (physical, atmosphere, environment, its system), and why each is so.
+- **Open its surface:** a world that can be landed on has this button. It makes the whole globe from its physics in the page's background worker the first time (a few minutes), keeps it in the browser, and opens it in the world map as one of the campaign's worlds, in the "planet" look's own colours (`world.md`, Many worlds). Which surfaces were opened is kept in collection `planetworlds`. The generator is told the world's physics (`surfaceFlags` in `atlas-galaxy.js`; the flags in `world.md`): its mean warmth (`--temp`), its size (`--km`, a moon or small planet smaller than the Earth), what fills its low ground (`--liquid`: water, methane, lava, ice, or none, for dry basins and pans), no rivers and no rain where nothing liquid runs (`--norivers`, and the dry climate), impact craters where no air, water or moving crust wears them away (`--craters`), volcanic swells, giant shield volcanoes and rifts instead of mountain belts where the crust does not move (`--lid`), and warmth and rain round the point under its star on a world locked to it, the night side frozen (`--locked`).
+- **Large moons** that can be landed on (under Its large moons in the whole profile) open their surfaces the same way. A moon is named after its planet with a Roman numeral, outward from the planet (`p.moonNames` keeps a name of the campaign's own).
+- **Work it out again** (with Edit the galaxy on): the planet editor. The game master changes what a world is made of or where it lies (orbit, mass, water, iron), or sets its insides, its air (pressure and main gas) or its life, and the planetary layer works out the rest as it did when the world was made (`A.planets.rework`; the world's own chances, kept as it was made, fall the same way, so only what follows from the change changes). **What would change** is listed, each with why, before **Keep it**. **Randomise** makes another world near that orbit, of the kind chosen if its star allows one (or says it does not). **As it was made** brings it back. Kept in the system's `gedits` document as `bodies.p[n].phys`.
+- **Scanning as play:** what the players know of each world: nothing yet, seen from afar (size, orbit, moons), scanned from orbit (kind, gravity, day, air, warmth, liquids, weather), surveyed on the ground (life, dangers, minerals, radiation, landing, whether people could live there). **Scan it** moves it on one step and the world's time by the hours it takes (1, 8, 48 with good sensors; twice as long with basic, half with military: the ship's **Sensors**). Kept with the system's chart (collection `charts`, `scans`). Their star chart lists the worlds they have scanned with only what they learned.
+- **Show them the survey sheet:** a handout (kind `survey`, in `atlas-table.js`) with the world's globe and what they know of it, from their ship on today's date; it stays among their handouts.
+- **The weather tonight** (from its own air and winds: a wind's force by the air's density, what falls, how cold the night, how far one sees; **Another night**), **its day and year** (its solar day from its turning and orbit, how many make its year, the date there now when the campaign keeps the world's time; a world locked to its star has no days) and **its history** (when it formed, its seas, its water or air lost, its locking, its life: rough times from what it is).
+
+**The tests** are in the workspace:
+- `dev/planets-test.js`: the Solar System rebuilt from orbits and masses, 10,000 random systems against the consistency rules and survey shares, and the planet editor (an unchanged world comes out the same; changed worlds stay consistent; an Earth moved outward keeps its seas from about 1 to 1.75 AU). It must end "all well".
+- `dev/planet-surface-test.js` (`--kind desert` and so on): a surface opened in the page.
+- `dev/planet-editor-test.js`: the editor, scanning, the survey sheet, the weather, day and year, history, the players' copy, and moons' surfaces in the page. It must end "all well".
+
 ## 2. What the council writes over it
 
 In `table.js`:

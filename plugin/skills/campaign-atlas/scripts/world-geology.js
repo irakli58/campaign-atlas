@@ -181,6 +181,31 @@ function geology(o, U) {
       if (o.shores) hotT.push([m0, k]);
     }
   }
+  // a planet whose crust does not move (o.lid, from atlas-planet.js; the approved planets plan, 3 Nov 2026): one rigid
+  // shell (o.plates 1), so no mountain belts along plate borders. Its heat comes up in a few places instead, raising
+  // great volcanic swells crowned by shield volcanoes far larger than Earth's (on a crust that does not move a volcano
+  // stays over its source and keeps growing: Tharsis and Olympus Mons), split by rift valleys where the swell's crust
+  // is stretched (Valles Marineris) [stagnant-lid planets: Mars, Mercury, the Moon]. A frozen world's are low and few.
+  if (o.lid && o.lid !== "plates") {
+    const rl = U.mulberry32((o.seed || 1) + 77), big = (o.km || 3200) >= 10000, nS = (o.lid === "frozen" ? 1 : 1 + Math.floor(rl() * 2.5)) + (big ? 1 : 0), weak = o.lid === "frozen" || o.lid === "iceshell" ? .35 : 1;
+    for (let k = 0; k < nS; k++) {
+      let s = -1; for (let t = 0; t < 60 && s < 0; t++) { const m = Math.floor(rl() * CN); if (crust[m] === 1 || t > 40) s = m; }
+      const R = (big ? 1100 + rl() * 1500 : 260 + rl() * 420) / ckm, ht = (.9 + rl() * .8) * weak, i0 = ci(s), j0 = cj(s), Rc = Math.ceil(R * 1.8);
+      for (let dj = -Rc; dj <= Rc; dj++) for (let di = -Rc; di <= Rc; di++) { const a = i0 + di, b = j0 + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; up[b * cc + a] += ht * .32 * gauss(Math.hypot(di, dj) / R); }
+      // (the shields: one to three, near the swell's top)
+      for (let v = 0, nv = 1 + Math.floor(rl() * 3); v < nv; v++) {
+        const a0 = i0 + Math.round((rl() - .5) * R), b0 = j0 + Math.round((rl() - .5) * R), r = Math.max(1.2, R * (.09 + rl() * .07)), Rv = Math.ceil(r * 2.4);
+        for (let dj = -Rv; dj <= Rv; dj++) for (let di = -Rv; di <= Rv; di++) { const a = a0 + di, b = b0 + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; up[b * cc + a] += ht * 1.1 * gauss(Math.hypot(di, dj) / r); }
+        if (a0 >= 0 && b0 >= 0 && a0 < cc && b0 < cr) volc.push(b0 * cc + a0);
+      }
+      // (a rift: a long trough out from the swell's top, deepest in its middle)
+      if (weak === 1 && rl() < .75) {
+        const ang = rl() * Math.PI, tx = Math.cos(ang), ty = Math.sin(ang), Lr = R * (1.2 + rl() * .8), w = Math.max(.8, R * .045);
+        for (let s2 = -Lr * .1; s2 <= Lr; s2 += .5) { const cx = i0 + tx * s2, cy = j0 + ty * s2, depth = ht * .7 * Math.sin(Math.PI * Math.max(0, Math.min(1, (s2 + Lr * .1) / (Lr * 1.1)))), W = Math.ceil(w * 2.5);
+          for (let dj = -W; dj <= W; dj++) for (let di = -W; di <= W; di++) { const a = Math.round(cx) + di, b = Math.round(cy) + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const perp = Math.abs((a - cx) * ty - (b - cy) * tx); up[b * cc + a] -= depth * .08 * gauss(perp / w); } }
+      }
+    }
+  }
   // (island arcs and hotspot islands rounded into islands, not blocks; the geologic coasts' volcanoes are cones already,
   // and the smallest would be rounded away)
   if (!o.shores) { const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = crust[n] === 2 ? 1 : 0; boxBlur(F, cc, cr, zs > 1 ? 2 : 1, 2); for (let n = 0; n < CN; n++) if (crust[n] !== 1) crust[n] = F[n] > (zs > 1 ? .38 : .42) ? 2 : 0; }
@@ -277,11 +302,15 @@ function geology(o, U) {
   // stays the default until the user approves it. The land itself is the same either way: the erosion above always runs
   // on the classic rain)
   let C = o.climateModel === "earth" ? climateEarth(E, cols, rows, o, nD, U, air) : climate(E, cols, rows, o, nD, U, air);
+  if (o.locked) lockClimate(C, E, cols, rows, o);
   if (C.mm) C.mm = Float32Array.from(C.rain);
   if (process.env.ATLAS_DUMP && C.mm) require("fs").writeFileSync(process.env.ATLAS_DUMP, JSON.stringify({ cols, rows, la: (o.lat || LAT[o.climate] || LAT.temperate), E: Array.from(E, v => Math.round(v)), mm: Array.from(C.mm, Math.round), sst: Array.from(C.sst, v => Math.round(v * 10) / 10), fog: Array.from(C.fog, v => Math.round(v * 100) / 100) }));
   { const r = []; for (let n = 0; n < N; n++) if (E[n] > 0) r.push(C.rain[n]); r.sort((a, b) => a - b);
     const med = r[Math.floor(r.length / 2)] || 1, want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
     for (let n = 0; n < N; n++) C.rain[n] *= want / med; }
+  // (a world with no liquid to rain, o.dry, from the planet's own physics: its air carries no rain, so no forests and
+  // no lakes, only dry pans in its hollows; the winds still blow)
+  if (o.dry) for (let n = 0; n < N; n++) { C.rain[n] *= .02; if (C.mm) C.mm[n] *= .02; }
 
   /* 7. lakes in the hollows the rivers cannot empty, salt pans where they cannot fill */
   const F = fill(E, cols, rows, U), lakeCells = new Uint8Array(N), playa = [], seen = new Uint8Array(N), I = n => n % cols, J = n => (n / cols) | 0;
@@ -304,7 +333,7 @@ function geology(o, U) {
 
   /* 8. what lives on it: climate classes, biomes and tree cover, from all of the above (world-ecology.js) */
   const want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
-  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog, paint: SK && SK.kind ? SK.kind : null }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC }, U);
+  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog, paint: SK && SK.kind ? SK.kind : null }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC, lockedT: o.locked ? C.temp : null }, U);
 
   /* to the grid the maps are drawn from */
   // (and each height's fraction, kept apart: a shaded relief map needs the land's slopes finer than 255 steps)
@@ -399,6 +428,25 @@ function climate(E, cols, rows, o, nz, U, air) {
   return { temp, rain };
 }
 
+// a tidally locked world (atlas-planet.js: one face always to its star; the approved planets plan, 3 Nov 2026): its
+// warmth from how high its star stands, which is fixed for each place, highest at the point under the star (the map's
+// middle) and nothing on the night side, not from the latitude. Its air carries heat round to the night side, the more
+// the thicker it is (o.locked: 0, none, to 1, day and night alike) [Showman et al. 2013; Wordsworth 2015]; its rain
+// falls from the great cloud deck over the point under the star and hardly at all on the night side, where the water
+// freezes out [Yang, Cowan & Abbot 2013]. (approximation: the shape of a locked climate, not a simulation of it)
+function lockClimate(C, E, cols, rows, o) {
+  const N = cols * rows, [la, lb] = o.lat || LAT[o.climate] || LAT.temperate, lat = j => la + (lb - la) * (j + .5) / rows, k = Math.max(0, Math.min(.95, +o.locked === +o.locked && o.locked !== true ? +o.locked : .3));
+  const span = Math.abs(la - lb) >= 179 ? 2 * Math.PI : (cols / rows) * Math.abs(la - lb) * Math.PI / 180;
+  // (the rain of the climate's latitude belts taken out, each row against its own mean, so only what the land itself
+  // does to the rain is kept, its rain shadows and wet windward slopes; the belts of a turning world are not there)
+  let all = 0; const rm = new Float32Array(rows); for (let j = 0; j < rows; j++) { let s = 0; for (let i = 0; i < cols; i++) s += C.rain[j * cols + i]; rm[j] = Math.max(1e-6, s / cols); all += s; } all /= N;
+  for (let n = 0; n < N; n++) {
+    const i = n % cols, j = (n / cols) | 0, L = lat(j) * Math.PI / 180, lon = ((i + .5) / cols - .5) * span, up = Math.max(0, Math.cos(L) * Math.cos(lon));
+    // (the mean of up^.5 over a whole sphere is a third: the world's mean warmth stays where the climate put it)
+    C.temp[n] = 13 + 78 * (1 - k) * (Math.sqrt(up) - 1 / 3) - Math.max(0, E[n]) * .0065 + (o.tempShift || 0) + (o.warmC || 0);
+    C.rain[n] = all * Math.max(.2, Math.min(3, C.rain[n] / rm[j])) * (.08 + 2.2 * Math.pow(up, 1.5));
+  }
+}
 // the climate as the Earth makes its deserts (the user, 27 Oct 2026: "deserts should appear naturally because of the
 // world's climate and geography"). The winds of each belt cross the sea and the land as before, but now:
 //   - the sea's warmth sets how much water the air takes up (about 7% more for each degree: Clausius–Clapeyron), so
