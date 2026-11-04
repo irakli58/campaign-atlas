@@ -2128,6 +2128,33 @@ button.ho-b:hover { color: var(--ink); }
 /* the world's history (atlas-history.js) */
 .hs-f { gap: 6px; }
 .hs-f .t-in { margin: 0; }
+/* the timeline to scroll (atlas-history.js) */
+.hs-tlw { display: grid; grid-template-columns: auto 1fr; gap: 0; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.hs-tll { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-right: 1px solid var(--rule); background: var(--accent-soft); }
+.hs-tll > div { display: flex; align-items: center; padding: 0 10px; white-space: nowrap; }
+.hs-tlx { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.hs-tl-svg { display: block; }
+.tl-day { stroke: var(--rule); stroke-width: 1; opacity: .55; }
+.tl-lane { stroke: var(--rule); stroke-width: 1; }
+.tl-date { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+.tl-now { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.tl-nowt { font-family: var(--f-mono); font-size: 10px; fill: var(--accent); }
+.tl-sess rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; opacity: .85; }
+.tl-sess text { font-family: var(--f-mono); font-size: 10px; fill: var(--ink); }
+.tl-link { fill: none; stroke: #b0662e; stroke-width: 1.4; opacity: .75; }
+.tl-m { cursor: pointer; }
+.tl-m circle { fill: #6d7f93; stroke: var(--bg); stroke-width: 1.5; }
+.tl-m.pub circle { stroke: var(--ink); }
+.tl-event circle, .tl-news circle { fill: #4f7fb0; }
+.tl-off circle { fill: transparent; stroke: #8a8378; stroke-dasharray: 2 2; }
+.tl-deed circle { fill: #c08a2e; }
+.tl-found circle, .tl-heard circle, .tl-reached circle, .tl-loot circle { fill: #5f9a6b; }
+.tl-conseq circle { fill: #b0662e; }
+.tl-session circle { fill: var(--accent); }
+.tl-coming { cursor: default; } .tl-coming circle { fill: transparent; stroke: #4f7fb0; stroke-dasharray: 2 2; opacity: .8; }
+.tl-m.sel circle { stroke: var(--accent); stroke-width: 3; }
+.tl-m:hover circle, .tl-m:focus circle { stroke: var(--accent); stroke-width: 2.5; outline: none; }
+.hs-tlsel { margin-top: 10px; }
 .hs-l { list-style: none; margin: 0; padding: 0; }
 .hs-e { border-top: 1px solid var(--rule); padding: 7px 0 7px 12px; position: relative; }
 .hs-e:first-child { border-top: 0; }

@@ -21,7 +21,7 @@
   const personName = id => ((A.castData || {})[id] || {}).n || id;
   const facName = id => ((A.factionsData || {})[id] || {}).n || id;
   const pls = () => A.order.filter(id => A.meta[id] && !String(id).startsWith("fly-"));
-  const UI = { f: { kind: "", who: "", place: "", vis: "", q: "" }, write: false, open: 60 };
+  const UI = { f: { kind: "", who: "", place: "", vis: "", q: "" }, write: false, open: 60, tlz: 36, tsel: null, tlAt: null };
   // the kinds of what happens, in the order the filter lists them
   const KIND = {
     event: "In the world", deed: "The party did", conseq: "Because of it", found: "Found", heard: "Heard of", reached: "Reached",
@@ -156,6 +156,58 @@
     }
     return s + "</ol>" + (l.length > UI.open && !pub ? `<button type="button" class="t-mini" data-hs="more">${l.length - UI.open} more</button>` : "");
   }
+  /* ---- the timeline to scroll (the user's approved idea of 3 Nov 2026, the eighth in the workspace's
+     reviews/2026-11-03-ideas.md: "the world's history drawn as a line of days, with sessions, events, deeds and their
+     consequences linked"): a row for each kind of thing (the sessions at the table as bands of the days each covered,
+     what happened in the world, what the party did, found and reached, and what came of their deeds), a line from each
+     deed to its consequences, today marked, and what is coming after it, faint. Click a mark for the whole of it. */
+  const LANES = [["table", "At the table", ["session"]], ["world", "In the world", ["event", "news", "off", "note"]], ["party", "The party", ["deed", "found", "heard", "reached", "loot"]], ["came", "What came of it", ["conseq"]]];
+  const laneOf = k => (LANES.find(L => L[2].includes(k)) || LANES[1])[0];
+  // the story's first moment's place in its day, so days are drawn midnight to midnight
+  const dayOff = () => { const o = at(0), mm = /(\d{1,2}):(\d{2})\s*$/.exec(o.short || ""); return mm ? +mm[1] * 60 + +mm[2] : (o.h || 0) * 60; };
+  // each session's first moment in the world (kept when the session number moves on: see init)
+  function sessionBands() {
+    const st = S(), out = []; if (!st) return out; const log = st.get("log") || {}, starts = [];
+    for (const [id, d] of Object.entries(log)) { const n = /^s(\d+)$/.exec(id); if (n && d && d.m0 != null) starts.push([+n[1], d.m0]); }
+    if (!starts.some(s => s[0] === 1)) starts.push([1, 0]);
+    starts.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    starts.forEach(([n, m], i) => out.push({ n, a: m, b: i + 1 < starts.length ? starts[i + 1][1] : nowM() }));
+    return out.filter(s => s.b > s.a || s.n === +api.session());
+  }
+  function timelineHTML() {
+    const L = all().filter(h => h.m != null), now = nowM(), off = dayOff(), dz = UI.tlz, PAD = 14, LH = 46, TOP = 26;
+    const comingE = W() ? W().coming().slice(0, 12).map(e => ({ e, m: W().whenOf(e.when) })).filter(x => x.m != null && x.m > now) : [];
+    const day = m => (m + off) / 1440, d0 = Math.floor(Math.min(0, ...L.map(h => day(h.m)))), d1 = Math.ceil(Math.max(day(now) + 1, ...comingE.map(x => day(x.m) + 1)));
+    const X = m => PAD + (day(m) - d0) * dz, w = PAD * 2 + (d1 - d0) * dz, H = TOP + LANES.length * LH + 8, Y = k => TOP + LANES.findIndex(l => l[0] === k) * LH + LH / 2;
+    let s = "";
+    // the days: a tick each day where there is room, each week otherwise; a date where it fits
+    const every = dz >= 22 ? 1 : dz >= 6 ? 7 : 30, lab = Math.max(every, Math.ceil(78 / dz / every) * every);
+    for (let d = d0; d <= d1; d++) { if ((d - d0) % every) continue; const x = PAD + (d - d0) * dz; s += `<line class="tl-day" x1="${x}" x2="${x}" y1="${TOP - 4}" y2="${H - 6}"/>`; if (!((d - d0) % lab)) s += `<text class="tl-date" x="${x + 3}" y="${TOP - 10}">${esc(at(d * 1440 - off).short.replace(/,.*$/, ""))}</text>`; }
+    LANES.forEach(([k], i) => { s += `<line class="tl-lane" x1="0" x2="${w}" y1="${TOP + (i + 1) * LH}" y2="${TOP + (i + 1) * LH}"/>`; });
+    // the sessions, as bands of the days they covered
+    for (const b of sessionBands()) { const x0 = X(b.a), x1 = Math.max(x0 + 6, X(b.b)); s += `<g class="tl-sess"><rect x="${x0}" y="${Y("table") - 11}" width="${x1 - x0}" height="22" rx="4"/><text x="${x0 + 5}" y="${Y("table") + 4}">Session ${b.n}</text></g>`; }
+    // each mark, stacked where a day holds more than one in its row
+    const pos = {}, used = {};
+    for (const h of L.slice().sort((a, b) => a.m - b.m)) {
+      const k = laneOf(h.kind), key = k + "|" + Math.floor(day(h.m)), n = used[key] = (used[key] || 0) + 1; if (n > 4) continue;
+      const x = X(h.m), y = Y(k) + [0, -10, 10, -20, 20][n - 1] * (k === "table" ? .6 : 1); pos[h.id] = [x, y];
+    }
+    // the lines from a deed to what came of it
+    const deedOf = h => { if (h.kind !== "conseq") return null; const m1 = /^c_(.+)_[^_]+$/.exec(h.id || ""); if (m1) return "d_" + m1[1]; const e = h.ev && W() ? W().events().find(x => x.id === h.ev) : null; return e && e.deed ? "d_" + e.deed : null; };
+    for (const h of L) { const d = deedOf(h); if (d && pos[d] && pos[h.id]) { const [ax, ay] = pos[d], [bx, by] = pos[h.id], mx = (ax + bx) / 2; s += `<path class="tl-link" d="M${ax} ${ay}C${mx} ${ay} ${mx} ${by} ${bx} ${by}"/>`; } }
+    for (const h of L) { const p = pos[h.id]; if (!p) continue; s += `<g class="tl-m tl-${esc(h.kind)}${UI.tsel === h.id ? " sel" : ""}${h.vis === "players" ? " pub" : ""}" data-hs="tlsel" data-id="${esc(h.id)}" tabindex="0" role="button" aria-label="${esc(at(h.m).short + ": " + h.title)}"><circle cx="${p[0]}" cy="${p[1]}" r="${h.kind === "session" ? 3.5 : 5.5}"/><title>${esc(at(h.m).short + ": " + h.title)}</title></g>`; }
+    // what is coming, faint, after today
+    for (const x of comingE) s += `<g class="tl-m tl-coming"><circle cx="${X(x.m)}" cy="${Y("world")}" r="5"/><title>${esc(at(x.m).short + ": " + x.e.title + " (coming)")}</title></g>`;
+    s += `<line class="tl-now" x1="${X(now)}" x2="${X(now)}" y1="${TOP - 6}" y2="${H - 4}"/><text class="tl-nowt" x="${X(now) + 4}" y="${H - 6}">now</text>`;
+    const sel = UI.tsel ? L.find(h => h.id === UI.tsel) : null;
+    setTimeout(keepScroll, 0);
+    return `<section class="t-card hs-tlc"><div class="tw-hh"><h3>The timeline</h3><span class="t-row"><button type="button" class="t-mini" data-hs="tlz" data-z="out" aria-label="Show more days">−</button><button type="button" class="t-mini" data-hs="tlz" data-z="in" aria-label="Show fewer days, larger">+</button></span></div>
+      <div class="hs-tlw"><div class="hs-tll" style="padding-top:${TOP}px">${LANES.map(([, n]) => `<div style="height:${LH}px">${esc(n)}</div>`).join("")}</div>
+      <div class="hs-tlx"><svg class="hs-tl-svg" width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" role="img" aria-label="The world's history as a line of days">${s}</svg></div></div>
+      ${sel ? `<ol class="hs-l hs-tlsel">${entryHTML(sel)}</ol>` : `<p class="t-small kn">Click a mark for the whole of it. A line joins a deed to what came of it; faint marks after today are what is coming.</p>`}</section>`;
+  }
+  // after drawing: the timeline scrolled to today the first time, else kept where it was
+  function keepScroll() { const x = document.querySelector(".hs-tlx"); if (!x) return; if (UI.tlAt == null) { const n = x.querySelector(".tl-now"); x.scrollLeft = n ? Math.max(0, +n.getAttribute("x1") - x.clientWidth * .7) : x.scrollWidth; } else x.scrollLeft = UI.tlAt; x.onscroll = () => { UI.tlAt = x.scrollLeft; }; }
   const sel = (name, opts, v, lbl) => `<select class="t-in tw-sel" data-hs="${name}" aria-label="${lbl}">${opts.map(([k, l]) => `<option value="${esc(k)}"${k === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
   const field = (lbl, inner) => `<label class="tw-l"><span>${lbl}</span>${inner}</label>`;
   function writeHTML() {
@@ -177,6 +229,7 @@
         <p class="t-small">Everything that has happened, newest first: what happened in the world, what the party did and what came of it, what they found and where they went, the news. Each says when, why, who and what it changed, and whether the players know.</p>
         <div class="t-row hs-f">${sel("kind", [["", "Everything"]].concat(Object.entries(KIND)), f.kind, "What kind")}${sel("who", who, f.who, "Who")}${sel("place", [["", "Anywhere"]].concat(pls().map(p => [p, placeName(p)])), f.place, "Where")}${sel("vis", [["", "Known or not"], ["players", "The players know"], ["gm", "Only you know"]], f.vis, "Who knows")}<input class="t-in tw-sel" data-hs="q" value="${esc(f.q)}" placeholder="Words in it" aria-label="Words in it">${Object.values(f).some(Boolean) ? `<button type="button" class="t-mini" data-hs="clear">Show all</button>` : ""}</div></section>
       ${UI.write ? writeHTML() : ""}
+      ${timelineHTML()}
       <section class="t-card hs-tl">${timeline(l)}</section></div>
       <div><section class="t-card hs-pub"><h3>As the players know it</h3><p class="t-small">What the party has seen, found and been told, in the words they heard it.</p>${P.length ? timeline(P.slice(0, 14), true) : `<p class="kn">Nothing yet.</p>`}</section>
       <section class="t-card"><h3>Saved moments</h3><p class="t-small">Save the world as it is now: the date, the events, the news, the factions, where everyone is${COLLS.length > 8 ? ", the consequences and the money" : ""}. Going back puts all of it back as it was, after saving it as it is first, so going back can be undone. What the party has found stays as it is.</p>
@@ -194,6 +247,8 @@
     else if (k === "cancel") { UI.write = false; document.activeElement && document.activeElement.blur(); paint(); }
     else if (k === "clear") { UI.f = { kind: "", who: "", place: "", vis: "", q: "" }; paint(); }
     else if (k === "more") { UI.open += 60; paint(); }
+    else if (k === "tlsel") { UI.tsel = UI.tsel === id ? null : id; paint(); }
+    else if (k === "tlz") { const x = document.querySelector(".hs-tlx"), f = b.dataset.z === "in" ? 1.6 : 1 / 1.6, z = Math.max(3, Math.min(160, UI.tlz * f)); if (x) UI.tlAt = (x.scrollLeft + x.clientWidth / 2) * (z / UI.tlz) - x.clientWidth / 2; UI.tlz = z; paint(); }
     else if (k === "time" || k === "deeds") api.open(k);
     // (remembered at the table: its recording, at the moment it was said: atlas-sessions.js)
     else if (k === "rec" && A.memory) A.memory.show(id);
@@ -215,13 +270,15 @@
       UI.write = false; document.activeElement && document.activeElement.blur(); api.note("Written into the world's history.");
     }
   });
-  function paint() { if (api.tab() === "history") api.render(); }
+  function paint() { if (api.tab() === "history") { api.render(); keepScroll(); } }
 
   const loaded = new Set();
   TU.addTab({ key: "history", label: "The world's history", icon: "history", group: "play", after: "factions", desc: "Everything that has happened, who knows of it; the world saved and gone back to",
     html, status: () => { const n = all().length; return n ? `${n} thing${n > 1 ? "s" : ""} so far` : "Nothing yet"; },
     init(store) {
       for (const c of ["history", "events", "news", "snaps", "clues", "status", "clock", "eventdefs"]) store.watch(c, () => { loaded.add(c); if (["clues", "status", "history"].includes(c)) discoveries(); if (!UI.write) paint(); });
+      // (the session moved on at the table: the world's time it began at, for the timeline's bands)
+      store.watch("log", L => { const n = +((L.now || {}).n); if (n && !(L["s" + n] || {}).m0 && loaded.has("clock")) store.set("log", "s" + n, Object.assign({}, L["s" + n] || {}, { m0: nowM() })); });
     } });
 
   A.history = { add, remove, all, list, recent, snapshot, restore, snaps, KIND, keep: c => { if (!COLLS.includes(c)) COLLS.push(c); } };

@@ -110,7 +110,9 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
         atlas-table.js, drawn as the town crier's sheet, a broadsheet, a daily or a newsfeed by age; printed by itself
         each week from the news, with the weather ahead; shown to the players to keep. The workspace's dev/paper-test.js
         "all well");
-     5. a timeline to scroll (8);
+     5. a timeline to scroll (8) (**built 4 Nov**: in atlas-history.js, above the list in The world's history: rows for
+        the sessions (bands, from `log` `s<n>.m0`), the world, the party and what came of it; deed-to-consequence lines;
+        today and what is coming; + and −. The workspace's dev/timeline-test.js "all well");
      6. the players' chronicle, with their own written intentions (5);
      7. people living their days in the 3D city (6);
      8. the relationship web (11);

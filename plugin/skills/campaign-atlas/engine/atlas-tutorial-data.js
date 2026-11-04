@@ -243,8 +243,9 @@
         { say: "Whatever you choose, the safeguards hold: a death, a war or a place lost always waits for you, nothing reaches the players unless you tell them, and the world is saved before time moves on a day.", sel: "#tvBody .db-safe", act: "look" },
         { say: "Move time on from here, and answer what waits for you without leaving the page.", sel: "#tvBody .db-now .tw-adv", act: "look" }
       ] },
-      { id: "history", module: ["living"], title: "The world's history", summary: "Everything that has happened, who knows of it; the world saved and gone back to.", features: ["history"], needs: has("[data-t='tab'][data-tab='history']"), steps: [
+      { id: "history", module: ["living"], title: "The world's history", summary: "Everything that has happened, who knows of it; the world saved and gone back to.", features: ["history", "timeline"], needs: has("[data-t='tab'][data-tab='history']"), steps: [
         { say: "The world's history: everything that has happened, newest first, with when, why, who, what came of it, and whether the players know.", sel: "[data-t='tab'][data-tab='history']", act: "click", try: "Click The world's history.", wait: 600 },
+        { say: "The timeline: the same history as a line of days to scroll along. A row for the sessions at the table, each a band of the days it covered; one for what happened in the world; one for what the party did, found and reached; one for what came of it, with a line from each deed to its consequences. Today is marked, and what is coming lies faint after it. Click a mark for the whole of it; + and − show fewer days or more.", sel: "#tvBody .hs-tlc", act: "look" },
         { say: "Narrow it to one kind, one person or faction, one place, or what the players know.", sel: "#tvBody .hs-f", act: "look" },
         { say: "As the players know it: what they have seen, found and been told, in the words they heard it.", sel: "#tvBody .hs-pub", act: "look" },
         { say: "Save the world as it is before a big moment, and go back to it if the night goes wrong. Going back can be undone too, and what the party has found stays as it is.", sel: "#tvBody form[data-hs='snap']", act: "look" }
@@ -289,6 +290,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    timeline: ["The timeline", "timeline line of days scroll sessions events deeds consequences linked today coming zoom history"],
     paper: ["The week's paper", "newspaper paper gazette broadsheet crier town crier sheet daily newsfeed bulletin week printed handout news players keep"],
     rumours: ["The rumour mill", "rumour rumor gossip spread travel roads version truth told changed exaggerated blamed inn town players hear news false lead"],
     journeys: ["Journeys", "journey travel road day by day route trip encounter meet sight found rumour inn town food supplies rations buy rest arrive road so far party flag words"],
