@@ -116,7 +116,8 @@
   const askNow = () => opts().ask || A.config.approve || "major";
   // (what cannot be put right again by itself, a death or a war, waits for the game master however the line is set:
   // the dashboard's safeguards, atlas-dashboard.js)
-  const needs = e => rank(e) >= ((ASK.find(a => a[0] === askNow()) || ASK[2])[2]) || !!(A.worldGuard && A.worldGuard(e));
+  // (while the world is run forward to see what would happen, nothing waits for the game master: whatIf below)
+  const needs = e => !SIM && (rank(e) >= ((ASK.find(a => a[0] === askNow()) || ASK[2])[2]) || !!(A.worldGuard && A.worldGuard(e)));
   const tellable = e => !!(e.players || e.news);
 
   // it happens: recorded, the clock it moves moved, and the players told if the game master said so
@@ -179,7 +180,7 @@
     if (opts().paused) return;
     const st = S(), to = Math.max(0, now() + mins), o = opts();
     // (a day or more at once: the world is saved as it was first, to go back to: atlas-history.js)
-    if (mins >= 1440 && A.history) A.history.snapshot(`Before moving on to ${at(to).short}`, true);
+    if (mins >= 1440 && A.history && !SIM) A.history.snapshot(`Before moving on to ${at(to).short}`, true);
     setNow(to);
     if (o.random && mins >= 720) {
       const tables = Object.entries(A.tablesData || {}), pick = tables.find(([k]) => k === o.table) || tables.find(([k]) => /event|rumou?r|street|encounter|weather|news/i.test(k)) || tables[0], p = (FREQ.find(f => f[0] === o.freq) || FREQ[1])[2];
@@ -191,6 +192,34 @@
       }
     }
     setTimeout(evaluate, 50);
+  }
+  /* ---- "What if they wait?" (the user's approved idea of 3 Nov 2026, the ninth in reviews/2026-11-03-ideas.md: "run the
+     world forward in a copy (events, factions, consequences) to see what happens if the party does nothing; keep it or
+     throw it away"): the world saved as it is now (a saved moment, atlas-history.js), then moved on day by day with
+     everything happening as planned and nothing waiting for the game master (the events, what comes of the party's
+     deeds, the factions' plans and people moved by them, rumours, the week's paper), and what happened listed. Keep it,
+     and the world stays moved on, the moment before saved; throw it away, and the world is put back as it was. */
+  let SIM = false;
+  async function whatIf(days) {
+    if (!A.history || SIM || opts().paused) return false; days = Math.max(1, Math.min(365, Math.round(+days) || 30));
+    const snap = A.history.snapshot(`Before waiting ${days} day${days > 1 ? "s" : ""} (${at(now()).short})`); if (!snap) return false;
+    const m0 = now(); UI.wif = { snap, m0, days, busy: true }; paint();
+    SIM = true;
+    try {
+      for (let d = 0; d < days; d++) { for (const x of pending()) decide(x.id, "done", { tell: false }); advance(1440); await new Promise(r => setTimeout(r, 90)); }
+      for (let k = 0; k < 3; k++) { for (const x of pending()) decide(x.id, "done", { tell: false }); await new Promise(r => setTimeout(r, 120)); }
+    } finally { SIM = false; }
+    UI.wif = Object.assign({}, UI.wif, { busy: false, m1: now(), list: A.history.all().filter(h => h.m != null && h.m > m0 && h.m <= now() + 1) });
+    paint(); return true;
+  }
+  function wifHTML() {
+    const w = UI.wif; if (!w) return "";
+    if (w.busy) return `<section class="t-card tw-wif"><h3>If they wait ${w.days} day${w.days > 1 ? "s" : ""}…</h3><p class="t-small">The world is moving on, day by day.</p></section>`;
+    const L = w.list || [];
+    return `<section class="t-card tw-wif"><h3>If they wait ${w.days} day${w.days > 1 ? "s" : ""}: to ${esc(at(w.m1).long)}</h3>
+      ${L.length ? `<ol class="tw-hist">${L.slice().reverse().map(h => `<li><span class="kn">${esc(at(h.m).short)}</span> ${esc(h.title)}${h.what ? ` <span class="t-small">${esc(String(h.what).slice(0, 160))}</span>` : ""}</li>`).join("")}</ol>` : `<p class="kn">Nothing happens: the world is quiet that long.</p>`}
+      <p class="t-small">Everything happened as planned, with nothing waiting for you. Keep it and the world stays here (the moment before is kept under The world's history, Saved moments); throw it away and the world goes back to ${esc(at(w.m0).short)}, as if they had not waited.</p>
+      <div class="t-row"><button type="button" class="t-btn prim" data-tw="wifkeep">Keep it</button><button type="button" class="t-btn" data-tw="wifdrop">Throw it away</button></div></section>`;
   }
   // the game master's answer to an event: it happens (the players told or not), later, or not at all; or taken back
   function decide(id, how, o) {
@@ -256,7 +285,8 @@
     const d = at(now()), o = opts();
     return `<div class="tw-now"><div class="tw-date">${esc(d.long)}</div><div class="tw-time">${esc(d.time)} · day ${d.day}</div></div>${o.paused ? `<p class="tw-paused">The world is paused: time stands still and nothing comes due. <button type="button" class="t-link" data-tw="pause">Start it again</button></p>` : ""}
       <div class="t-row tw-adv">${STEPS.map(([m, l]) => `<button type="button" class="t-mini" data-tw="adv" data-m="${m}"${o.paused ? " disabled" : ""}>${l}</button>`).join("")}${compact ? "" : `<button type="button" class="t-mini" data-tw="back" title="Take back the last step of time (what happened stays: undo it below)"${backStack.length ? "" : " disabled"}>Undo</button>`}</div>
-      ${compact ? "" : `<form class="t-row tw-custom" data-tw="custom"><label class="kn">Move on <input class="t-in t-n" type="number" name="n" min="1" max="999" value="3"></label><select class="t-in tw-sel" name="u"><option value="1">minutes</option><option value="60" selected>hours</option><option value="1440">days</option><option value="10080">weeks</option></select><button class="t-mini"${o.paused ? " disabled" : ""}>Go</button><span class="t-sp"></span><button type="button" class="t-mini" data-tw="pause">${o.paused ? "Start the world" : "Pause the world"}</button></form>`}`;
+      ${compact ? "" : `<form class="t-row tw-custom" data-tw="custom"><label class="kn">Move on <input class="t-in t-n" type="number" name="n" min="1" max="999" value="3"></label><select class="t-in tw-sel" name="u"><option value="1">minutes</option><option value="60" selected>hours</option><option value="1440">days</option><option value="10080">weeks</option></select><button class="t-mini"${o.paused ? " disabled" : ""}>Go</button><span class="t-sp"></span><button type="button" class="t-mini" data-tw="pause">${o.paused ? "Start the world" : "Pause the world"}</button></form>
+      ${A.history ? `<form class="t-row tw-wifform" data-tw="wif"><label class="kn">What if they wait <input class="t-in t-n" type="number" name="d" min="1" max="365" value="30"> days?</label><button class="t-mini"${o.paused || (UI.wif && UI.wif.busy) ? " disabled" : ""}>See what happens</button></form>` : ""}`}`;
   }
   const field = (lbl, inner, hint) => `<label class="tw-l"><span>${lbl}</span>${inner}${hint ? `<small class="kn">${hint}</small>` : ""}</label>`;
   function editHTML() {
@@ -295,6 +325,7 @@
     return `<div class="t-grid t-g2w"><div>
       <section class="t-card"><h3>${T.icon("time")} The world's time</h3>${nowHTML()}<p class="t-small">Move time on as the story does: a conversation, a night's rest, a journey. What comes due happens by itself if it is background or notable, and waits for you if it matters more; anything whose reason is gone is called off.</p>
         <label class="t-small tw-ask">Wait for me before <select class="t-in tw-sel" data-tw="ask">${ASK.map(([k, l]) => `<option value="${k}"${askNow() === k ? " selected" : ""}>${l}</option>`).join("")}</select></label></section>
+      ${wifHTML()}
       ${A.weather ? A.weather.cardHTML(!o.wxHide) : ""}
       ${P.length ? `<section class="t-card"><h3>Waiting for you <span class="kn">${P.length}</span></h3>${P.map(x => pendingCard(x)).join("")}</section>` : ""}
       ${UI.edit ? editHTML() : ""}
@@ -445,6 +476,8 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
       case "sgedit": { const x = (UI.sugg || [])[+b.dataset.i]; if (x) { UI.edit = { id: null, d: draftOf(x) }; UI.sugg.splice(+b.dataset.i, 1); } break; }
       case "sgno": (UI.sugg || []).splice(+b.dataset.i, 1); break;
       case "calreset": S().set("clock", "cal", null); setTimeout(() => setNow(now()), 60); break;
+      case "wifkeep": if (UI.wif) { api.note(`Kept: it is now ${at(now()).short}. The moment before is under The world's history, Saved moments.`); UI.wif = null; } break;
+      case "wifdrop": if (UI.wif && A.history) { const sid = UI.wif.snap, back = at(UI.wif.m0).short; UI.wif = null; Promise.resolve(A.history.restore(sid)).then(() => { S().set("snaps", sid, null); api.note(`Thrown away: the world is back at ${back}.`); setTimeout(paint, 120); }); } break;
       default: return;
     }
     setTimeout(() => { paint(); if (k === "new" || k === "edit" || k === "sgedit") { const el = document.getElementById("twEdit"); if (el) { el.scrollIntoView({ block: "start" }); const t = el.querySelector("input[name='title']"); if (t) t.focus({ preventScroll: true }); } } }, 80);
@@ -464,6 +497,7 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
     switch (f.dataset.tw) {
       case "own": { const h = g("h"); if (!h) return; S().set("news", "n" + Date.now().toString(36), { m: now(), when: at(now()).short, headline: h, text: g("x"), paper: g("p"), t: Date.now() }); api.note("Told to the players."); break; }
       case "custom": { const m = Math.round((+g("n") || 0) * (+g("u") || 60)); if (m > 0) { backStack.push(now()); advance(m); } break; }
+      case "wif": whatIf(+g("d") || 30); return;
       case "save": readForm(f); if (!saveForm()) { paint(); return; } break;
       case "ask": askCouncil(g("q")); return;
       case "cal": {
@@ -497,7 +531,7 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
   if (TU.addDock) TU.addDock("time", "Time", "time", head => head("time", "The world's time", "time", "Everything") + nowHTML(true) + (A.weather && A.weather.today() ? `<p class="t-small wx-dock"><b>Weather:</b> ${esc(A.weather.short(A.weather.today()))}</p>` : "") + (pending().length ? pending().map(x => pendingCard(x, true)).join("") : `<p class="t-small">Nothing waits for you. ${coming()[0] ? `Next: ${esc(coming()[0].title)}, ${esc(at(dueAt(coming()[0])).short)}.` : ""}</p>`));
 
   // the copilot and the consistency check are told of the world's time and what has happened in it
-  A.worldTime = { now, at, yearOf, whenOf, pending, coming, evaluate, advance, decide, hold, events: evDefs, councilPrompt, cleanSugg,
+  A.worldTime = { now, at, yearOf, whenOf, whatIf, pending, coming, evaluate, advance, decide, hold, events: evDefs, councilPrompt, cleanSugg,
     recent: () => allDone().filter(([, s]) => s.state === "done").sort((a, b) => b[1].at - a[1].at).slice(0, 6).map(([e, s]) => `${at(s.at).short}: ${e.title}${e.what ? " (" + e.what + ")" : ""}`) };
   if (A.consistency) A.consistency.add("time-events", () => {
     const out = [], ids = new Set(evDefs().map(e => e.id));

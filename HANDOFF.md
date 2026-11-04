@@ -124,7 +124,9 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
      8. the relationship web (11) (**built 4 Nov**: atlas-factions.js webModel/webLayout/web, The web above the factions'
         cards: factions, party, people, ties, Talk's opinions, remembered bonds/promises/threats; Find them on the board.
         The workspace's dev/web-test.js "all well");
-     9. "What if we wait a month?" (9);
+     9. "What if we wait a month?" (9) (**built 4 Nov**: atlas-worldtime.js whatIf: a named saved moment, then day by day
+        with SIM set (nothing waits, pending decided, no daily auto-saves), the list from the history; Keep it / Throw it
+        away (restore, and the named moment removed). The workspace's dev/whatif-test.js "all well");
      10. pacing from the words (15);
      11. the table, projected (13);
      12. one world, many campaigns (14).

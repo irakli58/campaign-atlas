@@ -204,10 +204,11 @@
         { say: "Clocks: what each villain is doing while the party investigates. Tick them as the world moves.", sel: "[data-t='tab'][data-tab='clocks']", act: "click", try: "Click Clocks and stuck.", wait: 500 },
         { say: "Handouts, drawn as the letters and newspapers they are, go to the players' screen with one click.", sel: "[data-t='tab'][data-tab='screen']", act: "click", auto: true }
       ] },
-      { id: "time", module: ["living"], title: "The world's time", summary: "The date in the story, its weather, events that wait for your yes, and news for the players.", features: ["worldtime", "events", "news", "weather", "paper"], needs: has("[data-t='tab'][data-tab='time']"), steps: [
+      { id: "time", module: ["living"], title: "The world's time", summary: "The date in the story, its weather, events that wait for your yes, and news for the players.", features: ["worldtime", "events", "news", "weather", "paper", "whatif"], needs: has("[data-t='tab'][data-tab='time']"), steps: [
         { say: "The world moves while the party investigates.", sel: "#v-table", act: "click", auto: true, wait: 400 },
         { say: "The world's time: the date in the story, what is coming, and what waits for you.", sel: "[data-t='tab'][data-tab='time']", act: "click", try: "Click The world's time.", wait: 500 },
         { say: "Move time on as the story does: a conversation, a night's rest, a day's journey.", sel: "#tvBody .tw-adv", act: "look" },
+        { say: "What if they wait? Say how many days, and the world runs on without them, everything happening as planned and nothing waiting for you: the events, what comes of their deeds, the factions' plans, the rumours. You see what happened; keep it, or throw it away and the world goes back as it was.", sel: "#tvBody .tw-wifform", act: "look", optional: true },
         { say: "The weather where the party is, from the world's own climate: the warmth and rain of that place in that season, as the world map was made, not a roll on a table. Today's, the days ahead, what it does to a journey, and why. A wet spell lasts some days and the next town shares it; move time on and it changes. The players see it under the date, the music outdoors takes its rain and wind, and the copilot describes it.", sel: "#tvBody .wx-card", act: "look", optional: true },
         { say: "Set where the party is on the world map: a place, then The party is here. When they move, the weather is theirs there.", sel: "#tvBody .wx-card", act: "look", optional: true },
         { say: "Events come due at their hour, or when what they wait on happens: a clue found, a place reached, a clock filled. Small ones happen by themselves; anything that could change the campaign waits for you. An event whose reason is gone is called off.", sel: "#tvBody .tw-due, #tvBody .tw-ev", act: "look" },
@@ -294,6 +295,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    whatif: ["What if they wait?", "what if wait month days run forward simulate world keep throw away go back events factions consequences"],
     web: ["The relationship web", "web relationships who stands with whom diagram factions allies enemies people ties bonds rivalries grudges promises threats party opinion board"],
     citylife: ["People living their days in the city", "people walk day schedule hour city 3d live where now doing talk to them cast move time"],
     chronicle: ["The players' chronicle", "chronicle intentions intent what we mean to do written players phones read purse carry possessions remember memories journal"],
