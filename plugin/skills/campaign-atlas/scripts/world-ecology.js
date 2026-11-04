@@ -29,6 +29,9 @@ const MEDIAN_MM = { temperate: 760, varied: 620, cold: 460, polar: 260, warm: 56
 function ecology(L, o, U) {
   const earth = o.model === "earth", { cols, rows } = o, N = cols * rows, cellKm = (o.km || 3200) / cols, B = BIO.CODE, E = L.E;
   const [la, lb] = o.lat || LAT[o.climate] || LAT.temperate, lat = j => la + (lb - la) * (j + .5) / rows;
+  // (a planet's environment: thick air evens its warmth between equator and pole (o.even, 0 to 1, as Venus's is almost the
+  // same everywhere); its wind belts sit by its own cells (o.cells; Earth's three put them where they are)
+  const EVK = o.even ? Math.sqrt(Math.max(0, 1 - o.even)) : 1, BKe = o.cells ? o.cells / 3 : 1;
   const I = n => n % cols, J = n => (n / cols) | 0, land = n => E[n] > 0 && !L.lake[n];
   const ocean = new Uint8Array(N), st = [];
   for (let n = 0; n < N; n++) { const i = I(n), j = J(n); if (E[n] <= 0 && !L.lake[n] && (!i || !j || i === cols - 1 || j === rows - 1)) { ocean[n] = 1; st.push(n); } }
@@ -45,7 +48,7 @@ function ecology(L, o, U) {
     for (let s = 0; s < cols; s++) { const i = cols - 1 - s, n = j * cols + i; if (ocean[n]) le = s; upE[n] = (s - le) * cellKm; }
   }
   const westShare = a => smooth(26, 34, a) * (1 - smooth(56, 64, a));
-  for (let n = 0; n < N; n++) { const w = westShare(Math.abs(lat(J(n)))); upwind[n] = Math.min(4000, upW[n]) * w + Math.min(4000, upE[n]) * (1 - w); }
+  for (let n = 0; n < N; n++) { const w = westShare(Math.abs(lat(J(n))) * BKe); upwind[n] = Math.min(4000, upW[n]) * w + Math.min(4000, upE[n]) * (1 - w); }
   // the rivers: water gathered down the land (to know which ground is waterlogged, and where rivers cross dry land)
   const acc = flow(E, cols, rows, U);
   const T = new Float32Array(N), Tw = new Float32Array(N), Tc = new Float32Array(N), P = new Float32Array(N), sf = new Float32Array(N), AI = new Float32Array(N);
@@ -57,7 +60,7 @@ function ecology(L, o, U) {
   // and a swamp much, snow the cold; the ecology then works out the rest)
   const PT = L.paint ? [1, 2, 3, 4].map(k => { const F = new Float32Array(N); for (let n = 0; n < N; n++) F[n] = L.paint[n] === k ? 1 : 0; blur(F, cols, rows, 3, 2); return F; }) : null;
   for (let n = 0; n < N; n++) {
-    const j = J(n), a = Math.abs(lat(j)), e = Math.max(0, E[n]);
+    const j = J(n), a0 = Math.abs(lat(j)), a = a0 * EVK, aB = a0 * BKe, e = Math.max(0, E[n]);
     // warmth: the latitude's, less with height; the seasons swing more toward the poles and far from the sea
     // the warmest and the coldest month, each from the Earth's own averages by latitude (July about 21 °C at 45°, 14 °C
     // at 60°, 8 °C at 70°); winters far colder inland than on the coast, where the sea keeps them mild, summers a little
@@ -74,8 +77,8 @@ function ecology(L, o, U) {
     // (each belt's season blended smoothly into the next: the even rain of the equator, the summer rain of the monsoon
     // and savanna belt, the dry summers of the subtropical west coasts (the Mediterranean, California, central Chile),
     // the even rain of maritime coasts, the summer rain of continental interiors)
-    const mon = smooth(6, 12, a) * (1 - smooth(22, 28, a)), medS = smooth(29, 33, a) * (1 - smooth(39, 43, a)) * (1 - smooth(250, 500, upwind[n])), mar = smooth(38, 46, a) * (1 - smooth(300, 700, upwind[n]));
-    let s = .52 + mon * (.26 + .1 * cont) + (1 - mon) * smooth(26, 40, a) * .1 * cont + (a > 28 ? .08 * cont : 0) - medS * .34 - mar * .1;
+    const mon = smooth(6, 12, aB) * (1 - smooth(22, 28, aB)), medS = smooth(29, 33, aB) * (1 - smooth(39, 43, aB)) * (1 - smooth(250, 500, upwind[n])), mar = smooth(38, 46, aB) * (1 - smooth(300, 700, upwind[n]));
+    let s = .52 + mon * (.26 + .1 * cont) + (1 - mon) * smooth(26, 40, aB) * .1 * cont + (aB > 28 ? .08 * cont : 0) - medS * .34 - mar * .1;
     sf[n] = Math.max(.15, Math.min(.92, s));
     // what the air could take (a simple Thornthwaite-like demand), and so how dry the land is
     // (with the Earth model, Hargreaves' demand: the sun's strength at the latitude, the warmth, and the day's swing of
@@ -149,6 +152,19 @@ function ecology(L, o, U) {
   }
   function detailF(n, b) { if (biome[n] === B.gallery || BIO.LIST[biome[n]] && BIO.LIST[biome[n]][0] === BIO.LIST[b][0]) return; if (b === B.temperate && [B.boreal, B.rainforest, B.mixed, B.subtropical, B.monsoon, B.temperate, B.cloud].includes(biome[n])) return; biome[n] = b; }
   const ground = earth ? groundEarth() : groundClassic();
+  // (a planet's environment, the user's plan of 4 Nov 2026: with no life, o.life "none", there are no forests, grassland or
+  // marsh: its land is bare ground, by how high and cold it is; with only microbial mats, no trees; and without wind
+  // enough to move sand, o.aeolian, no sand seas, only the loose grit of its surface. Without an environment, as before)
+  // (high: its highest seventh, by its own heights: a world without a sea level has no 1800 m of its own)
+  const hiE = o.life === "none" ? (() => { const v = []; for (let n = 0; n < N; n += 3) if (land(n)) v.push(E[n]); v.sort((a, b) => a - b); return v[Math.floor(v.length * .86)] || 1800; })() : 0;
+  if (o.life === "none" || o.life === "microbial") for (let n = 0; n < N; n++) {
+    if (!land(n)) continue; canopy[n] = 0; if (o.life === "microbial") continue;
+    const b = biome[n], cold = T[n] < -10, high = E[n] > hiE;
+    simple[n] = high ? B.mountains : o.icy && cold && (b === B.icesheet || simple[n] === B.snow) ? B.snow : B.desert;
+    biome[n] = simple[n] === B.mountains ? B.rock : simple[n] === B.snow ? B.icesheet : cold ? B.colddesert : B.rockdesert;
+    if (!ground[n]) ground[n] = high ? 3 : 2;
+  }
+  if (o.aeolian != null && o.aeolian < .15) for (let n = 0; n < N; n++) if (ground[n] === 1) ground[n] = 2;
   function groundClassic() {
   // the bare ground of dry land, where little grows over it (the user, 27 Oct 2026: the desert "looks kinda
   // unnatural"): a desert is not one sand but a mosaic, each by its place in the land: bare rock on the uplands and

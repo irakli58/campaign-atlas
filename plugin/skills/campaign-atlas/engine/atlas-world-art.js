@@ -478,10 +478,10 @@
     // (a world with no water has no snow: its cold heights are bare rock; with no liquid its low basins are dark ground)
     const sea = P.sea ? hex(P.sea) : dk(g, .45), ice = P.ice ? hex(P.ice) : lt(g, .3), plant = P.plant ? hex(P.plant) : null;
     // (no liquid: its low ground is dry basins of its own rock, no beaches)
-    const dryW = !P.sea;
+    const dryW = !P.sea, still = !!(P.liquid && P.liquid !== "water");   // (still: a methane or lava sea, no pale shallows by its shore)
     return { dry: lt(g, .12), dryCool: lt(g, .05), grass: plant ? mix(g, plant, .55) : lt(g, .02), wood: plant ? mix(g, plant, .75) : g, forest: plant || dk(g, .08), dense: plant ? dk(plant, .15) : dk(g, .12), jungle: plant ? dk(plant, .2) : dk(g, .14),
       tundra: mix(g, ice, .45), rock: dk(g, .05), rockHi: lt(g, .3), snow: ice, marsh: plant ? mix(plant, sea, .4) : mix(g, sea, .3), beach: dryW ? dk(g, .06) : lt(g, .25),
-      shelf: dryW ? dk(g, .1) : lt(sea, .35), mid: dryW ? dk(g, .22) : sea, deep: dryW ? dk(g, .36) : dk(sea, .3), lake: dryW ? dk(g, .18) : lt(sea, .2), nosea: dryW };
+      shelf: dryW ? dk(g, .1) : still ? lt(sea, .06) : lt(sea, .35), mid: dryW ? dk(g, .22) : sea, deep: dryW ? dk(g, .36) : dk(sea, .3), lake: dryW ? dk(g, .18) : still ? sea : lt(sea, .2), nosea: dryW };
   }
   function planet(WD, uid, o) { return relief(WD, uid, Object.assign({}, o, { colours: planetColours(WD.T && WD.T.planetPalette) })); }
   const RPREP = new WeakMap();
@@ -567,15 +567,18 @@
         let g = smooth(.12, .6, ai) * (1 - smooth(.5, .8, t));
         g = clamp(g + (pn - .5) * 1.6 * g * (1 - g), 0, 1);
         // (between the grass and the bare ground, the dry shrubland: grey-green bushes scattered thin over it)
-        c = mix(bare(x, y), [156, 154, 116], smooth(.03, .22, ai) * .45 * (1 - g));
-        c = mix(c, [150, 175, 108], g);
+        // (a planet in its own colours: its bare ground its own rock, sand and grit, as bright or dark as Earth's would be
+        // there, and what grows there its own plants' colour)
+        const b0 = bare(x, y), bc = o && o.colours ? (k => C.dry.map(v => Math.min(255, v * k)))((b0[0] * .3 + b0[1] * .55 + b0[2] * .15) / 190) : b0;
+        c = mix(bc, o && o.colours ? C.dryCool : [156, 154, 116], smooth(.03, .22, ai) * .45 * (1 - g));
+        c = mix(c, o && o.colours ? C.grass : [150, 175, 108], g);
         const sd = sandAt(x, y);
         // gravel and rock mottled darker where the stones are varnished; the sand seas in long ridges, broken into fields
         c = c.map(v => v * (1 + (nz(x * .05 + 3, y * .05 + 9) - .5) * .14 * (1 - sd)));
         // badlands: soft ground cut by many gullies, in bands of coloured rock
         const bd = badAt(x, y); if (bd > .1) { const gul = Math.abs(nz(x * .35 + 7, y * .35) - .5) * 2, band = Math.sin(nz(x * .02, y * .02 + 3) * 30) * .5 + .5; c = c.map((v, k) => v * (1 + ((gul < .25 ? -.22 : .04) + (band - .5) * .12) * bd)); }
         if (sd > .1) { const f = smooth(.35, .6, nz(x * .03 + 41, y * .03)), rid = Math.sin(x * .42 + y * .1 + nz(x * .015 + 5, y * .015) * 9); c = c.map(v => v * (1 + rid * .05 * sd * f)); }
-        c = mix(c, [38, 98, 42], fd);
+        c = mix(c, o && o.colours ? C.forest : [38, 98, 42], fd);
       } else {
         c = mix([150, 175, 108], [38, 98, 42], fd);
         // the third rule: the drier the land, the sandier: tan at a desert's edge to warm sand at its driest in the
@@ -595,7 +598,7 @@
         c = mix(c, [250, 250, 250], smooth(.42, .92, t));
       }
       // snow and ice where it never melts
-      if (snwAt) { const w = snwAt(x, y); if (w > .02) c = mix(c, [246, 248, 250], w * .9); }
+      if (snwAt) { const w = snwAt(x, y); if (w > .02) c = mix(c, o && o.colours ? C.snow : [246, 248, 250], w * .9); }
       // swamp: a dark olive green, wet and low
       if (swpAt) { const w = swpAt(x, y); if (w > .02) c = mix(c, [88, 112, 76], w * .7); }
       if (I.mix) c = washed("painted", c, Object.assign({}, I, { mix: I.mix.filter(([q]) => !["glacier", "icesheet", "snowforest", "snow"].includes(BIO.LIST[q][0])) }), x, y, nz, t, false);
@@ -609,6 +612,16 @@
     // 4 Nov 2026: "some world should be completely dry based on the planet")
     const deco = c => `<g class="wm-deco"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" fill="none" stroke="#2b2a24" stroke-width="1.4"/>${northArrow(W * c[0], H * c[1], Math.min(W, H) * .045, "#2b2a24", true)}${WD.title ? `<text class="wm-ttl" x="${W / 2}" y="34" text-anchor="middle" fill="#2b2a24">${A.esc ? A.esc(WD.title) : WD.title}</text>` : ""}</g>`;
     if (o && o.colours && o.colours.nosea) return s + `<g class="wm-detail"></g>` + deco(seaCorner(WD, pr));
+    // (a planet's shore by its liquid, its environment's shores: the pale surf line, beaches and shallows only where water
+    // and waves are; a methane shore a plain dark line, a lava shore a glowing one, nothing sandy or watery round them;
+    // the user, 4 Nov 2026: "the shores look weird, its sandy and has a watery hue around them")
+    const shoreK = o && o.colours && WD.T && WD.T.env ? WD.T.env.shores : null;
+    if (shoreK && shoreK !== "beach" && shoreK !== "plain") {
+      const cd0 = coastD(G, .6), lc = shoreK === "lava" ? "#ff8a3a" : `rgb(${C.deep.map(v => Math.round(v * .7)).join(",")})`;
+      s += (shoreK === "lava" ? `<path d="${cd0}" fill="none" stroke="#ff6a20" stroke-opacity=".55" stroke-width="3"/>` : "") + `<path d="${cd0}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="${lc}" stroke-opacity=".85" stroke-width=".7" stroke-linejoin="round"/><g class="wm-detail"></g>`;
+      s += N ? NT.rivers(WD, "relief", N, pr, "#2c5fc6", null, 1.25) : rivers(WD, "#2c5fc6", null, 1.25);
+      return s + deco(seaCorner(WD, pr));
+    }
     const cd = coastD(G, .6), fade = [], coasts = (WD.T && WD.T.coast ? naturalCoasts : beaches)(WD, pr, uid + "-land", fade);
     s += shallows(fade, G.cell, uid + "-sw", W, H) + reefsSvg(WD);
     s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/><g class="wm-detail"></g>`;

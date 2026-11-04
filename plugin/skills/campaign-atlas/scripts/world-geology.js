@@ -186,7 +186,9 @@ function geology(o, U) {
   // great volcanic swells crowned by shield volcanoes far larger than Earth's (on a crust that does not move a volcano
   // stays over its source and keeps growing: Tharsis and Olympus Mons), split by rift valleys where the swell's crust
   // is stretched (Valles Marineris) [stagnant-lid planets: Mars, Mercury, the Moon]. A frozen world's are low and few.
-  if (o.lid && o.lid !== "plates") {
+  // (only a rock lid: an ice shell cracks instead, and a world frozen through or squeezed by tides has its own landforms,
+  // world-invent.js planetFeatures)
+  if (o.lid && (o.lid === "stagnant" || o.lid === "squishy")) {
     const rl = U.mulberry32((o.seed || 1) + 77), big = (o.km || 3200) >= 10000, nS = (o.lid === "frozen" ? 1 : 1 + Math.floor(rl() * 2.5)) + (big ? 1 : 0), weak = o.lid === "frozen" || o.lid === "iceshell" ? .35 : 1;
     for (let k = 0; k < nS; k++) {
       let s = -1; for (let t = 0; t < 60 && s < 0; t++) { const m = Math.floor(rl() * CN); if (crust[m] === 1 || t > 40) s = m; }
@@ -219,18 +221,20 @@ function geology(o, U) {
   // itself into branching networks, rather than running in parallel lines down a smooth slope)
   for (let n = 0; n < CN; n++) h[n] = crust[n] ? 5 + U.fbm(nD, X(n) * 22 * zs, Y(n) * 22 * zs, 3) * 6 + rnd() * .5 : -1;
   let rain = new Float32Array(CN).fill(1);
-  const K = .06 * Math.min(1.5, air), mExp = .45, kd = .05, steps = 220, dt = 1;
+  // (how hard running liquid cuts the land: its environment's fluvial share, o.fluvial, when it has one; none on a world where
+  // nothing runs, faint old channels on one that dried, as Mars; every other world as it always was)
+  const K = .06 * Math.min(1.5, air) * (o.fluvial != null ? o.fluvial : 1), mExp = .45, kd = .05, steps = 220, dt = 1;
   const isBase = n => !crust[n];
   const rivC = SK && SK.river ? blockAvg(SK.river) : null;
   for (let it = 0; it < steps; it++) {
     for (let n = 0; n < CN; n++) if (crust[n]) h[n] += up[n] * dt;
-    landscapeStep(h, cc, cr, isBase, rain, K, mExp, dt, U);
+    if (K > 0) landscapeStep(h, cc, cr, isBase, rain, K, mExp, dt, U);
     // (a river the sketch shows keeps cutting its valley as the land rises, so the water gathers along it)
     if (rivC && it % 4 === 0) for (let n = 0; n < CN; n++) if (crust[n] && rivC[n] > .03 && h[n] > 3) h[n] *= 1 - .02 * Math.min(1, rivC[n] * 1.5);
     // creep: hilltops round, steep slopes ease
     if (it % 2 === 0) creep(h, cc, cr, isBase, kd * 2 * dt);
     // halfway, the rain the ranges catch begins to feed the rivers that cut them
-    if (it === steps >> 1) { const tmp = Float32Array.from(h); let top = 1; for (let n = 0; n < CN; n++) top = Math.max(top, tmp[n]); for (let n = 0; n < CN; n++) tmp[n] = crust[n] ? Math.max(1, tmp[n] / top * 4000) : -3000; const C0 = climate(tmp, cc, cr, Object.assign({}, o, { km: (o.km || 3200) }), nD, U, air); rain = C0.rain.map(r => Math.max(.15, r)); let mean = 0; for (let n = 0; n < CN; n++) mean += rain[n]; mean /= CN; for (let n = 0; n < CN; n++) rain[n] /= mean; }
+    if (it === steps >> 1 && K > 0) { const tmp = Float32Array.from(h); let top = 1; for (let n = 0; n < CN; n++) top = Math.max(top, tmp[n]); for (let n = 0; n < CN; n++) tmp[n] = crust[n] ? Math.max(1, tmp[n] / top * 4000) : -3000; const C0 = climate(tmp, cc, cr, Object.assign({}, o, { km: (o.km || 3200) }), nD, U, air); rain = C0.rain.map(r => Math.max(.15, r)); let mean = 0; for (let n = 0; n < CN; n++) mean += rain[n]; mean /= CN; for (let n = 0; n < CN; n++) rain[n] /= mean; }
   }
 
   /* 4. onto the map's own grid: the coarse land laid smoothly, a fine grain of detail, and a few more steps of erosion
@@ -244,7 +248,7 @@ function geology(o, U) {
     Cf[n] = c > .5 ? 1 : 0;
     Hf[n] = Cf[n] ? Math.max(.5, samp(h, x, y)) + rnd() * .4 : -1; Rf[n] = samp(rain, x, y); Uf[n] = samp(up, x, y); ridgeF[n] = samp(ridge, x, y); trenchF[n] = samp(trench, x, y);
   }
-  if (f > 1) { const isB = n => !Cf[n]; for (let it = 0; it < 14; it++) { for (let n = 0; n < N; n++) if (Cf[n]) Hf[n] += Uf[n] * .25; landscapeStep(Hf, cols, rows, isB, Rf, K * Math.pow(f, mExp * 2 - 1), mExp, .25, U); } creep(Hf, cols, rows, n => !Cf[n], .03); }
+  if (f > 1) { const isB = n => !Cf[n]; for (let it = 0; it < 14; it++) { for (let n = 0; n < N; n++) if (Cf[n]) Hf[n] += Uf[n] * .25; if (K > 0) landscapeStep(Hf, cols, rows, isB, Rf, K * Math.pow(f, mExp * 2 - 1), mExp, .25, U); } creep(Hf, cols, rows, n => !Cf[n], .03); }
 
   /* 5. the sea's level: a little above the lowest land, so the river mouths flood into bays and estuaries */
   const landVals = []; for (let n = 0; n < N; n++) if (Cf[n]) landVals.push(Hf[n]); landVals.sort((a, b) => a - b);
@@ -271,10 +275,14 @@ function geology(o, U) {
   const E = new Float32Array(N), isLand = new Uint8Array(N);
   for (let n = 0; n < N; n++) if (SK ? SK.land[n] : SH ? Hf[n] > seaLvl : Cf[n] && Hf[n] > seaLvl) isLand[n] = 1;
   // the land's heights, rank for rank, on the Earth's hypsometric curve (weak gravity lets them stand higher)
+  const relK = o.env ? ({ plates: 1, squishy: .7, stagnant: 1.3, tidal: .6, iceshell: .06, frozen: .2 }[o.env.crust] || 1) : 1, gF = o.env ? Math.max(grav, .45) : grav;
   { const idx = []; for (let n = 0; n < N; n++) if (isLand[n]) idx.push(n); idx.sort((a, b) => Hf[a] - Hf[b]);
     const Q = [[0, 2], [.1, 60], [.25, 200], [.5, 460], [.75, 1000], [.88, 1800], [.94, 2700], [.98, 4000], [.995, 5300], [1, 6400 + rnd() * 1800]];
     const at = p => { for (let k = 1; k < Q.length; k++) if (p <= Q[k][0]) return Q[k - 1][1] + (p - Q[k - 1][0]) / (Q[k][0] - Q[k - 1][0]) * (Q[k][1] - Q[k - 1][1]); return Q[Q.length - 1][1]; };
-    idx.forEach((n, k) => { E[n] = at(k / Math.max(1, idx.length - 1)) / grav; }); }
+    // (with a planet's environment, its relief by its crust: an ice shell flows and stays nearly flat (Europa's few hundred
+    // metres), frozen ice a little more, a rigid rock lid stands tall (the Moon's 20 km, Mars's 30), Io's plains low but
+    // for a few great blocks; and weak gravity lets it stand higher only so far)
+    idx.forEach((n, k) => { E[n] = at(k / Math.max(1, idx.length - 1)) * relK / gF; }); }
   // the sea floor: the shelf, the slope, the deep ocean; a ridge where plates part, a trench where one dives; the
   // drowned valleys shallow
   const dLand = U.distance(cols, rows, n => isLand[n] === 1);
@@ -290,6 +298,17 @@ function geology(o, U) {
 
   // (the deep floor is smooth at this scale: what the coarse grid left in it is eased away)
   if (!SH) { const Z = new Float32Array(N); for (let n = 0; n < N; n++) Z[n] = isLand[n] ? -40 : E[n]; boxBlur(Z, cols, rows, 3, 2); for (let n = 0; n < N; n++) if (!isLand[n]) E[n] = Math.min(-5, dLand[n] < 3 ? E[n] : Z[n]); }
+
+  // (a world with no surface liquid, o.noSea, from its environment: no sea at all. Its old low crust becomes dry lowland
+  // plains and the crust above them its highlands, the step between them an escarpment, as Mars's northern plains lie
+  // below its southern highlands; every cell is land)
+  // (the lowlands as deep as its crust allows, shallower on a cratered world, whose great basins make its lowlands; the
+  // old shore worn into a slope, the step between highland and lowland eased as an escarpment is, not a wall)
+  if (o.noSea) {
+    const k = relK * (1 - .6 * ((o.env && o.env.impacts) || 0)); for (let n = 0; n < N; n++) if (!isLand[n]) E[n] *= k;
+    let lo = 0; for (let n = 0; n < N; n++) lo = Math.min(lo, E[n]); for (let n = 0; n < N; n++) { E[n] = E[n] - lo + 15; isLand[n] = 1; }
+    const B = Float32Array.from(E); boxBlur(B, cols, rows, Math.max(2, Math.round(cols / 140)), 2); for (let n = 0; n < N; n++) E[n] = B[n] + .55 * (E[n] - B[n]);
+  }
 
   // (a lake the sketch shows lies in a hollow: its floor below the lowest of its shore)
   if (SK && SK.lake) { const seen = new Uint8Array(N);
@@ -333,7 +352,7 @@ function geology(o, U) {
 
   /* 8. what lives on it: climate classes, biomes and tree cover, from all of the above (world-ecology.js) */
   const want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
-  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog, paint: SK && SK.kind ? SK.kind : null }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC, lockedT: o.locked ? C.temp : null }, U);
+  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog, paint: SK && SK.kind ? SK.kind : null }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC, lockedT: o.locked ? C.temp : null, life: o.env ? o.env.life : undefined, aeolian: o.env ? o.env.erosion.aeolian : undefined, icy: o.env ? ["water", "ice", "subsurface"].includes(o.env.liquid.kind) : undefined, even: o.env && o.env.climate ? o.env.climate.even : undefined, cells: o.env && o.env.climate ? o.env.climate.cells : undefined }, U);
 
   /* to the grid the maps are drawn from */
   // (and each height's fraction, kept apart: a shaded relief map needs the land's slopes finer than 255 steps)
@@ -498,8 +517,11 @@ function climateEarth(E, cols, rows, o, nz, U, air) {
     for (let n = 0; n < N; n++) if (E[n] > 0 && Wt[n] > .02) temp[n] += .6 * A0[n] / Wt[n] * Math.min(1, Wt[n] * 2.5);
   }
   const cap = t => air * Math.min(1.8, Math.exp(.065 * (t - 25)));
-  const eff0 = cellKm / 1400, sub = a => gauss((a - 27) / 7.5), itcz = a => gauss(a / 8), storm = a => gauss((a - 50) / 14);
-  const mon = a => smooth(4, 9, a) * (1 - smooth(14, 24, a));
+  // (a planet's own wind belts, its environment's cells each side of the equator: Earth's three put them where they are; one
+  // on a slow world spreads the wet equator wide and dries the poles; more on a fast one squeeze them toward the equator)
+  const BK = o.env && o.env.climate && o.env.climate.cells ? o.env.climate.cells / 3 : 1;
+  const eff0 = cellKm / 1400, sub = a => gauss((a * BK - 27) / 7.5), itcz = a => gauss(a * BK / 8), storm = a => gauss((a * BK - 50) / 14);
+  const mon = a => smooth(4, 9, a * BK) * (1 - smooth(14, 24, a * BK));
   // one cell crossed by the air: st is the air's own state (its water q, the ground it last crossed, how steady the
   // cold sea left it, how far it has come down)
   const cross = (n, st, w, summer) => {

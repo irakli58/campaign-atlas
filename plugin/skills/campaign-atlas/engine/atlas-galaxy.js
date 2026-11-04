@@ -532,11 +532,13 @@
     // (a large moon with ground to stand on opens as a world of its own, as a planet does)
     const moons = (p.moonList || []).filter(m => !m.small).map(m => `<li><b>${esc(moonName(p, m))}</b>, ${esc((Gg.KINDS[m.kind] || m.kind || "").toLowerCase())} moon, ${m.distance ? m.distance.toLocaleString("en") + " km out" : ""}: ${esc(m.air)}, ${m.tempC} °C${m.water ? ", " + esc(m.water.toLowerCase()) : ""}${m.life ? ", " + esc(m.life) : ""}${m.landable && sid && A.worldGenerate ? ` <button type="button" class="t-mini" data-gx="surface" data-id="${esc(sid)}" data-n="${p.n}" data-m="${m.n}">Open its surface</button>` : ""}</li>`).join("");
     const whys = Object.entries(why).filter(([, v]) => v).map(([k, v]) => `<li><b>${esc({ gravity: "Gravity", spin: "Its turning", tectonics: "Its insides", air: "Its air", temp: "Its warmth", locked: "Locked", liquid: "Its liquids", winds: "Its winds", class: "What kind of world" }[k] || k)}:</b> ${esc(v)}</li>`).join("");
+    // (what shaped its surface, worked out from all the rest: the generator makes its surface from this, atlas-planet.js environment)
+    const ev = A.planets && A.planets.environment && !giant ? A.planets.environment(p, info.star) : null, surf = ev && ev.why ? Object.entries(ev.why).filter(([k]) => k !== "frame").map(([k, v]) => `<li><b>${esc({ liquid: "Liquids", erosion: "What wears it", impacts: "Craters", volcanism: "Volcanism", climate: "Weather", life: "Life" }[k] || k)}:</b> ${esc(v)}</li>`).join("") : "";
     const pal = p.palette || {}, sw = (c, l) => c ? `<span class="gx-sw"><i style="background:${esc(c)}"></i>${esc(l)}</span>` : "";
     const cols = (pal.bands || []).map((c, i) => sw(c, i ? "" : "its bands")).join("") + sw(pal.ground, "ground") + sw(pal.sea, "seas") + sw(pal.plant, pal.plantSay ? "plants: " + pal.plantSay : "") + sw(pal.sky, "sky") + sw(pal.clouds, "clouds");
     return `<details class="gx-prof"><summary>The whole profile, and why it is so</summary>
       <h5>Physical</h5><table class="gx-pt">${g1}</table><h5>Atmosphere</h5><table class="gx-pt">${g2}</table><h5>Environment</h5><table class="gx-pt">${g3}</table><h5>In its system</h5><table class="gx-pt">${g4}</table>
-      ${moons ? `<h5>Its large moons</h5><ul class="gx-pm">${moons}</ul>` : ""}${whys ? `<h5>Why it is so</h5><ul class="gx-pw">${whys}</ul>` : ""}${cols ? `<h5>Its colours</h5><p class="gx-sws">${cols}</p>` : ""}
+      ${moons ? `<h5>Its large moons</h5><ul class="gx-pm">${moons}</ul>` : ""}${whys ? `<h5>Why it is so</h5><ul class="gx-pw">${whys}</ul>` : ""}${surf ? `<h5>Its surface, and what made it</h5><ul class="gx-pw">${surf}</ul>` : ""}${cols ? `<h5>Its colours</h5><p class="gx-sws">${cols}</p>` : ""}
       <p class="t-small kn">Worked out from its star, orbit, mass and make-up. Where science is not settled (life elsewhere, the colour of alien plants) it says so.</p></details>`;
   }
   // a world as a small globe in its own colours (atlas-planet.js palette): a giant's bands and rings; a rocky world's
@@ -778,7 +780,10 @@
           A.openWorld): places and changes made on it are kept as on any world. Which surfaces were opened is kept
           (collection "planetworlds"), so they come back with the page. */
   const surfId = (sid, n, m) => ("p-" + sid + "-" + n + (m != null && m !== "" ? "-m" + m : "")).replace(/[^\w-]/g, "-").slice(0, 40);
-  function surfaceFlags(p, seed) {
+  // (since 4 Nov 2026 the recipe is the planetary layer's own: its environment worked out from its physics first, the
+  // generator following it; engine/atlas-planet.js surfaceFlags. The older recipe below stays for a page without it)
+  function surfaceFlags(p, seed, star) {
+    if (A.planets && A.planets.surfaceFlags) return A.planets.surfaceFlags(p, star || {}, seed);
     const share = Math.max(.03, Math.min(.97, 1 - (p.ocean || 0))), tc = p.tempC;
     const climate = (p.liquid === "none" || p.liquid === "lava") && (p.pressure || 0) > .001 ? "arid" : tc > 26 ? "tropical" : tc > 16 ? "warm" : tc > 4 ? "temperate" : tc > -15 ? "cold" : "polar";
     const word = { garden: "earthlike", ocean: "earthlike", desert: "desert", ice: "ice", dwarf: "ice", lava: "volcanic", toxic: "toxic", barren: "barren", rocky: "barren" }[p.kind] || "barren";
@@ -819,7 +824,7 @@
     if (!o.p.landable) throw new Error(`${o.p.name} has no surface to land on`);
     const id = surfId(sid, n, m), have = A.worlds && A.worlds[id] && A.worlds[id].terrain && A.worlds[id].terrain.height;
     if (have) return id;
-    const flags = surfaceFlags(o.p, (G().p.seed || 1) * 31 + (o.s.i || 0) * 17 + (+n) + (m != null && m !== "" ? 1000 * (+m + 1) : 0)), key = "planet|" + JSON.stringify(flags);
+    const flags = surfaceFlags(o.p, (G().p.seed || 1) * 31 + (o.s.i || 0) * 17 + (+n) + (m != null && m !== "" ? 1000 * (+m + 1) : 0), bodiesOf(o.s).star), key = "planet|" + JSON.stringify(flags);
     let T = A.worldGenCache ? await A.worldGenCache(key) : null;
     if (!T) { if (say) say(`Making the whole globe of ${o.p.name}: about ${Math.round(A.worldGenSecs("planet") / 60)} minutes the first time, then it is kept.`); T = await A.worldGenerate(flags, { title: o.p.name, locations: [] }); if (A.worldGenCache) await A.worldGenCache(key, T); }
     registerSurface(sid, n, T, m);
@@ -829,7 +834,10 @@
   A.planetSurface = planetSurface;
   // the surfaces opened before come back with the page: named at once, their land from this browser's keeping (or made
   // again, the same, when opened)
-  A.planetSurfacesInit = st => st.watch("planetworlds", docs => { for (const [id, d] of Object.entries(docs || {})) { if (!d || !d.system || (A.worlds[id] && A.worlds[id].data)) continue; registerSurface(d.system, d.n, null, d.m); if (A.worldGenCache && d.key) A.worldGenCache(d.key).then(T => { if (T) registerSurface(d.system, d.n, T, d.m); }); } });
+  // (a surface made under rules older than the planetary layer's environment is made again when it is next opened: the
+  // user's answer of 4 Nov 2026, "remake them all"; the game master's places and changes on it are kept, as they lie over it)
+  const currentKey = k => !!(A.planets && A.planets.ENV_V && String(k || "").includes(`"envv":${A.planets.ENV_V}`));
+  A.planetSurfacesInit = st => st.watch("planetworlds", docs => { for (const [id, d] of Object.entries(docs || {})) { if (!d || !d.system || (A.worlds[id] && A.worlds[id].data)) continue; registerSurface(d.system, d.n, null, d.m); if (A.worldGenCache && d.key && currentKey(d.key)) A.worldGenCache(d.key).then(T => { if (T) registerSurface(d.system, d.n, T, d.m); }); } });
   // a system opened from elsewhere on the page (and a world in it, by its number): the star chart's own selection
   A.galaxyOpen = (id, n) => { if (!host) return false; UI.sel = id; UI.sys = id; UI.selReg = null; UI.selLane = null; UI.planet = n == null ? null : +n; refresh(); return true; };
   // (a system chosen from outside the chart: a place's trail back up to the stars)

@@ -271,13 +271,15 @@
           dust butterscotch; haze orange; plants by starlight, Kiang 2007 (speculative)] */
   const PLANT = { F: ["#c79a2e", "gold and orange (speculative)"], G: ["#4f7a3a", "green"], K: ["#7a3a3a", "deep red and purple (speculative)"], M: ["#2a2230", "near-black and dark purple (speculative)"], A: ["#c9a85a", "pale gold (speculative)"] };
   function rockPalette(o, S, r) {
-    const ice = o.ice > .5 || o.surface === "ice", oldIce = ice && o.temp < 80, iron = o.kind === "desert" || (o.tectonics === "stagnant" && o.pressure > .001), sulph = o.tectonics === "tidal";
+    // (old ice darkened: by the sun's light over ages far out, or coated by the organic matter that falls from a methane haze,
+    // as Titan's is: tholins, orange-brown)
+    const ice = o.ice > .5 || o.surface === "ice", oldIce = ice && (o.temp < 80 || (o.liquid === "methane" || /methane/.test(o.composition || ""))), iron = o.kind === "desert" || (o.tectonics === "stagnant" && o.pressure > .001), sulph = o.tectonics === "tidal";
     const ground = sulph ? "#c9a93a" : oldIce ? "#9b6a4a" : ice ? "#dfe8ee" : o.kind === "lava" ? "#1d1a18" : iron ? "#b0603e" : o.kind === "barren" ? "#7a746c" : o.kind === "toxic" ? "#b9a77c" : "#8a7a5a";
     const sea = o.liquid === "water" ? (o.life ? "#1f5d7a" : "#26546f") : o.liquid === "methane" ? "#2b2b2b" : o.liquid === "lava" ? "#ff5a1f" : null;
     const plant = o.life && /complex|people/.test(o.life) ? PLANT[S.cls] || PLANT.G : o.life ? ["#5f6f45", "mats of microbes (speculative tint)"] : null;
     const sky = o.pressure < .001 ? "#000000" : o.pressure > 20 ? "#d9c58a" : o.composition && /methane/.test(o.composition) && o.temp < 150 ? "#d99a4e" : o.kind === "desert" && o.pressure < .1 ? "#c8a27a" : S.cls === "M" ? "#9fa0b8" : "#7fa8d8";
     const clouds = o.pressure > 20 ? "#e8dcae" : o.pressure > .2 ? "#f2f2f2" : null;
-    return { ground, sea, plant: plant && plant[0], plantSay: plant && plant[1], ice: ice ? (oldIce ? "#b07f62" : "#e8f0f5") : o.liquid === "none" || o.liquid === "lava" ? null : "#e8f0f5", sky, clouds, haze: o.pressure > 20 || (/methane/.test(o.composition || "") && o.temp < 150) };
+    return { ground, sea, liquid: o.liquid, plant: plant && plant[0], plantSay: plant && plant[1], ice: ice ? (oldIce ? "#b07f62" : "#e8f0f5") : o.liquid === "water" ? "#e8f0f5" : null, sky, clouds, haze: o.pressure > 20 || (/methane/.test(o.composition || "") && o.temp < 150) };
   }
   function gasPalette(teq, env, dayH, r) {
     const bands = env === "ice" ? ["#7fc8d8", "#6ab4cc", "#8fd2e0"] : teq > 1400 ? ["#2b2522", "#3d302a", "#1e1a18"] : teq > 900 ? ["#3a5f9e", "#2f4f86", "#4a6fb0"] : teq > 150 ? ["#d9b48a", "#f0e0c8", "#b8865a", "#e8d2b0"] : ["#e8dcb8", "#d8c49a", "#f2ead4"];
@@ -389,6 +391,74 @@
     moonsOf(q, S, replay(ch.seed != null ? null : p.moonDraws, r), opt); q.moonDraws = p.moonDraws;
     return q;
   }
+
+  /* ---- its surface's environment (the user's request of 4 Nov 2026: "the planet's scientific properties determine its
+          geography"; the plan approved that day, the workspace's reviews/2026-11-04-environments.md): which processes
+          shaped its surface and how strongly, each worked out from its profile, never chosen and never a preset. The world
+          generator follows it (scripts/world-invent.js, world-geology.js, world-ecology.js) and the map is drawn by it.
+          [the Moon and Mercury: no air or water, so impacts are never worn away, and their great basins were flooded by
+          lava (Head et al. 2011); Mars: a rigid lid, swells, shields and a rift, old channels, dust and dunes moved by its
+          thin air in gales; Venus: lava plains, coronae, folded highlands, few craters after its resurfacing (Grindrod
+          et al. 2010); Titan: methane lakes near the poles, rivers of methane, long dunes of organic sand near the equator
+          moved by gentle winds in thick air (Lorenz et al. 2006); Io: volcanoes everywhere, no craters; Europa: an ice
+          shell over an ocean, ridges and chaos, few craters] */
+  const ENV_V = 2;
+  function environment(p, S) {
+    const P = p.pressure || 0, T = p.temp || 200, liq = p.liquid || "none", mode = p.tectonics || "stagnant", age = (S && S.age) || 4.6, W = p.winds || {}, why = {};
+    const giant = p.env === "gas" || p.env === "ice" || p.env === "mini";
+    if (giant) return { v: ENV_V, frame: "none", why: { frame: "a giant has no surface to stand on: its clouds and storms are its face" } };
+    // (life on the surface only: microbes in an ocean under the ice leave its surface bare)
+    const life0 = /complex|people/.test(p.life || "") ? "complex" : p.life ? "microbial" : "none", life = ["water", "methane"].includes(liq) ? life0 : "none";
+    const surface = ["water", "methane", "lava"].includes(liq), share = surface ? clamp(p.ocean || 0, 0, 1) : 0;
+    why.liquid = surface ? `seas of ${liq === "water" ? "water" : liq} over ${Math.round(share * 100)}% of it` : liq === "subsurface" ? "its ocean lies under the ice, never on the surface" : liq === "ice" ? "its water is frozen: no liquid on the surface" : "no liquid on its surface: no seas, lakes or rivers";
+    // what wears it down: running liquid where it rains; old channels on a world that once had water and lost it (Mars);
+    // the wind where the air can move grains, by its density and force (Mars's thin air in its gales, Titan's thick air
+    // gently); ice where it flows
+    const once = !surface && !!(p.inputs && p.inputs.wf > .0001) && P > .001 && T < 320;
+    const fluvial = liq === "water" || liq === "methane" ? clamp(.4 + share * .6, 0, 1) : once ? .2 : 0;
+    // (under crushing air the ground winds are slow and loose sand scarce: Venus has only two dune fields)
+    const aeolian = P < .001 ? 0 : clamp(.25 + .25 * Math.log10(Math.max(W.push || 0, 1e-4) * 100) + (W.extreme > 40 && P < .05 ? .1 : 0), .05, 1) * (P > 20 ? .35 : 1);
+    const glacial = liq === "water" && T < 285 ? clamp((p.ice || 0) * 1.4 + (T < 265 ? .3 : 0), 0, 1) : liq === "ice" && P > .006 ? .4 : 0;
+    why.erosion = fluvial > .3 ? `its ${liq} rains and runs, cutting valleys` : fluvial > 0 ? "old dry channels from when water ran on it" : "nothing runs on it to cut valleys";
+    why.erosion += aeolian > .15 ? `; its wind moves sand${P < .05 ? ", in gales, the air too thin for anything gentler" : ""}` : P < .001 ? "; no air, so no wind" : "; its wind is too weak to move much";
+    // what survives of its impacts: nothing renews an airless, dead surface, so its craters stay; air burns up the small
+    // ones; water and wind wear them; lava, moving plates and fresh ice bury them; the older the surface, the more
+    const RENEW = { plates: .7, squishy: .85, tidal: 1, iceshell: .8, frozen: 0, stagnant: .15 }, renew = RENEW[mode] != null ? RENEW[mode] : .3;
+    const impacts = +clamp((1 - renew) * (P < .01 ? 1 : P < .1 ? .7 : P < 1 ? .35 : P < 10 ? .15 : .05) * clamp(age / 3, .3, 1) * (fluvial > .5 ? .4 : 1), 0, 1).toFixed(2);
+    const basins = impacts > .5 ? Math.round(2 + impacts * 5) : impacts > .2 ? 1 : 0;
+    why.impacts = impacts > .5 ? "craters everywhere: nothing has worn them away" + (basins ? ", and great old basins" : "") : impacts > .15 ? "some craters, the rest worn away or buried" : mode === "tidal" ? "no craters: its lava buries them as fast as they come" : "few craters: its surface is renewed";
+    // its volcanism, by how its insides lose their heat
+    const style = { plates: "arcs", squishy: "plains", stagnant: "shields", tidal: "paterae", iceshell: "cryo", frozen: "none" }[mode] || "shields";
+    const volcanism = +clamp(style === "paterae" ? 1 : style === "plains" ? .8 : style === "arcs" ? .5 : style === "cryo" ? .35 : style === "shields" ? clamp((p.heat || .3) * 1.4, .1, .6) : 0, 0, 1).toFixed(2);
+    why.volcanism = { arcs: "volcanoes along the plates' edges and over hotspots", plains: "lava flooded most of it: plains, coronae, folded highlands", shields: "a rigid shell: a few great shield volcanoes on swells, and rifts", paterae: "volcanoes everywhere, lava flows and sulphur", cryo: "an ice shell cracked into ridges and chaos", none: "long dead inside" }[style];
+    // its climate: belts by its turning (Earth's three each side, fewer on a slow world), evened out by thick air; a
+    // locked world by its star; an airless world has none, only sunlight and shadow
+    const day = p.day || 24, cells = clamp(Math.round(3 * Math.pow(24 / Math.min(day, 24 * 30), .6) * Math.sqrt(p.radius || 1)), 1, 6);
+    const climate = P < .001 ? { model: "none" } : p.locked && !p.host ? { model: "locked" } : { model: "cells", cells, even: +clamp((P - 1) / (P + 4), 0, .95).toFixed(2) };
+    why.climate = climate.model === "none" ? "no air: no weather, only the sun's heat and the cold of shadow" : climate.model === "locked" ? "locked to its star: warm under it, frozen on the night side" : `${cells} wind belt${cells > 1 ? "s" : ""} each side of its equator${climate.even > .3 ? ", its thick air evening out the warmth" : ""}`;
+    const fall = P < .001 ? "none" : liq === "water" ? (T < 273 ? "snow" : "rain") : liq === "methane" ? "methane" : liq === "ice" ? "frost" : "none";
+    // its ground where nothing grows, by what it is made of: rust-red dust, grey rock, dark basalt, sulphur, ice, organic sand
+    const dry = mode === "tidal" ? "brimstone" : liq === "lava" || p.kind === "lava" ? "volcanic" : liq === "ice" || liq === "subsurface" || p.surface === "ice" ? "icesheet" : liq === "methane" ? "dunes" : p.kind === "toxic" ? "volcanic" : p.kind === "desert" ? "aliendesert" : "rock";
+    const cold = liq === "water" || liq === "ice" || liq === "subsurface" ? "icesheet" : dry, high = mode === "tidal" ? "volcanic" : dry === "icesheet" ? "glacier" : dry === "rock" || dry === "volcanic" ? "rock" : dry;
+    const cover = life === "none" ? { dry, forest: dry, wet: liq === "methane" ? "drylake" : dry, cold, high, liquid: liq === "methane" ? "methane" : liq === "lava" ? "lava" : "water" }
+      : life === "microbial" ? { dry, forest: "bog", wet: "marsh", cold, high, liquid: liq === "methane" ? "methane" : "water" } : null;
+    why.life = life === "complex" ? "life covers its land: forests and grassland in its plants' colour" : life === "microbial" ? "only microbial mats, dark stains on wet ground" : life0 !== "none" ? "its life is hidden beneath the surface: the surface is bare" : "nothing lives on it: bare ground of its own rock";
+    const shores = liq === "water" ? (life === "none" ? "plain" : "beach") : liq === "methane" ? "smooth" : liq === "lava" ? "lava" : "none";
+    return { v: ENV_V, frame: "globe", crust: mode, impacts, basins, volcanism, volcStyle: style, liquid: { kind: liq, share, surface }, erosion: { fluvial: +fluvial.toFixed(2), aeolian: +aeolian.toFixed(2), glacial: +glacial.toFixed(2) }, climate, fall, life, cover, shores, names: life === "complex" && liq === "water" ? "earth" : "planetary", why };
+  }
+  // the world generator's recipe for its surface (scripts/world-invent.js's flags): its environment, its size, gravity,
+  // air, warmth and colours. The star chart's Open its surface and the workspace's dev/planet-environments.js use it alike
+  function surfaceFlags(p, S, seed, opt) {
+    const env = environment(p, S), tc = p.tempC, liq = env.liquid || {}, P = p.pressure || 0;
+    const climate = !liq.surface && P > .001 ? "arid" : tc > 26 ? "tropical" : tc > 16 ? "warm" : tc > 4 ? "temperate" : tc > -15 ? "cold" : "polar";
+    const f = { size: (opt && opt.size) || "planet", land: "masses", landmasses: p.tectonics === "plates" ? 4 : p.tectonics === "squishy" ? 5 : p.tectonics === "tidal" ? 9 : 2, climate, realism: "alien", setting: "scifi", planet: "barren", gravity: p.gravity, air: Math.max(.02, Math.min(3, P)), warmth: 0, temp: tc,
+      look: "planet", seed, replace: true, regions: true, "climate-model": env.climate && env.climate.model === "locked" ? "classic" : "earth", env, envv: ENV_V, palette: p.palette || null };
+    // (a world locked to its star: its air evens out day and night by its thickness)
+    if (p.locked && !p.host && P > 0) f.locked = +(Math.min(.95, P / (P + 1))).toFixed(2);
+    // (the globe as large as the world is: a moon or a small planet is smaller than the Earth)
+    if (p.radius && Math.abs(p.radius - 1) > .03) f.km = Math.round(40030 * p.radius);
+    return f;
+  }
   // a random source that remembers what it gave, and one that gives the same again (then fresh ones, past its end)
   function tape(r) { const t = []; return [() => { const v = r(); t.push(v); return v; }, t]; }
   function replay(t, r) { let k = 0; return () => t && k < t.length ? t[k++] : r(); }
@@ -418,6 +488,6 @@
     return L;
   }
 
-  A.planets = { STAR, TECH, star, body, system, moonsOf, check, flux, lockYears, boilK, radiusOf, rework, consequences };
+  A.planets = { STAR, TECH, star, body, system, moonsOf, check, flux, lockYears, boilK, radiusOf, rework, consequences, environment, surfaceFlags, ENV_V };
   if (typeof module === "object" && module.exports) module.exports = A.planets;
 })(typeof ATLAS !== "undefined" ? ATLAS : typeof window !== "undefined" ? (window.ATLAS = window.ATLAS || {}) : {});
