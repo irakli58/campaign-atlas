@@ -225,6 +225,7 @@
       <ul class="wm-jlist">${d.meet ? `<li><b>They meet</b> ${esc(d.meet.text)}${d.meet.from ? `<span class="kn"> (${esc(d.meet.from)})</span>` : ""}</li>` : `<li><b>Nothing</b> stops them today.</li>`}<li><b>They see</b> ${esc(d.sight)}</li>${d.found ? `<li><b>They might find</b> ${esc(d.found)}</li>` : ""}</ul>
       ${d.rumours && d.rumours.length ? `<h4>Heard in ${esc(H.name(d.at))}</h4><ul class="wm-jlist">${d.rumours.map(tell).join("")}</ul>` : ""}
       ${trip.food ? `<p class="${d.food <= 2 ? "warn" : "kn"}">${d.forage ? "They find enough to eat on the way. " : ""}Food left: ${d.food} day${d.food === 1 ? "" : "s"} for ${trip.food.people}.${d.food <= 2 ? " Running short." : ""}</p>${buy ? `<p><button type="button" data-w="jbuy">Buy 5 days of food here (${esc(buy.say)})</button></p>` : ""}` : ""}
+      ${A.chronicle && A.chronicle.latest() && !d.did ? `<p class="kn wm-jsaid">The players last wrote: “${esc(A.chronicle.latest().text)}”</p>` : ""}
       <form class="wm-jform" data-wj="${esc(tripId)}:${d.n}">
         <label><span>What the party does today <i>(their words)</i></span><textarea name="did" rows="2" maxlength="1200" placeholder="We keep to the river and ask at every farm about the rider.">${esc(d.did || "")}</textarea></label>
         <label><span>How it went <i>(yours)</i></span><textarea name="went" rows="2" maxlength="1200">${esc(d.went || "")}</textarea></label>

@@ -536,6 +536,7 @@
         <div class="t-row"><label class="t-lab">Session <select data-t="session">${list.length ? list.map(x => `<option value="${esc(x.n)}"${+x.n === n ? " selected" : ""}>${esc(x.n)}${x.title ? ": " + esc(x.title) : ""}</option>`).join("") : Array.from({ length: Math.max(n, 1) + 1 }, (_, i) => `<option value="${i + 1}"${i + 1 === n ? " selected" : ""}>${i + 1}</option>`).join("")}</select></label><button type="button" class="t-btn" data-t="printsheet">Print tonight's sheet</button></div>
         ${sheet}</div>
       <div>
+        ${cardsFor("tonight")}
         <section class="t-card"><h3>Previously on…</h3>
           ${n > 1 ? `<p class="t-small">Made from the notes on session ${n - 1}${prev.notes ? "" : " (none written yet: write them below when the session ends, or now)"}, and what the party has found.</p>` : `<p class="t-small">The first session has nothing before it. Write tonight's notes below; next time they become the recap.</p>`}
           ${n > 1 ? `<label class="t-lab t-block">Notes on session ${n - 1}<textarea rows="4" data-t="notes" data-n="${n - 1}" placeholder="What happened, in a few lines">${esc(prev.notes || "")}</textarea></label>` : ""}

@@ -513,11 +513,14 @@
           found it. Full: quests, people met, hints and next steps, "Previously on", a timeline. Nothing undiscovered, and
           nothing of the game master's, is ever in it; their theories are never marked right or wrong. */
   const JOURNAL = {
-    keys: [["clues", "The clues they found"], ["places", "The places they know"], ["people", "The people they met"], ["links", "The connections you pin up"], ["quests", "Their quests"], ["hints", "Hints you give"], ["next", "Next steps you suggest"], ["summaries", "\"Previously on\" you give them"], ["notes", "Their own notes and theories"]],
+    // (and since 4 Nov 2026, the players' chronicle, the user's approved idea: what they mean to do, in their own words,
+    // written from their phones for the game master to read; their purse and what they carry; and what the table
+    // remembers that they saw, did and said: kept memories of those kinds only, never the game master's notes for later)
+    keys: [["clues", "The clues they found"], ["places", "The places they know"], ["people", "The people they met"], ["links", "The connections you pin up"], ["quests", "Their quests"], ["hints", "Hints you give"], ["next", "Next steps you suggest"], ["summaries", "\"Previously on\" you give them"], ["notes", "Their own notes and theories"], ["intent", "What they mean to do, in their words"], ["purse", "Their purse and what they carry"], ["memories", "What the table remembers that they saw and said"]],
     modes: {
-      manual: { clues: false, places: false, people: false, links: false, quests: false, hints: false, next: false, summaries: false, notes: true },
-      assisted: { clues: true, places: true, people: true, links: true, quests: false, hints: false, next: false, summaries: false, notes: true },
-      full: { clues: true, places: true, people: true, links: true, quests: true, hints: true, next: true, summaries: true, notes: true }
+      manual: { clues: false, places: false, people: false, links: false, quests: false, hints: false, next: false, summaries: false, notes: true, intent: true, purse: false, memories: false },
+      assisted: { clues: true, places: true, people: true, links: true, quests: false, hints: false, next: false, summaries: false, notes: true, intent: true, purse: true, memories: false },
+      full: { clues: true, places: true, people: true, links: true, quests: true, hints: true, next: true, summaries: true, notes: true, intent: true, purse: true, memories: true }
     }
   };
   const journalCfg = st => { const c = (st && st.get("jcfg", "now")) || {}; return Object.assign({ mode: "assisted" }, JOURNAL.modes.assisted, JOURNAL.modes[c.mode] || {}, c); };
@@ -679,6 +682,14 @@
     // the journal: what the game master gave them for it, each part only when it is switched on
     function journalHTML() {
       const J = journalCfg(st), all = c => Object.values(st.get(c) || {}).filter(Boolean).sort((a, b) => (b.t || 0) - (a.t || 0)), out = [];
+      // what they mean to do, written here for the game master: the newest first, each marked once the game master has read it
+      if (J.intent) { const l = all("intent").slice(0, 8); out.push(`<section class="ps-jsec ps-intent"><h3>What we mean to do</h3><p class="ps-hint">Write what the party means to do next, in your own words: where you go, who you talk to, what you try. The game master reads it.</p><form class="ps-intent-f"><textarea maxlength="1200" rows="3" placeholder="We go back to the mill at night and look for the cellar door."></textarea><div class="ps-addrow"><input name="who" maxlength="40" placeholder="Who writes (if you like)" aria-label="Who writes"><button type="submit">Tell the game master</button></div></form>${l.length ? `<ul class="ps-intents">${l.map(x => `<li><p>${esc(x.text)}</p><span class="ps-when">${x.who ? esc(x.who) + " · " : ""}${esc(x.when || when(x.t))}${x.seen ? " · read by the game master" : ""}</span></li>`).join("")}</ul>` : ""}</section>`); }
+      // their purse and what they carry (Money and goods, as the game master keeps it)
+      // (in the players' copy, as the game master's page shared it: only what may be seen ever reaches it, atlas-share.js)
+      const CH = A.playersCopy ? A.shareChronicle || {} : null;
+      if (J.purse && (CH || A.money)) { const p = CH ? (CH.purse != null ? CH.purse : null) : (st.get("econ", "purse") || {}).n != null ? A.money.fmt(+st.get("econ", "purse").n) : null, items = CH ? CH.carry || [] : Object.values(st.get("stash") || {}).filter(x => x && x.n).sort((a, b) => (b.t || 0) - (a.t || 0)); if (p != null || items.length) out.push(`<section class="ps-jsec"><h3>What we carry</h3>${p != null ? `<p class="ps-purse"><b>In the purse:</b> ${esc(p)}</p>` : ""}${items.length ? `<ul class="ps-carry">${items.map(x => `<li>${esc(x.n)}${x.qty > 1 ? ` ×${x.qty}` : ""}</li>`).join("")}</ul>` : ""}</section>`); }
+      // what the table remembers that they saw, did and said (Recorded sessions: kept, of those kinds and that truth only)
+      if (J.memories) { const SEEN = ["did", "decision", "talk", "promise", "threat", "clue", "visit", "item", "fate", "bond", "theory", "mystery"], l = CH ? CH.mems || [] : Object.values(st.get("memory") || {}).filter(m => m && m.text && m.state === "kept" && SEEN.includes(m.kind) && ["canon", "narration", "player"].includes(m.src)).sort((a, b) => (b.t || b.t0 || 0) - (a.t || a.t0 || 0)).slice(0, 30); if (l.length) out.push(`<section class="ps-jsec"><h3>What we remember</h3><ul class="ps-mems">${l.map(m => `<li>${esc(m.text)}${m.quote ? `<q>${esc(m.quote)}</q>` : ""}${m.session ? `<span class="ps-when">Session ${esc(m.session)}</span>` : ""}</li>`).join("")}</ul></section>`); }
       if (J.quests) { const q = all("pquests"); out.push(`<section class="ps-jsec"><h3>Our quests</h3>${q.length ? `<ul class="ps-quests">${q.map(x => `<li class="${x.done ? "done" : ""}">${esc(x.text)}${x.done ? " <span class=\"ps-when\">done</span>" : ""}</li>`).join("")}</ul>` : `<p class="ps-empty">No quests yet.</p>`}</section>`); }
       if (J.people) { const m = all("met"); out.push(`<section class="ps-jsec"><h3>People we have met</h3>${m.length ? m.map(x => `<div class="ps-met"><b>${esc(x.name)}</b>${x.role ? ` <span class="ps-role">${esc(x.role)}</span>` : ""}${x.look ? `<p>${esc(x.look)}</p>` : ""}${x.when ? `<div class="ps-when">${esc(x.when)}</div>` : ""}</div>`).join("") : `<p class="ps-empty">Nobody yet.</p>`}</section>`); }
       const hs = all("hints").filter(h => (h.kind === "next" ? J.next : J.hints));
@@ -733,7 +744,7 @@
     st.watch("clock", () => dateLine());
     // the journal: its settings and what the game master gave for it
     st.watch("jcfg", () => { menu(); badges(); if (now.kind === "board") render(); if (tab !== "table") renderPage(); });
-    for (const c of ["pquests", "met", "hints", "recaps"]) st.watch(c, () => { badges(); if (tab === "journal") renderPage(); });
+    for (const c of ["pquests", "met", "hints", "recaps", "intent", "econ", "stash", "memory", "jcfg"]) st.watch(c, () => { badges(); if (tab === "journal" && !(document.activeElement && page.contains(document.activeElement) && document.activeElement.matches("textarea, input"))) renderPage(); });
     st.watch("mapedits", d => { if (applyMapEdits(d)) { if (now.kind === "map") render(); if (tab === "places") renderPage(); } });
     // the furnishings' pictures come as they are drawn (atlas-models.js), and models the game master brought in
     document.addEventListener("atlas-models", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
@@ -764,6 +775,13 @@
       else if (b.dataset.ps === "x") { const t = Date.now(); st.set("xcard", "now", { t }); st.set("xcard", "x" + t, { t }); toast("The game master has been told. Take a breath; the game will move on.", false); }
     });
     app.addEventListener("submit", e => {
+      // what they mean to do, for the game master (collection "intent": with the world's date when there is one)
+      if (e.target.matches(".ps-intent-f")) {
+        e.preventDefault(); const ta = e.target.querySelector("textarea"), v = ta.value.trim().slice(0, 1200); if (!v) return;
+        const who = String((e.target.elements.who || {}).value || "").trim().slice(0, 40), d = st.get("clock", "now") || {};
+        st.set("intent", "i" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), Object.assign({ text: v, t: Date.now() }, who ? { who } : {}, d.date ? { when: d.date + (d.time ? ", " + d.time : ""), m: d.m } : {}));
+        ta.value = ""; if (document.activeElement) document.activeElement.blur(); toast("The game master can read it now.", false); return;
+      }
       if (!e.target.matches(".ps-add")) return;
       e.preventDefault(); const ta = e.target.querySelector("textarea"), v = ta.value.trim().slice(0, 2000); if (!v) return;
       const kind = (e.target.querySelector("select[name=kind]") || {}).value || ""; st.set("journal", "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), Object.assign({ text: v, t: Date.now() }, kind ? { kind } : {})); ta.value = "";

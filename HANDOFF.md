@@ -113,7 +113,11 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
      5. a timeline to scroll (8) (**built 4 Nov**: in atlas-history.js, above the list in The world's history: rows for
         the sessions (bands, from `log` `s<n>.m0`), the world, the party and what came of it; deed-to-consequence lines;
         today and what is coming; + and −. The workspace's dev/timeline-test.js "all well");
-     6. the players' chronicle, with their own written intentions (5);
+     6. the players' chronicle, with their own written intentions (5) (**built 4 Nov**: three new journal keys in
+        atlas-table.js JOURNAL (intent, purse, memories) shown in the players' window Journal; collection `intent`
+        written by the players; atlas-journal.js's card on Tonight (cardsFor("tonight")), A.chronicle for the copilot
+        and journeys; the copy and phones get it through `share` doc `chronicle` (filtered on the game master's page)
+        and may read and write `intent` (lib/players-lan.js). The workspace's dev/chronicle-test.js "all well");
      7. people living their days in the 3D city (6);
      8. the relationship web (11);
      9. "What if we wait a month?" (9);

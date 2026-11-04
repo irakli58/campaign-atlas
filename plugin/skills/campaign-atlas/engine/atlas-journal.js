@@ -41,7 +41,16 @@
     S().set("met", key, Object.assign({}, had || {}, { name: n.name, role: T.plainRole ? T.plainRole(n.role || "") : "", look: n.look || "", when: (had && had.when) || nowWhen(), t: (had && had.t) || Date.now() }));
   }
 
-  const paint = () => { if (api.tab() === "screen") api.render(); };
+  const paint = () => { if (api.tab() === "screen" || api.tab() === "tonight") api.render(); };
+  // what the players mean to do, as they wrote it on their phones or their window (the players' chronicle, the user's
+  // approved idea of 3 Nov 2026: "text not checkmarks so a person writes what they are going to do"), on Tonight
+  const intents = () => Object.entries((S() && S().get("intent")) || {}).filter(([, x]) => x && x.text).sort((a, b) => (b[1].t || 0) - (a[1].t || 0));
+  function intentCard() {
+    if (!cfg().intent) return ""; const l = intents(), unread = l.filter(([, x]) => !x.seen).length;
+    return `<section class="t-card tj-intent"><h3>${T.icon("party")} What the players mean to do${unread ? ` <span class="tw-tag">${unread} new</span>` : ""}</h3>
+      ${l.length ? `<ul class="tj-list">${l.slice(0, 8).map(([id, x]) => `<li class="${x.seen ? "done" : ""}"><p>${esc(x.text)}</p><span class="kn">${x.who ? esc(x.who) + " · " : ""}${esc(x.when || new Date(x.t).toLocaleString())}</span> ${x.seen ? "" : `<button type="button" class="t-link" data-tj="iseen" data-id="${esc(id)}">Read</button>`}<button type="button" class="t-link" data-tj="idel" data-id="${esc(id)}">Remove</button></li>`).join("")}</ul>` : `<p class="t-small">Nothing written yet. The players write it in their Journal, on their screen or their phones; it comes here, and the copilot reads it too.</p>`}</section>`;
+  }
+  TU.addCard("tonight", intentCard);
   document.addEventListener("click", e => {
     const b = e.target.closest && e.target.closest("[data-tj]"); if (!b || b.tagName === "INPUT" || b.tagName === "FORM") return;
     const k = b.dataset.tj, id = b.dataset.id, st = S();
@@ -50,6 +59,8 @@
     else if (k === "qdel") st.set("pquests", id, null);
     else if (k === "hdel") st.set("hints", id, null);
     else if (k === "mdel") st.set("met", id, null);
+    else if (k === "iseen") { const x = st.get("intent", id); if (x) st.set("intent", id, Object.assign({}, x, { seen: true })); }
+    else if (k === "idel") st.set("intent", id, null);
     else if (k === "recap") { const n = api.session() - 1, r = n > 0 ? (api.notesOf(n) || {}).recap : ""; if (!r) { api.note("Write \"Previously on…\" under Tonight first."); return; } st.set("recaps", "s" + n, { n, text: r, t: Date.now() }); api.note("Given to their journal."); }
     else return;
     setTimeout(paint, 60);
@@ -70,5 +81,7 @@
     api.note("Given to their journal."); setTimeout(paint, 60);
   });
   // (watched once the table's store is there: the first plugin tab's init comes after it; the screen is read from then on)
-  let tries = 0; const boot = setInterval(() => { const st = S(); if (!st) { if (++tries > 600) clearInterval(boot); return; } clearInterval(boot); st.watch("screen", d => onScreen(d)); for (const c of ["jcfg", "pquests", "hints", "recaps", "met"]) st.watch(c, paint); }, 200);
+  let tries = 0; const boot = setInterval(() => { const st = S(); if (!st) { if (++tries > 600) clearInterval(boot); return; } clearInterval(boot); st.watch("screen", d => onScreen(d)); for (const c of ["jcfg", "pquests", "hints", "recaps", "met"]) st.watch(c, paint); st.watch("intent", () => { paint(); if (api.note && intents().some(([, x]) => !x.seen && Date.now() - (x.t || 0) < 8000)) api.note("The players have written what they mean to do: see Tonight."); }); }, 200);
+  // for the copilot and the journey's day: what the players last said they mean to do
+  A.chronicle = { intents: () => intents().map(([id, x]) => Object.assign({ id }, x)), latest: () => { const l = intents(); return l.length ? l[0][1] : null; } };
 })(ATLAS);

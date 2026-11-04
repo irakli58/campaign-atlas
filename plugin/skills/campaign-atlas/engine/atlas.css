@@ -2336,6 +2336,22 @@ button.ho-b:hover { color: var(--ink); }
 .tj-add .t-in { flex: 1 1 220px; width: auto; margin: 0; }
 .ps-jsec { border-top: 1px solid #2c2f31; padding: 16px 0 6px; }
 .ps-jsec h3 { font-family: var(--f-display); font-weight: 400; font-size: 26px; margin: 0 0 10px; color: #fff; }
+/* the players' chronicle: what they mean to do, what they carry, what they remember (atlas-table.js journalHTML) */
+.ps-intent-f { display: grid; gap: 6px; margin-bottom: 12px; }
+.ps-intent-f textarea { width: 100%; box-sizing: border-box; background: #0f1112; color: #e8e4da; border: 1px solid #3a3a3a; border-radius: 4px; padding: 8px; font: inherit; font-size: 16px; }
+.ps-intent-f .ps-addrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ps-intent-f input { flex: 1 1 160px; min-width: 0; background: #0f1112; color: #e8e4da; border: 1px solid #3a3a3a; border-radius: 4px; padding: 7px 8px; font: inherit; font-size: 15px; }
+.ps-intent-f button { border: 1px solid #555; background: #e8e4da; color: #111; border-radius: 3px; padding: 7px 14px; cursor: pointer; font: inherit; font-size: 15px; }
+.ps-intents, .ps-mems, .ps-carry { list-style: none; margin: 0; padding: 0; }
+.ps-intents li, .ps-mems li { border-left: 3px solid #4a4f53; padding: 4px 0 4px 10px; margin: 0 0 8px; }
+.ps-intents p { margin: 0 0 2px; white-space: pre-wrap; }
+.ps-mems q { display: block; font-style: italic; color: #b9b2a5; margin-top: 2px; }
+.ps-mems .ps-when, .ps-intents .ps-when { display: block; text-align: left; margin: 2px 0 0; }
+.ps-purse { font-size: 18px; margin: 0 0 8px; }
+.ps-carry { columns: 2 180px; }
+.ps-carry li { margin: 0 0 4px; }
+.tj-intent .tj-list p { margin: 0 0 2px; white-space: pre-wrap; }
+.wm-jsaid { margin: 8px 0 0; font-style: italic; }
 .ps-quests { margin: 0; padding-left: 22px; font-size: 18px; }
 .ps-quests li { margin: 0 0 6px; }
 .ps-quests li.done { color: #8a857c; text-decoration: line-through; }

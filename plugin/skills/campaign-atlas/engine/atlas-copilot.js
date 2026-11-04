@@ -57,6 +57,8 @@
     if (A.journey) { const j = A.journey.say(); if (j) out.push(j); }
     // what is going round where the party is, as people tell it (atlas-rumours.js)
     if (A.rumours) { const r = A.rumours.say(); if (r) out.push(r); }
+    // what the players last wrote that they mean to do (the players' chronicle, atlas-journal.js)
+    if (A.chronicle) { const l = A.chronicle.intents().slice(0, 2); if (l.length) out.push("The players say they mean to: " + l.map(x => `"${x.text}"`).join("; ")); }
     // unfinished business from earlier sessions, as the table remembers it (atlas-sessions.js): the council plans from it
     const U = A.memory ? A.memory.unfinished() : []; if (U.length) out.push("Unfinished business from earlier sessions: " + U.slice(0, 6).map(m => `[${A.memory.cite(m)}] ${m.text}`).join("; "));
     return out.join("\n");

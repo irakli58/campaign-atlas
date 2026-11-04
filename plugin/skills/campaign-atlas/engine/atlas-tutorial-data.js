@@ -160,7 +160,8 @@
         { say: "Open it, drag it onto the television, and choose what they see from here.", sel: "[data-t='openscreen']", act: "look" },
         { say: "Maps go to them a room at a time. In caves you brush the fog away as they explore, flat or in 3D.", sel: ".t-fog, .t-fog3d", act: "look" },
         { say: "With the Atlas app, players can also follow on their own phones: switch it on and show them the QR code.", sel: ".t-lan", act: "look", optional: true },
-        { say: "The players' journal: choose how much Atlas keeps for them, from their own notes only to quests, hints and a timeline. Only what they found, or what you give them, is ever in it.", sel: "#tvBody .t-journal", act: "look" }
+        { say: "The players' journal: choose how much Atlas keeps for them, from their own notes only to quests, hints and a timeline. Only what they found, or what you give them, is ever in it.", sel: "#tvBody .t-journal", act: "look" },
+        { say: "It is their chronicle too, on their screen and their phones: what they mean to do, written in their own words for you to read; their purse and what they carry; and what the table remembers that they saw, did and said, never your notes for later. Each is a switch here.", sel: "#tvBody .tj-keys", act: "look", optional: true }
       ] },
       { id: "dock", title: "The quick tools", summary: "Dice, a person on the spot, ideas when they're stuck, questions, the copilot: always at the bottom right.", features: ["dock", "dice", "person", "stuck", "ask"], needs: has("#tDock"), steps: [
         { say: "These quick tools are on every page, at the bottom right.", sel: "#tDock", act: "look" },
@@ -196,8 +197,9 @@
         { say: "Safety: lines and veils, and the X-card the players can press on their screen.", sel: "[data-t='tab'][data-tab='safety']", act: "click", try: "Click Safety.", wait: 400 },
         { say: "Print and export: the whole campaign as a book, the handouts to print, and maps for Foundry and Roll20.", sel: "[data-t='tab'][data-tab='export']", act: "click", try: "Click Print and export.", wait: 400 }
       ] },
-      { id: "tonight", title: "Tonight, clocks and handouts", summary: "The session sheet, the villains' clocks, and handouts drawn as the real thing.", features: ["tonight", "clocks", "handouts"], needs: has("#v-table"), steps: [
+      { id: "tonight", title: "Tonight, clocks and handouts", summary: "The session sheet, the villains' clocks, and handouts drawn as the real thing.", features: ["tonight", "clocks", "handouts", "chronicle"], needs: has("#v-table"), steps: [
         { say: "Tonight: the session's plan, your notes, and a read-aloud Previously on.", sel: "[data-t='tab'][data-tab='tonight']", act: "click", try: "Click Tonight.", wait: 500 },
+        { say: "What the players mean to do, as they wrote it in their journal, newest first: mark each one read. The copilot reads it, and a journey's day shows the last of it.", sel: "#tvBody .tj-intent", act: "look", optional: true },
         { say: "Clocks: what each villain is doing while the party investigates. Tick them as the world moves.", sel: "[data-t='tab'][data-tab='clocks']", act: "click", try: "Click Clocks and stuck.", wait: 500 },
         { say: "Handouts, drawn as the letters and newspapers they are, go to the players' screen with one click.", sel: "[data-t='tab'][data-tab='screen']", act: "click", auto: true }
       ] },
@@ -290,6 +292,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    chronicle: ["The players' chronicle", "chronicle intentions intent what we mean to do written players phones read purse carry possessions remember memories journal"],
     timeline: ["The timeline", "timeline line of days scroll sessions events deeds consequences linked today coming zoom history"],
     paper: ["The week's paper", "newspaper paper gazette broadsheet crier town crier sheet daily newsfeed bulletin week printed handout news players keep"],
     rumours: ["The rumour mill", "rumour rumor gossip spread travel roads version truth told changed exaggerated blamed inn town players hear news false lead"],

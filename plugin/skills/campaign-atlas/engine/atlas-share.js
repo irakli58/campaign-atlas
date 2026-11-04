@@ -92,12 +92,23 @@
     boardMemo = { k, v: { nodes, edges, W, H, pos: T.boardLayout(model, W, H) } };
     return boardMemo.v;
   }
+  // the players' chronicle (the user's approved idea of 3 Nov 2026): their purse and what they carry, written in the
+  // story's money here, and what the table remembers that they saw and said: only the kinds and truths their window shows,
+  // so the copy and the phones never hold the table's whole memory (atlas-table.js journalHTML)
+  const SEEN = ["did", "decision", "talk", "promise", "threat", "clue", "visit", "item", "fate", "bond", "theory", "mystery"];
+  function chronicleShare(S) {
+    const J = journal(S), out = {};
+    if (J.purse) { const p = S.get("econ", "purse"); if (p && p.n != null) out.purse = A.money && A.money.fmt ? A.money.fmt(+p.n) : String(p.n); out.carry = Object.values(S.get("stash") || {}).filter(x => x && x.n).sort((a, b) => (b.t || 0) - (a.t || 0)).map(x => ({ n: x.n, qty: x.qty || 1 })); }
+    if (J.memories) out.mems = Object.values(S.get("memory") || {}).filter(m => m && m.text && m.state === "kept" && SEEN.includes(m.kind) && ["canon", "narration", "player"].includes(m.src)).sort((a, b) => (b.t || b.t0 || 0) - (a.t || a.t0 || 0)).slice(0, 30).map(m => ({ text: m.text, quote: m.quote || "", session: m.session || "" }));
+    return out;
+  }
   // everything to share, as docs of the collection
   function compute(S, prefs) {
     const out = {}, screen = S.get("screen", "now") || {};
     for (const id of A.order) { const d = placeShare(S, id, screen); if (d) out["place:" + id] = d; }
     const w = worldShare(S, prefs); if (w) out.world = w;
     out.board = boardShare(S);
+    out.chronicle = chronicleShare(S);
     // the star chart: only what is charted (atlas-galaxy.js), never the seed the galaxy grows from
     if (A.galaxyShare) { try { const g = A.galaxyShare(S); if (g) out.galaxy = g; } catch (e) { console.warn("atlas: the star chart could not be shared", e); } }
     return out;
@@ -112,7 +123,7 @@
       for (const k of Object.keys(have)) if (!(k in all)) { delete last[k]; S.set("share", k, null); }
     };
     const soon = () => { clearTimeout(t); t = setTimeout(run, 400); };
-    for (const c of ["share", "fog", "status", "clues", "screen", "board", "devstate", "world", "mapedits", "fly", "jcfg", "charts", "ship", "gedits"]) S.watch(c, soon);
+    for (const c of ["share", "fog", "status", "clues", "screen", "board", "devstate", "world", "mapedits", "fly", "jcfg", "charts", "ship", "gedits", "econ", "stash", "memory"]) S.watch(c, soon);
     if (typeof document !== "undefined") document.addEventListener("atlas-story", soon);
     S.ready.then(soon);
     return { now: run };
@@ -131,11 +142,12 @@
           A.place(id, { name: d.name, region: d.region, map: { floors, ext: d.ext || "", clues: d.clues || {}, traps: d.traps || {}, start: d.start || 0 } });
         } else if (k === "world") A.worldData = JSON.parse(s);
         else if (k === "board") A.shareBoard = d;
+        else if (k === "chronicle") A.shareChronicle = d;
       }
       for (const k of Object.keys(got)) if (!(k in docs)) {
         delete got[k]; changed = true;
         if (k.startsWith("place:")) { const id = k.slice(6); delete A.maps[id]; delete A.meta[id]; const i = A.order.indexOf(id); if (i >= 0) A.order.splice(i, 1); }
-        else if (k === "world") A.worldData = null; else if (k === "board") A.shareBoard = null;
+        else if (k === "world") A.worldData = null; else if (k === "board") A.shareBoard = null; else if (k === "chronicle") A.shareChronicle = null;
       }
       if (!changed) return;
       A.state.cache = {};
