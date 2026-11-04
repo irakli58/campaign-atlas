@@ -48,6 +48,13 @@ function namer(rnd, own, dry, style, liquid) {
   const KIND_SAYS = { sea: ["sea", "ocean", "bay", "gulf", "sound", "strait"], range: ["range", "mountains", "hills", "peaks"], forest: ["forest", "wood", "woods", "weald"], lake: ["lake", "mere"], nebula: ["nebula", "cloud"],
     desert: ["desert", "waste", "sands", "dunes", "badlands"], swamp: ["swamp", "marsh", "fen", "bog", "mire", "wetland"], glacier: ["glacier", "ice", "icefield"], volcano: ["volcano", "mount", "peak"], wood: ["wood", "grove", "enchanted"], blight: ["blight", "wasteland", "corruption"] };
   const own_ = kind => { for (const [k, list] of Object.entries(mine)) if ((KIND_SAYS[kind] || [kind]).includes(k) && list.length) return list.shift().name; return null; };
+  // (a plane's seas and lakes named for what fills them: a sea of blood, the mists, the void, a lake of fire; the rest as
+  // fantasy names them)
+  if (style === "plane") {
+    const d0 = namer(rnd, own, dry, null, liquid), LQ = { bloodsea: ["Sea of Blood", "Blood Gulf", "Red Deep"], mistsea: ["Mists", "Cloud Deeps", "Grey Drift"], voidsea: ["Void", "Dark Between", "Deep Dark"], astral: ["Silver Reach", "Silver Deep"], lava: ["Fire Sea", "Burning Deep", "Sea of Flame"], ice: ["Frozen Sea", "White Ice", "Ice Fields"], cursedwater: ["Mire", "Black Water", "Fen"], ichor: ["Golden Sea", "Ichor Deep"] }[liquid];
+    if (LQ) { d0.sea = (big, auto) => own_("sea") || (auto ? `The ${pick(ADJ)} ${pick(LQ)}` : null); d0.lake = auto => own_("lake") || (auto ? `The ${word()} ${pick(LQ).split(" ").pop()}` : null); }
+    return d0;
+  }
   // (a planet's features named as astronomers name them (the IAU's descriptor terms): Planitia a low plain, Planum a high
   // one, Mare and Lacus a sea and a lake, Montes a range, Mons a mountain, Regio a broad region, Palus a marsh, Sinus a
   // bay; the user's plan of 4 Nov 2026)
@@ -332,7 +339,35 @@ function planetFeatures(L, cols, rows, env, km, rnd) {
       disk(ci, cj, R, (n, d) => { if (d < 1 && rnd() < .85) { bump(n, (rnd() - .5) * 6); FX[n] = rnd() < .5 ? B.stones : B.rock; } }); }
     made.lineae = nL; made.chaos = nX;
   }
+  // (a plane's own landforms, its recipe's laws, atlas-cosmos.js: they need no physics, only its lore. Malbolge's endless
+  // slope of boulders, Nessus's chasms, Maladomini's ruined cities)
+  const LF = new Set(env.landforms || []);
+  if (LF.has("slope")) { const a = rnd() * Math.PI * 2, ax = Math.cos(a), ay = Math.sin(a); for (let n = 0; n < N; n++) { const u = ((n % cols) / cols - .5) * ax + (((n / cols) | 0) / rows - .5) * ay; bump(n, u * 90); } made.slope = 1; }
+  if (LF.has("boulders")) { const k = Math.round(N / 80); for (let b = 0; b < k; b++) { const R = .7 + rnd() * 1.8; disk(Math.floor(rnd() * cols), Math.floor(rnd() * rows), R, (n, d) => { if (d < 1) { bump(n, 4 * (1 - d)); if (rnd() < .6) FX[n] = B.stones; } }); } made.boulders = k; }
+  if (LF.has("chasms")) {
+    const nC = 8 + Math.floor(rnd() * 10);
+    for (let c = 0; c < nC; c++) { let x = rnd() * cols, y = rnd() * rows, a = rnd() * Math.PI * 2; const len = cols * (.2 + rnd() * .6), w = 1 + Math.floor(rnd() * 3);
+      for (let s = 0; s < len; s++) { a += (rnd() - .5) * .25; x += Math.cos(a); y += Math.sin(a); for (let dj = -w; dj <= w; dj++) for (let di = -w; di <= w; di++) { const n = at(Math.round(x) + di, Math.round(y) + dj); if (n >= 0) { bump(n, -60 * (1 - Math.hypot(di, dj) / (w + 1))); FX[n] = B.canyon; } } } }
+    made.chasms = nC;
+  }
+  if (LF.has("ruins")) { const nR = 10 + Math.floor(rnd() * 12); for (let c = 0; c < nR; c++) { const R = 3 + rnd() * 9; disk(Math.floor(rnd() * cols), Math.floor(rnd() * rows), R, (n, d) => { if (d < 1 && rnd() < .7) { bump(n, rnd() * 3); FX[n] = rnd() < .5 ? B.ironstreets : B.stones; } }); } made["ruined cities"] = nR; }
   return { FX, made };
+}
+// a plane's named rivers, its recipe's laws (atlas-cosmos.js): they run because its lore says so, rain or none, across
+// the whole map by the lowest ground, as the Styx does through the upper Hells
+function magicRivers(L, cols, rows, cell, list, rnd) {
+  const H = L.H, N = cols * rows, out = [];
+  for (const rv of list || []) {
+    const vertical = rnd() < .5, a = vertical ? Math.floor(cols * (.2 + rnd() * .6)) : Math.floor(rows * (.2 + rnd() * .6)), start = vertical ? a : a * cols;
+    const dist = new Float64Array(N).fill(1e18), prev = new Int32Array(N).fill(-1), hp = new Heap(); dist[start] = 0; hp.push(start, 0); let end = -1;
+    while (hp.size) { const n = hp.pop(), i = n % cols, j = (n / cols) | 0; if (vertical ? j === rows - 1 : i === cols - 1) { end = n; break; }
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) { const x = i + di, y = j + dj; if (x < 0 || y < 0 || x >= cols || y >= rows) continue; const m = y * cols + x, d = dist[n] + Math.hypot(di, dj) * (1 + Math.max(0, H[m] - 128) * .2 + rnd() * .3); if (d < dist[m]) { dist[m] = d; prev[m] = n; hp.push(m, d); } } }
+    if (end < 0) continue; const path = []; for (let c = end; c >= 0; c = prev[c]) path.push(c); path.reverse();
+    for (const c of path) if (H[c] > 129) { H[c] = Math.max(129, H[c] - 2); if (L.Lo) L.Lo[c] = 0; }
+    const xy = path.map(m => [((m % cols) + .5) * cell, (((m / cols) | 0) + .5) * cell]);
+    out.push({ pts: smooth(simplify(xy, cell * .6), 2).map(p => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10]), w: 4.5, name: rv.name || null, liquid: rv.liquid || null, magic: true });
+  }
+  return out;
 }
 function carveFjords(o, L, rnd) {
   const { cols, rows } = o, N = cols * rows, H = L.H, high = distance(cols, rows, n => H[n] > 128 + 127 * .38), starts = [];
@@ -415,7 +450,8 @@ function makeCover(o, L, R, rnd, log) {
   // its slopes (the land round it a volcanic field, grown downhill)
   const peaks = []; for (let n = 0; n < N; n++) { if (!land(n) || th(n) < .5 || C[n]) continue; let top = true; const i = I(n), j = J(n); for (let dj = -3; dj <= 3 && top; dj++) for (let di = -3; di <= 3; di++) { const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < cols && b < rows && H[b * cols + a] > H[n]) { top = false; break; } } if (top) peaks.push(n); }
   // (with geology the volcanoes are where the plates put them: arcs over sinking oceans, rifts, hotspots)
-  const nV = o.geo ? o.geo.volcanoes.length : alien && o.planet === "volcanic" ? 6 : (rnd() < .38 ? 1 : 0) + (setting === "fantasy" && rnd() < .15 ? 1 : 0), vols = [];
+  // (a world with an environment has volcanoes only as its volcanism allows: none on a plane whose lore has none)
+  const nV = o.env && (!(o.env.volcanism > .1) || o.env.volcStyle === "cryo" || o.env.volcStyle === "none") ? 0 : o.geo ? o.geo.volcanoes.length : alien && o.planet === "volcanic" ? 6 : (rnd() < .38 ? 1 : 0) + (setting === "fantasy" && rnd() < .15 ? 1 : 0), vols = [];
   const vCands = o.geo ? o.geo.volcanoes.slice() : peaks.sort((a, b) => (L.coast[a] + rnd() * 30) - (L.coast[b] + rnd() * 30));
   for (const n of vCands) { if (vols.length >= nV) break; if (!awayFrom(vols, 40)(n)) continue; vols.push(n);
     const r = 4 + Math.floor(rnd() * 3), top = Math.min(255, H[n] + 12);
@@ -566,7 +602,7 @@ function invent(A, flags, log) {
   if (look !== "stars" && !SEA_SHARE[land]) throw new Error(`unknown land "${land}": masses (with --landmasses N and --landshare 0.1..0.9), continents (a whole planet's), continent, islands, archipelago, coast or inland`);
   const seed = flags.seed != null && flags.seed !== true ? parseInt(flags.seed, 10) : old.seed || 1000 + Math.floor(Math.random() * 9000);
   const cell = 4, cols = Math.round(w / cell), rows = Math.round(h / cell), N = cols * rows, rnd = mulberry32(seed + 77);
-  const env0 = envOf(flags.env), autoNames = flags.names !== "none", name = namer(mulberry32(seed + 5), W0.regions, env0 ? !env0.liquid.surface : flags.liquid === "none", env0 ? env0.names || "planetary" : null, env0 ? env0.liquid.kind : null);
+  const env0 = envOf(flags.env), autoNames = flags.names !== "none", name = namer(mulberry32(seed + 5), W0.regions, env0 ? !env0.liquid.surface : flags.liquid === "none", env0 ? (env0.kind === "plane" ? "plane" : env0.names || "planetary") : null, env0 ? env0.liquid.kind : null);
   // the climate and the setting (what the world gets by itself: fantasy's enchanted woods, an alien planet's strange land);
   // a land made before there were climates (the same seed, no cover) is made again exactly as it was, unless asked
   const setting = String(flags.setting && flags.setting !== true ? flags.setting : W0.setting || BIO.settingOf(look)).toLowerCase();
@@ -652,7 +688,7 @@ function invent(A, flags, log) {
       const coastWord = ENV ? (ENV.shores === "beach" ? "geologic" : "plain") : flags.coast != null && flags.coast !== true ? String(flags.coast) : old.coastModel || (fresh ? "geologic" : "");
       if (coastWord && !["natural", "geologic", "plain"].includes(coastWord)) throw new Error(`unknown coast "${coastWord}": geologic (shaped by rock, ice, sea level, rivers and waves), natural (waves, drift and sand) or plain`);
       const spinV = flags.spin != null && flags.spin !== true ? (/^(retro|-1|back)/i.test(String(flags.spin)) ? -1 : 1) : old.currents && old.currents.spin < 0 ? -1 : 1;
-      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", shores: coastWord === "geologic", currents: currentsOn && climateModel === "earth", spin: spinV, climateModel: climateModel === "earth" ? "earth" : undefined, lid: ENV ? (ENV.crust && ENV.crust !== "plates" ? ENV.crust : undefined) : typeof flags.lid === "string" ? flags.lid : undefined, dry: ENV ? (ENV.fall === "none" || ENV.fall === "frost" ? true : undefined) : flags.liquid === "none" || flags.liquid === "lava" ? true : undefined, plates: ENV && ENV.crust === "squishy" ? 3 : (ENV ? ENV.crust && ENV.crust !== "plates" && ENV.crust !== "squishy" : typeof flags.lid === "string" && flags.lid !== "plates" && flags.lid !== "squishy") ? 1 : undefined, env: ENV || undefined, noSea: envNoSea || undefined, fluvial: ENV ? ENV.erosion.fluvial : undefined, locked: flags.locked != null && flags.locked !== "off" ? (flags.locked === true ? .3 : +flags.locked) : undefined, lat: latA, warmC: whole ? (flags.temp != null && flags.temp !== true ? +flags.temp - 13 : { cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
+      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", shores: coastWord === "geologic", currents: currentsOn && climateModel === "earth", spin: spinV, climateModel: climateModel === "earth" ? "earth" : undefined, lid: ENV ? (ENV.crust && ENV.crust !== "plates" ? ENV.crust : undefined) : typeof flags.lid === "string" ? flags.lid : undefined, dry: ENV ? (ENV.fall === "none" || ENV.fall === "frost" ? true : undefined) : flags.liquid === "none" || flags.liquid === "lava" ? true : undefined, plates: ENV && ENV.crust === "squishy" ? 3 : (ENV ? ENV.crust && ENV.crust !== "plates" && ENV.crust !== "squishy" : typeof flags.lid === "string" && flags.lid !== "plates" && flags.lid !== "squishy") ? 1 : undefined, env: ENV || undefined, noSea: envNoSea || undefined, fluvial: ENV ? ENV.erosion.fluvial : undefined, locked: flags.locked != null && flags.locked !== "off" ? (flags.locked === true ? .3 : +flags.locked) : undefined, lat: latA, warmC: ENV && ENV.climate && ENV.climate.temp != null ? ENV.climate.temp - (ENV.climate.model === "uniform" ? 28 : 13) : whole ? (flags.temp != null && flags.temp !== true ? +flags.temp - 13 : { cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
       if (G.ocean) T.currents = packCurrents(G.ocean, name, cell);
       // (the coasts as the waves, the drift and the sand made them: on trial until the user approves, 28 Oct 2026,
@@ -700,6 +736,8 @@ function invent(A, flags, log) {
     const PF = ENV ? planetFeatures(L, cols, rows, ENV, kmA0, mulberry32(seed + 67)) : null;
     const noRiv = ENV ? ENV.erosion.fluvial < .3 || !ENV.liquid.surface : !!flags.norivers;
     const R = noRiv ? { rivers: [], mask: new Uint8Array(N) } : makeRivers(Object.assign({ wetf: geo ? 1 : BIO.CLIMATES[climate][2], lakesFlow: !!geo }, co), L); T.rivers = R.rivers; riverMask = R.mask;
+    // (a plane's named rivers, which run because its lore says so: the Styx)
+    if (ENV && ENV.rivers && ENV.rivers.length) { const mr = magicRivers(L, cols, rows, cell, ENV.rivers, mulberry32(seed + 71)); T.rivers = T.rivers.concat(mr); }
     if (L.drawnRiver) drawnRivers(co, L, R);
     if (regions) { CV = makeCover(Object.assign({ geo, rain: !!geo }, co), L, R, mulberry32(seed + 43), log); CV.fjords = fj; if (CV.liquid) T.liquid = CV.liquid; if (CV.lore && CV.lore.length) T.lore = CV.lore; }
     if (PF && CV) { for (let n = 0; n < N; n++) if (PF.FX[n]) CV.C[n] = PF.FX[n]; if (Object.keys(PF.made).length) T.features = PF.made; }

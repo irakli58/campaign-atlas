@@ -28,7 +28,7 @@
   const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
   const rng = seed => { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
 
-  const STRUCT = { land: "A land", unbounded: "A land without end: no seas, no coasts", islands: "Islands in a void", layers: "A stack of layers", city: "A city that is the plane", underground: "A land underground" };
+  const STRUCT = { land: "A land", unbounded: "A land without end: no seas, no coasts", islands: "Islands in a void", ocean: "All ocean: no shore, almost no land", sky: "All sky: islands adrift over clouds", chart: "No surface: a chart of what drifts in it", mirror: "A mirror of the campaign's world, remade by its laws", layers: "A stack of layers", city: "A city that is the plane", underground: "A land underground" };
   const RING = { material: "The world", echo: "Echoes of the world", transitive: "The ways between", inner: "The Inner Planes", outer: "The Outer Planes", other: "Elsewhere" };
   const TAG = { canon: ["Canon", "From its source, as that edition has it"], variant: ["Another edition", "Another edition says otherwise"], added: ["Added by Atlas", "Invented to fill a gap in the sources"], homebrew: ["Yours", "The game master's own"] };
   const WAYS = { portal: "A portal", gate: "A gate", ritual: "A ritual", spell: "A spell", passage: "A hidden passage", crossroads: "A crossroads" };
@@ -51,26 +51,73 @@
 
   /* ---- a layer's map from its recipe: the world generator's own flags, as Open its surface gives a planet's */
   const wid = (d, l) => ("dim-" + d.id + "-" + l.id).replace(/[^\w-]/g, "-").slice(0, 40);
+  /* (the user's plan of 4 Nov 2026, reviews/2026-11-04-environments.md: a plane's map is made from what its lore says it
+     is, not the fantasy generator's world in other colours. Its recipe's shape and laws become its environment, which the
+     world generator follows as it follows a planet's: its shape (a land, a land without end, islands in a void, all
+     ocean, all sky, a chart where it has no surface, a city, a mirror of the campaign's world), its liquid and how much,
+     its weather or none, its warmth by its law and not by latitude (a plane has no poles), what lives there, its own
+     landforms (an endless slope, chasms, ruined cities) and its named rivers that run because its lore says so) */
+  const SHAPE_SEA = { unbounded: 0, city: 0, underground: 0, ocean: .997, islands: .78, sky: .8 };
+  function envOf(d, l) {
+    const m = Object.assign({}, d.map || {}, l.map || {}), laws = Object.assign({}, d.laws || {}, l.laws || {}, m.laws || {});
+    const st = m.structure || l.structure || (d.structure !== "layers" ? d.structure : "") || "land";
+    const liquid = m.liquid || (m.cover && m.cover.liquid) || "water";
+    const share = liquid === "none" ? 0 : SHAPE_SEA[st] != null ? SHAPE_SEA[st] : m.landshare != null ? 1 - m.landshare : .38;
+    const still = laws.weather === "none";
+    const cover = Object.assign({}, m.cover || {}, st === "city" ? { dry: (m.cover || {}).dry || "ironstreets" } : {});
+    return { v: 2, kind: "plane", frame: st, crust: m.crust || "plates", impacts: m.impacts || 0, basins: m.basins || 0, volcanism: m.volcanism || 0, volcStyle: m.volcStyle || "arcs",
+      liquid: { kind: liquid, share, surface: share > 0 }, erosion: { fluvial: still || !share ? (m.fluvial || 0) : m.fluvial != null ? m.fluvial : 1, aeolian: m.aeolian != null ? m.aeolian : .3, glacial: m.glacial || 0 },
+      climate: { model: "uniform", temp: laws.warmth != null ? laws.warmth : 14, even: 1 }, fall: still ? "none" : laws.fall || "rain", life: m.life || laws.life || "complex",
+      cover: Object.keys(cover).length ? cover : null, shores: liquid === "water" ? "beach" : liquid === "lava" ? "lava" : share ? "smooth" : "none", names: null, landforms: m.landforms || [], rivers: m.rivers || [] };
+  }
   function recipe(d, l) {
-    const m = Object.assign({}, d.map || {}, l.map || {}), st = m.structure || l.structure || (d.structure !== "layers" ? d.structure : "") || "land";
+    const m = Object.assign({}, d.map || {}, l.map || {}), env = envOf(d, l), st = env.frame;
     const seed = +((docs()["seed:" + d.id + ":" + l.id] || {}).v) || m.seed || (hash(d.id + "|" + l.id) % 1e6);
-    const f = { size: m.size || "large", land: st === "unbounded" || st === "city" || st === "underground" ? "inland" : st === "islands" ? "archipelago" : m.land || "masses", landmasses: m.landmasses || 2, landshare: m.landshare != null ? m.landshare : .62,
-      climate: m.climate || "temperate", setting: "plane", look: "planet", seed, replace: true, regions: true, "climate-model": "earth", currents: "off", coast: "plain", liquid: m.liquid || (m.cover && m.cover.liquid) || "water" };
-    if (m.cover) f.cover = Object.assign({}, m.cover, st === "city" ? { dry: m.cover.dry || "ironstreets" } : {});
-    else if (st === "city") f.cover = { dry: "ironstreets" };
-    if (st === "islands" || m.norivers || ["none", "lava", "voidsea", "astral", "mistsea"].includes(f.liquid)) f.norivers = true;
-    if (f.liquid === "none" || f.liquid === "lava") f.liquid = f.liquid === "lava" ? "lava" : "none";
-    if (m.craters) f.craters = m.craters; if (m.lid) f.lid = m.lid;
-    return f;
+    const w = env.climate.temp, climate = m.climate || (w > 40 ? "arid" : w > 22 ? "warm" : w < -15 ? "polar" : w < 2 ? "cold" : "temperate");
+    return { size: m.size || "large", land: st === "islands" || st === "sky" ? "archipelago" : "masses", landmasses: m.landmasses || (st === "ocean" ? 6 : 2), climate, setting: "plane", realism: "fantasy", look: st === "chart" ? "stars" : "planet",
+      seed, replace: true, regions: true, "climate-model": "earth", currents: "off", coast: "plain", env, palette: palette(d, l) };
   }
   const PAL0 = { ground: "#7a6a5a", sea: null, ice: null, plant: null, sky: "#2a2a3a" };
-  const palette = (d, l) => Object.assign({}, PAL0, d.palette || {}, (l.map || {}).palette || l.palette || {});
+  // (its sea's colour from its liquid when the recipe gives none, so a plane with water or blood never looks dry; the
+  // liquid kept beside it, so a still sea gets no pale shallows: atlas-world-art.js planetColours)
+  const SEA_OF = { water: "#2f6f8f", bloodsea: "#5a1414", mistsea: "#8a9096", voidsea: "#0e0c18", astral: "#cfd0e0", lava: "#ff5a1f", ice: "#cfdde6", cursedwater: "#34403a", ichor: "#b08a2a", methane: "#2b2b2b", glowwater: "#4f9e98" };
+  const palette = (d, l) => { const m = Object.assign({}, d.map || {}, l.map || {}), liq = m.liquid || (m.cover && m.cover.liquid) || "water", P = Object.assign({}, PAL0, d.palette || {}, (l.map || {}).palette || l.palette || {}); if (!P.sea && liq !== "none") P.sea = SEA_OF[liq] || null; P.liquid = liq; return P; };
   const placesOf = (d, l) => (l.places || []).map(p => ({ id: p.id, name: p.name, kind: p.kind || "landmark", desc: p.desc || "", gm: p.gm || "" }));
   function register(d, l, T) {
     const id = wid(d, l);
-    A.world({ title: `${d.name}: ${l.name}`, look: "planet", kind: "plane", plane: { dim: d.id, layer: l.id }, locations: placesOf(d, l), routes: [], regions: (l.regions || []).map(r => typeof r === "string" ? { name: r, kind: "region" } : r) }, id);
-    if (T) A.worldTerrain(Object.assign({}, T, { look: "planet", planetPalette: palette(d, l) }), id);
+    A.world({ title: `${d.name}: ${l.name}`, look: envOf(d, l).frame === "chart" ? "stars" : "planet", kind: "plane", plane: { dim: d.id, layer: l.id }, locations: placesOf(d, l), routes: [], regions: (l.regions || []).map(r => typeof r === "string" ? { name: r, kind: "region" } : r) }, id);
+    if (T) A.worldTerrain(Object.assign({}, T, { look: envOf(d, l).frame === "chart" ? "stars" : "planet", planetPalette: palette(d, l) }), id);
     return id;
+  }
+  // a mirror (the user, 4 Nov 2026: "if the dimension is a mirror of the fantasy world keep that in mind"): the campaign's
+  // own world, its coasts, ranges and rivers, remade by the plane's laws: its heights raised or worn (map.relief), its
+  // ground and liquid its own (map.cover), its rivers of its liquid, its colours, its names changed if its lore says how
+  // (map.rename, "{name}" for the world's own), and its own places stood on its land
+  function mirrorTerrain(d, l) {
+    const W0 = A.worlds && A.worlds.main, T0 = W0 && W0.terrain; if (!T0 || !T0.height) throw new Error("the campaign's world map has no land to mirror");
+    const BIO = A.worldBiomes, m = Object.assign({}, d.map || {}, l.map || {}), relief = m.relief != null ? m.relief : 1;
+    const cov = Object.assign({ dry: "plains", forest: "forest", wet: "marsh", cold: "snow", high: "mountains", liquid: "water" }, m.cover || {});
+    const dec = s => Uint8Array.from(atob(s), c => c.charCodeAt(0)), enc = a => { let s = ""; for (let i = 0; i < a.length; i += 8192) s += String.fromCharCode.apply(null, a.subarray(i, i + 8192)); return btoa(s); };
+    const H = dec(T0.height), M = T0.moist ? dec(T0.moist) : new Uint8Array(H.length).fill(128), C = new Uint8Array(H.length), sea = T0.sea || 128, code = k => (BIO && BIO.CODE[k]) || 0;
+    for (let n = 0; n < H.length; n++) {
+      if (H[n] <= sea) { if (cov.liquid !== "water") C[n] = code(cov.liquid); continue; }
+      const t = (H[n] - sea) / (255 - sea); H[n] = Math.max(sea + 1, Math.min(255, Math.round(sea + (H[n] - sea) * relief)));
+      C[n] = code(t > .55 ? cov.high : M[n] > 175 ? cov.wet : M[n] > 105 ? cov.forest : cov.dry);
+    }
+    // its own places, each on its land
+    const r = rng(hash(d.id + "|" + l.id + "|places")), spots = {}, cols = T0.cols, cell = T0.cell || 4;
+    for (const p of placesOf(d, l)) for (let k = 0; k < 400; k++) { const n = Math.floor(r() * H.length); if (H[n] > sea + 2) { spots[p.id] = [Math.round(((n % cols) + .5) * cell), Math.round((((n / cols) | 0) + .5) * cell)]; break; } }
+    const liq = cov.liquid !== "water" ? cov.liquid : undefined;
+    return Object.assign({}, T0, { height: enc(H), Lo: undefined, cover: enc(C), liquid: liq, spots,
+      rivers: (T0.rivers || []).map(rv => Object.assign({}, rv, liq ? { liquid: liq } : {})),
+      labels: (T0.labels || []).map(L => Object.assign({}, L, { name: m.rename ? String(m.rename).replace("{name}", L.name) : L.name })),
+      env: { v: 2, life: m.life || "complex", shores: !liq ? "beach" : liq === "lava" ? "lava" : "smooth", liquid: liq || "water", surface: true, mirror: "main" } });
+  }
+  // a dimension made a mirror: each of its layers the campaign's world remade by that layer's own ground, liquid and laws
+  function asMirror(d) {
+    const mk = m => Object.assign({}, m || {}, { structure: "mirror" });
+    return Object.assign({}, d, { structure: (d.layers || []).length > 1 ? "layers" : "mirror", map: mk(d.map), layers: (d.layers || []).map(l => Object.assign({}, l, { map: mk(l.map) })),
+      lore: (d.lore || []).concat({ fact: "Its land mirrors the campaign's world: the same coasts and ranges, remade by its laws.", tag: "homebrew" }) });
   }
   async function layerMap(dimId, lid, say) {
     const d = dimOf(dimId); if (!d) throw new Error("that dimension is not in the campaign"); const l = layerOf(d, lid); if (!l) throw new Error("that layer is not in the dimension");
@@ -78,6 +125,7 @@
     // (a layer that is one of the campaign's own maps, the world itself for the Material Plane: l.world)
     if (l.world) { if (A.worlds && A.worlds[l.world] && A.worlds[l.world].data) return l.world; throw new Error(`the map ${l.world} is not in this campaign`); }
     const id = wid(d, l); if (A.worlds && A.worlds[id] && A.worlds[id].terrain && A.worlds[id].terrain.height) return id;
+    if (envOf(d, l).frame === "mirror") { register(d, l, mirrorTerrain(d, l)); S().set("dimworlds", id, { dim: d.id, layer: l.id, key: "mirror", t: Date.now() }); return id; }
     const flags = recipe(d, l), key = "plane|" + JSON.stringify(flags) + "|" + placesOf(d, l).map(p => p.id + ":" + p.kind).join(",");
     let T = A.worldGenCache ? await A.worldGenCache(key) : null;
     if (!T) { if (say) say(`Making ${l.name}: about ${Math.max(1, Math.round(A.worldGenSecs(flags.size)))} seconds the first time, then it is kept.`); T = await A.worldGenerate(flags, { title: `${d.name}: ${l.name}`, setting: "plane", locations: placesOf(d, l) }); if (A.worldGenCache) await A.worldGenCache(key, T); }
@@ -148,9 +196,11 @@
     if (!r.look && !r.feel && !play.length) return "";
     return `<section class="dm-sec"><h5>Its rules</h5>${r.look ? `<p><span class="kn">How it looks</span> ${esc(r.look)}</p>` : ""}${r.feel ? `<p><span class="kn">What it is like</span> ${esc(r.feel)}</p>` : ""}${play.length ? `<p class="kn">What it does in play</p><ul class="dm-facts">${play.map(p => `<li>${esc(p.rule || p)}${p.source ? ` <span class="kn">${esc(p.source)}</span>` : ` <span class="dm-tag dm-homebrew">Yours</span>`}</li>`).join("")}</ul>` : `<p class="t-small kn">No rules of play from a source: add your own if you want them.</p>`}</section>`;
   }
+  // a layer's laws in a few words: its weather, its warmth, its gravity
+  function lawSay(d, l) { const L = Object.assign({}, d.laws || {}, l.laws || {}, (l.map || {}).laws || {}), out = []; if (L.weather === "none") out.push("no weather"); else if (L.weather === "storms") out.push("endless storms"); if (L.warmth != null) out.push(`always about ${L.warmth} °C`); if (L.gravity) out.push(`gravity ${L.gravity}`); return out.length ? " · " + out.join(", ") : ""; }
   function layersHTML(d) {
     const L = layersOf(d), many = L.length > 1;
-    return `<section class="dm-sec"><h5>${many ? `Its layers (${L.length})` : "Its map"}</h5><ol class="dm-layers">${L.map(l => { const id = l.world || wid(d, l), made = !!(A.worlds && A.worlds[id] && A.worlds[id].data && (l.world || (A.worlds[id].terrain && A.worlds[id].terrain.height))), st = (l.map || {}).structure || l.structure || (d.structure !== "layers" ? d.structure : "") || "land"; return `<li><div><b>${esc(l.name)}</b>${l.ruler ? ` <span class="kn">ruled by</span> ${esc(said(d, l.ruler))}` : ""}</div>${l.concept ? `<div class="t-small">${esc(l.concept)}</div>` : ""}<div class="t-small kn">${esc(STRUCT[st] || st)}${(l.places || []).length ? " · " + l.places.map(p => p.name).join(", ") : ""}</div><div class="t-row"><button type="button" class="t-mini${made ? "" : " prim"}" data-dm="open" data-id="${esc(d.id)}" data-l="${esc(l.id)}">${made ? "Open its map" : "Make its map"}</button><button type="button" class="t-mini" data-dm="here" data-id="${esc(d.id)}" data-l="${esc(l.id)}">The party is here</button>${made ? `<button type="button" class="t-mini" data-dm="again" data-id="${esc(d.id)}" data-l="${esc(l.id)}" title="A new map from the same recipe; your places and changes on it stay">Make it again</button>` : ""}</div></li>`; }).join("")}</ol></section>`;
+    return `<section class="dm-sec"><h5>${many ? `Its layers (${L.length})` : "Its map"}</h5><ol class="dm-layers">${L.map(l => { const id = l.world || wid(d, l), made = !!(A.worlds && A.worlds[id] && A.worlds[id].data && (l.world || (A.worlds[id].terrain && A.worlds[id].terrain.height))), st = (l.map || {}).structure || l.structure || (d.structure !== "layers" ? d.structure : "") || "land"; return `<li><div><b>${esc(l.name)}</b>${l.ruler ? ` <span class="kn">ruled by</span> ${esc(said(d, l.ruler))}` : ""}</div>${l.concept ? `<div class="t-small">${esc(l.concept)}</div>` : ""}<div class="t-small kn">${esc(STRUCT[st] || st)}${esc(lawSay(d, l))}${(l.places || []).length ? " · " + l.places.map(p => p.name).join(", ") : ""}</div><div class="t-row"><button type="button" class="t-mini${made ? "" : " prim"}" data-dm="open" data-id="${esc(d.id)}" data-l="${esc(l.id)}">${made ? "Open its map" : "Make its map"}</button><button type="button" class="t-mini" data-dm="here" data-id="${esc(d.id)}" data-l="${esc(l.id)}">The party is here</button>${made ? `<button type="button" class="t-mini" data-dm="again" data-id="${esc(d.id)}" data-l="${esc(l.id)}" title="A new map from the same recipe; your places and changes on it stay">Make it again</button>` : ""}</div></li>`; }).join("")}</ol></section>`;
   }
   function waysHTML(d) {
     const P = (d.portals || []).concat(cosmos().dimensions.filter(x => x.id !== d.id).flatMap(x => (x.portals || []).filter(p => p.to && p.to.dim === d.id)));
@@ -179,7 +229,9 @@
     const how = UI.adding, dr = UI.draft;
     const form = how === "lore" ? `<label class="tw-l"><span>Which plane</span><input class="t-in" data-dm-f="name" placeholder="the Nine Hells of Baator; the Feywild; the Plane of Fire"></label><label class="tw-l"><span>Edition or setting</span><input class="t-in" data-dm-f="edition" placeholder="D&D 5th edition; Forgotten Realms; Planescape" value="${esc(cosmos().edition || "")}"></label><label class="tw-l"><span>How faithful</span><select class="t-in" data-dm-f="strict"><option value="strict">To the lore</option><option value="free">Free with it</option></select></label><label class="tw-l"><span>How much</span><select class="t-in" data-dm-f="scope"><option value="all">Every layer</option><option value="some">The main layers</option></select></label>`
       : how === "custom" ? `<label class="tw-l"><span>The dimension, in your words</span><textarea class="t-in" rows="3" data-dm-f="text" placeholder="a dimension where time flows backward and cities float above an endless ocean"></textarea></label>` : `<p class="t-small">A premise is drawn first; everything else follows from it.</p>`;
-    return `<section class="dm-add"><h5>${how === "lore" ? "A dimension from the lore" : how === "custom" ? "A dimension of your own" : "A dimension at random"}</h5>${dr ? "" : form}
+    // (its land: a world of its own, or a mirror of the campaign's world remade by its laws: the user's choice, 4 Nov 2026)
+    const mirror = how === "random" ? "" : `<label class="tw-l"><span>Its land</span><select class="t-in" data-dm-f="mirror"><option value="">A world of its own</option><option value="mirror"${A.worlds && A.worlds.main && A.worlds.main.terrain ? "" : " disabled"}>A mirror of the campaign's world, remade by its laws</option></select></label>`;
+    return `<section class="dm-add"><h5>${how === "lore" ? "A dimension from the lore" : how === "custom" ? "A dimension of your own" : "A dimension at random"}</h5>${dr ? "" : form + mirror}
       ${dr ? `<p class="t-small">What would be added: nothing is kept until you keep it.</p>${cardHTML(Object.assign({}, dr, { own: true }))}<div class="t-row"><button type="button" class="t-btn prim" data-dm="keep">Keep it</button><button type="button" class="t-btn" data-dm="redo">${how === "random" ? "Another" : "Again"}</button><button type="button" class="t-mini" data-dm="cancel">Cancel</button></div>` : `<div class="t-row"><button type="button" class="t-btn prim" data-dm="draft"${UI.busy ? " disabled" : ""}>${UI.busy ? "Working it out…" : how === "random" ? "Draw one" : "Work it out"}</button><button type="button" class="t-mini" data-dm="cancel">Cancel</button></div>`}${UI.msg ? `<p class="t-small">${esc(UI.msg)}</p>` : ""}</section>`;
   }
   function html() {
@@ -261,7 +313,7 @@
         if (UI.adding === "random") { UI.draft = randomDim(Math.floor(Math.random() * 1e9)); refresh(); break; }
         if ((UI.adding === "lore" && !f.name) || (UI.adding === "custom" && !f.text)) { UI.msg = "Say which plane, or describe it, first."; refresh(); break; }
         UI.busy = true; UI.msg = ""; refresh();
-        try { const dd = await askDim(UI.adding, f); if (!dd) UI.msg = "Working it out needs Claude, from the app or Claude's page. One at random works without."; else UI.draft = dd; } catch (x) { UI.msg = x.message; }
+        try { const dd = await askDim(UI.adding, f); if (!dd) UI.msg = "Working it out needs Claude, from the app or Claude's page. One at random works without."; else UI.draft = f.mirror ? asMirror(dd) : dd; } catch (x) { UI.msg = x.message; }
         UI.busy = false; refresh(); break;
       }
       case "keep": if (UI.draft) { let id = UI.draft.id; while (dimOf(id) && !(docs()["dim:" + id])) id += "-2"; UI.draft.id = id; S().set("cosmos", "dim:" + id, { def: UI.draft, t: Date.now() }); UI.sel = id; UI.adding = null; UI.draft = null; joinFactions(); api.note("Kept. Make each layer's map from its card."); refresh(); } break;
@@ -273,9 +325,9 @@
     init(store) {
       joinFactions(); joinEvents();
       // the layers' maps made before come back with the page: named at once, their land from this browser's keeping
-      store.watch("dimworlds", D => { for (const [id, x] of Object.entries(D || {})) { if (!x || !x.dim || (A.worlds && A.worlds[id] && A.worlds[id].data)) continue; const d = dimOf(x.dim), l = d && layerOf(d, x.layer); if (!l) continue; register(d, l, null); if (A.worldGenCache && x.key) A.worldGenCache(x.key).then(T => { if (T) register(d, l, T); }); } });
+      store.watch("dimworlds", D => { for (const [id, x] of Object.entries(D || {})) { if (!x || !x.dim || (A.worlds && A.worlds[id] && A.worlds[id].data)) continue; const d = dimOf(x.dim), l = d && layerOf(d, x.layer); if (!l) continue; if (x.key === "mirror") { try { register(d, l, mirrorTerrain(d, l)); } catch (e) { register(d, l, null); } continue; } register(d, l, null); if (A.worldGenCache && x.key) A.worldGenCache(x.key).then(T => { if (T) register(d, l, T); }); } });
       store.watch("cosmos", () => { if (api.tab() === "dims") api.render(); });
     }
   });
-  A.cosmosApi = { cosmos, dimOf, layersOf, recipe, layerMap, randomDim, waiting, chosen, said, partyHere, leave };
+  A.cosmosApi = { cosmos, dimOf, layersOf, recipe, envOf, layerMap, mirrorTerrain, asMirror, randomDim, waiting, chosen, said, partyHere, leave };
 })(ATLAS);

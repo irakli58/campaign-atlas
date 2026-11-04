@@ -593,6 +593,11 @@
         c = mix(c, [192, 166, 124], smooth(.08, .3, t) * .7 * (1 - fd * .6));
         c = mix(c, [148, 116, 86], smooth(.25, .55, t) * .75);
         c = mix(c, [232, 230, 224], smooth(.5, .92, t));
+      } else if (o && o.colours) {
+        // (a planet or a plane in its own colours: its heights in its own paler rock, white only where it is cold enough
+        // for its ice (below), never white for being high)
+        c = mix(c, C.rock, smooth(.2, .5, t) * .45);
+        c = mix(c, C.rockHi, smooth(.5, .95, t) * .7);
       } else {
         c = mix(c, [176, 168, 150], smooth(.2, .5, t) * .55);
         c = mix(c, [250, 250, 250], smooth(.42, .92, t));
