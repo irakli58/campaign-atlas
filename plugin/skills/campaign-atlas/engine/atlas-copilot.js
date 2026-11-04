@@ -53,6 +53,8 @@
     if (A.cosmosSay) { const w = A.cosmosSay(); if (w) out.push(w); }
     // the weather where the party is, from the world's own climate (atlas-weather.js), for descriptions to use
     if (A.weather) { const w = A.weather.say(); if (w) out.push(w); }
+    // on the road: where, and the day of the journey (atlas-journey.js)
+    if (A.journey) { const j = A.journey.say(); if (j) out.push(j); }
     // unfinished business from earlier sessions, as the table remembers it (atlas-sessions.js): the council plans from it
     const U = A.memory ? A.memory.unfinished() : []; if (U.length) out.push("Unfinished business from earlier sessions: " + U.slice(0, 6).map(m => `[${A.memory.cite(m)}] ${m.text}`).join("; "));
     return out.join("\n");

@@ -208,6 +208,8 @@
     const ph = A.cosmosApi && A.cosmosApi.partyHere ? A.cosmosApi.partyHere() : null;
     if (ph && ph.d && ph.l && !ph.l.world) { const id = ("dim-" + ph.d.id + "-" + ph.l.id).replace(/[^\w-]/g, "-").slice(0, 40), pw = A.worlds[id]; if (pw && pw.terrain && pw.terrain.height) return { wid: id, xy: [(pw.terrain.w || pw.terrain.cols * (pw.terrain.cell || 4)) / 2, (pw.terrain.h || pw.terrain.rows * (pw.terrain.cell || 4)) / 2], name: `${ph.d.short || ph.d.name}, ${ph.l.name}`, plane: true }; return null; }
     const p = Object.assign({}, w.data.party || {}, (S && (S.get("world") || {}).party) || {});
+    // (on the road between two places: where the day's journey left them, atlas-journey.js)
+    if (p.road && Array.isArray(p.road.xy) && (p.plan || []).length) { const to = spotOf("main", p.plan[0]); return { wid: "main", xy: p.road.xy, name: `the road to ${to ? to.name : p.plan[0]}`, road: true }; }
     return p.at ? spotOf("main", p.at) : null;
   }
   // the moment's day, its place in the year, where the year's winter is, and the month's name

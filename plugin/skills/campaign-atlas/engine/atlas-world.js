@@ -1154,8 +1154,9 @@
       if (P.at && P.plan.length && gm()) {
         const legs = [P.at, ...P.plan], next = WD.byId[P.plan[0]];
         J.hidden = false;
-        J.innerHTML = `<span class="kl">The party's journey</span><span>${legs.map(id => esc(WD.byId[id].name)).join(" → ")}</span><span class="wm-jb"><button type="button" data-w="arrive">Arrived at ${esc(next.name)}</button><button type="button" data-w="cancel">Call it off</button></span>`;
+        J.innerHTML = `<span class="kl">The party's journey</span><span>${legs.map(id => esc(WD.byId[id].name)).join(" → ")}</span>${A.journey ? `<span class="wm-jb">${A.journey.bar(JH)}</span>` : ""}<span class="wm-jb"><button type="button" data-w="arrive">Arrived at ${esc(next.name)}</button><button type="button" data-w="cancel">Call it off</button></span>`;
       } else J.hidden = true;
+      root.classList.toggle("journeying", !J.hidden);
     }
 
     /* ---- the locations, over the camera: they keep their size on the screen, and the lesser ones are named only
@@ -1164,13 +1165,15 @@
       let s = "";
       for (const L of WD.locs) {
         if (!passes(L)) continue;
-        const imp = impOf(L), here = WD.party.at === L.id, has3d = ctx.hasCity(L.city || L.id), dots = WD.look !== "stars" && WD.W.markers !== "pictures";
+        const imp = impOf(L), here = WD.party.at === L.id && !(WD.party.road && WD.party.road.xy), has3d = ctx.hasCity(L.city || L.id), dots = WD.look !== "stars" && WD.W.markers !== "pictures";
         // (the name beside its dot: as close as the dot is big; beside a picture, as before)
         const lx = dots ? (DOTR[String(L.kind || "").toLowerCase()] || 2.8) + 4 : imp === 1 ? 14 : 12;
         const cls = ["wl", "i" + imp, dots ? "dot" : "", L.kind === "capital" ? "cap" : "", L.state === "rumoured" ? "rum" : "", L.state === "unknown" ? "unk" : "", L.state === "done" ? "dn" : "", S.sel === L.id ? "sel" : "", here ? "here" : "", S.hits ? (S.hits.has(L.id) ? "hit" : "dim") : "", L.unplaced ? "unp" : ""].filter(Boolean).join(" ");
         s += `<g class="${cls}" data-loc="${esc(L.id)}" tabindex="0" role="button" aria-label="${esc(L.name)}, ${esc((KINDS[L.kind] || [0, L.kind])[1])}${has3d ? ", has a 3D map" : ""}"><circle class="wl-ring" r="14"/><g class="wi">${iconOf(WD.look, L, !dots)}</g>${has3d ? `<g class="wl-3d" transform="translate(${imp === 1 ? 10 : 8} -17)"><rect width="15" height="10" rx="2"/><text x="7.5" y="7.6">3D</text></g>` : ""}${gm() && L.state !== "known" ? `<circle class="wl-st st-${esc(L.state)}" cx="-10" cy="-9" r="3"/>` : ""}${here ? `<g class="wl-party" transform="translate(-13 -9)"><path d="M0 10V-8"/><path d="M0-8h9l-2.5 3.5L9-1H0Z"/></g>` : ""}<text class="wl-t" x="${lx}" y="4.5">${esc(L.name)}${L.state === "rumoured" ? "?" : ""}</text></g>`;
       }
       for (const r of WD.routes) if (routeShown(r) && (r.blocked || r.danger)) s += `<g class="wr-warn${r.blocked ? " blk" : ""}" data-route="${esc(r.id)}"><circle r="7.5"/><text y="4">${r.blocked ? "✕" : "!"}</text></g>`;
+      // (the party on the road between two places, a day's journey along: atlas-journey.js)
+      const rd = WD.party.road; if (rd && Array.isArray(rd.xy) && WD.party.plan.length) s += `<g class="wl-road" aria-label="The party, on the road to ${esc((WD.byId[WD.party.plan[0]] || {}).name || "")}"><circle r="4.5"/><g class="wl-party" transform="translate(-2 -6)"><path d="M0 10V-8"/><path d="M0-8h9l-2.5 3.5L9-1H0Z"/></g></g>`;
       over.innerHTML = s;
       place();
     }
@@ -1200,6 +1203,7 @@
         const r = WD.rById[g.dataset.route]; if (!r) continue; const m = midOf(wayFor(r));
         g.setAttribute("transform", `translate(${r1(m[0] * k + V.tx)} ${r1(m[1] * k + V.ty)})`);
       }
+      const rg = over.querySelector(".wl-road"), rd = WD.party.road; if (rg && rd && rd.xy) rg.setAttribute("transform", `translate(${r1(rd.xy[0] * k + V.tx)} ${r1(rd.xy[1] * k + V.ty)})`);
       cam.setAttribute("transform", `matrix(${k} 0 0 ${k} ${r1(V.tx)} ${r1(V.ty)})`);
       if (CUR.on && CUR.k && (k / CUR.k > 1.3 || k / CUR.k < .77)) drawCurrents();
       if (COA.on && COA.k && (k / COA.k > 1.3 || k / COA.k < .77)) drawCoasts();
@@ -1323,7 +1327,7 @@
           const tot = allDays ? daysText(legs.reduce((s, l) => s + l.tv.days, 0)) : allDist ? distText(WD, legs.reduce((s, l) => s + l.tv.dist, 0)) : `${legs.length} leg${legs.length > 1 ? "s" : ""}`;
           const risks = legs.filter(l => l.r.danger);
           const wx = A.weather && WID === "main" ? A.weather.roadNote() : "";
-          s += `<div class="wm-way"><p><strong>The way:</strong> ${tot}${allDays ? "" : WD.scale ? " (travel times are not known for every leg: set days on the routes in Edit map)" : " (the map has no scale, so no distances; set days on the routes in Edit map for travel times)"}</p>${wx ? `<p class="kn wm-wxway">${esc(wx)}</p>` : ""}<ol>${legs.map(l => `<li>${esc(WD.byId[l.b].name)} <span class="kn">by ${esc((ROUTES[l.r.kind] || l.r.kind).toLowerCase())}${l.tv.days != null ? ", " + daysText(l.tv.days) : l.tv.dist != null ? ", " + distText(WD, l.tv.dist) : ""}</span>${l.r.danger ? ` <span class="wm-dgr">${esc(l.r.danger === true ? "danger" : l.r.danger)}</span>` : ""}</li>`).join("")}</ol>${risks.length ? `<p class="warn">${risks.length} dangerous leg${risks.length > 1 ? "s" : ""} on the way.</p>` : ""}<button type="button" class="prim" data-w="setoff">Set this as the party's journey</button></div>`;
+          s += `<div class="wm-way"><p><strong>The way:</strong> ${tot}${allDays ? "" : WD.scale ? " (travel times are not known for every leg: set days on the routes in Edit map)" : " (the map has no scale, so no distances; set days on the routes in Edit map for travel times)"}</p>${wx ? `<p class="kn wm-wxway">${esc(wx)}</p>` : ""}<ol>${legs.map(l => `<li>${esc(WD.byId[l.b].name)} <span class="kn">by ${esc((ROUTES[l.r.kind] || l.r.kind).toLowerCase())}${l.tv.days != null ? ", " + daysText(l.tv.days) : l.tv.dist != null ? ", " + distText(WD, l.tv.dist) : ""}</span>${l.r.danger ? ` <span class="wm-dgr">${esc(l.r.danger === true ? "danger" : l.r.danger)}</span>` : ""}</li>`).join("")}</ol>${risks.length ? `<p class="warn">${risks.length} dangerous leg${risks.length > 1 ? "s" : ""} on the way.</p>` : ""}${A.journey ? `<label class="wm-jfood">Food they carry, in days <input type="number" name="jfood" min="0" max="365" placeholder="not counted"></label>` : ""}<button type="button" class="prim" data-w="setoff">Set this as the party's journey</button>${A.journey && A.worldTime ? `<p class="kn">Then Travel a day, on the journey's bar: each day its weather, the ground, how far they get, what they might meet, and the world's time a day on.</p>` : ""}</div>`;
         }
       }
       return s;
@@ -1370,6 +1374,8 @@
       else if (r && routeSeen(r)) { panel.hidden = false; panel.innerHTML = routePanel(r); }
       else if (f && (gm() || !f.hidden)) { panel.hidden = false; panel.innerHTML = featPanel(fk, f); }
       else if (NET.sel != null && netOn()) { panel.hidden = false; panel.innerHTML = netPanel(NET.sel); }
+      // a day of the party's journey, or the road so far (atlas-journey.js)
+      else if (S.jday && A.journey && gm()) { panel.hidden = false; panel.innerHTML = S.jday === "log" ? A.journey.logHTML(JH, S.jtrip) : A.journey.dayHTML(JH, S.jtrip, S.jday); }
       else { panel.hidden = true; panel.innerHTML = ""; }
     }
 
@@ -1814,7 +1820,23 @@
       sure = btn; btn.dataset.lbl = btn.textContent; btn.textContent = "Really?"; btn.classList.add("sure");
       setTimeout(() => { if (sure === btn) { btn.textContent = btn.dataset.lbl; btn.classList.remove("sure"); sure = null; } }, 4000);
     }
-    const setParty = p => save("party", { at: p.at || null, plan: p.plan || [], trail: (p.trail || []).slice(-60) });
+    // (with, on a journey, how far along the way to the next place they are, and the journey's record: atlas-journey.js)
+    const setParty = p => save("party", Object.assign({ at: p.at || null, plan: p.plan || [], trail: (p.trail || []).slice(-60) }, p.road ? { road: p.road } : {}, p.trip ? { trip: p.trip } : {}, p.lastTrip ? { lastTrip: p.lastTrip } : {}));
+    // what a journey's days need of this map (atlas-journey.js): its ways, places, scale and the party
+    const JH = {
+      get wid() { return WID; }, get unit() { return WD.scale ? plural(WD.scale.unit || "", 2) : ""; },
+      party: () => ({ at: WD.party.at, plan: WD.party.plan.slice(), trail: WD.party.trail.slice(), road: WD.party.road || null, trip: WD.party.trip || null }),
+      leg: (a, b) => { const r = WD.routes.find(x => !x.gone && ((x.from === a && x.to === b) || (x.from === b && x.to === a))), tv = r ? travel(WD, r, wayFor(r)) : { dist: null, days: null, basis: "" }; return { r, way: legWay(a, b), kind: r ? r.kind : "trail", dist: tv.dist, days: tv.days, basis: tv.basis }; },
+      where: id => WD.byId[id] && WD.byId[id].at ? WD.byId[id].at.slice() : null,
+      name: id => (WD.byId[id] || {}).name || id || "", loc: id => WD.byId[id] || null,
+      settled: id => SETTLED.includes((WD.byId[id] || {}).kind),
+      near: id => { const L = WD.byId[id]; if (!L || !L.at) return []; return WD.locs.filter(o => o !== L && !o.gone && Array.isArray(o.at)).map(o => [o.id, Math.hypot(o.at[0] - L.at[0], o.at[1] - L.at[1])]).sort((a, b) => a[1] - b[1]).slice(0, 6).map(x => x[0]); },
+      dir: (a, b) => { const A0 = WD.byId[a], B0 = WD.byId[b]; if (!A0 || !B0) return "not far"; const ang = Math.atan2(-(B0.at[1] - A0.at[1]), B0.at[0] - A0.at[0]) * 180 / Math.PI; return "to the " + ["east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east"][((Math.round(ang / 45) % 8) + 8) % 8]; },
+      setParty
+    };
+    // (a journey's days written in another window, or loaded after the map: the bar and the day's card follow, unless
+    // the game master is writing in the card)
+    if (A.journey && WID === "main") A.journey.listen(() => { if (gone) return; drawJourney(); if (S.jday && !(document.activeElement && panel.contains(document.activeElement))) renderPanel(); });
 
     /* ---- events */
     const ptr = new Map(); let gest = null, moved = false, downAt = null;
@@ -1952,7 +1974,7 @@
       const b = t.closest("[data-w]"); if (!b) return;
       const L = S.sel && WD.byId[S.sel], R = S.selRoute && WD.rById[S.selRoute], P = WD.party;
       switch (b.dataset.w) {
-        case "close": S.sel = null; S.selRoute = null; S.selFeat = null; S.journey = null; if (NET.sel != null) { NET.sel = null; drawNetPlaces(); } drawMarkers(); drawRoutes(); drawFx(); renderPanel(); break;
+        case "close": S.sel = null; S.selRoute = null; S.selFeat = null; S.journey = null; S.jday = null; if (NET.sel != null) { NET.sel = null; drawNetPlaces(); } drawMarkers(); drawRoutes(); drawFx(); renderPanel(); break;
         case "roadnet": NET.on = !NET.on; NET.sel = null; try { ctx.store.set("world-roadnet", NET.on ? "1" : "0"); } catch (_) {} drawNet(); drawRoutes(); drawMarkers(); renderPanel(); renderBars(); break;
         case "devreset": { const R = netData(); if (R) setDev(R.level); break; }
         case "netenter": { const p = NET.R && NET.R.places[NET.sel]; if (!p) break; const NL = { id: "net-" + p.id, name: p.name, kind: p.tier === "city" ? (p.port ? "port" : "city") : p.tier === "town" ? (p.port ? "port" : "town") : "village", at: p.at, netRoads: netRoadsAt(p.at) || [] }; const cid = A.worldCity.can(WD) ? A.worldCity.make(WD, NL) : null; if (cid && ctx.hasCity(cid)) ctx.enter(cid, null); break; }
@@ -1988,9 +2010,16 @@
         case "resetroute": if (R) save("r-" + R.id, null); break;
         case "partyhere": if (L) setParty({ at: L.id, plan: [], trail: P.at && P.at !== L.id ? [...P.trail, P.at] : P.trail }); break;
         case "plan": if (L && P.at) { S.journey = plan(L.id); drawJourney(); renderPanel(); } break;
-        case "setoff": if (S.journey && S.journey.legs) { const pl = S.journey.legs.map(l => l[1]); S.journey = null; setParty({ at: P.at, plan: pl, trail: P.trail }); } break;
-        case "arrive": if (P.plan.length) setParty({ at: P.plan[0], plan: P.plan.slice(1), trail: [...P.trail, P.at] }); break;
-        case "cancel": setParty({ at: P.at, plan: [], trail: P.trail }); break;
+        case "setoff": if (S.journey && S.journey.legs) { const pl = S.journey.legs.map(l => l[1]), fd = +((panel.querySelector("[name='jfood']") || {}).value || 0); S.journey = null; setParty({ at: P.at, plan: pl, trail: P.trail, trip: A.journey ? A.journey.start(JH, pl, fd) : null }); } break;
+        case "arrive": if (P.plan.length) setParty({ at: P.plan[0], plan: P.plan.slice(1), trail: [...P.trail, P.at], trip: P.plan.length > 1 ? P.trip : null, lastTrip: P.plan.length > 1 ? null : P.trip }); break;
+        case "cancel": setParty({ at: P.at, plan: [], trail: P.trail, lastTrip: P.trip }); break;
+        // a day of the journey: travelled or rested, the world's time a day on, its card in the panel (atlas-journey.js)
+        case "travelday": case "restday": { const res = A.journey && A.journey.day(JH, b.dataset.w === "restday" ? "rest" : "travel"); if (res) { S.sel = null; S.selRoute = null; S.selFeat = null; S.jtrip = res.trip; S.jday = res.n; drawMarkers(); drawRoutes(); renderPanel(); } break; }
+        case "jlog": S.jtrip = P.trip || S.jtrip || P.lastTrip; if (S.jtrip) { S.sel = null; S.selRoute = null; S.selFeat = null; S.jday = "log"; drawMarkers(); renderPanel(); } break;
+        case "jdayopen": S.jday = +b.dataset.n; renderPanel(); break;
+        case "jkeep": { const f = b.closest("form"), [tid, n] = String(f.dataset.wj).split(":"); A.journey.keep(tid, +n, f.elements.did.value, f.elements.went.value); note("The day is kept."); break; }
+        case "jbuy": if (A.journey.buyFood(S.jtrip)) { note("Bought: five more days of food."); renderPanel(); } break;
+        case "jtell": if (A.journey.tellRumour(S.jtrip, S.jday, +b.dataset.i)) { b.disabled = true; b.textContent = "Told"; note("Told to the players, as heard on the road."); } break;
       }
     }
     function onChange(e) {

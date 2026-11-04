@@ -817,7 +817,27 @@ details.ci[open] > summary.cn { margin-bottom: 4px; }
 .wm-results button:hover { background: var(--accent-soft); }
 .wm-results p { margin: 6px 8px; }
 .wm-journey { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; z-index: 13; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 14.5px; max-width: calc(100% - 160px); box-shadow: 0 4px 14px rgba(0, 0, 0, .15); }
-.wm-journey .wm-jb { display: inline-flex; gap: 6px; }
+.wm-journey .wm-jb { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* a journey's days (atlas-journey.js) */
+.wm-journey .wm-jday { font-size: 13.5px; color: var(--muted); }
+.wm-journey button.prim { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.wm-journey button { color: var(--ink); }
+/* (the journey's bar along the foot of the map: the side panel stops above it) */
+.wm.journeying .wm-panel { max-height: calc(100% - 130px); }
+.wl-road circle { fill: #8a2432; stroke: var(--wm-ink); stroke-width: 1; opacity: .85; }
+.wm-jw { margin: 6px 0; font-size: 14.5px; line-height: 1.45; }
+.wm-jlist { margin: 4px 0 8px; padding-left: 18px; font-size: 14.5px; line-height: 1.45; }
+.wm-jlist li { margin: 2px 0; }
+.wm-panel h4 .kn { font-weight: 400; font-size: 12px; letter-spacing: 0; text-transform: none; margin-left: 4px; }
+.wm-jform { display: grid; gap: 8px; margin: 10px 0 4px; }
+.wm-jform label { display: grid; gap: 3px; font-size: 13.5px; }
+.wm-jform textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 14.5px; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 3px; background: var(--bg, transparent); color: inherit; resize: vertical; }
+.wm-jform button { justify-self: start; }
+.wm-jlog { margin: 6px 0; padding-left: 20px; font-size: 14.5px; }
+.wm-jlog li { margin: 4px 0; }
+.wm-jlog p { margin: 2px 0 0; color: var(--muted); }
+.wm-jfood { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 14px; }
+.wm-jfood input { width: 7em; font: inherit; padding: 3px 6px; border: 1px solid var(--rule); border-radius: 3px; background: transparent; color: inherit; }
 .wm-journey button, .wm-panel button, .wm-dlg button { border: 1px solid var(--rule); background: transparent; border-radius: 3px; padding: 4px 10px; cursor: pointer; font-size: 14px; }
 .wm-journey button:hover, .wm-panel button:hover { border-color: var(--accent); }
 .wm-panel button.prim, .wm-dlg button.prim { background: var(--ink); color: var(--bg); border-color: var(--ink); }

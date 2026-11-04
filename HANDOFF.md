@@ -96,7 +96,11 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
         the card in The world's time, Time in the quick tools, a place's panel, the journey's way, the copilot, the
         players' line under the date, the music's rain, wind and thunder outdoors; planets and planes by their
         environment; the calendar's `winter`; taught; the workspace's dev/weather-test.js "all well");
-     2. journeys along the world map's routes (2);
+     2. journeys along the world map's routes (2) (**built 4 Nov**: engine/atlas-journey.js: Travel a day / Rest a day on
+        the journey's bar; each day's weather, ground, distance, the world's time, the flag on the road; suggested
+        meetings, sights and finds by ground and age (the campaign's own tables first); rumours in towns told as news;
+        food counted and bought with Money; the players' and the game master's words for each day; the road so far;
+        history and copilot. The workspace's dev/journey-test.js "all well");
      3. the rumour mill (4);
      4. the world's newspaper (7);
      5. a timeline to scroll (8);
