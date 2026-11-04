@@ -538,6 +538,7 @@
       <main class="ps-page" id="psPage" hidden></main>
       <nav class="ps-menu" aria-label="The players' window">${TABS.map(([k, l, ic]) => `<button type="button" class="ps-tab" data-ptab="${k}" aria-pressed="${k === "table"}">${icon(ic)}<span>${l}</span><b class="ps-badge" hidden></b></button>`).join("")}
         <span class="ps-sep" aria-hidden="true"></span>
+        <button type="button" class="ps-btn" data-ps="proj" title="A projector over the table: each square of a map one inch, as the miniatures stand" aria-label="Projector over the table" aria-pressed="false">▦</button>
         <button type="button" class="ps-btn" data-ps="full" title="Full screen" aria-label="Full screen">⤢</button>
         <button type="button" class="ps-x" data-ps="x" title="Touch this if you want what is happening to stop. No need to explain.">✕<span>Stop</span></button>
         ${mine ? `<button type="button" class="ps-btn ps-back" data-ps="back" title="Back to the game master's page (click twice)" aria-label="Back to the game master's page">⌂</button>` : ""}</nav>
@@ -548,6 +549,22 @@
     const fit = () => { const el = stage.firstElementChild; if (!el || !el.classList.contains("ps-fit")) return; const w = el.offsetWidth, h = el.offsetHeight, s = Math.min(stage.clientWidth * .94 / w, stage.clientHeight * .86 / h, 3); el.style.transform = `translate(-50%, -50%) scale(${s})`; };
     const when = t => new Date(t || 0).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     const placeName = id => (A.meta[id] || {}).name || id;
+    // the table, projected (the user's approved idea of 3 Nov 2026, the thirteenth in reviews/2026-11-03-ideas.md: "a mode
+    // for a projector over the table: the map top-down at the scale of miniatures, the fog lifting room by room"): this
+    // window's own choice, kept in this browser; once a square drawn on the table has been measured to an inch, each
+    // square of a map is one inch, as the miniatures stand; turned and mirrored as the projector hangs; moved with the
+    // arrow keys, a square at a time. Everything else shows as it did.
+    const proj = { on: pref.get("proj") === "1", ppi: +pref.get("ppi") || 0, rot: +pref.get("rot") || 0, flip: pref.get("flip") === "1", x: 0, y: 0, cal: false, key: "" };
+    const projSave = () => { pref.set("proj", proj.on ? "1" : "0"); pref.set("ppi", String(proj.ppi || "")); pref.set("rot", String(proj.rot)); pref.set("flip", proj.flip ? "1" : "0"); };
+    function projHTML(svg, F) {
+      const C = A.C || 24, w = (F.w * C + 20) / C * proj.ppi, h = (F.h * C + 70) / C * proj.ppi;
+      return `<div class="ps-proj"><div class="ps-proj-in" style="width:${w.toFixed(1)}px;height:${h.toFixed(1)}px;transform:translate(-50%, -50%) translate(${proj.x}px, ${proj.y}px) rotate(${proj.rot}deg)${proj.flip ? " scaleX(-1)" : ""}">${svg}</div></div>`;
+    }
+    function calHTML() {
+      const p = proj.ppi || 96;
+      return `<div class="ps-cal" role="dialog" aria-label="Measuring the projector"><div class="ps-cal-sq" style="width:${p}px;height:${p}px"></div><p>Make this square <b>one inch</b> (2.5 cm) across on the table, measured with a ruler. Each square of a map will then be one inch, as the miniatures stand.</p>
+        <div class="ps-cal-row"><button type="button" data-ps="cal-" aria-label="Smaller">−</button><button type="button" data-ps="cal+" aria-label="Larger">+</button><button type="button" data-ps="rot">Turn it</button><button type="button" data-ps="flip">Mirror it</button><button type="button" data-ps="caldone" class="ps-cal-ok">Done</button></div><p class="ps-cal-n">${p} dots to the inch · turned ${proj.rot}°${proj.flip ? " · mirrored" : ""}</p></div>`;
+    }
     // what is on the table, in the players' words
     const nowWords = d => ({ map: "the map of " + placeName(d.place), galaxy: "the star chart", handout: "a handout", person: d.name || "someone", scene: d.title || "words to read", world: "the world map", board: "your board", safety: "the lines and veils", blank: "nothing" })[d.kind] || "the title";
 
@@ -563,8 +580,10 @@
         if (!room3 || !stage.contains(room3.host)) { if (room3) room3.dispose(); stage.innerHTML = `<div class="ps-map3d"></div>`; room3 = fog3d(stage.firstChild); }
         room3.show(now.place, fi, (fog.f || {})[fi] || [], fog);
       } else if (k === "map" && A.maps[now.place]) {
-        const fog = st.get("fog", now.place) || {}, fi = +now.floor || 0;
-        stage.innerHTML = `<div class="ps-map">${fogSVG(now.place, fi, (fog.f || {})[fi] || [], true, fog)}</div>`;
+        const fog = st.get("fog", now.place) || {}, fi = +now.floor || 0, svg = fogSVG(now.place, fi, (fog.f || {})[fi] || [], true, fog), F = A.get(now.place).floors[fi];
+        // (projected: at the table's own scale, back in the middle when another map or floor comes up)
+        if (proj.on && proj.ppi && F && !proj.cal) { const key = now.place + "|" + fi; if (proj.key !== key) { proj.key = key; proj.x = 0; proj.y = 0; } stage.innerHTML = projHTML(svg, F); }
+        else stage.innerHTML = `<div class="ps-map">${svg}</div>`;
       } else if (k === "handout") {
         const h = allHandouts().find(x => x.id === now.id) || (now.h || null);
         stage.innerHTML = h ? `<div class="ps-fit">${handoutHTML(h)}</div>` : "";
@@ -587,6 +606,7 @@
         stage.innerHTML = `<div class="ps-fit">${safetyHTML()}</div>`;
       } else if (k === "blank") stage.innerHTML = "";
       else stage.innerHTML = `<div class="ps-fit"><div class="ps-title"><div>${esc(cfg.system || "")}</div><h1>${esc(cfg.title || "")}</h1>${cfg.strap ? `<p>${esc(cfg.strap)}</p>` : ""}</div></div>`;
+      if (proj.on && (proj.cal || !proj.ppi)) stage.insertAdjacentHTML("beforeend", calHTML());
       fit(); requestAnimationFrame(fit);
     }
     // the players' own board: only what they have, laid out on its own
@@ -771,6 +791,13 @@
         try { sessionStorage.removeItem(cfg.storageKey + "-players"); } catch (e) {}
         location.hash = ""; location.reload(); return;
       }
+      // the projector: on and off, measured, turned, mirrored (kept in this browser)
+      const pk = b.dataset.ps;
+      if (pk === "proj" || /^cal|^rot$|^flip$/.test(pk)) {
+        if (pk === "proj") { proj.on = !proj.on; proj.cal = proj.on && !proj.ppi; } else if (pk === "cal+") proj.ppi = Math.min(400, (proj.ppi || 96) + 2); else if (pk === "cal-") proj.ppi = Math.max(20, (proj.ppi || 96) - 2); else if (pk === "rot") proj.rot = (proj.rot + 90) % 360; else if (pk === "flip") proj.flip = !proj.flip; else if (pk === "caldone") { proj.ppi = proj.ppi || 96; proj.cal = false; } else if (pk === "calopen") proj.cal = true;
+        if (!proj.ppi && pk !== "proj" && pk !== "caldone") proj.ppi = 96;
+        projSave(); root.classList.toggle("proj", proj.on); const pb = app.querySelector('[data-ps="proj"]'); if (pb) pb.setAttribute("aria-pressed", String(proj.on)); render(); return;
+      }
       if (b.dataset.ps === "full") { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); }
       else if (b.dataset.ps === "x") { const t = Date.now(); st.set("xcard", "now", { t }); st.set("xcard", "x" + t, { t }); toast("The game master has been told. Take a breath; the game will move on.", false); }
     });
@@ -785,6 +812,15 @@
       if (!e.target.matches(".ps-add")) return;
       e.preventDefault(); const ta = e.target.querySelector("textarea"), v = ta.value.trim().slice(0, 2000); if (!v) return;
       const kind = (e.target.querySelector("select[name=kind]") || {}).value || ""; st.set("journal", "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), Object.assign({ text: v, t: Date.now() }, kind ? { kind } : {})); ta.value = "";
+    });
+    // (projected: the arrow keys move the map a square at a time, Home puts it back in the middle, M measures again)
+    root.classList.toggle("proj", proj.on); if (proj.on && !proj.ppi) proj.cal = true; { const pb = app.querySelector('[data-ps="proj"]'); if (pb) pb.setAttribute("aria-pressed", String(proj.on)); }
+    document.addEventListener("keydown", e => {
+      if (!proj.on || (e.target.closest && e.target.closest("input, textarea, select"))) return;
+      const d = proj.ppi || 96, mv = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] }[e.key];
+      if (mv && now.kind === "map") { proj.x += mv[0]; proj.y += mv[1]; e.preventDefault(); render(); }
+      else if (e.key === "Home" && now.kind === "map") { proj.x = 0; proj.y = 0; render(); }
+      else if (e.key === "m" || e.key === "M") { proj.cal = true; render(); }
     });
     // so the referee's page can say the players' window is open and following
     const beat = () => st.set("presence", "players", { t: Date.now() });

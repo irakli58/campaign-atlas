@@ -129,7 +129,8 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
         away (restore, and the named moment removed). The workspace's dev/whatif-test.js "all well");
      10. pacing from the words (15) (**built 4 Nov**: atlas-sessions.js pacing/pacingHTML under a session's The session,
         by keywords, five-minute steps, one suggestion; checked in the workspace's dev/session-test.js);
-     11. the table, projected (13);
+     11. the table, projected (13) (**built 4 Nov**: atlas-table.js players' window proj: ▦, an inch measured, turned,
+        mirrored, arrow keys, kept per browser; the workspace's dev/projector-test.js "all well");
      12. one world, many campaigns (14).
    - Each one taught, tested, committed. The review's items (reviews/2026-11-03-review.md) still wait for the user's answers.
 6c. (**built 3 Nov**: engine/atlas-modules.js, the gear and the Start here card, tabs, tools, views and lessons following the switches, files of parts switched off left out of the build, the app's "What it uses" choice; dev/modules-test.js "all well". Not yet: the finer levels inside People (days, knowledge), and the model library's furnishing tool hidden by CSS only.) **Modular features: APPROVED 3 Nov** (docs/requests/2026-11-03-modular-features.md; the plan and the user's answers in the workspace's reviews/2026-11-03-modules.md): the 17 modules with their levels, safety always on, the presets (plus Science fiction), the settings on a Start here card AND a gear button at the top of the page; per campaign in campaign.js `features` and the page's database; off means off (tabs, tools, watchers, background work, and the files left out of the build); data never deleted; tested on the presets with the database compared before and after; lessons follow the switches.

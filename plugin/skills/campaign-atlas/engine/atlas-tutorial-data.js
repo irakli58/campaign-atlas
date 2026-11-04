@@ -155,10 +155,11 @@
       ] }
     ] },
     { id: "table", title: "Game night", lessons: [
-      { id: "screen", module: ["players"], title: "The players' screen", summary: "A window for the players: maps a room at a time, handouts, faces, the fog of war.", features: ["players-screen", "fog", "fog3d", "players-copy", "phones", "journal"], needs: has("#v-table"), steps: [
+      { id: "screen", module: ["players"], title: "The players' screen", summary: "A window for the players: maps a room at a time, handouts, faces, the fog of war.", features: ["players-screen", "fog", "fog3d", "players-copy", "phones", "journal", "projector"], needs: has("#v-table"), steps: [
         { say: "At the table holds the tools for game night.", sel: "#v-table", act: "click", try: "Click At the table.", wait: 500 },
         { say: "The players' screen is a window of its own for the television or a second screen, with nothing of yours on it.", sel: "[data-t='tab'][data-tab='screen']", act: "click", try: "Click Players' screen.", wait: 500 },
         { say: "Open it, drag it onto the television, and choose what they see from here.", sel: "[data-t='openscreen']", act: "look" },
+        { say: "Or onto a projector over the table: in the players' window, the ▦ button makes it the projector. Measure an inch on the table once with a ruler, turn and mirror it as the projector hangs, and each square of a map is one inch, as the miniatures stand, the fog lifting room by room as you open them. The arrow keys move the map a square at a time, Home puts it back in the middle, M measures again.", sel: "[data-t='openscreen']", act: "look", optional: true },
         { say: "Maps go to them a room at a time. In caves you brush the fog away as they explore, flat or in 3D.", sel: ".t-fog, .t-fog3d", act: "look" },
         { say: "With the Atlas app, players can also follow on their own phones: switch it on and show them the QR code.", sel: ".t-lan", act: "look", optional: true },
         { say: "The players' journal: choose how much Atlas keeps for them, from their own notes only to quests, hints and a timeline. Only what they found, or what you give them, is ever in it.", sel: "#tvBody .t-journal", act: "look" },
@@ -296,6 +297,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    projector: ["The table, projected", "projector projected table miniatures scale inch measure ruler turn rotate mirror flip top-down fog"],
     pacing: ["How the evening went", "pacing evening chart talk story exploring fighting rules off the game session time suggestion balance"],
     whatif: ["What if they wait?", "what if wait month days run forward simulate world keep throw away go back events factions consequences"],
     web: ["The relationship web", "web relationships who stands with whom diagram factions allies enemies people ties bonds rivalries grudges promises threats party opinion board"],
