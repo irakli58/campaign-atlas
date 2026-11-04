@@ -136,6 +136,15 @@
       }
       case "newspaper":
         return `<article class="ho ho-newspaper era-${e}"><header><div class="ho-mast">${esc(paperName(h))}</div><div class="ho-dateline">${esc(h.date || "")}${h.price ? " · " + esc(h.price) : ""}</div></header><h4 class="ho-headline">${esc(h.headline || h.title || "")}</h4>${h.sub ? `<div class="ho-sub">${esc(h.sub)}</div>` : ""}<div class="ho-cols">${body}</div></article>`;
+      // the world's paper of the week (atlas-paper.js): the news the players were told, in the age's own look: the town
+      // crier's sheet, a broadsheet, a daily, a datapad's feed
+      case "gazette": {
+        const it = (h.items || []).filter(x => x && (x.headline || x.text)), one = x => x.text && x.text !== x.headline ? `<p>${esc(x.text)}</p>` : "", wx = h.weather ? `<footer class="ho-gwx">${esc(h.weather)}</footer>` : "";
+        if (e === "medieval" || e === "fantasy") return `<article class="ho ho-gazette ho-crier era-${e}"><header><div class="ho-hear">Hear ye, hear ye</div><div class="ho-mast">${esc(h.paper || "")}</div><div class="ho-dateline">${esc(h.date || "")}</div></header>${it.map(x => `<section><h5>${esc(x.headline || "")}</h5>${one(x)}</section>`).join(`<div class="ho-orn" aria-hidden="true">❦</div>`)}${wx}</article>`;
+        if (e === "future") return `<article class="ho ho-gazette ho-feed era-${e}"><header><span>${esc(h.paper || "")}</span><span>${esc(h.date || "")}</span></header>${it.map((x, i) => `<section><span class="ho-fi">${String(i + 1).padStart(2, "0")}</span><div><b>${esc(x.headline || "")}</b>${one(x)}${x.paper ? `<i>${esc(x.paper)}</i>` : ""}</div></section>`).join("")}${wx}</article>`;
+        const [lead, ...rest] = it;
+        return `<article class="ho ho-gazette ${e === "modern" ? "ho-daily" : "ho-broad"} era-${e}"><header><div class="ho-mast">${esc(h.paper || "")}</div><div class="ho-dateline">${esc(h.date || "")}${h.price ? " · " + esc(h.price) : ""}</div></header>${lead ? `<div class="ho-lead"><h4 class="ho-headline">${esc(lead.headline || "")}</h4>${one(lead)}</div>` : ""}${rest.length ? `<div class="ho-cols">${rest.map(x => `<section><h5>${esc(x.headline || "")}</h5>${one(x)}</section>`).join("")}</div>` : ""}${wx}</article>`;
+      }
       case "diary":
         return `<article class="ho ho-diary era-${e}">${h.date ? `<div class="ho-date">${esc(h.date)}</div>` : ""}<div class="ho-body">${body}</div></article>`;
       case "note":

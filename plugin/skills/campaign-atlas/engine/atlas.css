@@ -1186,6 +1186,36 @@ details.ci[open] > summary.cn { margin-bottom: 4px; }
 .ho-cols { column-count: 2; column-gap: 22px; column-rule: 1px solid rgba(0, 0, 0, .3); text-align: justify; hyphens: auto; }
 .ho-cols p:first-child::first-letter { float: left; font-size: 3.1em; line-height: .85; padding: 4px 5px 0 0; font-weight: 700; }
 @media (max-width: 560px) { .ho-cols { column-count: 1; } }
+/* the world's paper of the week (atlas-paper.js), by its age */
+.ho-gazette h5 { margin: 0 0 3px; font-weight: 700; font-size: 16px; line-height: 1.2; }
+.ho-gazette p { margin: 0 0 8px; }
+.ho-gwx { margin-top: 10px; padding-top: 6px; border-top: 1px solid rgba(0, 0, 0, .35); font-size: 13px; font-style: italic; text-align: center; }
+.ho-broad { background: #ece6d6; background-image: linear-gradient(180deg, rgba(0, 0, 0, .03), rgba(90, 70, 30, .12)); padding: 22px 26px 24px; font-family: "Old Standard TT", Georgia, serif; font-size: 15px; line-height: 1.45; color: #1d1a16; }
+.ho-broad header, .ho-daily header { text-align: center; border-bottom: 3px double #1d1a16; padding-bottom: 6px; margin-bottom: 10px; }
+.ho-broad .ho-lead { border-bottom: 1px solid #1d1a16; margin-bottom: 10px; padding-bottom: 6px; }
+.ho-broad .ho-lead p::first-letter { float: left; font-size: 3.1em; line-height: .85; padding: 4px 5px 0 0; font-weight: 700; }
+.ho-gazette .ho-cols section { break-inside: avoid; margin-bottom: 8px; }
+.ho-gazette .ho-cols p:first-child::first-letter { float: none; font-size: inherit; padding: 0; font-weight: inherit; }
+.ho-daily { background: #fbfaf7; color: #111; padding: 18px 22px 22px; font-family: Georgia, "Times New Roman", serif; font-size: 15px; line-height: 1.45; }
+.ho-daily .ho-mast { font-family: "Playfair Display", Georgia, serif; font-weight: 900; font-size: 36px; font-style: normal; letter-spacing: -.01em; }
+.ho-daily .ho-headline { font-family: system-ui, "Segoe UI", sans-serif; font-weight: 800; font-size: 28px; text-transform: none; text-align: left; letter-spacing: -.01em; }
+.ho-daily h5 { font-family: system-ui, "Segoe UI", sans-serif; font-weight: 700; }
+.ho-crier { background: #efe2bf; background-image: radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, .35), transparent 60%), linear-gradient(180deg, rgba(120, 80, 30, .05), rgba(120, 80, 30, .2)); color: #2b1f12; padding: 22px 28px 24px; font-family: "IM Fell English", Georgia, serif; font-size: 16px; line-height: 1.45; border: 1px solid #a88b5a; box-shadow: inset 0 0 40px rgba(120, 80, 30, .25); text-align: center; }
+.ho-crier header { margin-bottom: 10px; }
+.ho-crier .ho-hear { font-family: "IM Fell English SC", "IM Fell English", serif; letter-spacing: .2em; font-size: 13px; color: #7a2a1a; }
+.ho-crier .ho-mast { font-family: "UnifrakturMaguntia", "IM Fell English", serif; font-size: 34px; line-height: 1.1; }
+.ho-crier .ho-dateline { font-size: 12px; letter-spacing: .08em; font-style: italic; text-transform: none; border: 0; }
+.ho-crier h5 { font-family: "IM Fell English SC", "IM Fell English", serif; font-weight: 400; font-size: 18px; letter-spacing: .04em; }
+.ho-crier .ho-orn { color: #7a2a1a; font-size: 18px; margin: 4px 0 8px; }
+.ho-crier .ho-gwx { border-top-color: rgba(122, 42, 26, .4); }
+.ho-feed { background: #0e1a1f; color: #bfe9f0; padding: 0 0 12px; font-family: "Share Tech Mono", "IBM Plex Mono", monospace; font-size: 14.5px; line-height: 1.5; border: 1px solid #2c5560; border-radius: 6px; overflow: hidden; }
+.ho-feed header { display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px; background: #163039; color: #7fe3f0; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+.ho-feed section { display: grid; grid-template-columns: 2.4em 1fr; gap: 8px; padding: 10px 14px 0; }
+.ho-feed .ho-fi { color: #4fb3c4; }
+.ho-feed b { color: #e6fbff; font-weight: 600; }
+.ho-feed p { margin: 2px 0 2px; color: #9fcfd8; }
+.ho-feed i { font-style: normal; font-size: 12px; color: #4f8f9c; }
+.ho-feed .ho-gwx { margin: 10px 14px 0; border-top-color: #2c5560; color: #7fbcc8; }
 .ho-ledger { font-family: "Special Elite", "Courier New", monospace; font-size: 15px; background-color: #ecebd9; background-image: linear-gradient(90deg, transparent 0 34px, rgba(180, 40, 40, .35) 34px 35px, transparent 35px), repeating-linear-gradient(transparent 0 27px, rgba(40, 90, 140, .25) 27px 28px); }
 .ho-ledger table { width: 100%; border-collapse: collapse; }
 .ho-ledger td { padding: 4px 6px; border-bottom: 1px solid rgba(40, 90, 140, .25); vertical-align: top; }
@@ -2037,6 +2067,12 @@ button.ho-b:hover { color: var(--ink); }
 .tw-f { font-size: 14.5px; margin: 2px 0; }
 .tw-f > .kn { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
 .tw-paused { margin: 0 0 8px; padding: 6px 10px; border-radius: 6px; background: var(--accent-soft); font-size: 14px; }
+/* the week's paper in The world's time (atlas-paper.js) */
+.tw-paper { margin-top: 14px; border-top: 1px solid var(--rule); padding-top: 6px; }
+.tw-pp { margin: 6px 0 4px; }
+.tw-pp > summary { cursor: pointer; }
+.tw-pp > .ho { margin: 8px 0; max-width: 560px; }
+.tw-paper label input { vertical-align: -2px; margin-right: 4px; }
 /* the rumour mill (atlas-rumours.js) */
 .rm-r { border-top: 1px solid var(--rule); padding: 8px 0; }
 .rm-r > summary { cursor: pointer; line-height: 1.4; }

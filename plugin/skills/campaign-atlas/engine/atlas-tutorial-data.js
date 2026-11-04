@@ -201,7 +201,7 @@
         { say: "Clocks: what each villain is doing while the party investigates. Tick them as the world moves.", sel: "[data-t='tab'][data-tab='clocks']", act: "click", try: "Click Clocks and stuck.", wait: 500 },
         { say: "Handouts, drawn as the letters and newspapers they are, go to the players' screen with one click.", sel: "[data-t='tab'][data-tab='screen']", act: "click", auto: true }
       ] },
-      { id: "time", module: ["living"], title: "The world's time", summary: "The date in the story, its weather, events that wait for your yes, and news for the players.", features: ["worldtime", "events", "news", "weather"], needs: has("[data-t='tab'][data-tab='time']"), steps: [
+      { id: "time", module: ["living"], title: "The world's time", summary: "The date in the story, its weather, events that wait for your yes, and news for the players.", features: ["worldtime", "events", "news", "weather", "paper"], needs: has("[data-t='tab'][data-tab='time']"), steps: [
         { say: "The world moves while the party investigates.", sel: "#v-table", act: "click", auto: true, wait: 400 },
         { say: "The world's time: the date in the story, what is coming, and what waits for you.", sel: "[data-t='tab'][data-tab='time']", act: "click", try: "Click The world's time.", wait: 500 },
         { say: "Move time on as the story does: a conversation, a night's rest, a day's journey.", sel: "#tvBody .tw-adv", act: "look" },
@@ -212,6 +212,7 @@
         { say: "Cancel for now.", sel: "#tvBody [data-tw='cancel']", act: "click", auto: true, wait: 300 },
         { say: "Or ask the council: it suggests what the world does next, from the campaign's own words. Nothing is added until you say so.", sel: "#tvBody .tw-council", act: "look" },
         { say: "What you let the players hear goes to their screen as news, with a word on it that it came. Send news of your own here too.", sel: "#tvBody .tw-own", act: "look" },
+        { say: "The week's paper: when a week of the story ends, its news is printed as a handout in your age's own look, the town crier's sheet, a broadsheet, a daily or a station's newsfeed, with the weather ahead. Show it on the players' screen and it is theirs to keep. Print the week so far whenever you like.", sel: "#tvBody .tw-paper", act: "look", optional: true },
         { say: "Time is in the quick tools as well, with a count of what waits for you.", sel: "#tDock [data-dock='time']", act: "click", try: "Click Time.", wait: 500 },
         { say: "Close it from the toolbar.", sel: "#tDock [data-dock='time']", act: "click", auto: true }
       ] },
@@ -288,6 +289,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    paper: ["The week's paper", "newspaper paper gazette broadsheet crier town crier sheet daily newsfeed bulletin week printed handout news players keep"],
     rumours: ["The rumour mill", "rumour rumor gossip spread travel roads version truth told changed exaggerated blamed inn town players hear news false lead"],
     journeys: ["Journeys", "journey travel road day by day route trip encounter meet sight found rumour inn town food supplies rations buy rest arrive road so far party flag words"],
     worldtime: ["The world's time", "clock calendar date day hour time pause"], weather: ["The weather from the world's climate", "weather rain snow sleet fog frost wind gale storm thunder heat cold climate season month forecast tomorrow days ahead journey travel slower roads mud players screen music"], events: ["World events", "event plan happens approve due notification council suggest called off"], news: ["News for the players", "news told players notification"], facility: ["A facility's systems", "power oxygen pressure temperature contamination security structure comms emergency station ship lab survival"],

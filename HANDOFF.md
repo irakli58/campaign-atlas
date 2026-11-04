@@ -106,7 +106,10 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
         and changed at each place (worked out, not stored), as far and as long as they matter; the truth beside every
         version; told to the players by hand or by itself; heard on journeys; told to the copilot. The workspace's
         dev/rumours-test.js "all well");
-     4. the world's newspaper (7);
+     4. the world's newspaper (7) (**built 4 Nov**: engine/atlas-paper.js and the handout kind `gazette` in
+        atlas-table.js, drawn as the town crier's sheet, a broadsheet, a daily or a newsfeed by age; printed by itself
+        each week from the news, with the weather ahead; shown to the players to keep. The workspace's dev/paper-test.js
+        "all well");
      5. a timeline to scroll (8);
      6. the players' chronicle, with their own written intentions (5);
      7. people living their days in the 3D city (6);
