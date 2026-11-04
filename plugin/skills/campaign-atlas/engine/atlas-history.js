@@ -234,7 +234,8 @@
       <div><section class="t-card hs-pub"><h3>As the players know it</h3><p class="t-small">What the party has seen, found and been told, in the words they heard it.</p>${P.length ? timeline(P.slice(0, 14), true) : `<p class="kn">Nothing yet.</p>`}</section>
       <section class="t-card"><h3>Saved moments</h3><p class="t-small">Save the world as it is now: the date, the events, the news, the factions, where everyone is${COLLS.length > 8 ? ", the consequences and the money" : ""}. Going back puts all of it back as it was, after saving it as it is first, so going back can be undone. What the party has found stays as it is.</p>
         <form class="t-row" data-hs="snap"><input class="t-in" name="n" maxlength="80" placeholder="A name: before the raid"><button class="t-btn">Save the world now</button></form>
-        ${sn.length ? `<ul class="hs-snaps">${sn.map(([id, s]) => `<li><b>${esc(s.name)}</b> <span class="kn">${esc(s.when || "")}${s.auto ? " · saved by itself" : ""}</span><span class="t-row"><button type="button" class="t-mini" data-hs="restore" data-id="${esc(id)}">Go back to it</button><button type="button" class="t-mini" data-hs="unsnap" data-id="${esc(id)}">Remove</button></span></li>`).join("")}</ul>` : `<p class="kn">None saved yet.</p>`}</section></div></div>`;
+        ${sn.length ? `<ul class="hs-snaps">${sn.map(([id, s]) => `<li><b>${esc(s.name)}</b> <span class="kn">${esc(s.when || "")}${s.auto ? " · saved by itself" : ""}</span><span class="t-row"><button type="button" class="t-mini" data-hs="restore" data-id="${esc(id)}">Go back to it</button><button type="button" class="t-mini" data-hs="unsnap" data-id="${esc(id)}">Remove</button></span></li>`).join("")}</ul>` : `<p class="kn">None saved yet.</p>`}</section>
+      ${A.word ? A.word.cardHTML() : ""}</div></div>`;
   }
 
   /* ---- what the game master does */

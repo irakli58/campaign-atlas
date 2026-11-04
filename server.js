@@ -142,6 +142,27 @@ async function route(req, res) {
       const f = path.join(dir, "dist", "preview.html"); if (!fs.existsSync(f)) return fail(res, 404, "not built");
       res.writeHead(200, { "content-type": TYPES[".html"], "content-disposition": `attachment; filename="${mm[1]}.html"` }); return fs.createReadStream(f).pipe(res);
     }
+    // word between campaigns that share a world (atlas-word.js; the user's approved idea of 3 Nov 2026, "one world, many
+    // campaigns"): what one campaign sends is left in data/word/<world>/, and every other campaign of that world picks
+    // it up; a campaign never gets back its own
+    if (rest === "word" || rest.startsWith("word?")) {
+      if (!authed) return fail(res, 403, "forbidden");
+      const wdir = w => /^[a-z0-9-]{1,48}$/.test(w || "") ? path.join(DATA, "word", w) : null;
+      if (m === "POST") {
+        try {
+          const d = await body(req, 256 << 10), dir2 = wdir(d && d.world);
+          if (!dir2 || d.atlasWord !== 1 || !Array.isArray(d.items) || d.items.length > 60) return fail(res, 400, "That is not word for a shared world.");
+          fs.mkdirSync(dir2, { recursive: true }); fs.writeFileSync(path.join(dir2, `${Date.now()}-${mm[1]}.json`), JSON.stringify(Object.assign({}, d, { slug: mm[1] })));
+          return send(res, 200, { ok: true });
+        } catch (e) { return fail(res, 400, e.message); }
+      }
+      if (m === "GET") {
+        const dir2 = wdir(url.searchParams.get("world")); if (!dir2 || !fs.existsSync(dir2)) return send(res, 200, { word: [] });
+        const files = fs.readdirSync(dir2).filter(f => /^\d+-[a-z0-9-]+\.json$/.test(f) && !f.endsWith(`-${mm[1]}.json`)).sort().slice(-50);
+        const word = []; for (const f of files) { try { word.push(JSON.parse(fs.readFileSync(path.join(dir2, f), "utf8"))); } catch (e) {} }
+        return send(res, 200, { word });
+      }
+    }
     // the world map's "Make its 3D map now"
     if (m === "POST" && rest === "make-city") {
       if (!authed) return fail(res, 403, "forbidden");

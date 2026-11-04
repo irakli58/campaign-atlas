@@ -104,6 +104,8 @@ node atlas.js world <dir> --drawing story/world-drawing.jpg
 
 ### The real world
 
+**One world, many campaigns** (the user's approved idea of 3 Nov 2026, West Marches style): `node atlas.js world <dir> --from <other campaign>` gives this campaign the other's world (its world.js, world-terrain.js and world-roads.js: the same land, places and roads) and marks both as one shared world (`shared: "<id>"` in world.js; the other campaign's world.js gains that line, its only change). Each keeps its own party, cities, places, events and history; word of what each group does passes between them (The world's history, Word between groups: references/table.md), starting as rumours where it happened.
+
 ```
 node atlas.js world <dir> --real "Northern England" [--km 800] [--unit mile|km]
 ```

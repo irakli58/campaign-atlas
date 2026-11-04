@@ -131,7 +131,11 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
         by keywords, five-minute steps, one suggestion; checked in the workspace's dev/session-test.js);
      11. the table, projected (13) (**built 4 Nov**: atlas-table.js players' window proj: ▦, an inch measured, turned,
         mirrored, arrow keys, kept per browser; the workspace's dev/projector-test.js "all well");
-     12. one world, many campaigns (14).
+     12. one world, many campaigns (14) (**built 4 Nov**: atlas.js world --from (shared: id in world.js);
+        engine/atlas-word.js, Word between groups in The world's history: send by the app (server.js route word,
+        data/word/<world>/; local-db.js ATLAS_APP.word; not tested live in the app) or as a file; received word let spread
+        as rumours and history "heard". The workspace's dev/word-test.js "all well").
+   - **The approved ideas list is done (4 Nov).** Next: the UI/UX polish (7), starting with the user's review of the sounds.
    - Each one taught, tested, committed. The review's items (reviews/2026-11-03-review.md) still wait for the user's answers.
 6c. (**built 3 Nov**: engine/atlas-modules.js, the gear and the Start here card, tabs, tools, views and lessons following the switches, files of parts switched off left out of the build, the app's "What it uses" choice; dev/modules-test.js "all well". Not yet: the finer levels inside People (days, knowledge), and the model library's furnishing tool hidden by CSS only.) **Modular features: APPROVED 3 Nov** (docs/requests/2026-11-03-modular-features.md; the plan and the user's answers in the workspace's reviews/2026-11-03-modules.md): the 17 modules with their levels, safety always on, the presets (plus Science fiction), the settings on a Start here card AND a gear button at the top of the page; per campaign in campaign.js `features` and the page's database; off means off (tabs, tools, watchers, background work, and the files left out of the build); data never deleted; tested on the presets with the database compared before and after; lessons follow the switches.
 6c'. (**built 3 Nov: many worlds per campaign.** A.worlds and A.worldList, worlds/<id>/ files registering under their folder's id (atlas.js campaignSrc), `atlas.js world|roads --id`, the selector beside World map, A.openWorld(id), each world's own changes, view and cities, and the check over every world. Tested with dev/worlds-test.js, "all well". Next: the planetary layer.)

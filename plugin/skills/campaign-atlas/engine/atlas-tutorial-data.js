@@ -250,12 +250,13 @@
         { say: "Whatever you choose, the safeguards hold: a death, a war or a place lost always waits for you, nothing reaches the players unless you tell them, and the world is saved before time moves on a day.", sel: "#tvBody .db-safe", act: "look" },
         { say: "Move time on from here, and answer what waits for you without leaving the page.", sel: "#tvBody .db-now .tw-adv", act: "look" }
       ] },
-      { id: "history", module: ["living"], title: "The world's history", summary: "Everything that has happened, who knows of it; the world saved and gone back to.", features: ["history", "timeline"], needs: has("[data-t='tab'][data-tab='history']"), steps: [
+      { id: "history", module: ["living"], title: "The world's history", summary: "Everything that has happened, who knows of it; the world saved and gone back to.", features: ["history", "timeline", "word"], needs: has("[data-t='tab'][data-tab='history']"), steps: [
         { say: "The world's history: everything that has happened, newest first, with when, why, who, what came of it, and whether the players know.", sel: "[data-t='tab'][data-tab='history']", act: "click", try: "Click The world's history.", wait: 600 },
         { say: "The timeline: the same history as a line of days to scroll along. A row for the sessions at the table, each a band of the days it covered; one for what happened in the world; one for what the party did, found and reached; one for what came of it, with a line from each deed to its consequences. Today is marked, and what is coming lies faint after it. Click a mark for the whole of it; + and − show fewer days or more.", sel: "#tvBody .hs-tlc", act: "look" },
         { say: "Narrow it to one kind, one person or faction, one place, or what the players know.", sel: "#tvBody .hs-f", act: "look" },
         { say: "As the players know it: what they have seen, found and been told, in the words they heard it.", sel: "#tvBody .hs-pub", act: "look" },
-        { say: "Save the world as it is before a big moment, and go back to it if the night goes wrong. Going back can be undone too, and what the party has found stays as it is.", sel: "#tvBody form[data-hs='snap']", act: "look" }
+        { say: "Save the world as it is before a big moment, and go back to it if the night goes wrong. Going back can be undone too, and what the party has found stays as it is.", sel: "#tvBody form[data-hs='snap']", act: "look" },
+        { say: "Word between groups, when this world is shared with other campaigns (one world, many campaigns: ask Claude to give a campaign another's world). Send word of what happened here, by the Atlas app to the others on this computer or as a small file; word from them waits here, and Let it spread starts it as a rumour where it happened, written in the history as word from that group.", sel: "#tvBody .wd-card", act: "look", optional: true }
       ] },
       { id: "deeds", module: ["living", "advanced"], title: "Consequences", summary: "What the party did, and what comes of it: at once, in days, weeks later.", features: ["deeds"], needs: has("[data-t='tab'][data-tab='deeds']"), steps: [
         { say: "Consequences: when the party does something that matters, write it here.", sel: "[data-t='tab'][data-tab='deeds']", act: "click", try: "Click Consequences.", wait: 600 },
@@ -297,6 +298,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    word: ["Word between groups", "shared world one world many campaigns groups west marches word send receive file other group heard spread rumour"],
     projector: ["The table, projected", "projector projected table miniatures scale inch measure ruler turn rotate mirror flip top-down fog"],
     pacing: ["How the evening went", "pacing evening chart talk story exploring fighting rules off the game session time suggestion balance"],
     whatif: ["What if they wait?", "what if wait month days run forward simulate world keep throw away go back events factions consequences"],

@@ -77,6 +77,18 @@
       return fetch(URL_.replace(/db$/, "trace"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ image: image, prompt: prompt }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not read"); return d.plan; }); });
     },
+    // word between campaigns that share a world (atlas-word.js): sent to this computer's other campaigns of that world,
+    // and what they sent picked up
+    word: {
+      send: function (d) {
+        return fetch(URL_.replace(/db$/, "word"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(d) })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not sent"); return x; }); });
+      },
+      inbox: function (world) {
+        return fetch(URL_.replace(/db$/, "word") + "?world=" + encodeURIComponent(world), { headers: { "x-atlas-token": TOKEN }, cache: "no-store" })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not read"); return x.word || []; }); });
+      }
+    },
     makeCity: function (o) {
       return fetch(URL_.replace(/db$/, "make-city"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not made"); return d; }); })

@@ -2067,6 +2067,11 @@ button.ho-b:hover { color: var(--ink); }
 .tw-f { font-size: 14.5px; margin: 2px 0; }
 .tw-f > .kn { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
 .tw-paused { margin: 0 0 8px; padding: 6px 10px; border-radius: 6px; background: var(--accent-soft); font-size: 14px; }
+/* word between groups that share a world (atlas-word.js) */
+.wd-card .t-row { flex-wrap: wrap; }
+.wd-read { cursor: pointer; display: inline-flex; align-items: center; }
+.wd-in { border-top: 1px solid var(--rule); margin-top: 8px; padding-top: 6px; }
+.wd-in h4 { margin: 0 0 4px; }
 /* how the evening went, in Recorded sessions (atlas-sessions.js pacing) */
 .sm-pchart { width: 100%; height: auto; display: block; background: var(--accent-soft); border-radius: 4px; }
 .sm-pchart text { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
