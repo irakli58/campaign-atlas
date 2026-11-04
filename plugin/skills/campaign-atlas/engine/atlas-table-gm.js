@@ -431,7 +431,7 @@
   // which module each tab and quick tool belongs to, and from which level (atlas-modules.js; the user, 3 Nov 2026): a
   // module off draws neither, and its tab's work does not start. Home, Tonight, the clocks, the party and safety are the
   // core, always there
-  const KMOD = { dims: ["dimensions"], screen: ["players"], combat: ["fights"], make: ["makeup"], ask: ["copilot"], board: ["investigation"], export: ["print"], clues: ["investigation"], consistency: ["consistency"], copilot: ["copilot"], dash: ["living", "advanced"], deeds: ["living", "advanced"], factions: ["living", "advanced"], time: ["living"], history: ["living"], money: ["money"], recorded: ["recorded"] };
+  const KMOD = { dims: ["dimensions"], screen: ["players"], combat: ["fights"], make: ["makeup"], ask: ["copilot"], board: ["investigation"], export: ["print"], clues: ["investigation"], consistency: ["consistency"], copilot: ["copilot"], dash: ["living", "advanced"], deeds: ["living", "advanced"], factions: ["living", "advanced"], time: ["living"], rumours: ["living"], history: ["living"], money: ["money"], recorded: ["recorded"] };
   const DMOD = { dice: ["fights"], person: ["makeup"], ask: ["copilot"], screen: ["players"], talk: ["copilot"], time: ["living"] };
   const modOn = r => !r || !A.modules || A.modules.on(r[0], r[1]);
   const shownTab = k => modOn(KMOD[k]), shownDock = k => modOn(DMOD[k]);

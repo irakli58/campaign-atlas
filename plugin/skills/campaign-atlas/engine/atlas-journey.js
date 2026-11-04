@@ -197,7 +197,9 @@
     if (WT) for (const e of WT.coming().slice(0, 12)) { const w = (e.news && (e.news.text || e.news.headline)) || e.players; if (w && out.length < 2 && r() < .6) out.push({ text: w, about: e.title, kind: "coming" }); }
     for (const id of H.near(at)) { const L = H.loc(id); if (L && (L.state === "unknown" || L.state === "rumoured") && out.length < 4) out.push({ text: `Travellers speak of ${L.name}, ${H.dir(at, id)}.`, place: id, kind: "place" }); }
     const own = fromTables(/rumou?r|gossip|talk|tavern|inn/i, r); if (own) out.push({ text: own.text, kind: "table", from: own.from });
-    return out.slice(0, 4);
+    // (and what the rumour mill has brought there by the day's end, as it is told there: atlas-rumours.js)
+    const mill = A.rumours ? A.rumours.heardAt(at, nowM() + 1440).map(x => ({ text: x.say, kind: "mill", from: "the rumour mill" })) : [];
+    return mill.slice(0, 2).concat(out).slice(0, 5);
   }
 
   /* ---- on the page: the journey bar, the day's card, the road so far */
@@ -255,5 +257,5 @@
     return `The party is on the road from ${name(t.from)} to ${name(t.to)}${d ? `, day ${d.n}, ${GROUND[d.ground] || ""}` : ""}, making for ${name(p.plan[0])}.`;
   }
 
-  A.journey = { ground, along, legDays, start, day, bar, dayHTML, logHTML, keep, buyFood, tellRumour, say, GROUND, MEET, SIGHT, trip: tripOf, listen: f => { hooks.push(f); follow(); } };
+  A.journey = { PACE, ground, along, legDays, start, day, bar, dayHTML, logHTML, keep, buyFood, tellRumour, say, GROUND, MEET, SIGHT, trip: tripOf, listen: f => { hooks.push(f); follow(); } };
 })(typeof ATLAS !== "undefined" ? ATLAS : global.ATLAS);

@@ -2037,6 +2037,21 @@ button.ho-b:hover { color: var(--ink); }
 .tw-f { font-size: 14.5px; margin: 2px 0; }
 .tw-f > .kn { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
 .tw-paused { margin: 0 0 8px; padding: 6px 10px; border-radius: 6px; background: var(--accent-soft); font-size: 14px; }
+/* the rumour mill (atlas-rumours.js) */
+.rm-r { border-top: 1px solid var(--rule); padding: 8px 0; }
+.rm-r > summary { cursor: pointer; line-height: 1.4; }
+.rm-r > summary .kn { font-size: 13px; }
+.rm-truth { margin: 8px 0; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); font-size: 14.5px; }
+.rm-t { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rm-t th, .rm-t td { text-align: left; vertical-align: top; padding: 5px 6px; border-bottom: 1px solid var(--rule); }
+.rm-t th { font-weight: 600; white-space: nowrap; }
+.rm-t td.kn { white-space: nowrap; font-size: 12.5px; }
+.rm-t .rm-not { opacity: .55; }
+.rm-ch { display: block; font-size: 12px; font-style: italic; }
+.rm-party { font-family: var(--f-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.rm-here { margin: 4px 0 8px; padding-left: 18px; line-height: 1.45; }
+.rm-here li { margin: 4px 0; }
+@media (max-width: 640px) { .rm-t td.kn { white-space: normal; } .rm-t th { white-space: normal; } }
 /* the weather where the party is (atlas-weather.js) */
 .wx-today { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 2px 0 6px; }
 .wx-today b { font-family: var(--f-display); font-weight: 400; font-size: 22px; line-height: 1.15; }

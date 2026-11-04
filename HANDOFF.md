@@ -101,7 +101,11 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
         meetings, sights and finds by ground and age (the campaign's own tables first); rumours in towns told as news;
         food counted and bought with Money; the players' and the game master's words for each day; the road so far;
         history and copilot. The workspace's dev/journey-test.js "all well");
-     3. the rumour mill (4);
+     3. the rumour mill (4) (**built 4 Nov**: engine/atlas-rumours.js, a tab beside The world's time: rumours started by
+        events with words for the players and by the game master, travelling the routes at the people's pace, retold
+        and changed at each place (worked out, not stored), as far and as long as they matter; the truth beside every
+        version; told to the players by hand or by itself; heard on journeys; told to the copilot. The workspace's
+        dev/rumours-test.js "all well");
      4. the world's newspaper (7);
      5. a timeline to scroll (8);
      6. the players' chronicle, with their own written intentions (5);

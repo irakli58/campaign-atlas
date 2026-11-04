@@ -788,6 +788,7 @@
     handout: `<rect x="3.5" y="5.5" width="17" height="13" rx="1"/><path d="M3.5 6.5 12 13l8.5-6.5"/>`,
     time: `<rect x="4" y="5.5" width="16" height="14.5" rx="1.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4M8 13.5h2M11 13.5h2M14 13.5h2M8 16.5h2M11 16.5h2"/>`,
     news: `<path d="M4 5.5h13v13.5H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-4 0M7 9h7M7 12.5h7M7 16h4.5"/>`,
+    rumour: `<path d="M3.5 4.5h11v8H8.5L5 15.5v-3H3.5z"/><path d="M17 8.5h3.5v8H19v3l-3.5-3H10v-2"/><path d="M6.5 8.5h5"/>`,
     map: `<path d="M3.5 6.5 9 4.5l6 2 5.5-2v13L15 19.5l-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>`,
     tables: `<path d="M9 6.5h11M9 12h11M9 17.5h11"/><rect x="3.5" y="4.5" width="3.5" height="3.5" rx=".6"/><rect x="3.5" y="10.2" width="3.5" height="3.5" rx=".6"/><rect x="3.5" y="15.8" width="3.5" height="3.5" rx=".6"/>`,
     play: `<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 3v6.5M4 7.5l8 2 8-2M12 9.5 7 17h10z"/>`,

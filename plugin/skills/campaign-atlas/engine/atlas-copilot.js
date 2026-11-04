@@ -55,6 +55,8 @@
     if (A.weather) { const w = A.weather.say(); if (w) out.push(w); }
     // on the road: where, and the day of the journey (atlas-journey.js)
     if (A.journey) { const j = A.journey.say(); if (j) out.push(j); }
+    // what is going round where the party is, as people tell it (atlas-rumours.js)
+    if (A.rumours) { const r = A.rumours.say(); if (r) out.push(r); }
     // unfinished business from earlier sessions, as the table remembers it (atlas-sessions.js): the council plans from it
     const U = A.memory ? A.memory.unfinished() : []; if (U.length) out.push("Unfinished business from earlier sessions: " + U.slice(0, 6).map(m => `[${A.memory.cite(m)}] ${m.text}`).join("; "));
     return out.join("\n");

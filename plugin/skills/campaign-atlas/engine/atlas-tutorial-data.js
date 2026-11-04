@@ -215,6 +215,12 @@
         { say: "Time is in the quick tools as well, with a count of what waits for you.", sel: "#tDock [data-dock='time']", act: "click", try: "Click Time.", wait: 500 },
         { say: "Close it from the toolbar.", sel: "#tDock [data-dock='time']", act: "click", auto: true }
       ] },
+      { id: "rumours", module: ["living"], title: "The rumour mill", summary: "What happens travels the roads as rumours and changes as it is told; you keep the truth, each place its version.", features: ["rumours"], needs: has("[data-t='tab'][data-tab='rumours']"), steps: [
+        { say: "The rumour mill: what happens in the world travels the world map's roads as rumours.", sel: "[data-t='tab'][data-tab='rumours']", act: "click", try: "Click The rumour mill.", wait: 600 },
+        { say: "What is going round where the party is, as it is told there. Tell the players sends that version to their screen as news; or tick the box, and a rumour is told to them by itself when it reaches them.", sel: "#tvBody .rm-here, #tvBody .t-fogck", act: "look", optional: true },
+        { say: "Each rumour: where it began, and when. Open one for the truth, which only you see, and every place it reaches: when it gets there, at the pace of the people on the roads, and what is said there. It changes as it is told again: numbers grow, things get worse, someone is blamed, a detail is added or lost.", sel: "#tvBody .rm-r", act: "look", optional: true },
+        { say: "An event with words for the players starts a rumour by itself where it happens, going as far as the event matters. Start one of your own here: what really happened, what people say at first, where it starts and how far it goes.", sel: "#tvBody form[data-rm='new']", act: "look" }
+      ] },
       { id: "dimensions", module: ["dimensions"], title: "Dimensions and planes", summary: "The planes beyond the world: their layers and maps, the ways between, where the sources disagree.", features: ["dimensions"], needs: has("[data-t='tab'][data-tab='dims']"), steps: [
         { say: "Dimensions: the planes beyond your world, from the campaign's cosmos.", sel: "[data-t='tab'][data-tab='dims']", act: "click", try: "Click Dimensions.", wait: 600 },
         { say: "The cosmology drawn: the world at the hub, the planes round it. A gold dot marks a plane whose sources disagree and wait for your choice. Click one to see it.", sel: "#tvBody .dm-wheel", act: "look" },
@@ -282,6 +288,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    rumours: ["The rumour mill", "rumour rumor gossip spread travel roads version truth told changed exaggerated blamed inn town players hear news false lead"],
     journeys: ["Journeys", "journey travel road day by day route trip encounter meet sight found rumour inn town food supplies rations buy rest arrive road so far party flag words"],
     worldtime: ["The world's time", "clock calendar date day hour time pause"], weather: ["The weather from the world's climate", "weather rain snow sleet fog frost wind gale storm thunder heat cold climate season month forecast tomorrow days ahead journey travel slower roads mud players screen music"], events: ["World events", "event plan happens approve due notification council suggest called off"], news: ["News for the players", "news told players notification"], facility: ["A facility's systems", "power oxygen pressure temperature contamination security structure comms emergency station ship lab survival"],
     journal: ["The players' journal", "journal notes theories quests hints summaries manual assisted full"],
@@ -298,7 +305,7 @@
   // map's buttons. dev/tutorial-coverage.js finds every one of these in the engine; one with no feature here, or a feature
   // no lesson teaches, fails it: a new tool is not finished until it has its lesson.
   const COVERS = {
-    tab: { dims: "dimensions", home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", factions: "factions", dash: "dashboard", history: "history", deeds: "deeds", money: "money", recorded: "sessions" },
+    tab: { dims: "dimensions", home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", rumours: "rumours", factions: "factions", dash: "dashboard", history: "history", deeds: "deeds", money: "money", recorded: "sessions" },
     dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
     view: { gaz: "gazetteer", table: "views", world: "worldmap", worldsel: "worldmap", galaxy: "galaxy", story: "bible", music: "music" },
     tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues", marks: "mapmarks" },
