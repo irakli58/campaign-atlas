@@ -2324,6 +2324,18 @@ button.ho-b:hover { color: var(--ink); }
 .fa-more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .fa-web { width: 100%; max-width: 380px; height: auto; display: block; margin: 0 auto; }
 .fa-web text { font-size: 16px; fill: var(--ink); font-family: var(--f-body); }
+/* the relationship web (atlas-factions.js web) */
+.fa-web2 { max-width: 100%; }
+.fa-web2 text { font-size: 12.5px; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
+.fw-n { cursor: pointer; }
+.fw-n circle { stroke: var(--panel); stroke-width: 2; }
+.fw-person circle { stroke: var(--ink); stroke-width: 1.2; }
+.fw-n.sel circle, .fw-n:hover circle, .fw-n:focus circle { stroke: var(--accent); stroke-width: 3; outline: none; }
+.fw-party text { font-weight: 700; }
+.fw-key { line-height: 1.6; }
+.fw-sel { border-top: 1px solid var(--rule); margin-top: 6px; padding-top: 6px; }
+.fw-sel h4 { margin: 0 0 4px; }
+.t-bflash { outline: 3px solid var(--accent); outline-offset: 3px; transition: outline-color .4s; }
 .fa-person { border-top: 1px solid var(--rule); padding: 8px 0; }
 .fa-person:first-child { border-top: 0; }
 .fa-ph { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }

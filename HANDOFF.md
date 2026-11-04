@@ -121,7 +121,9 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
      7. people living their days in the 3D city (6) (**built 4 Nov**: atlas-cityedit.js lived() and personCard, the
         city's people() placing by place and walking between redraws; four people with days in the realm sample's
         Eldermere. The workspace's dev/citylife-test.js "all well");
-     8. the relationship web (11);
+     8. the relationship web (11) (**built 4 Nov**: atlas-factions.js webModel/webLayout/web, The web above the factions'
+        cards: factions, party, people, ties, Talk's opinions, remembered bonds/promises/threats; Find them on the board.
+        The workspace's dev/web-test.js "all well");
      9. "What if we wait a month?" (9);
      10. pacing from the words (15);
      11. the table, projected (13);

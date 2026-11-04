@@ -150,7 +150,7 @@
   A.worldEffects = { apply, revert, say, KINDS, toRow, fromRow, rowHTML, readRow, any: () => ids().length || Object.keys(A.castData || {}).length };
 
   /* ---- the tab */
-  const UI = { open: {}, move: null };
+  const UI = { open: {}, move: null, web: null };
   function bars(f) { return `<div class="fa-has">${HAS.map(([k, l]) => { const v = Math.max(0, Math.min(5, +f.has[k] || 0)); return `<div class="fa-bar"><span class="kn">${l}</span><span class="fa-pips" aria-label="${l}: ${v} of 5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= v ? "on" : ""}"></i>`).join("")}</span><button type="button" class="t-mini" data-fa="has" data-id="${esc(f.id)}" data-k="${k}" data-d="-1" aria-label="Less ${l}">−</button><button type="button" class="t-mini" data-fa="has" data-id="${esc(f.id)}" data-k="${k}" data-d="1" aria-label="More ${l}">+</button></div>`; }).join("")}</div>`; }
   function card(f) {
     const others = ids().filter(o => o !== f.id), plan = [].concat(f.plan || []);
@@ -166,14 +166,70 @@
       <details class="fa-more"><summary>What only you know</summary>${row("They know", esc(f.knows || ""))}${row("They believe, wrongly", esc(f.wrong || ""))}${row("Inside it", esc(f.inner || ""))}${row("Reputation", esc(f.rep || ""))}${row("Its past", esc(f.past || ""))}</details>
       ${f.log.length ? `<details class="fa-more"><summary>What has changed (${f.log.length})</summary><ol class="tw-hist" reversed>${f.log.slice().reverse().map(l => `<li><span class="kn">${esc(l.when || "")}</span> ${esc(l.what)}</li>`).join("")}</ol></details>` : ""}</article>`;
   }
-  // the web of how the factions stand, round a circle: green for allies, red for enemies, dashed for wary
-  function web() {
-    const L = ids().map(fac); if (L.length < 2) return "";
-    const W = 320, H = 280, cx = W / 2, cy = H / 2, r = Math.min(W, H) / 2 - 48, pos = {}; L.forEach((f, i) => { const a = -Math.PI / 2 + i * 2 * Math.PI / L.length; pos[f.id] = [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
-    const col = k => ({ war: "#b0161b", hostile: "#c0392b", wary: "#a07c10", neutral: "#8a8f8b", friendly: "#3f8a4f", allied: "#2f6b3a" })[k] || "#8a8f8b";
-    const lines = []; for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) { const a = L[i], b = L[j], k = a.rels[b.id] || b.rels[a.id] || "neutral"; if (k === "neutral") continue; const [x1, y1] = pos[a.id], [x2, y2] = pos[b.id]; lines.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${col(k)}" stroke-width="${Math.abs(stanceOf(k)[2]) + 1}"${k === "wary" ? ' stroke-dasharray="6 5"' : ""}><title>${esc(a.n)} and ${esc(b.n)}: ${stanceOf(k)[1]}</title></line>`); }
-    return `<svg class="fa-web" viewBox="0 0 ${W} ${H}" role="img" aria-label="How the factions stand">${lines.join("")}${L.map(f => { const [x, y] = pos[f.id]; return `<g><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="11" fill="${esc(f.color)}"/><text x="${Math.max(60, Math.min(W - 60, x)).toFixed(1)}" y="${(y + (y < cy ? -17 : 30)).toFixed(1)}" text-anchor="middle">${esc(f.n.length > 22 ? f.n.slice(0, 20) + "…" : f.n)}</text></g>`; }).join("")}</svg><p class="t-small"><span style="color:#3f8a4f">━</span> friends and allies · <span style="color:#a07c10">┅</span> wary · <span style="color:#c0392b">━</span> hostile, at war</p>`;
+  /* ---- the relationship web (the user's approved idea of 3 Nov 2026, the eleventh in reviews/2026-11-03-ideas.md:
+     "factions' stances and the remembered bonds and grudges as a living diagram, joined to the existing board"): the
+     party at its heart; the factions, how they stand to each other and to the party; the people of the cast, the
+     factions they belong to and lead, the ties written for them, what they think of the party (as the copilot's Talk
+     keeps it), and the bonds, rivalries, promises and threats the table remembers (Recorded sessions, kept). Drawn
+     from the world as it is now, so it changes as the story does. One clicked shows every line it has and where each
+     comes from; a person can be found on the board. */
+  const WCOL = { war: "#b0161b", hostile: "#c0392b", wary: "#a07c10", friendly: "#3f8a4f", allied: "#2f6b3a", trusting: "#2f6b3a", afraid: "#a07c10", member: "#8a8f8b", leads: "#5b6166", tie: "#6f7f93", bond: "#7a4fa0", promise: "#2a8a8a", threat: "#8a1f1f" };
+  const WSAY = { member: "belongs to", leads: "leads", tie: "knows", bond: "a bond or a rivalry", promise: "a promise", threat: "a threat", trusting: "trusts", afraid: "is afraid of" };
+  const OPIN = { friendly: "friendly", trusting: "trusting", wary: "wary", afraid: "afraid", hostile: "hostile" };
+  function webModel() {
+    const nodes = [{ id: "party", kind: "party", label: "The party" }], edges = [], has = new Set(["party"]), cast = A.castData || {};
+    const addN = (id, kind, label, color) => { if (!has.has(id)) { has.add(id); nodes.push({ id, kind, label, color }); } };
+    const L = ids().map(fac).filter(Boolean), pn = id => (cast[id] || {}).n || id;
+    for (const f of L) addN("f:" + f.id, "faction", f.n, f.color);
+    for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) { const a = L[i], b = L[j], k = a.rels[b.id] || b.rels[a.id] || "neutral"; if (k !== "neutral") edges.push({ a: "f:" + a.id, b: "f:" + b.id, k, why: relWhy(a.id, b.id) || relWhy(b.id, a.id), src: "Factions and people" }); }
+    for (const f of L) if (f.party && f.party !== "neutral") edges.push({ a: "f:" + f.id, b: "party", k: f.party, why: "", src: "Factions and people" });
+    for (const id of Object.keys(cast)) for (const fid of factionsOf(id)) if (has.has("f:" + fid)) { addN("p:" + id, "person", pn(id)); edges.push({ a: "p:" + id, b: "f:" + fid, k: (defs()[fid] || {}).leader === id ? "leads" : "member", why: "", src: "Factions and people" }); }
+    for (const [id, c] of Object.entries(cast)) if (c && c.ties && typeof c.ties === "object") for (const [to, why] of Object.entries(c.ties)) {
+      const t = cast[to] ? to : Object.keys(cast).find(k => String(cast[k].n || "").toLowerCase() === String(to).toLowerCase()); if (!t || t === id) continue;
+      addN("p:" + id, "person", pn(id)); addN("p:" + t, "person", pn(t)); const e = edges.find(x => x.k === "tie" && x.a === "p:" + t && x.b === "p:" + id);
+      if (e) e.why += " / " + why; else edges.push({ a: "p:" + id, b: "p:" + t, k: "tie", why: String(why || ""), src: "The cast" });
+    }
+    for (const d of Object.values((S() && S().get("talks")) || {})) { const id = d && String(d.who || "").startsWith("cast:") ? d.who.slice(5) : null; if (!id || !cast[id] || !OPIN[d.opinion]) continue; addN("p:" + id, "person", pn(id)); edges.push({ a: "p:" + id, b: "party", k: OPIN[d.opinion], why: "As they think of the party, from talking with them", src: "Talk" }); }
+    for (const m of Object.values((S() && S().get("memory")) || {})) {
+      if (!m || m.state !== "kept" || !["bond", "promise", "threat"].includes(m.kind)) continue;
+      const cs = [...new Set((m.who || []).filter(w => String(w).startsWith("cast:") && cast[w.slice(5)]).map(w => "p:" + w.slice(5)))], party = (m.who || []).some(w => !String(w).startsWith("cast:"));
+      cs.forEach(n => addN(n, "person", pn(n.slice(2))));
+      if (cs.length >= 2) edges.push({ a: cs[0], b: cs[1], k: m.kind, why: m.text, src: "Remembered, session " + (m.session || "?") });
+      else if (cs.length === 1) edges.push({ a: cs[0], b: "party", k: m.kind, why: m.text, src: "Remembered, session " + (m.session || "?") });
+      else if (party && (m.factions || []).length) for (const f of m.factions) if (has.has("f:" + f)) edges.push({ a: "f:" + f, b: "party", k: m.kind, why: m.text, src: "Remembered, session " + (m.session || "?") });
+    }
+    return { nodes, edges };
   }
+  // laid out by springs and pushes, always the same for the same web: the party in the middle, factions round it, each
+  // person drawn toward the factions and people they are joined to
+  function webLayout(M, W, H) {
+    const P = {}, n = M.nodes.length, fs = M.nodes.filter(x => x.kind === "faction");
+    M.nodes.forEach((x, i) => { const fi = fs.indexOf(x), a = x.kind === "faction" ? -Math.PI / 2 + fi * 2 * Math.PI / Math.max(1, fs.length) : i * 2.39996; const r = x.kind === "party" ? 0 : x.kind === "faction" ? .3 : .42; P[x.id] = [W / 2 + Math.cos(a) * r * W, H / 2 + Math.sin(a) * r * H]; });
+    const k = Math.sqrt(W * H / Math.max(4, n)) * .62;
+    for (let it = 0; it < 260; it++) {
+      const D = {}; for (const x of M.nodes) D[x.id] = [0, 0];
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) { const a = M.nodes[i].id, b = M.nodes[j].id, dx = P[a][0] - P[b][0], dy = P[a][1] - P[b][1], d = Math.max(1, Math.hypot(dx, dy)), f = k * k / d; D[a][0] += dx / d * f; D[a][1] += dy / d * f; D[b][0] -= dx / d * f; D[b][1] -= dy / d * f; }
+      for (const e of M.edges) { const dx = P[e.a][0] - P[e.b][0], dy = P[e.a][1] - P[e.b][1], d = Math.max(1, Math.hypot(dx, dy)), f = d * d / k * (e.k === "member" || e.k === "leads" ? 1.2 : .8); D[e.a][0] -= dx / d * f; D[e.a][1] -= dy / d * f; D[e.b][0] += dx / d * f; D[e.b][1] += dy / d * f; }
+      const tmax = 18 * (1 - it / 260) + 1;
+      for (const x of M.nodes) { if (x.kind === "party") { P.party = [W / 2, H / 2]; continue; } const [dx, dy] = D[x.id], d = Math.max(.01, Math.hypot(dx, dy)), s = Math.min(d, tmax); P[x.id][0] = Math.max(60, Math.min(W - 60, P[x.id][0] + dx / d * s + (W / 2 - P[x.id][0]) * .004)); P[x.id][1] = Math.max(26, Math.min(H - 26, P[x.id][1] + dy / d * s + (H / 2 - P[x.id][1]) * .004)); }
+    }
+    return P;
+  }
+  function web() {
+    const M = webModel(); if (M.nodes.length < 3) return "";
+    const W = 640, H = 470, P = webLayout(M, W, H), sel = UI.web && M.nodes.some(x => x.id === UI.web) ? UI.web : null, near = new Set(sel ? M.edges.filter(e => e.a === sel || e.b === sel).flatMap(e => [e.a, e.b]) : []);
+    // (two lines between the same pair bend apart, so both are seen)
+    const pairs = {};
+    const lines = M.edges.map(e => { const pk = [e.a, e.b].sort().join("|"), ix = pairs[pk] = (pairs[pk] || 0) + 1, bend = .08 * Math.ceil(ix / 2) * (ix % 2 ? 1 : -1) * (e.a < e.b ? 1 : -1), [x1, y1] = P[e.a], [x2, y2] = P[e.b], on = !sel || e.a === sel || e.b === sel, dash = ["wary", "afraid", "tie", "promise", "threat"].includes(e.k) ? (e.k === "tie" ? "2 4" : "6 5") : "", w = e.k === "war" || e.k === "allied" || e.k === "leads" ? 3 : e.k === "member" ? 1.2 : 2;
+      return `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)}Q${((x1 + x2) / 2 + (y2 - y1) * bend).toFixed(1)} ${((y1 + y2) / 2 - (x2 - x1) * bend).toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" stroke="${WCOL[e.k] || WCOL[stanceOf(e.k)[0]] || "#8a8f8b"}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ""} opacity="${on ? .9 : .12}"><title>${esc(label(M, e.a))} – ${esc(label(M, e.b))}: ${esc((WSAY[e.k] || stanceOf(e.k)[1]).toLowerCase())}${e.why ? ". " + esc(e.why) : ""}</title></path>`; }).join("");
+    const dots = M.nodes.map(x => { const [cx, cy] = P[x.id], on = !sel || x.id === sel || near.has(x.id), r = x.kind === "party" ? 15 : x.kind === "faction" ? 11 : 6.5;
+      return `<g class="fw-n fw-${x.kind}${x.id === sel ? " sel" : ""}" data-fa="websel" data-id="${esc(x.id)}" tabindex="0" role="button" aria-label="${esc(x.label)}" opacity="${on ? 1 : .3}"><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r}" fill="${x.kind === "faction" ? esc(x.color || "#777") : x.kind === "party" ? "#d9a227" : "#e8e4da"}"/><text x="${cx.toFixed(1)}" y="${(cy + r + 12).toFixed(1)}" text-anchor="middle">${esc(x.label.length > 24 ? x.label.slice(0, 22) + "…" : x.label)}</text></g>`; }).join("");
+    const list = sel ? M.edges.filter(e => e.a === sel || e.b === sel).map(e => { const o = e.a === sel ? e.b : e.a; return `<li><b style="color:${WCOL[e.k] || "inherit"}">${esc(WSAY[e.k] || stanceOf(e.k)[1])}</b> ${esc(label(M, o))}${e.why ? `: <span class="t-small">${esc(e.why)}</span>` : ""} <span class="kn">(${esc(e.src)})</span></li>`; }).join("") : "";
+    return `<svg class="fa-web fa-web2" viewBox="0 0 ${W} ${H}" role="img" aria-label="The web of who stands with whom">${lines}${dots}</svg>
+      <p class="t-small fw-key"><span style="color:#3f8a4f">━</span> friends, allies · <span style="color:#a07c10">┅</span> wary, afraid · <span style="color:#c0392b">━</span> hostile, at war · <span style="color:#8a8f8b">─</span> belongs to · <span style="color:#6f7f93">┈</span> knows · <span style="color:#7a4fa0">━</span> bond · <span style="color:#2a8a8a">┅</span> promise · <span style="color:#8a1f1f">┅</span> threat</p>
+      ${sel ? `<div class="fw-sel"><h4>${esc(label(M, sel))}</h4>${list ? `<ul class="t-ul">${list}</ul>` : `<p class="kn">Nothing joins them yet.</p>`}<div class="t-row">${sel.startsWith("p:") ? `<button type="button" class="t-mini" data-fa="webboard" data-id="${esc(sel)}">Find them on the board</button>` : ""}<button type="button" class="t-mini" data-fa="websel" data-id="">Show everyone</button></div></div>` : `<p class="t-small kn">Click someone for every line they have and where it comes from.</p>`}`;
+  }
+  const label = (M, id) => (M.nodes.find(x => x.id === id) || {}).label || id;
   function peopleHTML() {
     const L = lived(); if (!L.length) return `<p class="kn">No one in the cast has a day written for them yet (sched, home, work on the cast: references/table.md, section 19).</p>`;
     const t = nowAt();
@@ -188,7 +244,8 @@
   function html() {
     const L = ids().map(fac);
     if (!L.length && !lived().length) return `<section class="t-card"><h3>${T.icon("board")} Factions and people</h3><p class="kn">This campaign has no factions or people's days written yet. The council gives them in table.js (ATLAS.factions) and on the cast (home, work, sched): who holds power and what they have, what they want and are doing about it, and where each important person is at each hour (references/table.md, section 19).</p></section>`;
-    return `<div class="t-grid t-g2w"><div>${L.map(card).join("") || ""}</div><div>${L.length > 1 ? `<section class="t-card"><h3>How they stand</h3>${web()}</section>` : ""}<section class="t-card"><h3>The people, now</h3>${peopleHTML()}</section></div></div>`;
+    const wb = web();
+    return `<div class="t-grid t-g2w"><div>${wb ? `<section class="t-card fw-card"><h3>The web</h3>${wb}</section>` : ""}${L.map(card).join("") || ""}</div><div><section class="t-card"><h3>The people, now</h3>${peopleHTML()}</section></div></div>`;
   }
 
   /* ---- what the game master does: every change is kept with the world's date, and can be changed back */
@@ -200,6 +257,9 @@
     if (k === "has" && f) { const v = Math.max(0, Math.min(5, (+f.has[b.dataset.k] || 0) + +b.dataset.d)); setFac(id, { has: Object.assign({}, stOf(id).has || {}, { [b.dataset.k]: v }) }, `${(HAS.find(h => h[0] === b.dataset.k) || [0, ""])[1].toLowerCase()} now ${v} of 5`); }
     else if (k === "step" && f) { const v = Math.max(0, Math.min([].concat(f.plan || []).length, (f.step || 0) + +b.dataset.d)); setFac(id, { step: v }, v >= [].concat(f.plan || []).length ? "the plan is done" : `the plan at step ${v + 1}: ${[].concat(f.plan)[v]}`); }
     else if (k === "move") UI.move = UI.move === id ? null : id;
+    else if (k === "websel") UI.web = id && UI.web !== id ? id : null;
+    // (a person of the web on the board: its card brought into view and marked for a moment)
+    else if (k === "webboard") { api.open("board"); setTimeout(() => { const c = document.querySelector(`#tBoard [data-bd="${CSS.escape(id)}"]`); if (c) { c.scrollIntoView({ block: "center", inline: "center" }); c.classList.add("t-bflash"); setTimeout(() => c.classList.remove("t-bflash"), 2400); } }, 500); return; }
     else if (k === "back") { const L = Object.assign({}, lifeOf(id)); delete L.at; delete L.doing; delete L.until; S().set("npcstate", id, L); }
     else return;
     setTimeout(paint, 60);
@@ -221,7 +281,7 @@
 
   TU.addTab({ key: "factions", label: "Factions and people", icon: "board", group: "play", after: "time", desc: "Who holds power, what they have and want, how they stand; where everyone is now",
     html, status: () => { const n = ids().length, p = lived().length; return n || p ? [n && `${n} faction${n > 1 ? "s" : ""}`, p && `${p} ${p > 1 ? "people" : "person"}`].filter(Boolean).join(" · ") : "None in this campaign"; },
-    init(store) { for (const c of ["factions", "npcstate", "clock", "world"]) store.watch(c, () => paint()); } });
+    init(store) { for (const c of ["factions", "npcstate", "clock", "world", "talks", "memory"]) store.watch(c, () => paint()); } });
 
   // the copilot: where someone is now and what they belong to; the investigation: the factions as things to join to
   A.lives = { whereNow, factionsOf, about, fac, ids };
