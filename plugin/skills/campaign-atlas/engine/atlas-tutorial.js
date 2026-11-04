@@ -84,7 +84,10 @@
   const card = document.createElement("div"); card.className = "tu-card" + (VIDEO ? " tu-video" : ""); card.setAttribute("role", "dialog"); card.setAttribute("aria-live", "polite");
   const mount = () => { if (!spot.isConnected) document.body.append(spot, cur, card); };
   const visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
-  async function find(sel, ms) { const list = [].concat(sel); const t0 = Date.now(); while (Date.now() - t0 < (ms || 3500)) { for (const s of list) { let el = null; try { el = [...document.querySelectorAll(s)].find(visible); } catch (e) { el = null; } if (el) return el; } await sleep(120); } return null; }
+  // (on a phone the table's tools are a menu in place of their list: a step that points at one of the tools points at
+  // the menu, and choosing it there does the step)
+  const pickFor = s => { const m = /\[data-t='tab'\]\[data-tab='([\w-]+)'\]/.exec(s), pk = m && document.querySelector("[data-t='tabpick']"); if (!pk || !visible(pk) || ![...pk.options].some(o => o.value === m[1])) return null; pk.__tab = m[1]; return pk; };
+  async function find(sel, ms) { const list = [].concat(sel); const t0 = Date.now(); while (Date.now() - t0 < (ms || 3500)) { for (const s of list) { let el = null; try { el = [...document.querySelectorAll(s)].find(visible) || pickFor(s); } catch (e) { el = null; } if (el) return el; } await sleep(120); } return null; }
   function light(el) {
     const r = el.getBoundingClientRect(), pad = 6;
     Object.assign(spot.style, { left: r.left - pad + "px", top: r.top - pad + "px", width: r.width + pad * 2 + "px", height: r.height + pad * 2 + "px" }); spot.classList.add("on");
@@ -112,7 +115,8 @@
 
   /* ---- doing a step */
   async function perform(s, el) {
-    if (s.act === "click") { ripple(); await sleep(180); if (!s.sim) el.click(); }
+    if (s.act === "click" && el.__tab && el.matches("[data-t='tabpick']")) { ripple(); await sleep(180); if (!s.sim) { el.value = el.__tab; el.dispatchEvent(new Event("change", { bubbles: true })); } }
+    else if (s.act === "click") { ripple(); await sleep(180); if (!s.sim) el.click(); }
     else if (s.act === "type") { el.focus(); const v = String(s.value || ""); if (!v) { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); } else { el.value = ""; for (const ch of v) { el.value += ch; el.dispatchEvent(new Event("input", { bubbles: true })); await sleep(90); } } }
     else if (s.act === "hover") el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
   }
@@ -120,10 +124,12 @@
   function userDoes(s, el, token) {
     return new Promise(res => {
       const done = () => { off(); res(true); };
-      const onClick = e => { if (el.contains(e.target) || e.target === el) setTimeout(done, 60); };
+      const onClick = e => { if (el.__tab) return; if (el.contains(e.target) || e.target === el) setTimeout(done, 60); };
       const onInput = e => { if (e.target === el) { clearTimeout(onInput.t); onInput.t = setTimeout(done, 900); } };
-      const off = () => { document.removeEventListener("click", onClick, true); document.removeEventListener("input", onInput, true); clearInterval(watch); };
-      document.addEventListener("click", onClick, true); document.addEventListener("input", onInput, true);
+      // (the phone's menu of tools: the step is done when that tool is chosen in it)
+      const onPick = e => { if (e.target === el && el.__tab && el.value === el.__tab) setTimeout(done, 60); };
+      const off = () => { document.removeEventListener("click", onClick, true); document.removeEventListener("input", onInput, true); document.removeEventListener("change", onPick, true); clearInterval(watch); };
+      document.addEventListener("click", onClick, true); document.addEventListener("input", onInput, true); document.addEventListener("change", onPick, true);
       const watch = setInterval(() => { if (token !== R.token) { off(); res(false); } }, 200);
       R.doIt = async () => { off(); await perform(s, el); res(true); };
     });

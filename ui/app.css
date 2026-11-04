@@ -60,6 +60,14 @@ small, .hint { color: var(--muted); font-size: 14px; }
 .bopt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .bopt input { margin-top: 4px; accent-color: var(--accent); }
 .bopt select { width: auto; max-width: 100%; margin: 6px 6px 0 0; padding: 5px 8px; font-size: 14px; }
+/* (the words beside a choice take the room left, so a long menu in them wraps or shrinks instead of widening the page) */
+.bopt > span { flex: 1; min-width: 0; }
+.bopts { grid-template-columns: minmax(0, 1fr); }
+.bopt { min-width: 0; }
+@media (max-width: 560px) {
+  .tu-helpbtn { min-height: 30px; padding-top: 6px; padding-bottom: 6px; }
+  .tu-qb { width: 28px !important; height: 28px !important; }
+}
 .bopt input[name=period] { display: block; margin-top: 6px; padding: 6px 10px; font-size: 14px; }
 label.dim input[name=period] { opacity: .55; }
 .subgenre { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 8px; font-size: 15px; }

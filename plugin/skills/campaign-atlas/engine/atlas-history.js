@@ -150,7 +150,7 @@
     if (!l.length) return `<p class="kn">${all().length ? "Nothing that fits." : "Nothing yet. As time moves on and the party acts, what happens is written here."}</p>`;
     let day = null, s = "";
     for (const h of l.slice(0, UI.open)) {
-      const d = h.m == null ? "Before the record began" : at(h.m).long;
+      const d = h.m == null ? "Earlier, before the world's time was kept" : at(h.m).long;
       if (d !== day) { s += `${day !== null ? "</ol>" : ""}<h4 class="tw-sub">${esc(d)}</h4><ol class="hs-l">`; day = d; }
       s += entryHTML(h, pub);
     }

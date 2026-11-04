@@ -725,6 +725,9 @@ function checkTable(A) {
   const CO = require("./councils.js");
   if (A.config.genre && !CO.GENRES[A.config.genre]) P(`genre is "${A.config.genre}": it is fantasy, scifi or modern`);
   if (A.config.kind && !CO.KINDS[A.config.kind]) P(`kind is "${A.config.kind}": it is detective, sandbox or hybrid`);
+  // (the referee called by another game's word: Keeper is Call of Cthulhu's, the DM Dungeons & Dragons')
+  { const sys = String(A.config.system || ""), gm = String(A.config.gm || "");
+    if (gm === "Keeper" && /dungeons|d&d|\bdnd\b|pathfinder|\b5e\b|13th age|warhammer|traveller|star wars|cyberpunk|shadowrun/i.test(sys)) N(`gm is "Keeper", Call of Cthulhu's word, but the game is ${sys}: give it that game's word (DM for Dungeons & Dragons, GM, Referee…)`); }
   if (A.config.approve && !["all", "notable", "major", "critical"].includes(A.config.approve)) P(`approve is "${A.config.approve}": all, notable, major or critical (which world events wait for the referee)`);
   const chosen = A.__dir ? councilChosen(A.__dir) : null;
   if (chosen && chosen.bad) P(`story/council.json does not read: ${chosen.bad}`);
@@ -1114,6 +1117,9 @@ function cmdInit(dir) {
     if (!list[flags[k]]) die(`--${k} is one of ${Object.keys(list).join(", ")}`);
     const c = path.join(dir, "campaign.js"); fs.writeFileSync(c, fs.readFileSync(c, "utf8").replace(`  ${k}: "",`, `  ${k}: "${flags[k]}",`));
   }
+  // (what the game calls its referee, by its kind of world: the template's Keeper is Call of Cthulhu's word; a fantasy
+  // game's is the DM, a science-fiction or modern one's the GM, until the campaign's system says otherwise)
+  { const g = { fantasy: "DM", scifi: "GM", modern: "GM" }[flags.genre]; if (g) { const c = path.join(dir, "campaign.js"); fs.writeFileSync(c, fs.readFileSync(c, "utf8").replace(/gm: "Keeper",/, `gm: "${g}",`)); } }
   console.log(`started ${dir}
   1. save the story, untouched, as story/source.md
   2. convene the council (references/council.md; who sits: atlas.js council ${dir}): story/council.md, then story/bible/

@@ -444,10 +444,12 @@
       box.innerHTML = `<div class="tv">
         <div class="tv-head"><div><div class="st-kicker">${esc(gmName())} only</div><h2 class="tv-h">At the table</h2><p class="tv-lead">Everything for game night: what your players see, tonight's sheet, the villains' clocks, fights and dice, people and places made up on the spot.</p></div>
           <div class="tv-acts"><button type="button" class="t-btn prim" data-t="openscreen">${T.icon("open")}Open the players' screen</button><button type="button" class="t-btn" data-t="tablet" aria-pressed="${app().dataset.tablet === "1"}" title="Bigger buttons, and the tools along the bottom: for a tablet beside you at the table">${app().dataset.tablet === "1" ? "Table-side view: on" : "Table-side view"}</button></div></div>
+        <label class="tv-pick"><span class="kl">Tool</span><select class="t-in" data-t="tabpick" aria-label="Which of the table's tools">${[TABS[0]].map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}${Object.entries(GROUPS).map(([g, gl]) => `<optgroup label="${esc(gl)}">${TABS.filter(t => t[3] === g && shownTab(t[0])).map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}</optgroup>`).join("")}</select></label>
         <div class="tv-wrap"><nav class="tv-nav" role="tablist" aria-label="At the table">${navBtn(TABS[0])}${Object.entries(GROUPS).map(([g, gl]) => `<div class="tvn-g">${esc(gl)}</div>${TABS.filter(t => t[3] === g && shownTab(t[0])).map(navBtn).join("")}`).join("")}</nav>
         <div class="tv-main"><div class="tv-body" id="tvBody" role="tabpanel"></div><p class="tv-note" id="tvNote" aria-live="polite"></p></div></div></div>`;
     }
     box.querySelectorAll(".tv-nav [data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === UI.tab));
+    { const pk = box.querySelector("[data-t='tabpick']"); if (pk && pk.value !== UI.tab) pk.value = UI.tab; }
     renderTab();
   }
   const app = () => document.getElementById("app");
@@ -1173,6 +1175,8 @@
         const t = e.target; if (!t.matches || !t.matches("[data-t]")) return;
         const d = t.dataset;
         if (d.t === "session") { S.set("log", "now", { n: +t.value }); }
+        // (the phone's menu of the table's tools, in place of its list)
+        else if (d.t === "tabpick") { UI.tab = t.value; pref.set("tab", t.value); t.blur(); view(); }
         else if (d.t === "fogplace") { UI.fogPlace = t.value; UI.fogFloor = 0; renderTab(); fogDlgPaint(); }
         else if (d.t === "fogfloor") { UI.fogFloor = +t.value; renderTab(); fogDlgPaint(); }
         else if (d.t === "fogbrush") UI.fogBrush = +t.value;
