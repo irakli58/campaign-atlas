@@ -64,6 +64,8 @@ function namer(rnd, own, dry) {
     volcano: auto => own_("volcano") || (auto ? `Mount ${word()}` : null),
     wood: (auto, kind) => own_("wood") || (auto ? ({ enchanted: `The ${pick(["Witch", "Elder", "Silver", "Dream", "Faerie"])}wood`, glowforest: `The ${pick(["Lantern", "Ember", "Star", "Moon"])} Grove`, mushrooms: `The ${pick(["Spore", "Cap", "Gill"])}wood`, corrupted: `The ${pick(["Blighted", "Rotting", "Thorn", "Hollow"])} Wood`, floating: `The ${pick(["Drifting", "Hanging", "Sky"])} Isles` }[kind] || `The ${word()} Wood`) : null),
     blight: (auto, kind) => own_("blight") || (auto ? (kind === "vale" ? `The Vale of ${word()}` : `The ${pick(["Blight", "Scar", "Ruin", "Shatterlands", "Withering"])}`) : null),
+    // (a plane's own lands: the recipe's regions first, then names in their spirit)
+    plane: (auto, kind) => own_(kind) || own_("region") || (auto ? ({ ashwaste: `The ${pick(["Ash", "Cinder", "Grey", "Smouldering"])} ${pick(["Wastes", "Barrens", "Plains"])}`, ironspires: `The ${pick(["Iron", "Black", "Spiked"])} ${pick(["Spires", "Thicket", "Teeth"])}`, bonefield: `The ${pick(["Bone", "Ossuary", "White"])} ${pick(["Fields", "Plains", "Drifts"])}`, brimstone: `The ${pick(["Sulphur", "Brimstone", "Yellow"])} ${pick(["Flats", "Reaches", "Plains"])}`, cinders: `The ${pick(["Burning", "Ember", "Flame"])} ${pick(["Plains", "Fields", "Wastes"])}`, thornwood: `The ${pick(["Thorn", "Briar", "Bramble"])}${pick(["wood", " Forest", " Tangle"])}`, wildwood: `The ${pick(["Wild", "Dream", "Glimmer", "Elder"])}wood`, feymeadow: `The ${pick(["Gloaming", "Dancing", "Starlit", "Endless"])} ${pick(["Meadows", "Fields", "Downs"])}`, shadowland: `The ${pick(["Grey", "Ashen", "Hollow", "Weeping"])} ${pick(["Lands", "Moors", "Reaches"])}`, gloomwood: `The ${pick(["Gloom", "Dusk", "Mourn"])}wood`, ironstreets: `The ${pick(["Iron", "Brass", "Black"])} ${pick(["Streets", "Wards", "Maze"])}` }[kind] || `The ${word()} Reaches`) : null),
     leftover: () => Object.values(mine).flat()
   };
 }
@@ -283,6 +285,15 @@ function carveFjords(o, L, rnd) {
   if (kept.length) L.coast = distance(cols, rows, n => H[n] <= 128);
   return kept.length;
 }
+// a plane's own kinds of land (--cover "forest=ashwaste,wet=bloodsea,dry=ashwaste,cold=bonefield,high=ironspires,
+// liquid=bloodsea", or the same as an object from the page): each a kind of BIO's list, the rest left as they are
+function coverOf(c) {
+  if (!c || c === true) return null;
+  const o = typeof c === "string" ? Object.fromEntries(c.split(",").map(p => p.split("=").map(s => s.trim())).filter(p => p.length === 2)) : c, out = {};
+  for (const k of ["forest", "wet", "dry", "cold", "high", "liquid"]) if (o[k] && BIO.BY[o[k]]) out[k] = o[k];
+  const any = out.dry || out.forest || out.wet || out.cold || out.high; if (!any) return null;
+  return Object.assign({ forest: any, wet: any, dry: any, cold: any, high: any, liquid: "water" }, out);
+}
 // the regions a world gets by itself: glaciers on cold heights, volcanoes and their ash, mesas and badlands in the dry
 // heat, canyons where rivers cut a dry plateau, salt flats in desert basins, floodplains, reefs on warm shallow coasts, a
 // crater; in fantasy enchanted, corrupted and mushroom woods, floating mountains and a glowing lake; on an alien planet
@@ -413,7 +424,9 @@ function makeCover(o, L, R, rnd, log) {
     const p = eco ? lakes.reduce((b, q) => Math.max(...q.cells.map(c => H[c])) > Math.max(...b.cells.map(c => H[c])) ? q : b, lakes[0]) : lakes[Math.floor(rnd() * lakes.length)];
     if (!C[p.cells[0]]) { for (const c of p.cells) put(c, "glowwater"); if (eco) lore.push({ kind: "glowwater", at: [I(p.cells[0]), J(p.cells[0])], why: "the highest lake, a tarn among the peaks" }); }
   }
-  const P = alien ? BIO.PLANETS[o.planet] : null; let liquid = null;
+  // (a plane's own kinds of land, o.cover from its recipe, atlas-cosmos.js: { forest, wet, dry, cold, high, liquid }, as an
+  // alien planet's remap their natural covers)
+  const P = o.cover || (alien ? BIO.PLANETS[o.planet] : null); let liquid = null;
   if (P) {
     // (what fills its low ground: the kind of planet's own, or the planet's physics, --liquid: water, methane, lava, ice
     // for frozen seas, none for dry basins as on the Moon or Mercury)
@@ -492,6 +505,7 @@ function invent(A, flags, log) {
   const realism = String(flags.realism && flags.realism !== true ? flags.realism : W0.realism || old.realism || (setting === "fantasy" ? "fantasy" : setting === "scifi" ? "alien" : "realistic")).toLowerCase();
   if (!["realistic", "fantasy", "alien"].includes(realism)) throw new Error(`unknown realism "${realism}": realistic, fantasy or alien`);
   const geoWord = flags.geology && flags.geology !== true ? String(flags.geology) : old.geology || (before ? "classic" : "plates");
+  const planeCover = coverOf(flags.cover);
   if (!["plates", "classic"].includes(geoWord)) throw new Error(`unknown geology "${geoWord}": plates (tectonics, erosion and climate) or classic`);
   if (land === "masses" && geoWord !== "plates") throw new Error("--land masses is made by plate tectonics: leave out --geology classic");
   if (flags.sketch && geoWord !== "plates") throw new Error("a world from a sketch is made by plate tectonics: leave out --geology classic");
@@ -511,7 +525,7 @@ function invent(A, flags, log) {
     T.stars = { seed };
     for (const p of patches(cols, rows, n => M[n] > 185, true).filter(p => p.cells.length > N * .02).sort((a, b) => b.cells.length - a.cells.length).slice(0, 4)) { const nm = name.nebula(autoNames); if (nm) T.labels.push(Object.assign({ name: nm, kind: "nebula", size: 18 }, labelOf(p, cols, cell))); }
   } else {
-    const co = { cols, rows, cell, seed, climate, setting: realism === "realistic" && setting === "fantasy" ? "realistic" : realism === "alien" ? "scifi" : setting, planet: planetWord, liquid: typeof flags.liquid === "string" ? flags.liquid : undefined };
+    const co = { cols, rows, cell, seed, climate, setting: realism === "realistic" && setting === "fantasy" ? "realistic" : realism === "alien" ? "scifi" : setting, planet: planetWord, liquid: typeof flags.liquid === "string" ? flags.liquid : undefined, cover: planeCover };
     let geo = null;
     if (geoWord === "plates") {
       // an alien planet's own conditions: its gravity (mountains stand taller where it is weak), its air (the rain it
@@ -611,6 +625,8 @@ function invent(A, flags, log) {
     if (regions) nameAll(c => [BC.marsh, BC.bog, BC.swampforest, BC.mangrove].includes(c), .004, 2, () => name.swamp(autoNames), "swamp", 12);
     if (regions) nameAll(c => c === BC.glacier || c === BC.icesheet, .004, 2, () => name.glacier(autoNames), "glacier", 12);
     if (regions && setting === "fantasy") for (const k of ["enchanted", "glowforest", "mushrooms", "corrupted", "floating", "wasteland", "corruptland", "vale"]) nameAll(c => c === BC[k], .0015, 1, () => ["wasteland", "corruptland", "vale"].includes(k) ? name.blight(autoNames, k) : name.wood(autoNames, k), k === "floating" ? "range" : k === "vale" ? "region" : "forest", 13);
+    // (a plane's own lands, each of the bigger stretches named: The Ash Wastes, The Thorn Forest)
+    if (regions && planeCover) for (const k of [...new Set(Object.values(planeCover))].filter(k => BIO.BY[k] && BIO.BY[k].group === "planes")) nameAll(c => c === BC[k], .004, 2, () => name.plane(autoNames, k), "region", 13);
     if (CV) for (const [i, j] of CV.vols) { const nm = name.volcano(autoNames); if (nm) T.labels.push({ name: nm, kind: "volcano", size: 12, at: [Math.round((i + .5) * cell), Math.round((j + 1.5) * cell + 18)], angle: 0 }); }
   }
   const unused = name.leftover(); if (unused.length) log(`  regions in world.js the land had no place for (no ${[...new Set(unused.map(r => r.kind || "region"))].join(", ")} big enough): ${unused.map(r => r.name).join(", ")}. Give them at: [x, y] in labels: to place them by hand.`);

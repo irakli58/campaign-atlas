@@ -1,5 +1,5 @@
 /* Campaign Atlas: what a campaign uses (the user's request of 3 Nov 2026, "Modular features & customizable DM
-   experience"; the plan approved with their answers in the workspace's reviews/2026-11-03-modules.md). Seventeen
+   experience"; the plan approved with their answers in the workspace's reviews/2026-11-03-modules.md). Eighteen (Dimensions and planes added with the dimensions plan)
    modules, each with its levels; presets; a game master's own presets. The core is never switched off: the gazetteer
    and its maps, saving, search, help, Tonight, the clocks, the party, and safety (lines and veils, the X-card: the user
    chose that safety is always on).
@@ -24,6 +24,8 @@
     { id: "mapedit", group: "world", name: "Map editor, 3D rooms and furnishing", say: "Redrawing a place's maps, rooms in 3D, furnishing caves, houses and rooms from the model library", levels: [["off", "Off"], ["on", "On"]] },
     { id: "caves", group: "world", name: "Caves, riddles, traps", say: "Generated caves, their riddles and traps, the fog over them", levels: [["off", "Off"], ["on", "On"]] },
     { id: "stars", group: "world", name: "The stars", say: "The star chart, systems, the ship and its fuel, the players' charts", levels: [["off", "Off"], ["on", "On"]] },
+    // (the approved dimensions plan, 3 Nov 2026: an 18th module)
+    { id: "dimensions", group: "world", name: "Dimensions and planes", say: "The planes beyond the world: their layers and maps, the ways between, where the sources disagree", levels: [["off", "Off"], ["on", "On"]] },
     { id: "investigation", group: "story", name: "Investigation", say: "Clues found and the board; then connections, who knows what, Auto-Connect", levels: [["off", "Off"], ["basic", "Basic"], ["advanced", "Advanced"]] },
     { id: "people", group: "story", name: "People", say: "Who is where; then their days, what they know and remember", levels: [["off", "Notes only"], ["basic", "Basic"], ["advanced", "Advanced"]] },
     { id: "copilot", group: "story", name: "Copilot", say: "Talk, Improvise and Ask the campaign; then reminders while you play", levels: [["off", "Off"], ["asked", "When asked"], ["unasked", "Also unasked"]] },
@@ -50,6 +52,9 @@
     // (Everything: the stars as the setting has them)
     everything: ["Everything", P("edit", "edit", "on", "on", "setting", "advanced", "advanced", "advanced", "full", "unasked", "on", "words", "on", "on", "copy", "voice", "on")]
   };
+  // (Dimensions and planes, the 18th: off where the plan says, on for fantasy and Everything; a sandbox has them when the
+  // campaign has a cosmos)
+  Object.entries({ minimal: "off", detective: "off", sandbox: "setting", fantasy: "on", scifi: "off", everything: "on" }).forEach(([k, v]) => { PRESETS[k][1].dimensions = v; });
   // what leans on what: [module, from level, needs module, at least, what happens without it]
   const NEEDS = [
     ["copilot", "unasked", "recorded", "words", "Reminders while you play come from what is recorded. With Recorded sessions off, the copilot can still be asked."],
@@ -62,8 +67,8 @@
   /* ---- the choice now: the page's database over campaign.js; a campaign that never chose has everything as before */
   const rank = (id, key) => { const m = BY[id]; if (!m) return 0; const i = m.levels.findIndex(l => l[0] === key); return i < 0 ? m.levels.length - 1 : i; };
   const top = id => BY[id].levels[BY[id].levels.length - 1][0];
-  const hasStars = () => !!A.galaxyParams;
-  function fromPreset(pid) { const p = PRESETS[pid]; if (!p) return null; const out = {}; for (const m of MODULES) { let v = p[1][m.id]; if (v === "setting") v = hasStars() ? "on" : "off"; out[m.id] = v; } return out; }
+  const hasStars = () => !!A.galaxyParams, hasPlanes = () => !!(A.cosmosData && (A.cosmosData.dimensions || []).length);
+  function fromPreset(pid) { const p = PRESETS[pid]; if (!p) return null; const out = {}; for (const m of MODULES) { let v = p[1][m.id]; if (v === "setting") v = (m.id === "dimensions" ? hasPlanes() : hasStars()) ? "on" : "off"; out[m.id] = v; } return out; }
   let STATE = null;   // { preset, levels }
   const fromConfig = () => {
     const f = (A.config && A.config.features) || null; if (!f) return { preset: null, levels: {} };

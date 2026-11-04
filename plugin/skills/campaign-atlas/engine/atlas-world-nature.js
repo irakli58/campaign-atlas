@@ -168,6 +168,13 @@
   pal("monsoon", "#456f34", "#8fbf74", "#2a7a3a"); pal("subtropical", "#4a7236", "#94c27c", "#2a6a3a"); pal("mixed", "#436440", "#90b886", "#2a5a4a"); pal("mediterranean", "#a19e66", "#d9d8a6", "#6a6a3a");
   pal("gallery", "#5d8442", "#a8cc8a", "#2a6a3a"); pal("alpine", "#9ea67e", "#d6dcc0", "#5a7a6a"); pal("rock", "#98908a", "#d4d0ca", "#6a6a6a"); pal("colddesert", "#b3a68a", "#e2dac8", "#7a6a5a");
   pal("desert", "#d6b47a", "#ecd8aa", "#c08a3a"); pal("plains", "#a9b66a", "#d6e2a6", "#4a7a3a"); pal("forest", "#4b6e34", "#9cc47f", "#1f6b4a"); pal("mountains", "#9a8c7a", "#d2c8b8", "#7a6a6a"); pal("swamp", "#5f6e44", "#a9bf96", "#2a5a4a"); pal("snow", "#eef2f4", "#f8fafb", "#bfe0f0");
+  // (the planes' own, atlas-cosmos.js: ash and iron and bone, brimstone and cinders, the fey wildwood, the grey
+  // shadowlands; blood, ichor, mist and the void)
+  pal("ashwaste", "#6b625c", "#b8b0aa", "#a05a3a"); pal("ironspires", "#4a4446", "#9a9496", "#b05a4a"); pal("bonefield", "#cfc6b0", "#ece6d6", "#d0c0a0"); pal("brimstone", "#b0973a", "#e0d08a", "#e8c03a");
+  pal("cinders", "#6a3a26", "#c08a6a", "#ff6a2a"); pal("thornwood", "#3e3a30", "#9a9488", "#7a3a3a"); pal("wildwood", "#2f7a4a", "#8fd0a8", "#3af0a0"); pal("feymeadow", "#7cb85a", "#c8f0a0", "#c07af0");
+  pal("shadowland", "#6c6e6a", "#b8bab6", "#7a8a9a"); pal("gloomwood", "#3a403c", "#8a908c", "#5a6a7a"); pal("ironstreets", "#55504e", "#a8a29e", "#c06a4a");
+  pal("bloodsea", "#5a1414", "#a04040", "#d02a2a"); pal("ichor", "#b08a2a", "#e0c070", "#ffd040"); pal("mistsea", "#8a9096", "#cfd4d8", "#a0b0c0"); pal("voidsea", "#0e0c18", "#3a3850", "#5a3aa0"); pal("astral", "#8a8aa0", "#cfd0e0", "#c0c8ff");
+  Object.assign(TINT, { ashwaste: .7, ironspires: .65, bonefield: .7, brimstone: .7, cinders: .8, thornwood: .55, wildwood: .55, feymeadow: .45, shadowland: .75, gloomwood: .6, ironstreets: .75, bloodsea: .9, ichor: .9, mistsea: .85, voidsea: .95, astral: .9 });
   Object.assign(TINT, {"desert": .7, "plains": .35, "forest": .5, "mountains": .35, "swamp": .55, "snow": .9, "monsoon": .55, "subtropical": .5, "mixed": .52, "mediterranean": .45, "gallery": .5, "alpine": .55, "rock": .6, "colddesert": .65, "temperate": 0.5, "boreal": 0.55, "rainforest": 0.6, "jungle": 0.6, "snowforest": 0.8, "burned": 0.6, "deadforest": 0.5, "autumn": 0.45, "palms": 0.35, "blossom": 0.35, "woodland": 0.35, "bamboo": 0.45, "cloud": 0.5, "grass": 0.45, "steppe": 0.55, "savanna": 0.55, "dunes": 0.75, "rockdesert": 0.6, "badlands": 0.6, "tundra": 0.7, "icesheet": 0.9, "farmland": 0.45, "orchard": 0.4, "vineyard": 0.45, "terraces": 0.45, "volcanic": 0.6, "saltflat": 0.85, "drylake": 0.7, "marsh": 0.5, "bog": 0.55, "floodplain": 0.4, "scrub": 0.45, "glacier": 0.92, "mesas": 0.55, "canyon": 0.7, "volcano": 0.65, "crater": 0.55, "sinkholes": 0.3, "stones": 0.35, "highmtn": 0.3, "oldmtn": 0.4, "ice": 0.88, "reef": 0.55, "glowwater": 0.7, "cursedwater": 0.7, "acid": 0.8, "methane": 0.85, "lava": 0.9, "alienliquid": 0.85, "enchanted": 0.45, "glowforest": 0.45, "corrupted": 0.5, "mushrooms": 0.45, "wasteland": 0.55, "corruptland": 0.5, "vale": 0.4, "floating": 0.15, "cursedmtn": 0.4});
   const fam = look => look === "atlas" ? 1 : look === "holo" ? 2 : 0;
   // the colour of a laid-down kind at a point, worked as a painter would wash it in: the colour wandering a little
@@ -564,7 +571,7 @@
 
   /* ---- rivers: what flows in them, deltas, waterfalls and rapids, springs */
   const LIQUID = { water: null, frozen: ["#d4e6ee", "#8aaabb", "#e8f2f6", "#9ad8ff"], lava: ["#ff6a1a", "#ffb03a", "#e0603a", "#ff6a2a"], glowing: ["#7ff0e0", "#c8fff6", "#5ad0d0", "#7ff0e0"], acid: ["#c8e040", "#eaff8a", "#b8d040", "#e8ff4a"], methane: ["#c07a30", "#f0b06a", "#c08a5a", "#f0a03a"], cursed: ["#2a3a30", "#7a8a7a", "#5a6a62", "#7af07a"], alien: ["#d050c0", "#ffa0f0", "#c070c0", "#ff4ae0"] };
-  const liquidOfCover = { lava: "lava", acid: "acid", methane: "methane", alienliquid: "alien", glowwater: "glowing", cursedwater: "cursed", ice: "frozen" };
+  const liquidOfCover = { lava: "lava", acid: "acid", methane: "methane", alienliquid: "alien", glowwater: "glowing", cursedwater: "cursed", ice: "frozen", bloodsea: "cursed", ichor: "glowing", mistsea: "frozen" };
   function rivers(WD, look, N, pr, col, inkCol, wmul) {
     let s = "", deco = "", glow = "";
     const world = WD.T && WD.T.liquid ? (liquidOfCover[WD.T.liquid] || WD.T.liquid) : null, f = look === "painted" ? 0 : look === "atlas" ? 2 : look === "holo" ? 3 : 1;

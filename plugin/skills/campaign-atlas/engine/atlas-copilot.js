@@ -49,6 +49,8 @@
     for (const c of A.clocksData || []) { const at = api.clockAt(c); if (at) out.push(`${c.name}: ${at} of ${+c.segments || (c.ticks || []).length || 4} — ${(c.ticks || [])[at - 1] || ""}`); }
     // the world's time and what has happened in it (atlas-worldtime.js)
     const W = A.worldTime; if (W && (A.calendarData || (A.eventsData || []).length)) { const d = W.at(W.now()); out.push(`It is now ${d.long}, ${d.time} (day ${d.day} of the story).`); const r = W.recent(); if (r.length) out.push("Lately in the world: " + r.join("; ")); }
+    // the plane the party is on, and its rules (atlas-cosmos.js): never described as the world's own
+    if (A.cosmosSay) { const w = A.cosmosSay(); if (w) out.push(w); }
     // unfinished business from earlier sessions, as the table remembers it (atlas-sessions.js): the council plans from it
     const U = A.memory ? A.memory.unfinished() : []; if (U.length) out.push("Unfinished business from earlier sessions: " + U.slice(0, 6).map(m => `[${A.memory.cite(m)}] ${m.text}`).join("; "));
     return out.join("\n");

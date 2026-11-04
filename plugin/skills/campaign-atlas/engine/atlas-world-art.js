@@ -477,8 +477,11 @@
     const g = hex(P.ground || "#8a7a5a"), lt = (c, f) => c.map(v => Math.min(255, v + (255 - v) * f)), dk = (c, f) => c.map(v => v * (1 - f));
     // (a world with no water has no snow: its cold heights are bare rock; with no liquid its low basins are dark ground)
     const sea = P.sea ? hex(P.sea) : dk(g, .45), ice = P.ice ? hex(P.ice) : lt(g, .3), plant = P.plant ? hex(P.plant) : null;
+    // (no liquid: its low ground is dry basins of its own rock, no beaches)
+    const dryW = !P.sea;
     return { dry: lt(g, .12), dryCool: lt(g, .05), grass: plant ? mix(g, plant, .55) : lt(g, .02), wood: plant ? mix(g, plant, .75) : g, forest: plant || dk(g, .08), dense: plant ? dk(plant, .15) : dk(g, .12), jungle: plant ? dk(plant, .2) : dk(g, .14),
-      tundra: mix(g, ice, .45), rock: dk(g, .05), rockHi: lt(g, .3), snow: ice, marsh: plant ? mix(plant, sea, .4) : mix(g, sea, .3), beach: lt(g, .25), shelf: lt(sea, .35), mid: sea, deep: dk(sea, .3), lake: lt(sea, .2) };
+      tundra: mix(g, ice, .45), rock: dk(g, .05), rockHi: lt(g, .3), snow: ice, marsh: plant ? mix(plant, sea, .4) : mix(g, sea, .3), beach: dryW ? dk(g, .06) : lt(g, .25),
+      shelf: dryW ? dk(g, .1) : lt(sea, .35), mid: dryW ? dk(g, .22) : sea, deep: dryW ? dk(g, .36) : dk(sea, .3), lake: dryW ? dk(g, .18) : lt(sea, .2), nosea: dryW };
   }
   function planet(WD, uid, o) { return relief(WD, uid, Object.assign({}, o, { colours: planetColours(WD.T && WD.T.planetPalette) })); }
   const RPREP = new WeakMap();
@@ -487,7 +490,7 @@
     // (a planet in its own colours: o.colours, worked out from what its surface is made of, atlas-planet.js)
     const C = { dry: hex("#ddc99c"), dryCool: hex("#cfc6a2"), grass: hex("#bfcd91"), wood: hex("#86a965"), forest: hex("#5d8a4b"), dense: hex("#3f6f38"), jungle: hex("#356a33"),
       tundra: hex("#b8bca6"), rock: hex("#b3a690"), rockHi: hex("#d2c9ba"), snow: hex("#f7f8f8"), marsh: hex("#8fa486"), beach: hex("#e3d6b0"), shelf: hex("#a7cde0"), mid: hex("#6f9fc2"), deep: hex("#3d6b92"), lake: hex("#8db7d0") };
-    if (o && o.colours) for (const [k, v] of Object.entries(o.colours)) if (v) C[k] = Array.isArray(v) ? v : hex(v);
+    if (o && o.colours) for (const [k, v] of Object.entries(o.colours)) if (v && typeof v !== "boolean") C[k] = Array.isArray(v) ? v : hex(v);
     // (light from the north-west, the slopes exaggerated a little as relief maps are, a soft fill from the north)
     const ex = 5.5 * Math.min(2, Math.max(.6, 1400 / Math.max(W, H)));
     // (how much the relief is raised under the light: about the old look's strength, less on very large maps)
@@ -536,6 +539,15 @@
       if (h <= sea && P) { if (I.lake) return [128, 170, 192]; const d = clamp((sea - h) / 128, 0, 1); let c = d < .09 ? mix([188, 214, 222], [146, 189, 207], d / .09) : mix([146, 189, 207], [52, 96, 136], smooth(.09, .62, d)); c = c.map(v => v * (1 + (nz(x * .02, y * .02) - .5) * .05)); return lit(c, gx, gy, RX * .25); }
       if (h <= sea) {
         const d = clamp((sea - h) / 128, 0, 1);
+        // (a planet in its own colours: its seas in its liquid's colour, lava, methane or water; and a world with no
+        // liquid at all has no sea, only low dry basins, darker the deeper, lit as the land is (the user, 4 Nov 2026:
+        // "remember not every planet has a sea"))
+        if (o && o.colours) {
+          if (o.colours.nosea) { let c = mix(C.shelf, C.deep, smooth(0, .55, d)); c = c.map(v => v * (1 + (nz(x * .05, y * .05) - .5) * .14)); if (I.mix) c = washed("painted", c, I, x, y, nz, 0, true); return lit(c, gx, gy, RX * .9); }
+          let c = I.lake ? C.lake : mix(C.deep, C.shelf, smooth(.09, 0, d) * .7 + (1 - smooth(0, .6, d)) * .3);
+          if (I.mix) c = washed("painted", c, I, x, y, nz, 0, true);
+          return I.lake ? c : lit(c, gx, gy, RX * .35);
+        }
         // the sea: pale over the shelf by the coast, deepening down the slope to the ocean floor, its relief faintly lit
         let c = I.lake ? [40, 112, 178] : mix([30, 60 + 60 * (1 - d), 110 + 80 * (1 - d)], [96, 168, 204], smooth(.09, .0, d) * .55);
         if (I.mix) c = washed("painted", c, I, x, y, nz, 0, true);
@@ -593,13 +605,17 @@
     if (o && o.only) return img;
     if (P) return hydroSvg(WD, uid, img, pr, N);
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
+    // (a world with no liquid at all is all ground: no shore, no beaches, no shallows round its low basins; the user,
+    // 4 Nov 2026: "some world should be completely dry based on the planet")
+    const deco = c => `<g class="wm-deco"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" fill="none" stroke="#2b2a24" stroke-width="1.4"/>${northArrow(W * c[0], H * c[1], Math.min(W, H) * .045, "#2b2a24", true)}${WD.title ? `<text class="wm-ttl" x="${W / 2}" y="34" text-anchor="middle" fill="#2b2a24">${A.esc ? A.esc(WD.title) : WD.title}</text>` : ""}</g>`;
+    if (o && o.colours && o.colours.nosea) return s + `<g class="wm-detail"></g>` + deco(seaCorner(WD, pr));
     const cd = coastD(G, .6), fade = [], coasts = (WD.T && WD.T.coast ? naturalCoasts : beaches)(WD, pr, uid + "-land", fade);
     s += shallows(fade, G.cell, uid + "-sw", W, H) + reefsSvg(WD);
     s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/><g class="wm-detail"></g>`;
     s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath>` + coasts;
     s += N ? NT.rivers(WD, "relief", N, pr, "#2c5fc6", null, 1.25) : rivers(WD, "#2c5fc6", null, 1.25);
     const c = seaCorner(WD, pr);
-    s += `<g class="wm-deco"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" fill="none" stroke="#2b2a24" stroke-width="1.4"/>${northArrow(W * c[0], H * c[1], Math.min(W, H) * .045, "#2b2a24", true)}${WD.title ? `<text class="wm-ttl" x="${W / 2}" y="34" text-anchor="middle" fill="#2b2a24">${A.esc ? A.esc(WD.title) : WD.title}</text>` : ""}</g>`;
+    s += deco(c);
     return s;
   }
 

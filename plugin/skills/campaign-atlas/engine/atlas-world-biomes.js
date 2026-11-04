@@ -118,11 +118,29 @@
     ["forest", "Forest", "simple", "", { tree: [["broad", .55], ["oak", .2], ["pine", .25]], dens: 1 }],
     ["mountains", "Mountains", "simple", "", { mark: "stones" }],
     ["swamp", "Swamp", "simple", "", { tree: [["willow", .6], ["swampcypress", .4]], dens: .5, mark: "marsh", lift: "low" }],
-    ["snow", "Snow and ice", "simple", "", { mark: "ice", mtn: "snow" }]
+    ["snow", "Snow and ice", "simple", "", { mark: "ice", mtn: "snow" }],
+    // (4 Nov 2026, the approved dimensions plan: the planes' own kinds of land and liquid, for a plane's map made from its
+    // recipe, atlas-cosmos.js; added at the end so every kind made before keeps its number)
+    ["ashwaste", "Ash waste", "planes", "fantasy", { tree: [["dead", 1]], dens: .02, mark: "rifts", mtn: "volcanic" }],
+    ["ironspires", "Iron spires", "planes", "fantasy", { tree: [["spire", 1]], dens: .5, mtn: "metal", lift: "hill" }],
+    ["bonefield", "Fields of bones", "planes", "fantasy", { mark: "stones" }],
+    ["brimstone", "Brimstone plains", "planes", "fantasy", { mark: "toxic", mtn: "volcanic" }],
+    ["cinders", "Burning plains", "planes", "fantasy", { mark: "rifts", mtn: "volcanic" }],
+    ["thornwood", "Thorn forest", "planes", "fantasy", { tree: [["twisted", 1]], dens: .8, mark: "veins" }],
+    ["wildwood", "Fey wildwood", "planes", "fantasy", { tree: [["enchanted", .6], ["glowtree", .2], ["broad", .2]], dens: 1, mark: "sparkle" }],
+    ["feymeadow", "Fey meadows", "planes", "fantasy", { tree: [["enchanted", 1]], dens: .04, mark: "flowers" }],
+    ["shadowland", "Grey shadowlands", "planes", "fantasy", { tree: [["dead", .7], ["twisted", .3]], dens: .08, mark: "rifts" }],
+    ["gloomwood", "Gloomwood", "planes", "fantasy", { tree: [["dead", .5], ["twisted", .5]], dens: .8 }],
+    ["ironstreets", "Iron streets", "planes", "fantasy", { mark: "pillars", mtn: "metal" }],
+    ["bloodsea", "Sea of blood", "water", "fantasy", { water: 1, mark: "murk" }],
+    ["ichor", "Ichor", "water", "fantasy", { water: 1, mark: "glow" }],
+    ["mistsea", "Sea of mist", "water", "fantasy", { water: 1, mark: "murk" }],
+    ["voidsea", "The void", "water", "fantasy", { water: 1, mark: "glowdots" }],
+    ["astral", "The silver void", "water", "fantasy", { water: 1, mark: "sparkle" }]
   ];
   const BY = {}, CODE = {};
   LIST.forEach(([id, name, group, setting, o], code) => { const b = Object.assign({ id, name, group, setting, code, tree: null, dens: 0 }, o); BY[id] = b; CODE[id] = code; });
-  const GROUPS = [["simple", "The five kinds of land"], ["forest", "Forests and woods"], ["ground", "Open land"], ["relief", "Mountains and the shape of the land"], ["water", "Water"], ["fantasy", "Fantasy"], ["alien", "Alien worlds"]];
+  const GROUPS = [["simple", "The five kinds of land"], ["forest", "Forests and woods"], ["ground", "Open land"], ["relief", "Mountains and the shape of the land"], ["water", "Water"], ["fantasy", "Fantasy"], ["planes", "The planes"], ["alien", "Alien worlds"]];
   const byCode = c => LIST[c] ? BY[LIST[c][0]] : null;
 
   // ---- the climate: how warm each cell is (0 frozen, 1 hottest), from how far north it stands (north is colder, as on

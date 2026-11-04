@@ -25,6 +25,8 @@
   A.events = list => { A.eventsData = (A.eventsData || []).concat(list || []); return A; };
   // the powers that act in the world (atlas-factions.js; the user's master plan, part 6): { id: { n, kind, leader, members, hq, territory, has, wants, plan, rels, ... } }
   A.factions = obj => { A.factionsData = Object.assign({}, A.factionsData || {}, obj || {}); return A; };
+  // the dimensions and planes beyond the world (atlas-cosmos.js; the approved dimensions plan, 3 Nov 2026): { model, edition, dimensions: [...] }, a dimension of the same id replaced
+  A.cosmos = def => { const C = A.cosmosData = A.cosmosData || { model: "great wheel", dimensions: [] }; if (def) { for (const k of Object.keys(def)) if (k !== "dimensions") C[k] = def[k]; for (const d of def.dimensions || []) { const i = C.dimensions.findIndex(x => x.id === d.id); if (i >= 0) C.dimensions[i] = d; else C.dimensions.push(d); } } return A; };
   // money and goods (atlas-economy.js; the user's master plan, part 19): { mode, currency, goods, treasure, regions, merchants, purse }
   A.economy = obj => { A.economyData = Object.assign({}, A.economyData || {}, obj || {}); return A; };
 

@@ -271,7 +271,9 @@ function seafloor(E, o, SH, U) {
   // each sea cell's nearest coast, and how far (km)
   const near = new Int32Array(N).fill(-1), D = new Float32Array(N).fill(1e9), q = [];
   for (let n = 0; n < N; n++) if (E[n] > 0) { D[n] = 0; near[n] = n; q.push(n); }
-  for (let h = 0; h < q.length; h++) { const n = q[h]; for (const [di, dj] of NB8) { const m = at(I(n) + di, J(n) + dj); if (m < 0 || E[m] > 0) continue; const d = D[n] + (di && dj ? 1.414 : 1) * cellKm; if (d < D[m]) { D[m] = d; near[m] = near[n]; q.push(m); } } }
+  // (a margin on the comparison: the distances are kept in single precision, and without it a rounding error could
+  // "improve" a cell again and again, the queue growing without end: it did on a globe smaller than the Earth)
+  for (let h = 0; h < q.length; h++) { const n = q[h]; for (const [di, dj] of NB8) { const m = at(I(n) + di, J(n) + dj); if (m < 0 || E[m] > 0) continue; const d = D[n] + (di && dj ? 1.414 : 1) * cellKm; if (d < D[m] - 1e-3) { D[m] = d; near[m] = near[n]; q.push(m); } } }
   // (how far each cell lies from the continent's own crust, km: where a shelf sea lies over the continent, the slope
   // begins at the crust's edge, not at the coast, so the shelf does not end in a wall)
   const dCr = U.distance(cols, rows, n => o.crust[n] === 1); for (let n = 0; n < N; n++) dCr[n] *= cellKm;

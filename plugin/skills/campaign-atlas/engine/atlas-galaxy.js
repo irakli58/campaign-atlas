@@ -495,7 +495,7 @@
   // the survey sheet: what the players know of it, its globe if they have seen it, from their ship, on today's date
   function surveySheet(s, p, lv) {
     const R = seenRows(p, lv), when = A.worldTime ? A.worldTime.at(A.worldTime.now()).short : new Date().toLocaleDateString();
-    const svg = lv >= 1 ? `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">${globe(p, 50, 50, 44, "sv-" + s.id).replace(/data-gx="[^"]*"/g, "")}</svg>` : "";
+    const svg = lv >= 1 ? (A.pixelPlanet && typeof document !== "undefined" ? `<img src="${A.pixelPlanet.url(p, 48, bodiesOf(s).star.color)}" alt="${esc(p.name)}" class="ho-px">` : `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">${globe(p, 50, 50, 44, "sv-" + s.id).replace(/data-gx="[^"]*"/g, "")}</svg>`) : "";
     return { kind: "survey", title: `Survey: ${p.name}`, date: when, svg, rows: R.length ? R : [["What is known", "nothing yet: it has not been scanned"]], from: `${SCAN[lv]}, by ${ship().name || "the ship"}` };
   }
   // the extras in a world's card: what the players know and the next scan, tonight's weather, its day and year, its history
@@ -541,7 +541,9 @@
   }
   // a world as a small globe in its own colours (atlas-planet.js palette): a giant's bands and rings; a rocky world's
   // ground, seas, ice at its poles and a rim of air if it has one; its night side away from its star
-  function globe(p, x, y, r, sid) {
+  function globe(p, x, y, r, sid, star) {
+    // (as pixel art, the user's wish of 4 Nov 2026, atlas-pixelplanet.js: a still picture here, turning in the world's card)
+    if (A.pixelPlanet && typeof document !== "undefined") { const N = r > 5 ? 24 : 16, M = p.rings ? Math.round(N * 2.2) : N + 6, sz = 2 * r * M / N, on = UI.planet === p.n; return `<g class="gx-planet gx-p-${esc(p.kind)}${on ? " on" : ""}" data-gx="planet" data-n="${p.n}"><title>${esc(p.name)}: ${esc(p.kname)}</title><image href="${A.pixelPlanet.url(p, N, star)}" x="${(x - sz / 2).toFixed(1)}" y="${(y - sz / 2).toFixed(1)}" width="${sz.toFixed(1)}" height="${sz.toFixed(1)}" class="gx-px"/>${on ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r + 2.5).toFixed(1)}" fill="none" stroke="#fff" stroke-width="1"/>` : ""}</g>`; }
     const P = p.palette || {}, id = `gl-${String(sid).replace(/[^\w-]/g, "")}-${p.n}`, X = x.toFixed(1), Y = y.toFixed(1), R = r.toFixed(1), on = UI.planet === p.n, oc = p.ocean || 0;
     let body = "";
     if (P.bands) { const n = P.bands.length, h = 2 * r / (n * 2); for (let i = 0; i < n * 2; i++) body += `<rect x="${(x - r).toFixed(1)}" y="${(y - r + i * h).toFixed(2)}" width="${(2 * r).toFixed(1)}" height="${(h + .2).toFixed(2)}" fill="${esc(P.bands[i % n])}"/>`; }
@@ -560,7 +562,7 @@
   function systemHTML(s, info, places) {
     const W = 320, H = 200, n = info.planets.length + info.belts.length, maxA = Math.max(1, ...info.planets.map(p => p.a), ...info.belts.map(b => b.a));
     const rx = a => 22 + Math.log(1 + a * 6) / Math.log(1 + maxA * 6) * (W / 2 - 34), ang = k => -Math.PI / 2 + k * 2.399;
-    const orbits = info.planets.map((p, k) => { const r = rx(p.a), a = ang(k), x = W / 2 + Math.cos(a) * r, y = H / 2 + Math.sin(a) * r * .6, pr = p.kind === "gas" || p.kind === "hotjupiter" ? 7 : p.kind === "icegiant" || p.kind === "mini" ? 5.5 : Math.max(2.2, 2 + p.size * 1.6); return `<ellipse cx="${W / 2}" cy="${H / 2}" rx="${r}" ry="${r * .6}" class="gx-orbit"/>${globe(p, x, y, pr, s.id)}`; }).join("");
+    const orbits = info.planets.map((p, k) => { const r = rx(p.a), a = ang(k), x = W / 2 + Math.cos(a) * r, y = H / 2 + Math.sin(a) * r * .6, pr = p.kind === "gas" || p.kind === "hotjupiter" ? 7 : p.kind === "icegiant" || p.kind === "mini" ? 5.5 : Math.max(2.2, 2 + p.size * 1.6); return `<ellipse cx="${W / 2}" cy="${H / 2}" rx="${r}" ry="${r * .6}" class="gx-orbit"/>${globe(p, x, y, A.pixelPlanet ? pr * 1.4 : pr, s.id, info.star.color)}`; }).join("");
     const belts = info.belts.map(b => { const r = rx(b.a); return `<ellipse cx="${W / 2}" cy="${H / 2}" rx="${r}" ry="${r * .6}" class="gx-belt"/>`; }).join("");
     const p = UI.planet != null ? info.planets.find(x => x.n === UI.planet) : null, ed = UI.tools;
     const onP = n => info.sites.filter(t => t.on === n), here = places.filter(id => (A.meta[id] || {}).planet == null);
@@ -572,7 +574,7 @@
       <p class="t-small">${info.planets.length ? info.planets.length + " world" + (info.planets.length > 1 ? "s" : "") : "No worlds"}${info.belts.length ? ", " + info.belts.length + " belt" + (info.belts.length > 1 ? "s" : "") : ""}. Click a world to see it.</p>
       ${info.belts.map(b => `<div class="gx-f"><span class="kn">Belt</span> ${esc(b.name)} at ${b.a} AU${b.rich ? ", rich" : ""}${ed ? ` <button type="button" class="t-mini" data-gx="delbelt" data-id="${esc(s.id)}" data-k="${b.k}" aria-label="Take away the belt">×</button>` : ""}</div>`).join("")}
       ${info.sites.filter(t => t.on == null).map(t => siteRow("In orbit", t)).join("")}${here.length ? `<div class="gx-f"><span class="kn">Your places</span> ${here.map(id => `<button type="button" class="t-go" data-go="${esc(id)}">${esc(A.meta[id].name || id)}</button>`).join(" ")}</div>` : ""}
-      ${p ? (ed && UI.pedit === p.n ? worldForm(s, p) : ed && UI.phys === p.n ? physForm(s, p) : `<div class="gx-world"><h4>${esc(p.name)}: ${esc(p.kname || Gg.KINDS[p.kind] || "")}</h4>${row("Size", p.size + " times the Earth")}${row("Gravity", p.grav + " g")}${row("Warmth", p.temp + " °C at the surface, on average")}${row("Air", p.air)}${p.pres != null ? row("Pressure", p.pres + " atmospheres") : ""}${row("Climate", p.climate)}${row("Surface", p.geo)}${row("Liquids", p.water)}${row("Life", p.life || "None found")}${row("Minerals", p.minerals)}${row("Dangers", (p.hazards || []).join(", "))}${row("Landing", p.land)}${row("For people", p.hab)}${row("Moons", p.moons ? String(p.moons) : "")}${row("To be found", p.chance)}${profileHTML(p, info, s.id)}
+      ${p ? (ed && UI.pedit === p.n ? worldForm(s, p) : ed && UI.phys === p.n ? physForm(s, p) : `<div class="gx-world">${A.pixelPlanet ? `<canvas class="gx-pxg" data-id="${esc(s.id)}" data-n="${p.n}" role="img" aria-label="${esc(p.name)}, turning"></canvas>` : ""}<h4>${esc(p.name)}: ${esc(p.kname || Gg.KINDS[p.kind] || "")}</h4>${row("Size", p.size + " times the Earth")}${row("Gravity", p.grav + " g")}${row("Warmth", p.temp + " °C at the surface, on average")}${row("Air", p.air)}${p.pres != null ? row("Pressure", p.pres + " atmospheres") : ""}${row("Climate", p.climate)}${row("Surface", p.geo)}${row("Liquids", p.water)}${row("Life", p.life || "None found")}${row("Minerals", p.minerals)}${row("Dangers", (p.hazards || []).join(", "))}${row("Landing", p.land)}${row("For people", p.hab)}${row("Moons", p.moons ? String(p.moons) : "")}${row("To be found", p.chance)}${profileHTML(p, info, s.id)}
         ${p.owner ? row("Held by", (G().powers.find(x => x.id === p.owner) || {}).name || ((A.factionsData || {})[p.owner] || {}).n || p.owner) : ""}${p.gm ? `<p class="gx-gm"><span class="kn">Only you</span> ${esc(p.gm)}</p>` : ""}
         ${onP(p.n).map(t => siteRow("Here", t)).join("")}${places.filter(id => (A.meta[id] || {}).planet === p.n).map(id => `<div class="gx-f"><span class="kn">Your place</span> <button type="button" class="t-go" data-go="${esc(id)}">${esc(A.meta[id].name || id)}</button></div>`).join("")}
         ${wn.length ? `<ul class="gx-risks gx-wn">${wn.map(w => `<li>${esc(w)}</li>`).join("")}</ul><p class="t-small">Allowed: it is your setting. Atlas only says what would not hang together.</p>` : ""}
@@ -619,6 +621,8 @@
     const g = G(), rg = UI.selReg && g.regions.find(r => r.id === UI.selReg);
     sd.innerHTML = (UI.panel === "sp" ? spHTML() : "") + shipHTML() + (s ? sysHTML(s) : rg ? regHTML(rg) : UI.selLane ? laneHTML(UI.selLane) : `<section class="gx-card"><p class="t-small">Click a star to see its system, plot a course there, or change what the players' charts show. Drag to move; scroll to come closer. Edit the galaxy adds and changes systems, regions, lanes, sectors, powers and their territories.</p></section>`);
     { const pf = sd.querySelector("form.gx-phys"); if (pf) physPreview(pf); }
+    // (the world in its card, turning, as pixel art: atlas-pixelplanet.js)
+    if (A.pixelPlanet) sd.querySelectorAll("canvas.gx-pxg").forEach(cv => { const s2 = findSys(cv.dataset.id), info = s2 && bodiesOf(s2), p = info && info.planets.find(x => x.n === +cv.dataset.n); if (p) A.pixelPlanet.spin(cv, p, 48, info.star.color); });
   }
   function refresh() { A._galaxy = null; if (host) { base(); over(); side(); tools(); } }
 

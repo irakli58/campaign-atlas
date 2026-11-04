@@ -2419,6 +2419,40 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .gx-pworlds h4 { margin: 0 0 4px; font-size: 14px; }
 .gx-pworlds h4 span { font-weight: 400; opacity: .7; font-size: 12px; }
 .gx-extra { margin: 8px 0; border-top: 1px solid var(--line, rgba(127, 127, 127, .25)); padding-top: 6px; }
+/* the worlds as pixel art (atlas-pixelplanet.js): crisp pixels, never smoothed */
+.gx-px, .gx-pxg, .ho-px { image-rendering: pixelated; image-rendering: crisp-edges; }
+.gx-pxg { display: block; margin: 6px auto 10px; background: radial-gradient(circle, rgba(255, 255, 255, .04), transparent 70%); }
+.ho-px { width: 144px; height: 144px; display: block; }
 .gx-sws { display: flex; flex-wrap: wrap; gap: .4rem .8rem; font-size: 12px; }
 .gx-sw { display: inline-flex; align-items: center; gap: .3rem; }
 .gx-sw i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .25); }
+
+/* ---- dimensions and planes (atlas-cosmos.js): the cosmology drawn, a dimension's card, its layers, the sources */
+.dm-wheel { width: 100%; max-width: 620px; display: block; margin: 6px auto 10px; background: radial-gradient(ellipse at center, rgba(120, 110, 180, .12), transparent 70%); border-radius: 10px; }
+.dm-wheel .dm-rim { fill: none; stroke: rgba(180, 170, 220, .35); stroke-width: 1.2; }
+.dm-wheel .dm-thin { stroke-dasharray: 3 4; stroke-width: .8; }
+.dm-wheel .dm-axis { stroke: rgba(180, 170, 220, .35); stroke-dasharray: 3 4; }
+.dm-wheel .dm-link { stroke: rgba(230, 200, 120, .5); stroke-width: 1; }
+.dm-wheel .dm-cap { fill: currentColor; opacity: .55; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.dm-node { cursor: pointer; }
+.dm-node circle { stroke: rgba(255, 255, 255, .5); stroke-width: 1; }
+.dm-node.on circle:first-child { stroke: #fff; stroke-width: 2.2; }
+.dm-node text { fill: currentColor; font-size: 10.5px; }
+.dm-node .dm-wait { fill: #e8b04a; stroke: none; }
+.dm-node:focus-visible circle:first-child { stroke: #fff; stroke-width: 3; }
+.dm-card { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--line, rgba(127, 127, 127, .3)); border-radius: 10px; }
+.dm-card h4 { margin: 0 0 2px; }
+.dm-sec { margin: 10px 0 0; }
+.dm-sec h5, .dm-add h5 { margin: 0 0 4px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; opacity: .8; }
+.dm-layers { padding-left: 1.3rem; margin: 4px 0; }
+.dm-layers li { margin: 0 0 8px; }
+.dm-facts, .dm-ways { padding-left: 1.1rem; margin: 4px 0; font-size: 13px; }
+.dm-facts li, .dm-ways li { margin-bottom: 4px; }
+.dm-tag { display: inline-block; font-size: 10.5px; letter-spacing: .04em; padding: 0 6px; border-radius: 8px; border: 1px solid currentColor; opacity: .85; vertical-align: 1px; }
+.dm-canon { color: #7fc29b; } .dm-variant { color: #e0b45a; } .dm-added { color: #9fb4d6; } .dm-homebrew { color: #d6a0d0; } .dm-wait-t { color: #e8b04a; }
+.dm-alert { border-left: 3px solid #e8b04a; padding: 4px 8px; margin: 8px 0; font-size: 13.5px; }
+.dm-cf { margin: 6px 0 10px; padding: 6px 8px; border-radius: 8px; background: rgba(127, 127, 127, .07); }
+.dm-cf.wait { box-shadow: inset 3px 0 0 #e8b04a; }
+.dm-cf ul { list-style: none; padding-left: .2rem; margin: 4px 0 0; font-size: 13px; }
+.dm-party { margin: 6px 0 10px; padding: 8px 10px; border-radius: 8px; background: rgba(120, 110, 180, .12); font-size: 13.5px; }
+.dm-add { margin-top: 12px; }
