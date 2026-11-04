@@ -605,7 +605,50 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
       ${sm ? (UI.edit === "sum" ? `<form data-sm="sumedit"><textarea class="t-in" name="s" rows="6" maxlength="4000">${esc(sm.summary)}</textarea><div class="t-row"><button class="t-btn prim">Keep it</button><button type="button" class="t-mini" data-sm="cancel">Cancel</button></div></form>`
         : `<div class="t-readout"><p>${esc(sm.summary).replace(/\n+/g, "</p><p>")}</p></div><div class="t-row">${sm.state !== "kept" ? `<button type="button" class="t-btn prim" data-sm="sumkeep" data-n="${n}">Keep it</button>` : `<span class="tw-tag">kept</span>`}<button type="button" class="t-mini" data-sm="sumopen">Change it</button><button type="button" class="t-mini" data-sm="sumnotes" data-n="${n}">Put it in the session's notes, for "Previously on…"</button></div>`)
         : `<p class="kn">No summary yet: it is written when the words are read.</p>`}
-      ${GROUPS.map(([g, ks]) => { const l = ms.filter(([, x]) => ks.includes(x.kind)).sort((a, b) => a[1].t - b[1].t); return l.length ? `<h4 class="tw-sub">${g}</h4>${l.map(([id, x]) => `<p class="t-small"><button type="button" class="t-link" data-sm="show" data-id="${esc(id)}">${esc(hms(x.t))}</button> ${esc(x.text)}${x.state === "unsure" ? ` <span class="kn">(unsure)</span>` : ""}${x.next ? ` <span class="kn">Could lead to: ${esc(x.next)}</span>` : ""}</p>`).join("")}` : ""; }).join("")}</section>`;
+      ${GROUPS.map(([g, ks]) => { const l = ms.filter(([, x]) => ks.includes(x.kind)).sort((a, b) => a[1].t - b[1].t); return l.length ? `<h4 class="tw-sub">${g}</h4>${l.map(([id, x]) => `<p class="t-small"><button type="button" class="t-link" data-sm="show" data-id="${esc(id)}">${esc(hms(x.t))}</button> ${esc(x.text)}${x.state === "unsure" ? ` <span class="kn">(unsure)</span>` : ""}${x.next ? ` <span class="kn">Could lead to: ${esc(x.next)}</span>` : ""}</p>`).join("")}` : ""; }).join("")}</section>${pacingHTML(rec)}`;
+  }
+  /* ---- how the evening went (the user's approved idea of 3 Nov 2026, the fifteenth in reviews/2026-11-03-ideas.md:
+     "after a session, a quiet chart of how the evening went (talk, exploration, fights, rules discussion) from the live
+     words' timing and content, with one suggestion"): each stretch of words read for what it is about by the words in
+     it (no Claude, nothing sent anywhere), the evening drawn in steps, how long each kind took, and one suggestion, the
+     plainest that fits */
+  const PACE = [
+    ["talk", "Talk and story", "#6d7f93", null],
+    ["explore", "Exploring", "#5f9a6b", /\b(doors?|rooms?|corridors?|halls?|look(?:s|ing)? (?:at|around|for|in|under|inside)|search(?:es|ing)?|opens?|go(?:es)? (?:to|down|up|in|into|out|through)|walks?|maps?|north|south|east|west|upstairs|downstairs|deck|hatch|explore|inside|outside|enters?|climbs?|cellar|street|stairs|bay|ladder|vents?|tunnels?|path|road|ruins?)\b/gi],
+    ["fight", "Fighting", "#b0662e", /\b(attacks?|hits?|miss(?:es)?|damage|initiative|wound(?:s|ed)?|shoots?|shot|stabs?|swings?|parry|dodges?|hp|hit points|armou?r class|kill(?:s|ed)?|dies|unconscious|grenade|sword|blast|crit(?:ical)?|punch(?:es)?|fight(?:s|ing)?|guns?|pistol|rifle|bleed(?:s|ing)?)\b/gi],
+    ["rules", "Rules", "#a07c10", /\b(rules?|roll(?:s|ed|ing)?|modifier|bonus|dc|advantage|disadvantage|skill|character sheet|page \d+|rulebook|spell slots?|saving throw|how does|can i|is that allowed|percentile|d20|d100|d6|d8|d10|d12|dice|sanity|spot hidden|luck)\b/gi],
+    ["off", "Off the game", "#8a8378", /\b(pizza|snacks?|food|a break|toilet|bathroom|my phone|haha|lol|anyway|beer|coffee|tea|starving|hungry|the bus|train home|the dog|the kids|be right back|brb)\b/gi]
+  ];
+  function pacing(segs) {
+    if (!segs || !segs.length) return null;
+    const end = Math.max(...segs.map(s => (+s[0] || 0) + (+s[1] || 0))), step = end > 1800 ? 300 : Math.max(15, Math.ceil(end / 20)), n = Math.max(1, Math.ceil(end / step));
+    const bins = Array.from({ length: n }, (_, i) => ({ t: i * step, c: {} })), tot = {}, kinds = [];
+    segs.forEach((s, i) => {
+      const t = +s[0] || 0, d = Math.max(+s[1] || 0, i + 1 < segs.length ? Math.max(0, (+segs[i + 1][0] || 0) - t) : 4), x = String(s[3] || "");
+      let best = "talk", score = /["“”]/.test(x) ? 1 : 0;
+      for (const [k, , , re] of PACE) if (re) { const m = x.match(re), v = m ? m.length : 0; if (v > score) { best = k; score = v; } }
+      kinds.push(best); tot[best] = (tot[best] || 0) + d; const b = bins[Math.min(n - 1, Math.floor(t / step))]; b.c[best] = (b.c[best] || 0) + d;
+    });
+    // the longest stretch of one kind
+    let run = null, cur = null; segs.forEach((s, i) => { const k = kinds[i]; if (!cur || cur.k !== k) cur = { k, a: +s[0] || 0, b: +s[0] || 0 }; cur.b = (+s[0] || 0) + (+s[1] || 0); if (!run || cur.b - cur.a > run.b - run.a) run = Object.assign({}, cur); });
+    const sum = Object.values(tot).reduce((a, b) => a + b, 0) || 1, pc = k => Math.round((tot[k] || 0) / sum * 100);
+    const at = k => { let t = 0, v = 0; for (const b of bins) if ((b.c[k] || 0) > v) { v = b.c[k]; t = b.t; } return hms(t); };
+    const say = pc("rules") >= 20 ? `Rules took ${pc("rules")}% of the evening, most of it around ${at("rules")}. A short sheet of the rules that came up could give that time back to the story.`
+      : pc("fight") >= 45 ? `Fighting filled ${pc("fight")}% of the evening. A scene next time that cannot be won by fighting would change the pace.`
+      : pc("off") >= 15 ? `${pc("off")}% of the evening was off the game, much of it around ${at("off")}. A break planned near then might gather it into one.`
+      : run && run.b - run.a >= 2400 && run.k !== "talk" ? `From ${hms(run.a)} to ${hms(run.b)} it was all ${PACE.find(p => p[0] === run.k)[1].toLowerCase()}. Something else breaking into a stretch that long keeps the table awake.`
+      : pc("talk") >= 75 && pc("explore") < 8 ? `Almost all talk (${pc("talk")}%). A place to search or a door to open next time would let the players lead.`
+      : `A balanced evening: ${PACE.filter(p => pc(p[0])).map(p => `${pc(p[0])}% ${p[1].toLowerCase()}`).join(", ")}.`;
+    return { step, end, bins, tot, pc, say, run, kinds };
+  }
+  function pacingHTML(rec) {
+    const P = pacing(segsOf(rec)); if (!P) return "";
+    const W = 600, H = 120, bw = W / P.bins.length, big = P.step;
+    const bars = P.bins.map((b, i) => { let y = H; return PACE.map(([k, l, col]) => { const v = Math.min(H, (b.c[k] || 0) / big * H); if (!v) return ""; y -= v; return `<rect x="${(i * bw + .5).toFixed(1)}" y="${Math.max(0, y).toFixed(1)}" width="${Math.max(1, bw - 1).toFixed(1)}" height="${v.toFixed(1)}" fill="${col}"><title>${hms(b.t)}: ${esc(l)}, ${Math.round(b.c[k])} s</title></rect>`; }).join(""); }).join("");
+    const ticks = P.bins.map((b, i) => i % Math.max(1, Math.round(P.bins.length / 6)) ? "" : `<text x="${(i * bw + 2).toFixed(1)}" y="${H + 14}">${hms(b.t)}</text>`).join("");
+    return `<section class="t-card sm-pace"><h3>How the evening went</h3><svg class="sm-pchart" viewBox="0 0 ${W} ${H + 18}" role="img" aria-label="The session's time by kind: ${PACE.map(p => p[1] + " " + P.pc(p[0]) + "%").join(", ")}">${bars}${ticks}</svg>
+      <p class="sm-pkey">${PACE.map(([k, l, col]) => `<span><i style="background:${col}"></i>${esc(l)} <b>${P.pc(k)}%</b></span>`).join("")}</p>
+      <p class="sm-psay">${esc(P.say)}</p><p class="t-small kn">Read from the words alone, by what they are about; nothing is sent anywhere. A rough guide, not a verdict.</p></section>`;
   }
   function recHTML(rec) {
     const m = recOf(rec); if (!m) { UI.rec = ""; return home(); }
@@ -748,6 +791,7 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
     } });
 
   // the copilot, the world's history and the consistency check draw on it (atlas-copilot.js, atlas-history.js)
+  A.sessionPacing = pacing;
   A.memory = { recall, forPrompt, snippets, unfinished: () => unfinished().map(([id, m]) => Object.assign({ id }, m)), cite, show, refName, KINDS, SRC, parseWords };
   if (A.consistency) A.consistency.add("sessions", () => {
     const out = [], st = S(); if (!st) return out;

@@ -127,7 +127,8 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
      9. "What if we wait a month?" (9) (**built 4 Nov**: atlas-worldtime.js whatIf: a named saved moment, then day by day
         with SIM set (nothing waits, pending decided, no daily auto-saves), the list from the history; Keep it / Throw it
         away (restore, and the named moment removed). The workspace's dev/whatif-test.js "all well");
-     10. pacing from the words (15);
+     10. pacing from the words (15) (**built 4 Nov**: atlas-sessions.js pacing/pacingHTML under a session's The session,
+        by keywords, five-minute steps, one suggestion; checked in the workspace's dev/session-test.js);
      11. the table, projected (13);
      12. one world, many campaigns (14).
    - Each one taught, tested, committed. The review's items (reviews/2026-11-03-review.md) still wait for the user's answers.

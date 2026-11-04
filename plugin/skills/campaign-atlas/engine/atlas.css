@@ -2067,6 +2067,12 @@ button.ho-b:hover { color: var(--ink); }
 .tw-f { font-size: 14.5px; margin: 2px 0; }
 .tw-f > .kn { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
 .tw-paused { margin: 0 0 8px; padding: 6px 10px; border-radius: 6px; background: var(--accent-soft); font-size: 14px; }
+/* how the evening went, in Recorded sessions (atlas-sessions.js pacing) */
+.sm-pchart { width: 100%; height: auto; display: block; background: var(--accent-soft); border-radius: 4px; }
+.sm-pchart text { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+.sm-pkey { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; margin: 8px 0 4px; }
+.sm-pkey i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.sm-psay { font-size: 15px; margin: 6px 0 2px; }
 /* the week's paper in The world's time (atlas-paper.js) */
 .tw-paper { margin-top: 14px; border-top: 1px solid var(--rule); padding-top: 6px; }
 .tw-pp { margin: 6px 0 4px; }

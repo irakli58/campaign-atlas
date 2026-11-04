@@ -180,13 +180,14 @@
         { say: "And What do we remember?: anything from earlier sessions, answered from what the table remembers, with the session and the time where each thing was said, and what is fact, a claim, or only the players' idea.", sel: "#tPop .cp-host", act: "look" },
         { say: "Close it from the toolbar.", sel: "#tDock [data-dock='talk']", act: "click", auto: true }
       ] },
-      { id: "recorded", module: ["recorded"], title: "Recorded sessions", summary: "Record the table; its words; what the campaign remembers of every session.", features: ["sessions", "tablememory"], needs: has("[data-t='tab'][data-tab='recorded']"), steps: [
+      { id: "recorded", module: ["recorded"], title: "Recorded sessions", summary: "Record the table; its words; what the campaign remembers of every session.", features: ["sessions", "tablememory", "pacing"], needs: has("[data-t='tab'][data-tab='recorded']"), steps: [
         { say: "Recorded sessions: the table's own notes, which remember everything that matters, session after session.", sel: "[data-t='tab'][data-tab='recorded']", act: "click", try: "Click Recorded sessions.", wait: 600 },
         { say: "Read the table the few words about recording, tick that everyone agreed, and start. The sound is kept ten seconds at a time, so an interruption loses seconds, not the evening. A banner shows it is recording on every page, with Stop one click away.", sel: "#tvBody .sm-rec", act: "look" },
         { say: "In the Atlas app, a phone of its own can be the recorder: open the recorder link and point the phone at the code. It sends the sound to this computer as it records.", sel: "#tvBody [data-sm='linkon']", act: "look", optional: true },
         { say: "Or add a recording afterwards, from a phone's own recorder app; or its words alone, from any tool that writes them.", sel: "#tvBody input[data-sm='words']", act: "look" },
         { say: "Each session keeps what was said and who said it. Claude reads it and writes down what to remember: promises, threats, clues, fates, theories. You keep each one, change it, mark it unsure, or say it is not so. Only what you keep counts.", sel: "#tvBody .sm-sess, #tvBody input[data-sm='q']", act: "look" },
-        { say: "Search everything said and remembered. Unfinished business, the promises and threats not yet settled, can be handed to the consequences to see what comes of it.", sel: "#tvBody input[data-sm='q']", act: "look" }
+        { say: "Search everything said and remembered. Unfinished business, the promises and threats not yet settled, can be handed to the consequences to see what comes of it.", sel: "#tvBody input[data-sm='q']", act: "look" },
+        { say: "Under a session's The session: how the evening went, a quiet chart of its time in talk and story, exploring, fighting, rules and off the game, read from the words alone, with one suggestion for next time.", sel: "#tvBody .sm-pace", act: "look", optional: true }
       ] },
       { id: "more", title: "Everything else at the table", summary: "Combat, making things up, the board, the players' characters, safety tools, and the printed book.", features: ["tablehome", "combat", "make", "board", "party", "safety", "export"], needs: has("#v-table"), steps: [
         { say: "At the table opens on Start here: every tool, with what it is for.", sel: "#v-table", act: "click", auto: true, wait: 400 },
@@ -295,6 +296,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    pacing: ["How the evening went", "pacing evening chart talk story exploring fighting rules off the game session time suggestion balance"],
     whatif: ["What if they wait?", "what if wait month days run forward simulate world keep throw away go back events factions consequences"],
     web: ["The relationship web", "web relationships who stands with whom diagram factions allies enemies people ties bonds rivalries grudges promises threats party opinion board"],
     citylife: ["People living their days in the city", "people walk day schedule hour city 3d live where now doing talk to them cast move time"],
