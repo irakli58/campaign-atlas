@@ -118,7 +118,9 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
         written by the players; atlas-journal.js's card on Tonight (cardsFor("tonight")), A.chronicle for the copilot
         and journeys; the copy and phones get it through `share` doc `chronicle` (filtered on the game master's page)
         and may read and write `intent` (lib/players-lan.js). The workspace's dev/chronicle-test.js "all well");
-     7. people living their days in the 3D city (6);
+     7. people living their days in the 3D city (6) (**built 4 Nov**: atlas-cityedit.js lived() and personCard, the
+        city's people() placing by place and walking between redraws; four people with days in the realm sample's
+        Eldermere. The workspace's dev/citylife-test.js "all well");
      8. the relationship web (11);
      9. "What if we wait a month?" (9);
      10. pacing from the words (15);

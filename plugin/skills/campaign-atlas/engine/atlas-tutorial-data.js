@@ -112,7 +112,7 @@
         { say: "Edit map again puts the tools away.", sel: "[data-w='edit']", act: "click", auto: true, wait: 400 },
         { say: "Back to the Gazetteer.", sel: "#v-gaz", act: "click", auto: true }
       ] },
-      { id: "cityedit", module: ["cities", "edit"], title: "Changing a city", summary: "Move, turn, change or remove buildings; add houses, roads, walls and gates, parks, squares and districts; put people in the streets; make a building one of your places.", features: ["cityedit", "citypeople", "askchange", "realplaces"], needs: has("[data-editcity]"), steps: [
+      { id: "cityedit", module: ["cities", "edit"], title: "Changing a city", summary: "Move, turn, change or remove buildings; add houses, roads, walls and gates, parks, squares and districts; put people in the streets; make a building one of your places.", features: ["cityedit", "citypeople", "citylife", "askchange", "realplaces"], needs: has("[data-editcity]"), steps: [
         { say: "A city made for your story can be changed as much as you like. A real city keeps its real streets.", sel: "#v-gaz", act: "click", try: "Click Gazetteer.", wait: 900 },
         { say: "Edit the city opens its tools.", sel: "[data-editcity]", act: "click", try: "Click Edit the city.", wait: 500 },
         { say: "Choose a building: then move it, turn it, change its kind, its floors and its roof, or remove it.", sel: ".cebar [data-t='select']", act: "look" },
@@ -120,6 +120,7 @@
         { say: "+ Road, + Wall and + Gate, + Park and + Square: click along the line or round the edge, then Finish. What stood in the way is cleared.", sel: ".cebar [data-t='road']", act: "look" },
         { say: "+ District marks a quarter and who holds it, in that faction's colour.", sel: ".cebar [data-t='district']", act: "look" },
         { say: "+ Person puts one of your people in the city: choose who, say what they are doing there if you like, and click where they are. They show on the map whenever the city is open; click one to move them or take them away.", sel: ".cebar [data-t='person']", act: "look" },
+        { say: "Your people with a day of their own (where they are, hour by hour, under Factions and people) live it in the city by themselves, in blue: each stands at the place their day puts them, and walks to the next as the world's time moves. With the tools put away, click one for what they are doing and their day, and Talk to them. Someone you place by hand stays where you put them.", sel: ".cperson.lived", act: "look", optional: true },
         { say: "A chosen building can become one of your own places: Make it a place opens the new place with the building's kind, size, floors and colours, standing where the building stands; Put it here sets it in, ready for its maps, people and clues.", sel: ".cebar [data-t='select']", act: "look" },
         { say: "With a building chosen, Ask for a change: say what it should be, and see what that replaces and what it keeps before you make the change.", sel: ".cebar [data-ce='ask']", act: "look", optional: true },
         { say: "Undo and Redo take back any change; Copy the changes gives them to the campaign. Nothing else in the city moves.", sel: ".cebar [data-ce='undo']", act: "look" },
@@ -292,6 +293,7 @@
     dock: ["The quick tools", "toolbar dock"], dice: ["Dice", "roll dice"], person: ["A person on the spot", "npc generator name"], stuck: ["They're stuck", "stuck ideas"], ask: ["Ask the campaign", "question answer"],
     copilot: ["The copilot", "copilot ai help"], talk: ["Talk as a character", "npc dialogue voice answer"], improvise: ["Improvise", "describe reaction consequence encounter"], memory: ["What a character remembers", "memory remember knowledge"],
     tonight: ["Tonight's sheet", "session notes previously"], clocks: ["Villains' clocks", "clock tick"], handouts: ["Handouts", "handout letter newspaper"],
+    citylife: ["People living their days in the city", "people walk day schedule hour city 3d live where now doing talk to them cast move time"],
     chronicle: ["The players' chronicle", "chronicle intentions intent what we mean to do written players phones read purse carry possessions remember memories journal"],
     timeline: ["The timeline", "timeline line of days scroll sessions events deeds consequences linked today coming zoom history"],
     paper: ["The week's paper", "newspaper paper gazette broadsheet crier town crier sheet daily newsfeed bulletin week printed handout news players keep"],

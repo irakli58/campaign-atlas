@@ -99,7 +99,33 @@
   const peopleOf = id => (((store() && store().get("citypeople", id)) || {}).list) || [];
   const cast = () => A.story && A.story.people ? A.story.people().map(p => [p.ref, p.name]) : [];
   const nameOf = ref => (cast().find(c => c[0] === ref) || [0, String(ref || "").replace(/^[a-z]+:/, "")])[1];
-  function showPeople(ctl, selRef) { if (ctl.map && ctl.map.people) ctl.map.people(peopleOf(ctl.city).map(q => Object.assign({ name: nameOf(q.ref), sel: q.ref === selRef }, q))); }
+  function showPeople(ctl, selRef) { if (ctl.map && ctl.map.people) { const hand = peopleOf(ctl.city).map(q => Object.assign({ name: nameOf(q.ref), sel: q.ref === selRef }, q)); ctl.map.people(hand.concat(lived(ctl.city, hand, selRef))); } }
+  // the cast living their days (the user's approved idea of 3 Nov 2026, the sixth in reviews/2026-11-03-ideas.md: "the
+  // cast walk to where their day takes them, as the world's time moves; click one to see what they are doing, or talk to
+  // them"): each of the cast with a day (Factions and people, atlas-factions.js) at the place in this city where their
+  // day puts them now; someone the game master placed by hand stays where they were put; the dead and the missing are not
+  // shown. Drawn again when the world's time moves, and they walk there.
+  function lived(city, hand, selRef) {
+    if (!A.lives || !A.castData) return [];
+    const placed = new Set(hand.map(q => q.ref)), out = [];
+    for (const [id, c] of Object.entries(A.castData)) {
+      const ref = "cast:" + id; if (placed.has(ref) || !c) continue;
+      const w = A.lives.whereNow(id); if (!w || !w.at || ["dead", "gone", "missing", "hiding"].includes(w.status) || !A.meta[w.at]) continue;
+      if (A.placeCity && A.placeCity(w.at) !== city) continue;
+      out.push({ ref, place: w.at, name: c.n || id, note: [w.doing, A.meta[w.at].name].filter(Boolean).join(", "), cls: "lived" + (w.doing === "asleep" ? " asleep" : ""), lived: true, sel: ref === selRef });
+    }
+    return out;
+  }
+  // a person of the city clicked, with the editor closed: what they are doing, their day, and Talk to them (the copilot)
+  function personCard(ctl, el, ev) {
+    const host = (ctl.map && ctl.map.dbg && ctl.map.dbg.renderer.domElement.parentElement) || el.parentElement, ref = el.dataset.person, id = String(ref).replace(/^cast:/, ""), c = (A.castData || {})[id] || {}, w = A.lives ? A.lives.whereNow(id) : null;
+    let card = host.querySelector(".ce-pcard"); if (!card) { card = document.createElement("div"); card.className = "ce-peek ce-pcard keeper"; host.appendChild(card); }
+    const day = (c.sched || []).map(([r, at, doing]) => `<li><span class="kn">${esc(r)}</span> ${esc((A.meta[at] || {}).name || at)}${doing ? `: ${esc(doing)}` : ""}</li>`).join("");
+    card.innerHTML = `<b>${esc(c.n || nameOf(ref))}</b>${c.role ? `<span class="kn">${esc(c.role)}</span>` : ""}<p>${w && w.at ? `Now: ${esc(w.doing || "here")}, at ${esc((A.meta[w.at] || {}).name || w.at)}.` : esc(el.title || "")}</p>${day ? `<ul class="ce-pday">${day}</ul>` : ""}<div class="t-row">${A.copilot && A.copilot.talkTo ? `<button type="button" class="t-btn prim" data-pc="talk">Talk to them</button>` : ""}<button type="button" class="t-mini" data-pc="x" aria-label="Close">×</button></div>`;
+    const r = host.getBoundingClientRect(); card.style.left = Math.min(r.width - 280, Math.max(8, ev.clientX - r.left + 12)) + "px"; card.style.top = Math.min(r.height - 160, Math.max(8, ev.clientY - r.top + 12)) + "px"; card.hidden = false;
+    // (the copilot opened once this click is over, or the click would count as one outside it and close it again)
+    card.onclick = e => { const k = e.target.closest("[data-pc]"); if (!k) return; e.stopPropagation(); card.hidden = true; if (k.dataset.pc === "talk") setTimeout(() => A.copilot.talkTo(ref), 0); };
+  }
 
   /* ---- any building of the city, clicked when the editor is closed (the game master's view only): what it is, and Make it
           a place, which opens it as a place of the game master's own with rooms and floors laid out for its kind
@@ -123,16 +149,22 @@
     });
   }
 
+  // (a person clicked while the editor is closed: their card; the editor, when open, takes the click itself)
+  function people(ctl) {
+    const cv = ctl.map && ctl.map.dbg && ctl.map.dbg.renderer.domElement, box = cv && (cv.closest(".city, .atlas") || cv.parentElement); if (!box || box.dataset.pcard) return; box.dataset.pcard = "1";
+    box.addEventListener("click", ev => { const el = ev.target.closest && ev.target.closest(".cperson[data-person]"); if (!el || ctl.ceUI || (document.getElementById("app") || {}).dataset.mode !== "gm") return; ev.preventDefault(); personCard(ctl, el, ev); });
+  }
+
   /* ---- attaching to a city as it is built (atlas-city.js calls this before drawing it) */
   A.cityEditor = {
     attach(ctl, C) {
       const id = ctl.city; ctl.ce = { base: snapshot(C), C, applied: "" };
       reset(C, ctl.ce.base); apply(C, allSteps(id)); ctl.ce.applied = JSON.stringify(allSteps(id));
       // (the store may answer after the city is up, or another window may change it: drawn again when its steps differ)
-      const hook = () => { const st = store(); if (!st) return false; st.watch("cityedits", () => { if (!ctl.ce || ctl.ce.busy) return; const now = JSON.stringify(allSteps(id)); if (now !== ctl.ce.applied) redraw(ctl); }); st.watch("citypeople", () => showPeople(ctl, ctl.ceUI && ctl.ceUI.selRef())); return true; };
+      const hook = () => { const st = store(); if (!st) return false; st.watch("cityedits", () => { if (!ctl.ce || ctl.ce.busy) return; const now = JSON.stringify(allSteps(id)); if (now !== ctl.ce.applied) redraw(ctl); }); for (const c of ["citypeople", "clock", "npcstate"]) st.watch(c, () => showPeople(ctl, ctl.ceUI && ctl.ceUI.selRef())); return true; };
       if (!hook()) { const iv = setInterval(() => { if (hook()) clearInterval(iv); }, 300); setTimeout(() => clearInterval(iv), 60000); }
       // (the people are shown once the city's map is up; and a building clicked offers to become a place)
-      const up = () => { if (!ctl.map || !ctl.map.people || !store()) return false; showPeople(ctl); peek(ctl); return true; };
+      const up = () => { if (!ctl.map || !ctl.map.people || !store()) return false; showPeople(ctl); peek(ctl); people(ctl); return true; };
       if (!up()) { const iv = setInterval(() => { if (up()) clearInterval(iv); }, 400); setTimeout(() => clearInterval(iv), 60000); }
     },
     open, apply, KINDS

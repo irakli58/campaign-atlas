@@ -2221,6 +2221,14 @@ button.ho-b:hover { color: var(--ink); }
 .ce-peek { position: absolute; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; max-width: 240px; padding: 8px 10px; border-radius: 8px; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); box-shadow: 0 4px 16px rgba(0, 0, 0, .25); font-size: 14px; }
 .ce-peek[hidden] { display: none; }
 .ce-peek .t-btn { flex: 1 1 100%; }
+/* the cast living their days in the city (atlas-cityedit.js lived, atlas-city.js people) */
+.ce-pcard { max-width: 280px; flex-direction: column; align-items: stretch; }
+.ce-pcard p { margin: 2px 0; font-size: 14.5px; }
+.ce-pcard .t-row { justify-content: space-between; }
+.ce-pday { margin: 2px 0 4px; padding-left: 16px; font-size: 13px; line-height: 1.4; }
+.cperson.lived .cp-fig, .cperson.lived .cp-fig::before { background: #2f5d7c; }
+.cperson.asleep .cp-fig { opacity: .5; }
+.cperson.walking .cp-n { display: block; }
 /* recorded sessions and what the table remembers (atlas-sessions.js) */
 .sm-rec.on { border-color: #b0161b; }
 .sm-recnow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

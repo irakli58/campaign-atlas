@@ -1803,14 +1803,25 @@ function createMap3D(host, C, planCanvas, hooks) {
   for (const o of marks) { if (!o.L.label || !o.L.name) continue; const el = document.createElement("div"); el.className = "llab" + (o.L.major ? " major" : ""); el.textContent = o.L.name; pinsEl.appendChild(el); ll.push({ el, x: o.x, y: o.y + .6, z: o.z, far: o.L.major ? SPAN * 1.2 : 190 }); }
   // the people the game master has placed in the city (atlas-cityedit.js): a figure and a name over the street where
   // each stands, the note on pointing at it; the game master's knowledge, so hidden from the players' view
-  const pp = [];
+  // (and the cast living their days (the user's approved idea of 3 Nov 2026: "the cast walk to where their day takes
+  // them, as the world's time moves"): one given a place stands by it, beside whoever else is there, and walks from
+  // where they were when their day moves them on)
+  const pp = [], lastAt = {};
   function people(list) {
-    for (const o of pp) o.el.remove(); pp.length = 0;
+    // (where each was, mid-walk or standing, so drawing them again carries a walk on rather than cutting it short)
+    const was0 = {}; for (const o of pp) { o.el.remove(); if (o.ref) was0[o.ref] = o; } pp.length = 0;
+    const t0 = performance.now(), at = {};
     for (const q of list || []) {
-      if (!q || !Array.isArray(q.at)) continue;
-      const el = document.createElement("button"); el.type = "button"; el.className = "cperson keeper" + (q.sel ? " sel" : ""); el.dataset.person = q.ref || "";
+      if (!q) continue; let x, z;
+      if (Array.isArray(q.at)) { x = wx(q.at[0]); z = wz(q.at[1]); }
+      else if (q.place && LM[q.place]) { const g = LM[q.place].grp.position, k = at[q.place] = (at[q.place] || 0) + 1, a = k * 2.1; x = g.x + 3 + Math.cos(a) * (k - 1) * 2.2; z = g.z + 3 + Math.sin(a) * (k - 1) * 2.2; }
+      else continue;
+      const el = document.createElement("button"); el.type = "button"; el.className = "cperson keeper" + (q.sel ? " sel" : "") + (q.cls ? " " + q.cls : ""); el.dataset.person = q.ref || ""; if (q.lived) el.dataset.lived = "1";
       el.title = q.note ? `${q.name}: ${q.note}` : q.name; el.innerHTML = `<span class="cp-fig" aria-hidden="true"></span><span class="cp-n">${A.esc(q.name)}</span>`;
-      pinsEl.appendChild(el); pp.push({ el, x: wx(q.at[0]), y: 1.7, z: wz(q.at[1]) });
+      pinsEl.appendChild(el); const o = { el, ref: q.ref, x, y: 1.7, z }, old = was0[q.ref], was = old ? [old.x, old.z] : lastAt[q.ref];
+      if (old && old.walk && Math.hypot(old.walk.tx - x, old.walk.tz - z) < .5) { o.walk = old.walk; o.x = old.x; o.z = old.z; el.classList.add("walking"); }
+      else if (was && Math.hypot(was[0] - x, was[1] - z) > .5) { const d = Math.hypot(was[0] - x, was[1] - z); o.walk = { fx: was[0], fz: was[1], tx: x, tz: z, t0, dur: Math.min(7000, 1200 + d * 22) }; o.x = was[0]; o.z = was[1]; el.classList.add("walking"); }
+      lastAt[q.ref] = [x, z]; pp.push(o);
     }
     request();
   }
@@ -1884,6 +1895,7 @@ function createMap3D(host, C, planCanvas, hooks) {
       if (!off) o.el.style.transform = `translate(${((pv.x + 1) / 2 * W).toFixed(1)}px, ${((1 - pv.y) / 2 * H).toFixed(1)}px) translate(-50%, -100%)`;
     }
     for (const o of pp) {
+      if (o.walk) { const t = Math.min(1, ((now || performance.now()) - o.walk.t0) / o.walk.dur), k = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; o.x = o.walk.fx + (o.walk.tx - o.walk.fx) * k; o.z = o.walk.fz + (o.walk.tz - o.walk.fz) * k; if (t >= 1) { o.walk = null; o.el.classList.remove("walking"); } else request(); }
       pv.set(o.x, o.y, o.z).project(camera);
       const off = pv.z > 1 || pv.x < -1.05 || pv.x > 1.05 || pv.y < -1.05 || pv.y > 1.05;
       o.el.classList.toggle("off", off); o.el.classList.toggle("named", dist < 260);
