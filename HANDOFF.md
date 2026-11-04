@@ -84,13 +84,18 @@ On the user's own machine the live copy of the skill is `~/.claude/skills/campai
 5. Record the tutorial video again (new lessons: the living world's four tabs, people in a city, the trail, Ask for a change): rebuild the samples first (kestrel, hollow, realm).
 6. (done 3 Nov: modern real cities. On a real city (city.js `real: true`) + Add location asks which of the city's own buildings the place is in, lights up the one under the pointer, and the place takes it as it stands (atlas-city.js `realAt`, `outlineOf`, `setCustom(C, list, real)`; atlas-locations.js placing in `real` mode; no outside asked, Ask for a change offers no outside); a place with no building within reach keeps a model. The city editor stays off real cities. London regression exact; tested on a New York copy)
 6a. (prototype done 3 Nov, shown to the user: **Session recording and memory**, docs/requests/2026-11-03-session-memory.md, design docs/research/2026-11-03-session-memory.md. Engine: atlas-sessions.js, the tab Recorded sessions, `A.memory`; app: lib/recorder-lan.js, lib/selfsigned.js, ui/recorder.html, server routes recorder / rec-audio / rec-drop, ATLAS_APP.recorder / audioUrl / dropAudio. The user chose (3 Nov) the browser's live words: who spoke does not matter to them, so no Whisper download. Live words are on by default on the page and the phone; the sound is optional ("Keep the sound too"); a phone that cannot do both offers "Keep the words instead of the sound". Possible later: the optional live check by Claude, search by meaning, a "Recording" sign on the players' screen)
-6b. **Every city on the world map opens a city from the existing generator** (the user's request of 3 Nov, docs/requests/2026-11-03-world-cities.md): click any settlement, its city is made by atlas-city.js shaped by its river, coast, mountains and routes, buildings open their interiors as they already do; manual edits kept.
+6b. (**built 3 Nov**: every city on the world map opens a city from the existing generator (the user's request, docs/requests/2026-11-03-world-cities.md; atlas-world.js `A.worldCity`, laid out for its sea, river and roads as it is entered). Its loose ends (an end-to-end test, a lesson, keeping such a city in the campaign's files) are item 9 of the workspace's reviews/2026-11-03-review.md, waiting for the user's answer.)
 6b'. **Approved by the user, 3 Nov** (the ideas in the workspace's reviews/2026-11-03-ideas.md; not wanted: 1, 10, 12, 16):
    - **Writing instead of tick-boxes everywhere it fits:** wherever the game master or the players say what they are going
      to do, they write it in their own words (the consequences' "how it went", the players' intentions from their phones,
      journeys, the campaign's features described in words).
    - **Build, in this order:**
-     1. weather from the world's own climate (3);
+     1. weather from the world's own climate (3) (**built 4 Nov**: engine/atlas-weather.js reads each place's climate back
+        from the world map by the generator's own rules (within about half a degree and a few per cent of rain of what
+        the generator worked out) and draws each day from the season's normals, weather systems drifting with the wind;
+        the card in The world's time, Time in the quick tools, a place's panel, the journey's way, the copilot, the
+        players' line under the date, the music's rain, wind and thunder outdoors; planets and planes by their
+        environment; the calendar's `winter`; taught; the workspace's dev/weather-test.js "all well");
      2. journeys along the world map's routes (2);
      3. the rumour mill (4);
      4. the world's newspaper (7);

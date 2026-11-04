@@ -697,7 +697,8 @@
       bj.hidden = !nj || tab === "journal"; bj.textContent = nj;
     }
     // the world's date, as the game master's clock last wrote it
-    function dateLine() { const d = st.get("clock", "now") || {}, el = root.querySelector(".ps-date"); el.hidden = !d.date; el.innerHTML = d.date ? `<b>${esc(d.date)}</b>${d.time ? `<span>${esc(d.time)}</span>` : ""}` : ""; }
+    // (and the weather where the party is, when the game master's page writes it: atlas-weather.js)
+    function dateLine() { const d = st.get("clock", "now") || {}, el = root.querySelector(".ps-date"); el.hidden = !d.date && !d.sky; el.innerHTML = (d.date ? `<b>${esc(d.date)}</b>${d.time ? `<span>${esc(d.time)}</span>` : ""}` : "") + (d.sky ? `<span class="ps-sky">${esc(d.sky)}</span>` : ""); }
     // (look: true for a Look button to The table, or the tab it goes to)
     const toast = (t, look) => { const el = app.querySelector(".ps-toast"), lb = el.querySelector("button"); el.querySelector("span").textContent = t; lb.hidden = !look; lb.dataset.ptab = typeof look === "string" ? look : "table"; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, 6000); };
 

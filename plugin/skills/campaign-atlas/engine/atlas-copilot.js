@@ -51,6 +51,8 @@
     const W = A.worldTime; if (W && (A.calendarData || (A.eventsData || []).length)) { const d = W.at(W.now()); out.push(`It is now ${d.long}, ${d.time} (day ${d.day} of the story).`); const r = W.recent(); if (r.length) out.push("Lately in the world: " + r.join("; ")); }
     // the plane the party is on, and its rules (atlas-cosmos.js): never described as the world's own
     if (A.cosmosSay) { const w = A.cosmosSay(); if (w) out.push(w); }
+    // the weather where the party is, from the world's own climate (atlas-weather.js), for descriptions to use
+    if (A.weather) { const w = A.weather.say(); if (w) out.push(w); }
     // unfinished business from earlier sessions, as the table remembers it (atlas-sessions.js): the council plans from it
     const U = A.memory ? A.memory.unfinished() : []; if (U.length) out.push("Unfinished business from earlier sessions: " + U.slice(0, 6).map(m => `[${A.memory.cite(m)}] ${m.text}`).join("; "));
     return out.join("\n");

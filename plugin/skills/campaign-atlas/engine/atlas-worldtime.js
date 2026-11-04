@@ -53,6 +53,20 @@
     const h = Math.floor(mins / 60), mn = mins % 60;
     return { long: `${wd}${dy + 1} ${months[mi2][0]}, ${c.era ? c.era + " " : ""}${year}`, time: hour(h, mn), short: `${dy + 1} ${months[mi2][0]}, ${String(h).padStart(2, "0")}:${String(mn).padStart(2, "0")}`, day: dayOf(m), h, wd: wdn };
   }
+  // where in its year a moment falls, for the weather (atlas-weather.js): 0 to 1 from the year's first day, the story's
+  // day, and where the heart of the northern winter lies: mid-January on a real calendar; on the world's own, the middle
+  // of its first month, or of the month it names as winter's (ATLAS.calendar winter: a month's name or number). With
+  // no calendar at all the story is taken to begin in spring, in a year of 365 days.
+  function yearOf(m) {
+    const o = origin(), c = cal(), dayN = dayOf(m) - 1;
+    if (o.real) { const d = new Date(o.ms + m * 60000), y0 = new Date(0); y0.setUTCFullYear(d.getUTCFullYear(), 0, 1); y0.setUTCHours(0, 0, 0, 0); return { f: ((d - y0) / 864e5) / 365.25, winter: 16 / 365, dayN, month: MONTHS[d.getUTCMonth()], set: true }; }
+    if (!c) return { f: (.29 + (dayN + .5) / 365) % 1, winter: 16 / 365, dayN, month: "", set: false };
+    const months = (c.months && c.months.length ? c.months : [["Month", 30]]).map(x => Array.isArray(x) ? x : [x, 30]), len = months.map(x => +x[1] || 30), yearLen = len.reduce((a, b) => a + b, 0);
+    const total = (o.day - 1) * 1440 + o.h * 60 + o.mi + m, dn = Math.floor(total / 1440), dy = ((dn % yearLen) + yearLen) % yearLen + (((total % 1440) + 1440) % 1440) / 1440;
+    let wi = c.winter == null ? 0 : typeof c.winter === "number" ? c.winter - 1 : months.findIndex(x => String(x[0]).toLowerCase() === String(c.winter).toLowerCase()); if (!(wi >= 0 && wi < months.length)) wi = 0;
+    let k = 0, rest = dy; while (k < months.length - 1 && rest >= len[k]) { rest -= len[k]; k++; }
+    return { f: dy / yearLen, winter: (len.slice(0, wi).reduce((a, b) => a + b, 0) + len[wi] / 2) / yearLen, dayN, month: months[k][0], set: true };
+  }
   const hour = (h, mi) => { const p = h < 5 || h >= 21 ? "night" : h < 12 ? "morning" : h < 17 ? "afternoon" : "evening"; return `${((h + 11) % 12) + 1}${mi ? ":" + String(mi).padStart(2, "0") : ""} ${h < 12 ? "am" : "pm"}, ${p}`; };
   const dayOf = m => { const o = origin(); return Math.floor((o.h * 60 + o.mi + m) / 1440) + 1; };
   // when an event is due: a real date, "day 3 06:00", { day, hour }, or nothing (it waits only on what it is after)
@@ -71,8 +85,9 @@
   const opts = () => (S() && S().get("clock", "opts")) || {};
   // the date goes with the time, in words, for the players' window (which has no calendar of its own: it has nothing of
   // the campaign in its copy) to show as it is
-  const label = m => { const d = at(m); return { date: d.long, time: d.time }; };
-  const setNow = m => S().set("clock", "now", Object.assign({ m, t: Date.now() }, cal() ? label(m) : {}));
+  // (and the weather where the party is, in a few words, when the world map can tell it: atlas-weather.js)
+  const label = m => { const d = at(m), w = A.weather ? A.weather.sky(m) : ""; return Object.assign({ date: d.long, time: d.time }, w ? { sky: w } : {}); };
+  const setNow = m => { S().set("clock", "now", Object.assign({ m, t: Date.now() }, cal() ? label(m) : A.weather && A.weather.sky(m) ? { sky: A.weather.sky(m) } : {})); if (A.weather) A.weather.sync(); };
   // the events: the council's (table.js), as the game master changed them, and the game master's own (collection eventdefs)
   function evDefs() {
     const council = (A.eventsData || []).filter(e => e && e.id), mine = (S() && S().get("eventdefs")) || {};
@@ -280,6 +295,7 @@
     return `<div class="t-grid t-g2w"><div>
       <section class="t-card"><h3>${T.icon("time")} The world's time</h3>${nowHTML()}<p class="t-small">Move time on as the story does: a conversation, a night's rest, a journey. What comes due happens by itself if it is background or notable, and waits for you if it matters more; anything whose reason is gone is called off.</p>
         <label class="t-small tw-ask">Wait for me before <select class="t-in tw-sel" data-tw="ask">${ASK.map(([k, l]) => `<option value="${k}"${askNow() === k ? " selected" : ""}>${l}</option>`).join("")}</select></label></section>
+      ${A.weather ? A.weather.cardHTML(!o.wxHide) : ""}
       ${P.length ? `<section class="t-card"><h3>Waiting for you <span class="kn">${P.length}</span></h3>${P.map(x => pendingCard(x)).join("")}</section>` : ""}
       ${UI.edit ? editHTML() : ""}
       <section class="t-card"><div class="tw-hh"><h3>Coming</h3><button type="button" class="t-btn" data-tw="new">Plan an event</button></div>${C.length ? C.slice(0, 16).map(evRow).join("") : `<p class="kn">Nothing set for an hour.</p>`}
@@ -437,8 +453,8 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
     // (a change in the world: its kind chosen, the form shows what that kind needs)
     if (e.target.dataset && e.target.dataset.twfx === "kind" && UI.edit && e.target.closest("form[data-tw='save']")) { const f = e.target.closest("form"); readForm(f); e.target.blur(); paint(); return; }
     const t = e.target; if (!t.dataset || !t.dataset.tw) return; const o = Object.assign({}, opts());
-    if (t.dataset.tw === "random") o.random = t.checked; else if (t.dataset.tw === "table") o.table = t.value; else if (t.dataset.tw === "freq") o.freq = t.value; else if (t.dataset.tw === "ask") o.ask = t.value; else return;
-    S().set("clock", "opts", o); if (t.dataset.tw === "ask") setTimeout(evaluate, 60);
+    if (t.dataset.tw === "random") o.random = t.checked; else if (t.dataset.tw === "table") o.table = t.value; else if (t.dataset.tw === "freq") o.freq = t.value; else if (t.dataset.tw === "ask") o.ask = t.value; else if (t.dataset.tw === "wxshow") o.wxHide = !t.checked; else return;
+    S().set("clock", "opts", o); if (t.dataset.tw === "ask") setTimeout(evaluate, 60); if (t.dataset.tw === "wxshow") setTimeout(() => setNow(now()), 60);
   });
   document.addEventListener("submit", e => {
     const f = e.target; if (!f.dataset || !f.dataset.tw) return; e.preventDefault();
@@ -470,14 +486,16 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
       for (const c of WATCH) store.watch(c, () => {
         loaded.add(c);
         // (the players' window shows the date as it was last written: write it when the calendar has changed since)
-        if (c === "clock" && cal()) { const d = store.get("clock", "now") || {}, l = label(now()); if (d.date !== l.date || d.time !== l.time) setNow(now()); }
+        if (c === "clock" && cal()) { const d = store.get("clock", "now") || {}, l = label(now()); if (d.date !== l.date || d.time !== l.time || (d.sky || "") !== (l.sky || "")) setNow(now()); }
         evaluate(); if (!UI.edit) paint(); else badge();
       });
+      // (the party moved on the world map: the weather where they are now, on the players' screen and in the music)
+      if (A.weather) store.watch("world", () => { const d = store.get("clock", "now") || {}; if ((d.sky || "") !== (A.weather.sky(now()) || "")) setNow(now()); else A.weather.sync(); if (api.tab() === "time" && !UI.edit) paint(); });
     } });
-  if (TU.addDock) TU.addDock("time", "Time", "time", head => head("time", "The world's time", "time", "Everything") + nowHTML(true) + (pending().length ? pending().map(x => pendingCard(x, true)).join("") : `<p class="t-small">Nothing waits for you. ${coming()[0] ? `Next: ${esc(coming()[0].title)}, ${esc(at(dueAt(coming()[0])).short)}.` : ""}</p>`));
+  if (TU.addDock) TU.addDock("time", "Time", "time", head => head("time", "The world's time", "time", "Everything") + nowHTML(true) + (A.weather && A.weather.today() ? `<p class="t-small wx-dock"><b>Weather:</b> ${esc(A.weather.short(A.weather.today()))}</p>` : "") + (pending().length ? pending().map(x => pendingCard(x, true)).join("") : `<p class="t-small">Nothing waits for you. ${coming()[0] ? `Next: ${esc(coming()[0].title)}, ${esc(at(dueAt(coming()[0])).short)}.` : ""}</p>`));
 
   // the copilot and the consistency check are told of the world's time and what has happened in it
-  A.worldTime = { now, at, whenOf, pending, coming, evaluate, advance, decide, hold, events: evDefs, councilPrompt, cleanSugg,
+  A.worldTime = { now, at, yearOf, whenOf, pending, coming, evaluate, advance, decide, hold, events: evDefs, councilPrompt, cleanSugg,
     recent: () => allDone().filter(([, s]) => s.state === "done").sort((a, b) => b[1].at - a[1].at).slice(0, 6).map(([e, s]) => `${at(s.at).short}: ${e.title}${e.what ? " (" + e.what + ")" : ""}`) };
   if (A.consistency) A.consistency.add("time-events", () => {
     const out = [], ids = new Set(evDefs().map(e => e.id));

@@ -483,6 +483,8 @@
   function Theme(E, spec, t0) {
     // spec.mix: music the referee made in the Music tab, a mood of their own (see mixM)
     const T = this, ac = E.ac, F = FLAVOURS[spec.flavour] || FLAVOURS.industrial, M = spec.mix ? Object.assign({}, spec.mix) : Object.assign({}, MOODS[spec.mood] || MOODS.mystery, F.moods && F.moods[spec.mood]), rnd = mulberry32(spec.seed || 1);
+    // (the day's weather outdoors: its rain and wind no quieter than the place's own, thunder now and then)
+    if (spec.air) { M.tex = Object.assign({}, M.tex || {}); for (const k of ["rain", "wind"]) if (spec.air[k]) M.tex[k] = Math.max(M.tex[k] || 0, spec.air[k]); if (spec.air.thunder) M.ev = Object.assign({}, M.ev || {}, { lightning: (M.ev || {}).lightning || 60 }); }
     Object.assign(T, { E, ac, M, F, rnd, t0, spec, mods: [], stops: [], dead: false });
     const G = v => { const g = ac.createGain(); g.gain.value = v; return g; };
     T.out = G(0); T.out.gain.setValueAtTime(0, t0); T.out.gain.linearRampToValueAtTime(spec.raw ? 1 : spec.mix ? (spec.mix.auto || (F.cine ? 1.8 : 1.4)) * (spec.mix.loud || 1) : trimOf(F, FLAVOURS[spec.flavour] ? spec.flavour : "industrial", spec.mood), t0 + 2.5);
@@ -694,7 +696,7 @@
   }
   Engine.prototype.setTheme = function (spec, t) {
     // (any change to music of one's own is a new theme, crossfaded; its measured level is not: that is set on the theme as it plays)
-    const key = spec ? (spec.mix ? "mix|" + JSON.stringify(Object.assign({}, spec.mix, { auto: undefined })) : spec.mood) + "|" + spec.flavour + "|" + spec.seed : "";
+    const key = spec ? (spec.mix ? "mix|" + JSON.stringify(Object.assign({}, spec.mix, { auto: undefined })) : spec.mood) + "|" + spec.flavour + "|" + spec.seed + (spec.air ? "|" + JSON.stringify(spec.air) : "") : "";
     if (this.cur && this.cur.key === key) return;
     if (this.cur) this.cur.end(t, 2.5);
     this.cur = spec ? new Theme(this, spec, t) : null; if (this.cur) this.cur.key = key;
@@ -852,8 +854,12 @@
     let th = P.hold ? Object.assign({}, P.hold) : null;
     if (!th && P.place) { const o = ownOf(P.place); th = o ? ownSpec(P.place, o) : themeFor(P.place); }
     if (th && !th.own && !th.mix && P.style && FLAVOURS[P.style]) th.flavour = P.style;      // the referee has chosen another style at the table
+    if (th && !th.own && !th.mix && P.air && OUTDOORS.has(th.mood)) th.air = P.air;          // the day's weather, outdoors
     return th;
   }
+  // (the weather where the party is (atlas-weather.js, the user's approved idea of 3 Nov 2026: "it changes ... the
+  // music's mood"): its rain, wind and thunder laid under the songs of places in the open air, as their own textures are)
+  const OUTDOORS = new Set(["street", "night", "market", "docks", "sea", "forest", "moor", "desert", "ruins", "base"]);
   const styleOf = id => (P.style && FLAVOURS[P.style] ? P.style : spec(id, "calm").flavour);
   const shortStyle = fl => FLAVOURS[fl].label.split(",")[0];
   const placeName = id => (id && A.meta[id] ? A.meta[id].name || id : "");
@@ -1337,6 +1343,8 @@
       apply();
     },
     place(id) { P.place = id; apply(); },
+    // the weather where the party is: { rain, wind, thunder } or nothing (atlas-weather.js air)
+    air(a) { P.air = a || null; apply(); },
     choose, own: ownOf,
     // the narrator is speaking: the music steps back to a third of its volume, and comes up again after
     duck(on) {

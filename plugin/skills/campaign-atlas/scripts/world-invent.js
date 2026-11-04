@@ -721,6 +721,9 @@ function invent(A, flags, log) {
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)
       if (G.eco && flags.biomes !== "classic") { T.biome = Buffer.from(G.eco.biome).toString("base64"); T.canopy = Buffer.from(G.eco.canopy).toString("base64"); T.tempC = Buffer.from(Uint8Array.from(G.eco.T, v => Math.max(0, Math.min(255, Math.round(v + 60))))).toString("base64"); if (G.eco.ground.some(v => v)) T.ground = Buffer.from(G.eco.ground).toString("base64"); }
+      // (the climate as the ecology worked it out, for the workspace's dev/weather-test.js to hold the page's weather to:
+      // written only when asked)
+      if (G.eco && process.env.ATLAS_CLIMATE_DUMP) require("fs").writeFileSync(process.env.ATLAS_CLIMATE_DUMP, JSON.stringify({ cols, rows, lat: latA || LATS, km: kmA, Tw: Array.from(G.eco.Tw, v => Math.round(v * 10) / 10), Tc: Array.from(G.eco.Tc, v => Math.round(v * 10) / 10), P: Array.from(G.eco.P, Math.round), s: Array.from(G.eco.sf, v => Math.round(v * 100) / 100) }));
       // (the land was made to a size, so the map knows its scale: miles for fantasy and the past, km otherwise)
       const kmAcross = kmA, miles = ["hydro", "relief", "painted", "parchment", "engraved"].includes(look);
       T.scale = { unit: miles ? "mile" : "km", per: Math.round((miles ? kmAcross * .6214 : kmAcross) / w * 1000) / 1000 };

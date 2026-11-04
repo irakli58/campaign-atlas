@@ -2017,6 +2017,17 @@ button.ho-b:hover { color: var(--ink); }
 .tw-f { font-size: 14.5px; margin: 2px 0; }
 .tw-f > .kn { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
 .tw-paused { margin: 0 0 8px; padding: 6px 10px; border-radius: 6px; background: var(--accent-soft); font-size: 14px; }
+/* the weather where the party is (atlas-weather.js) */
+.wx-today { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 2px 0 6px; }
+.wx-today b { font-family: var(--f-display); font-weight: 400; font-size: 22px; line-height: 1.15; }
+.wx-today span:not(.kn) { font-size: 18px; }
+.wx-card > p { margin: 4px 0 8px; line-height: 1.45; }
+.wx-next { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 3px; font-size: 14.5px; }
+.wx-next .kn { display: inline-block; min-width: 9em; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
+.wx-why summary, .wm-wx summary { cursor: pointer; font-size: 13.5px; color: var(--muted); }
+.wx-road b, .wm-wx b { font-weight: 600; }
+.wm-wx { margin: 8px 0; font-size: 14.5px; line-height: 1.45; }
+.wm-wx details p { margin: 4px 0 0; }
 .tw-custom { align-items: center; margin-top: 4px; }
 .tw-custom .kn { display: inline-flex; gap: 6px; align-items: center; }
 .tw-sel, .tw-custom .t-in, .tw-ask .t-in { width: auto; margin: 0; }
@@ -2175,6 +2186,7 @@ button.ho-b:hover { color: var(--ink); }
 .ps-date b { font-family: var(--f-display); font-weight: 400; font-size: 18px; }
 .ps-date span { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; color: #9a948a; }
 .ps-date[hidden], .ps:not([data-tab="table"]) .ps-date { display: none; }
+.ps-date .ps-sky { font-family: var(--f-body); font-size: 13px; letter-spacing: 0; color: #cfc8ba; margin-top: 2px; }
 .ps-news { border-top: 1px solid #2c2f31; padding: 18px 0 8px; }
 .ps-news .ps-when { text-align: left; margin: 0 0 4px; }
 .ps-news h3 { font-family: var(--f-display); font-weight: 400; font-size: 30px; line-height: 1.15; margin: 0 0 8px; color: #fff; }

@@ -1297,6 +1297,7 @@
         ${acts.length ? `<div class="meta">${acts.map(a => `<span class="tag">Act ${a}</span>`).join("")}</div>` : ""}
         ${L.desc ? `<p class="wm-desc">${esc(L.desc)}</p>` : ""}
         ${keeper && L.gm ? `<div class="sec secret"><p>${esc(L.gm)}</p></div>` : ""}
+        ${A.weather && WD.look !== "stars" && !L.unplaced ? A.weather.panelHTML(WID, L) : ""}
         ${L.unplaced && keeper ? `<p class="warn">This place has no position on the map yet: it waits at the foot of the map. Drag it where it belongs (Edit map).</p>` : ""}
         ${enter}
         ${places.length ? `<h4>Places here</h4><ul class="wm-pl">${places.map(p => `<li><button type="button" data-wopen="${esc(p.id)}">${p.st ? `<span class="sd st-${esc(p.st)}"></span>` : ""}<span class="n">${String(p.n).padStart(2, "0")}</span>${esc(p.name)}</button></li>`).join("")}</ul>` : ""}
@@ -1321,7 +1322,8 @@
           const allDays = legs.every(l => l.tv.days != null), allDist = legs.every(l => l.tv.dist != null);
           const tot = allDays ? daysText(legs.reduce((s, l) => s + l.tv.days, 0)) : allDist ? distText(WD, legs.reduce((s, l) => s + l.tv.dist, 0)) : `${legs.length} leg${legs.length > 1 ? "s" : ""}`;
           const risks = legs.filter(l => l.r.danger);
-          s += `<div class="wm-way"><p><strong>The way:</strong> ${tot}${allDays ? "" : WD.scale ? " (travel times are not known for every leg: set days on the routes in Edit map)" : " (the map has no scale, so no distances; set days on the routes in Edit map for travel times)"}</p><ol>${legs.map(l => `<li>${esc(WD.byId[l.b].name)} <span class="kn">by ${esc((ROUTES[l.r.kind] || l.r.kind).toLowerCase())}${l.tv.days != null ? ", " + daysText(l.tv.days) : l.tv.dist != null ? ", " + distText(WD, l.tv.dist) : ""}</span>${l.r.danger ? ` <span class="wm-dgr">${esc(l.r.danger === true ? "danger" : l.r.danger)}</span>` : ""}</li>`).join("")}</ol>${risks.length ? `<p class="warn">${risks.length} dangerous leg${risks.length > 1 ? "s" : ""} on the way.</p>` : ""}<button type="button" class="prim" data-w="setoff">Set this as the party's journey</button></div>`;
+          const wx = A.weather && WID === "main" ? A.weather.roadNote() : "";
+          s += `<div class="wm-way"><p><strong>The way:</strong> ${tot}${allDays ? "" : WD.scale ? " (travel times are not known for every leg: set days on the routes in Edit map)" : " (the map has no scale, so no distances; set days on the routes in Edit map for travel times)"}</p>${wx ? `<p class="kn wm-wxway">${esc(wx)}</p>` : ""}<ol>${legs.map(l => `<li>${esc(WD.byId[l.b].name)} <span class="kn">by ${esc((ROUTES[l.r.kind] || l.r.kind).toLowerCase())}${l.tv.days != null ? ", " + daysText(l.tv.days) : l.tv.dist != null ? ", " + distText(WD, l.tv.dist) : ""}</span>${l.r.danger ? ` <span class="wm-dgr">${esc(l.r.danger === true ? "danger" : l.r.danger)}</span>` : ""}</li>`).join("")}</ol>${risks.length ? `<p class="warn">${risks.length} dangerous leg${risks.length > 1 ? "s" : ""} on the way.</p>` : ""}<button type="button" class="prim" data-w="setoff">Set this as the party's journey</button></div>`;
         }
       }
       return s;
