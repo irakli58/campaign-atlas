@@ -157,9 +157,13 @@ function ecology(L, o, U) {
   // enough to move sand, o.aeolian, no sand seas, only the loose grit of its surface. Without an environment, as before)
   // (high: its highest seventh, by its own heights: a world without a sea level has no 1800 m of its own)
   const hiE = o.life === "none" ? (() => { const v = []; for (let n = 0; n < N; n += 3) if (land(n)) v.push(E[n]); v.sort((a, b) => a - b); return v[Math.floor(v.length * .86)] || 1800; })() : 0;
+  const hiE2 = o.life === "none" && L.drawnMtn ? (() => { const v = []; for (let n = 0; n < N; n += 3) if (land(n)) v.push(E[n]); v.sort((a, b) => a - b); return v[Math.floor(v.length * .97)] || 1800; })() : 0;
   if (o.life === "none" || o.life === "microbial") for (let n = 0; n < N; n++) {
-    if (!land(n)) continue; canopy[n] = 0; if (o.life === "microbial") continue;
-    const b = biome[n], cold = T[n] < -10, high = E[n] > hiE;
+    // (plants the game master painted on such a world, saying so: theirs, though its physics would not have them)
+    if (!land(n) || (o.paintLife && L.paint && (L.paint[n] === 1 || L.paint[n] === 3))) continue; canopy[n] = 0; if (o.life === "microbial") continue;
+    // (drawn by the game master on a world with no sea: its mountains where they were drawn; all its painted land stands
+    // above its dry lowlands, so its highest seventh would make mountains of the plains drawn there)
+    const b = biome[n], cold = T[n] < -10, high = L.drawnMtn ? L.drawnMtn[n] > .6 || E[n] > hiE2 : E[n] > hiE;
     simple[n] = high ? B.mountains : o.icy && cold && (b === B.icesheet || simple[n] === B.snow) ? B.snow : B.desert;
     biome[n] = simple[n] === B.mountains ? B.rock : simple[n] === B.snow ? B.icesheet : cold ? B.colddesert : B.rockdesert;
     if (!ground[n]) ground[n] = high ? 3 : 2;

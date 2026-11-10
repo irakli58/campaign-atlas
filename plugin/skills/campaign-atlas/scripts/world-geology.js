@@ -308,6 +308,9 @@ function geology(o, U) {
     const k = relK * (1 - .6 * ((o.env && o.env.impacts) || 0)); for (let n = 0; n < N; n++) if (!isLand[n]) E[n] *= k;
     let lo = 0; for (let n = 0; n < N; n++) lo = Math.min(lo, E[n]); for (let n = 0; n < N; n++) { E[n] = E[n] - lo + 15; isLand[n] = 1; }
     const B = Float32Array.from(E); boxBlur(B, cols, rows, Math.max(2, Math.round(cols / 140)), 2); for (let n = 0; n < N; n++) E[n] = B[n] + .55 * (E[n] - B[n]);
+    // (a drawing: its land lifted above the old floor would carry the ranges drawn on it past the map's highest height,
+    // flat-topped; all of it eased down together, so the ranges keep their slopes over the drawn plains)
+    if (SK) { let top = 0; for (let n = 0; n < N; n++) top = Math.max(top, E[n]); if (top > 7600) { const f = (7600 - 15) / (top - 15); for (let n = 0; n < N; n++) E[n] = 15 + (E[n] - 15) * f; } }
   }
 
   // (a lake the sketch shows lies in a hollow: its floor below the lowest of its shore)
@@ -352,7 +355,7 @@ function geology(o, U) {
 
   /* 8. what lives on it: climate classes, biomes and tree cover, from all of the above (world-ecology.js) */
   const want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
-  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog, paint: SK && SK.kind ? SK.kind : null }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC, lockedT: o.locked ? C.temp : null, life: o.env ? o.env.life : undefined, aeolian: o.env ? o.env.erosion.aeolian : undefined, icy: o.env ? ["water", "ice", "subsurface"].includes(o.env.liquid.kind) : undefined, even: o.env && o.env.climate ? o.env.climate.even : undefined, cells: o.env && o.env.climate ? o.env.climate.cells : undefined }, U);
+  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog, paint: SK && SK.kind ? SK.kind : null, drawnMtn: SK && SK.mtn && o.noSea ? SK.mtn : null }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC, lockedT: o.locked ? C.temp : null, life: o.env ? o.env.life : undefined, aeolian: o.env ? o.env.erosion.aeolian : undefined, icy: o.env ? ["water", "ice", "subsurface"].includes(o.env.liquid.kind) : undefined, even: o.env && o.env.climate ? o.env.climate.even : undefined, cells: o.env && o.env.climate ? o.env.climate.cells : undefined, paintLife: o.env && o.env.paintLife ? true : undefined }, U);
 
   /* to the grid the maps are drawn from */
   // (and each height's fraction, kept apart: a shaded relief map needs the land's slopes finer than 255 steps)

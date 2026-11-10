@@ -28,7 +28,8 @@
       ${(d.lanes || []).map(([a, b]) => by[a] && by[b] ? `<line x1="${by[a].x}" y1="${by[a].y}" x2="${by[b].x}" y2="${by[b].y}" class="gx-lane"/>` : "").join("")}
       ${S.map(s => `<g class="gx-sys${s.state === "visited" ? " v" : ""}"><circle cx="${s.x}" cy="${s.y}" r="${s.state === "rumoured" ? 2.4 : 3.6}" fill="${s.state === "rumoured" ? "none" : esc(s.color || "#fff")}" stroke="${esc(s.color || "#fff")}"/><text x="${s.x + 6}" y="${s.y + 3}" style="font-size:${Math.max(7, w / 70)}px">${esc(s.name)}</text></g>`).join("")}
       ${(d.things || []).map(t => t.r ? `<g class="gx-pthing"><circle cx="${t.x}" cy="${t.y}" r="${Math.max(2, t.r / Math.max(1e-6, d.ly || .1))}" fill="rgba(190,150,220,.12)" stroke="rgba(200,214,240,.4)" stroke-dasharray="3 4"/><text x="${t.x}" y="${t.y}" text-anchor="middle" style="font-size:${Math.max(7, w / 75)}px">${esc(t.name)}</text></g>` : `<g class="gx-pthing"><rect x="${t.x - 2.6}" y="${t.y - 2.6}" width="5.2" height="5.2" transform="rotate(45 ${t.x} ${t.y})" fill="${t.signal ? "#ff6b6b" : "#e8dcc0"}"/><text x="${t.x + 6}" y="${t.y + 3}" style="font-size:${Math.max(7, w / 72)}px">${esc(t.name)}</text></g>`).join("")}
-      ${d.ship && by[d.ship] ? (() => { const n = d.shipNear && (d.things || []).find(t => t.id === d.shipNear), p = n || by[d.ship]; return `<g class="gx-ship"><circle cx="${p.x}" cy="${p.y}" r="${Math.max(6, w / 60)}"/></g>`; })() : ""}</svg>${(d.things || []).some(t => t.signal) ? `<div class="gx-psig"><h4>Signals received</h4>${d.things.filter(t => t.signal).map(t => `<p><b>${esc(t.name)}</b>: “${esc(t.signal)}”</p>`).join("")}</div>` : ""}${(d.worlds || []).length ? `
+      ${(d.things || []).filter(t => t.pingT && Date.now() - t.pingT < 90000).map(t => `<g class="gx-ping"><circle cx="${t.x}" cy="${t.y}" r="4"><animate attributeName="r" from="4" to="${Math.max(24, w / 14)}" dur="1.8s" repeatCount="indefinite"/><animate attributeName="opacity" from=".9" to="0" dur="1.8s" repeatCount="indefinite"/></circle></g>`).join("")}
+      ${d.ship && by[d.ship] ? (() => { const n = d.shipNear && (d.things || []).find(t => t.id === d.shipNear), p = n || by[d.ship]; return `${d.reach > 0 ? `<circle class="gx-preach" cx="${p.x}" cy="${p.y}" r="${d.reach}"><title>How far the ship's sensors reach</title></circle>` : ""}<g class="gx-ship"><circle cx="${p.x}" cy="${p.y}" r="${Math.max(6, w / 60)}"/></g>`; })() : ""}</svg>${(d.things || []).some(t => t.signal) ? `<div class="gx-psig"><h4>Signals received</h4>${d.things.filter(t => t.signal).map(t => `<p><b>${esc(t.name)}</b>: “${esc(t.signal)}”</p>`).join("")}</div>` : ""}${(d.worlds || []).length ? `
       <details class="gx-pworlds"><summary>The worlds you have scanned (${d.worlds.length})</summary>${d.worlds.map(x => `<section><h4>${esc(x.name)} <span>${esc(x.sys)} · ${esc(x.level)}</span></h4><table class="gx-pt">${(x.rows || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table></section>`).join("")}</details>` : ""}`;
   };
 
@@ -60,7 +61,10 @@
   // the galaxy as grown, with the council's names and the game master's changes lain over it
   function G() {
     if (A._galaxy) return A._galaxy;
-    const g = Gg.grow(A.galaxyParams || {}), over = A.galaxyOver || {};
+    // (grown again by the game master, the editing plan of 10 Nov 2026, stage 6: its own seed and names for its stars,
+    // "~grow"; the systems they kept stand in it as they were; regions remade inside their circles, "~remake")
+    const over = A.galaxyOver || {}, E0 = allEdits(), g = Gg.grow(gp(E0));
+    remakeRegions(g, gp(E0), E0["~remake"]);
     g.byId = {}; for (const s of g.systems) g.byId[s.id] = s;
     for (const [id, o] of Object.entries(over.systems || {})) { const s = g.byId[id]; if (s) { Object.assign(s, o.name ? { name: o.name } : {}, o.cls ? { cls: o.cls } : {}); s.desc = o.desc || ""; s.gm = o.gm || ""; s.f = Object.assign({}, s.f, o.flags || {}); if (o.state) s.state0 = o.state; } }
     if (over.home && g.byId[over.home]) g.home = g.byId[over.home].i;
@@ -72,6 +76,25 @@
     A._galaxy = g; return g;
   }
   A.galaxyApi = { G, reset: () => { A._galaxy = null; } };
+  // the campaign's changes and the page's, and the galaxy's own recipe with the game master's regrowing in it
+  const allEdits = () => Object.assign({}, (A.galaxyOver || {}).edits || {}, (typeof S === "function" && S()) ? (S().get("gedits") || {}) : {});
+  const gp = E0 => { const R = (E0 || {})["~grow"]; return R && R.p ? Object.assign({}, A.galaxyParams || {}, R.p) : (A.galaxyParams || {}); };
+  // a region remade: inside its circle the stars grown again from a seed of its own, those the game master kept left
+  // standing (each circle keeps the list made when it was remade, so later changes do not move it), joined to the
+  // stars round it
+  function remakeRegions(g, P, RM) {
+    for (const c of (RM && RM.list) || []) {
+      const pg = Gg.grow(Object.assign({}, P, { seed: c.seed, idPre: "M" + c.k + "-" })), inC = q => Math.hypot(q.x - c.x, q.y - c.y) <= c.r, keep = new Set(c.keep || []);
+      const kept = g.systems.filter(q => inC(q) && keep.has(q.id));
+      for (const q of g.systems) if (inC(q) && !keep.has(q.id)) q.gone = true;
+      const map = new Map();
+      for (const q of pg.systems) if (inC(q) && !kept.some(t => Math.hypot(t.x - q.x, t.y - q.y) < 1.6)) { const t = Object.assign({}, q, { i: g.systems.length, remade: c.k }); delete t.pw; map.set(q.i, t.i); g.systems.push(t); }
+      for (const [a, b] of pg.lanes) if (map.has(a) && map.has(b)) g.lanes.push([map.get(a), map.get(b)]);
+      const outside = g.systems.filter(q => !q.gone && !inC(q));
+      for (const [, i] of map) { const q = g.systems[i]; if (Math.hypot(q.x - c.x, q.y - c.y) < c.r * .7) continue; let b = null, bd = Infinity; for (const t of outside.concat(kept)) { const d = Math.hypot(t.x - q.x, t.y - q.y); if (d < bd) { bd = d; b = t; } } if (b && bd < c.r * .6) g.lanes.push([Math.min(q.i, b.i), Math.max(q.i, b.i)]); }
+      g.N = g.systems.length;
+    }
+  }
 
   /* ---- the game master's changes (27 Oct 2026, the world builder: the galaxy, its systems and worlds edited), lain
           over the grown galaxy so that courses, lanes, sectors and territories follow them. Kept in the store's
@@ -92,7 +115,10 @@
       // set, a copy's own star, no worlds grown for a system built by hand or copied, a mark)
       if (Number.isFinite(+e.z) && e.z != null) s.z = +e.z; if (e.m2) s.m2 = e.m2; if (e.comp !== undefined) { s.comp = e.comp || null; s.compOwn = !e.compNat; } if (e.comp2 !== undefined) s.comp2 = e.comp2 || null;
       if (e.star0) s.star0 = e.star0; if (e.noGen) s.noGen = true; if (e.mark != null) s.mark = !!e.mark; if (e.special != null) s.special = e.special || "";
+      if (e.i0 != null) s.i0 = +e.i0; if (e.lock != null) s.lock = !!e.lock; if (e.kept) s.kept = true; if (e.whole) s.whole = true;
     }
+    // (grown again: a new star too near one the game master kept gives way to it)
+    if (E["~grow"]) { const own = g.systems.filter(q => q.added && !q.gone); for (const q of g.systems) if (!q.added && !q.gone && own.some(t => Math.hypot(t.x - q.x, t.y - q.y) < 1.6)) q.gone = true; }
     g.N = g.systems.length;
     // the lanes: a system added joins its two nearest; the game master's own lanes, trade routes and corridors, and cuts
     const L = new Map(g.lanes.map(([a, b]) => [lk(a, b), [a, b]])), live = g.systems.filter(s => !s.gone);
@@ -178,9 +204,18 @@
   let KH = null; const keepH = () => { if (!KH && A.ux) { KH = A.ux.keepHist("gx"); KH.load(HIST, REDO); } if (KH) KH.save(HIST, REDO); };
   function setG(id, data, how) {
     const cur = edits()[id];
-    if (how !== "hist") { HIST.push({ id, before: cur == null ? null : JSON.parse(JSON.stringify(cur)), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; keepH(); }
-    S().set("gedits", id, data); A._galaxy = null;
+    if (how !== "hist") { HIST.push({ id, before: cur == null ? null : JSON.parse(JSON.stringify(cur)), after: data == null ? null : JSON.parse(JSON.stringify(data)), t: Date.now() }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; keepH(); }
+    S().set("gedits", id, data); A._galaxy = null; if (A.ux && A.ux.changed) A.ux.changed();
   }
+  function setGMany(list) {
+    const ed = edits(), h = { t: Date.now(), many: list.map(({ id, data }) => ({ id, before: ed[id] == null ? null : JSON.parse(JSON.stringify(ed[id])), after: data == null ? null : JSON.parse(JSON.stringify(data)) })) };
+    HIST.push(h); if (HIST.length > 200) HIST.shift(); REDO.length = 0; keepH();
+    for (const { id, data } of list) S().set("gedits", id, data); A._galaxy = null; if (A.ux && A.ux.changed) A.ux.changed();
+  }
+  // (the chart's changes in words, for the one history across the editors: A.ux.undoable)
+  const KEYW = { "~lanes": "the lanes, trade routes and corridors", "~regions": "the regions", "~sectors": "the sectors", "~powers": "the powers", "~terr": "territory painted", "~things": "the things between the stars", "~grow": "the galaxy grown again", "~remake": "a region remade", "~enc": "what may happen on any jump" };
+  const histWhat = h => { if (h.many) { const ids = h.many.map(x => x.id); return ids.includes("~grow") ? "the galaxy grown again, your work kept" : ids.includes("~remake") ? "a region remade" : h.many.length + " changes at once"; } if (KEYW[h.id]) return KEYW[h.id]; const s = G().byId[h.id], nm = (s && s.name) || (h.after || h.before || {}).name || h.id; return !h.before && h.after && h.after.added ? nm + " added" : !h.after ? nm + " as it was" : nm + " changed"; };
+  if (A.ux && A.ux.undoable) A.ux.undoable("gx", { where: () => "The star chart", list: () => HIST.map(h => ({ what: histWhat(h), t: h.t })), undo: () => undo(true), open: () => { const b = document.getElementById("v-galaxy"); if (b) b.click(); } });
   // (a change made on the page starts from the campaign's own, ATLAS.galaxyEdit({ edits }) in table.js, so nothing the
   // council placed there is lost when the game master changes it)
   const doc = id => JSON.parse(JSON.stringify(edits()[id] || ((A.galaxyOver || {}).edits || {})[id] || {}));
@@ -207,7 +242,7 @@
   let MG = null, FR = null, PIC = null, cvs = null, ctx = null, raf = 0, hoverId = null, fly = null, DRAWN = [], paintPts = [];
   // the galaxy round this campaign: its kind (the barred spiral of the Milky Way unless galaxy.js says), and the chart set in it
   function galaxyModel() {
-    const g = G(), p = (A.galaxyParams || {});
+    const g = G(), p = gp(allEdits());
     if (!MG || MG.__seed !== p.seed || MG.__type !== (p.galaxyType || p.type)) { MG = GMOD ? GMOD.galaxyOf({ type: p.galaxyType || (p.model === 2 ? p.type : "barred"), seed: p.seed, milkyWay: !!p.milkyWay, galaxyName: p.galaxyName, active: p.active }) : null; if (MG) { MG.__seed = p.seed; MG.__type = p.galaxyType || p.type; } PIC = null; }
     FR = MG ? GMOD.frameOf(g, MG) : { x: 0, y: 0, z: 0, k: g.ly }; return MG;
   }
@@ -317,6 +352,8 @@
         // (on a jump map, each route's own length and days at the ship's speed, written on it)
         if (SCH && Math.hypot(bx - ax, by - ay) > 70) { const L0 = g.laneLy.get(lk(a, b)) || Gg.dist(g, a, b), dd = L0 / Math.max(.01, ship().speed || 1); THLBL.push([(ax + bx) / 2, (ay + by) / 2, `${ly1(L0)} ly · ${dd < 1 ? Math.round(dd * 24) + " h" : ly1(dd) + " d"}`, true, "lane"]); } }
       ctx.setLineDash([]);
+      // (a region being remade, or opened on its own: its circle)
+      for (const c of [UI.remake && Object.assign({ col: "rgba(232,176,48,.9)" }, UI.remake), UI.only && Object.assign({ col: "rgba(143,209,158,.6)" }, UI.only)].filter(Boolean)) { const p = gxOf(c), [cx, cy] = scr(p.x, p.y), rp = c.r * FR.k * CAM.s; ctx.strokeStyle = c.col; ctx.lineWidth = 1.6; ctx.setLineDash([7, 5]); ctx.beginPath(); ctx.arc(cx, cy, rp, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); }
       // the party's way so far: the systems they visited, in order
       if (LAY.journey) { const v = Object.entries((S() && S().get("charts")) || {}).filter(([, c]) => c && c.state === "visited" && c.t).sort((a, b) => a[1].t - b[1].t).map(([id]) => findSys(id)).filter(Boolean); if (v.length > 1) { ctx.strokeStyle = "rgba(143,209,158,.55)"; ctx.lineWidth = 1.6; ctx.setLineDash([2, 4]); ctx.beginPath(); v.forEach((s, i) => { const p = gxOf(s), [x, y] = scr(p.x, p.y); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.setLineDash([]); } }
       if (UI.plan && UI.plan.path) { const pts = UI.plan.path.map(id => findSys(id)).filter(Boolean); ctx.strokeStyle = UI.plan.ok ? "#8fd19e" : "#ef4444"; ctx.lineWidth = 2.2; ctx.setLineDash([6, 4]); ctx.beginPath(); pts.forEach((s, i) => { const p = gxOf(s), [x, y] = scr(p.x, p.y); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.setLineDash([]); }
@@ -325,7 +362,8 @@
       for (const s of sorted) {
         const p = gxOf(s), [x, y] = scr(p.x, p.y); if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
         // (outside the depth slice: faint, unnamed, not counted among the crowd; the ship's and the chosen always shown)
-        const away = SL && Math.abs((s.z || 0) - SL.z) > SL.half && s.id !== UI.sel && s.id !== ship().at;
+        const outR = UI.only && Math.hypot(s.x - UI.only.x, s.y - UI.only.y) > UI.only.r;
+        const away = (SL && Math.abs((s.z || 0) - SL.z) > SL.half || outR) && s.id !== UI.sel && s.id !== ship().at;
         const key = Math.floor(x / cell) + ":" + Math.floor(y / cell), c = away ? null : cells.get(key);
         if (c && rank(s) < 30) { c.n++; continue; }
         if (!c && !away) cells.set(key, { s, x, y, n: 1 });
@@ -337,11 +375,13 @@
         if (s.cls === "X") { ctx.strokeStyle = "#c6a8ff"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 1.6, 0, 6.2832); ctx.stroke(); }
         if (st === "visited") { ctx.strokeStyle = "rgba(143,209,158,.9)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 2, 0, 6.2832); ctx.stroke(); }
         // (a system the game master marked as important: a gold ring with four ticks)
+        // (locked: never grown again; a small padlock above it)
+        if (s.lock && !away) { const lx = x + rr + 3, ly0 = y - rr - 8; ctx.strokeStyle = "#c9d6ea"; ctx.fillStyle = "#c9d6ea"; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.arc(lx + 2.5, ly0 + 2.6, 2, Math.PI, 0); ctx.stroke(); ctx.fillRect(lx, ly0 + 2.6, 5, 4); }
         if (s.mark) { ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x, y, rr + 4, 0, 6.2832); ctx.stroke(); for (let q = 0; q < 4; q++) { const a = q * Math.PI / 2 + .785; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * (rr + 4), y + Math.sin(a) * (rr + 4)); ctx.lineTo(x + Math.cos(a) * (rr + 7), y + Math.sin(a) * (rr + 7)); ctx.stroke(); } }
         // what is there, as a small mark: a colony, a station
         if (LAY.sites && sp > 16 && (s.f.colony || s.f.station)) { ctx.fillStyle = s.f.colony ? "#8fd19e" : "#9fc2ff"; if (s.f.colony) { ctx.beginPath(); ctx.arc(x + rr + 3.5, y - rr - 2, 1.8, 0, 6.2832); ctx.fill(); } else { ctx.save(); ctx.translate(x + rr + 3.5, y - rr - 2); ctx.rotate(.785); ctx.fillRect(-1.6, -1.6, 3.2, 3.2); ctx.restore(); } }
         ctx.globalAlpha = 1;
-        DRAWN.push([x, y, s, rr, away]);
+        DRAWN.push([x, y, s, rr, away, outR]);
       }
       // the crowded: a count where many were gathered under one (until the view comes closer)
       ctx.font = "10px sans-serif"; ctx.textAlign = "left";
@@ -440,7 +480,7 @@
         const pl = A.order.find(id => (A.meta[id] || {}).thing === th.id);
         it.push({ label: "Its card", run: () => { UI.thing = th.id; UI.sel = null; side(); request(); } }, { label: "Move it", run: () => { UI.tools = true; UI.movingThing = th.id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should be."); } });
         if (!SP.isArea(th.kind)) it.push({ label: "Plot a course here", run: () => { UI.thing = th.id; UI.plan = Object.assign({ to: th.id }, courseToThing(ship().at, th)); side(); request(); } });
-        it.push(th.hidden && !th.found ? { label: "Show it to the players", run: () => { setThing(th.id, { found: true, ready: false, foundHow: "shown by the game master", foundAt: nowMin() }); refresh(); } } : th.hidden ? { label: "Hide it again", run: () => { setThing(th.id, { found: false, ready: false }); refresh(); } } : null);
+        it.push(th.hidden && !th.found ? { label: "Show it to the players", run: () => { setThing(th.id, { found: true, ready: false, foundHow: "shown by the game master", foundAt: nowMin(), foundT: Date.now() }); refresh(); } } : th.hidden ? { label: "Hide it again", run: () => { setThing(th.id, { found: false, ready: false }); refresh(); } } : null);
         if (!SP.isArea(th.kind)) it.push(pl ? { label: "Open it", hint: "its page and its inside", run: () => { const g0 = document.createElement("button"); g0.dataset.go = pl; host.appendChild(g0); g0.click(); g0.remove(); } } : { label: "Its inside…", run: () => thingPlace(th) });
         it.push("-", { label: "Take it away", danger: true, run: () => { setThing(th.id, null); if (UI.thing === th.id) UI.thing = null; refresh(); } });
         A.ux.menu(e, it.filter(Boolean), th.name); return;
@@ -448,7 +488,7 @@
       if (best) {
         it.push({ label: "Its system", run: () => enterSystem(best.id) });
         it.push({ label: "Plot a course here", run: () => { UI.sel = best.id; over(); side(); setTimeout(() => { const b = host.querySelector('[data-gx="plot"]'); if (b) b.click(); }, 30); } });
-        it.push("-", { label: "Change it", run: () => { UI.tools = true; UI.sel = best.id; UI.edit = best.id; tools(); side(); } }, { label: "Move it", run: () => { UI.tools = true; UI.moving = best.id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); } }, { label: "Duplicate it", run: () => dupSystem(best.id) }, { label: best.mark ? "Unmark it" : "Mark it", hint: "important", run: () => markSystem(best.id) }, { label: "A lane from it", run: tool("lane", () => { UI.first = best.id; }) });
+        it.push("-", { label: "Change it", run: () => { UI.tools = true; UI.sel = best.id; UI.edit = best.id; tools(); side(); } }, { label: "Move it", run: () => { UI.tools = true; UI.moving = best.id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); } }, { label: "Duplicate it", run: () => dupSystem(best.id) }, { label: best.mark ? "Unmark it" : "Mark it", hint: "important", run: () => markSystem(best.id) }, { label: best.lock ? "Unlock it" : "Lock it", hint: "never grown again", run: () => lockSystem(best.id) }, { label: "A lane from it", run: tool("lane", () => { UI.first = best.id; }) });
       } else {
         if (SP) it.push({ label: "Something here…", hint: "a wreck, a beacon, a station, a gate, a nebula", run: () => KIND_MENU(e, wx, wy) });
         it.push({ label: "A star system here…", run: () => A.ux.menu(e, [{ label: "As the galaxy would have one here", hint: "its star from the real mix, its worlds from its star", run: () => addSystemAt(wx, wy, "random") }, LIB ? { label: "From the library…", hint: "a premade star and its worlds", run: () => libDlg("system", sy => addSystemPreset(wx, wy, sy)) } : null, { label: "By hand", hint: "a star of your choosing, no worlds yet", run: () => addSystemAt(wx, wy, "hand") }].filter(Boolean), "A star system here") }, { label: "A region here", run: tool("region") }, "-", { label: "Our space", run: () => fitChart() }, { label: "The whole galaxy", run: () => fitGalaxy() });
@@ -488,6 +528,7 @@
       if (e.key === "Escape" && TL) { e.preventDefault(); tlClose(); return; }
       if (e.key === "Escape" && SV) { e.preventDefault(); sideClose(); return; }
       if (e.key === "Escape" && A.starSystem && A.starSystem.isOpen() && !(UI.tool || UI.adding || UI.moving || UI.movingReg)) { e.preventDefault(); leaveSystem(true); return; }
+      if (e.key === "Escape" && (UI.regrow || UI.remake || UI.grow || UI.only)) { e.preventDefault(); if (UI.remake) UI.remake = null; else if (UI.regrow) UI.regrow = null; else if (UI.grow) UI.grow = null; else { UI.only = null; fitChart(); } tools(); side(); request(); return; }
       if (e.key === "Escape") { if (UI.tool || UI.adding || UI.moving || UI.movingReg) { UI.tool = null; UI.adding = false; UI.moving = null; UI.movingReg = null; UI.first = null; } else if (UI.sel || UI.selReg || UI.selLane) { UI.sel = null; UI.selReg = null; UI.selLane = null; } else if (UI.tools) { UI.tools = false; UI.panel = null; UI.pedit = null; } else return; e.preventDefault(); tools(); over(); side(); return; }
       if ((e.key === "+" || e.key === "=") && !e.ctrlKey) { e.preventDefault(); zoomAt(1.6); return; }
       if (e.key === "-" && !e.ctrlKey) { e.preventDefault(); zoomAt(.62); return; }
@@ -505,6 +546,7 @@
     // (the planet editor shows what its changes would do as they are made)
     // (a world's look changes as it is changed: each field touched is kept, the preview drawn again)
     host.addEventListener("input", e => { const lf = e.target.closest && e.target.closest("form.gx-look"); if (lf) { e.target.dataset.on = "1"; lookPreview(lf); } });
+    host.addEventListener("input", e => { if (e.target.dataset && e.target.dataset.gx === "rmr" && UI.remake) { UI.remake.r = +e.target.value; const sp = e.target.parentNode.querySelector(".kn"); if (sp) sp.textContent = Math.round(UI.remake.r * G().ly) + " ly"; request(); clearTimeout(UI.rmT); UI.rmT = setTimeout(() => side(), 250); return; } });
     host.addEventListener("input", e => { if (e.target.dataset && e.target.dataset.gxl === "depth") { LAY.depth = +e.target.value; keepLay(); depthSay(); request(); if (SV) sideDraw(); return; } const f = e.target.closest && e.target.closest("form.gx-phys"); if (f) physPreview(f); });
     depthSay();
     request();
@@ -532,7 +574,7 @@
   function base() { galaxyModel(); ranks(); if (host) keyHTML(); request(); }
   function over() { request(); }
   // the system under the pointer (a steady reach on the screen)
-  function pickAt(e) { const r = cvs.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top; let best = null, bd = 13 * 13; for (const d of DRAWN) { const q = (d[0] - px) ** 2 + (d[1] - py) ** 2; if (q < bd) { bd = q; best = d[2]; } } return best; }
+  function pickAt(e) { const r = cvs.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top; let best = null, bd = 13 * 13; for (const d of DRAWN) { if (d[5]) continue; const q = (d[0] - px) ** 2 + (d[1] - py) ** 2; if (q < bd) { bd = q; best = d[2]; } } return best; }
   // a star clicked: fly to it, then into its system's own map (atlas-starsystem.js), the chart kept as it was to come back to
   function enterSystem(id) {
     const s = findSys(id); if (!s) return;
@@ -672,6 +714,7 @@
     setG(nid, Object.assign({ added: true, name: nm, cls: s.cls, bin: !!comp, x: r1c(s.x + 9), y: r1c(s.y + 6), z: s.z || undefined, f: Object.assign({}, s.f), desc: s.desc || "", noGen: true, star0, bodies, t: Date.now() }, comp ? { comp: { cls: comp.cls, mass: comp.mass, a: comp.a, e: comp.ecc != null ? comp.ecc : comp.e, both: !!comp.both }, compNat: true } : {}, st.companion2 ? { comp2: { cls: st.companion2.cls, mass: st.companion2.mass, a: st.companion2.a, e: st.companion2.ecc } } : {}));
     UI.tools = true; UI.sel = nid; refresh(); if (A.tableUI) A.tableUI.api.note(`${nm}: a copy of ${s.name}, its star and worlds the same. Move it where it belongs.`);
   }
+  function lockSystem(id) { const s = findSys(id); if (!s) return; setG(id, Object.assign(doc(id), { lock: !s.lock, t: Date.now() })); refresh(); if (A.tableUI) A.tableUI.api.note(s.lock ? `${s.name} unlocked.` : `${s.name} locked: growing the galaxy or a region again leaves it as it is.`); }
   function markSystem(id) { const s = findSys(id); if (!s) return; setG(id, Object.assign(doc(id), { mark: !s.mark, t: Date.now() })); refresh(); }
 
   /* ---- things between the stars (atlas-space.js; the editing plan of 10 Nov 2026, stage 2): kept in "~things", drawn
@@ -703,7 +746,7 @@
       for (const t of allThings()) {
         if (!t.hidden || t.found || t.ready) continue;
         const why = SP.met(t, { dist: sp ? lyTo(t, sp) : null, reach, swept: o && o.swept, foundClue, eventDone }); if (!why) continue;
-        if (t.reveal === "auto") setThing(t.id, { found: true, foundHow: why, foundAt: nowMin() }, "hist"); else setThing(t.id, { ready: true, readyHow: why }, "hist");
+        if (t.reveal === "auto") setThing(t.id, { found: true, foundHow: why, foundAt: nowMin(), foundT: Date.now() }, "hist"); else setThing(t.id, { ready: true, readyHow: why }, "hist");
         out.push([t, why]);
       }
     } finally { thBusy = false; }
@@ -829,22 +872,57 @@
     if (!LIB) return; let dlg = document.getElementById("libDlg");
     if (!dlg) { dlg = document.createElement("dialog"); dlg.id = "libDlg"; dlg.className = "lib-dlg"; document.body.appendChild(dlg); }
     const groups = mode === "star" ? [["red", "Red dwarfs", s => s.cls === "M"], ["sun", "Orange, yellow and white", s => "KGFA".includes(s.cls) && !s.special.match(/super|ttauri/)], ["hot", "Blue, giants and supergiants", s => "OBR".includes(s.cls) || /super|giant|wolfrayet/.test(s.special)], ["dead", "White dwarfs, neutron stars, black holes", s => "DNX".includes(s.cls)], ["odd", "Brown dwarfs and young stars", s => "LTY".includes(s.cls) || s.special === "ttauri"]] : mode === "system" ? [["all", "Systems", () => true]] : LIB.CATS.map(c => [c.id, c.name, w => w.cat === c.id]);
-    const list = mode === "star" ? LIB.STARS : mode === "system" ? LIB.SYSTEMS : LIB.WORLDS;
-    let cur = (dlg.dataset.mode === mode && dlg.dataset.g) || groups[0][0];
+    const list = mode === "star" ? LIB.STARS : mode === "system" ? LIB.SYSTEMS : LIB.WORLDS, MY = A.myLibrary, myKind = { world: "world", system: "system", look: "look" }[mode];
+    let cur = (dlg.dataset.mode === mode && dlg.dataset.g) || groups[0][0], mine = [];
+    // (your own, kept to use in any campaign: atlas-mylib.js; loaded as the window opens)
+    if (MY && myKind) MY.list(myKind).then(l => { mine = l; if (l.length && !groups.some(g => g[0] === "mine")) groups.push(["mine", "Yours", () => true]); if (dlg.open && dlg.dataset.mode === mode) draw(); });
     const draw = () => {
-      const g0 = groups.find(g => g[0] === cur) || groups[0], items = list.filter(g0[2]);
+      if (cur === "mine" && !mine.length) cur = groups[0][0];
+      const g0 = groups.find(g => g[0] === cur) || groups[0], items = cur === "mine" ? [] : list.filter(g0[2]);
       dlg.innerHTML = `<div class="lib-head"><h3>${mode === "star" ? "Stars from the library" : mode === "system" ? "Systems from the library" : mode === "look" ? "Looks from the library" : "Worlds from the library"}</h3><button type="button" class="t-btn" data-lib="x">Close</button></div>
         ${ctx && ctx.say ? `<p class="t-small">${esc(ctx.say)}</p>` : ""}${groups.length > 1 ? `<div class="lib-tabs" role="tablist">${groups.map(g => `<button type="button" role="tab" class="gx-b" data-lib="tab" data-g="${g[0]}" aria-pressed="${g[0] === cur}">${esc(g[1])}</button>`).join("")}</div>` : ""}
+        ${cur === "mine" ? `<p class="t-small kn">Kept ${esc(MY.where())}. Each comes in as a copy of its own: changing it here changes no other campaign.</p><div class="lib-grid">${mine.map(it => `<div class="lib-tile lib-mine"><button type="button" class="lib-pickm" data-lib="pickmine" data-id="${esc(it.id)}"><canvas data-mypic="${esc(it.id)}" width="64" height="64" aria-hidden="true"></canvas><b>${esc(it.name)}</b><span class="kn">${esc(it.say || "")}${it.from ? " · from " + esc(it.from) : ""}</span></button><button type="button" class="t-mini" data-lib="forget" data-id="${esc(it.id)}">Forget it</button></div>`).join("")}</div>` : ""}
         <div class="lib-grid">${items.map(it => `<button type="button" class="lib-tile" data-lib="pick" data-id="${esc(it.id)}"><canvas data-libpic="${esc(it.id)}" width="64" height="64" aria-hidden="true"></canvas><b>${esc(it.name)}</b><span class="kn">${esc(mode === "system" ? `${(LIB.get(it.star) || {}).name || ""} · ${it.worlds.length} worlds` : mode === "star" ? `${it.cls === "X" ? "" : (it.teff ? it.teff.toLocaleString("en") + " K · " : "")}${it.mass} Suns` : (it.say || it.catName))}</span><span class="lib-fit t-small" data-libfit="${esc(it.id)}"></span></button>`).join("")}</div>`;
       dlg.dataset.mode = mode; dlg.dataset.g = cur;
       // each drawn, a few at a time, so the window opens at once; and for a world to put at an orbit, whether it stays of
       // its kind there
+      for (const cv of dlg.querySelectorAll("canvas[data-mypic]")) { const it = mine.find(x => x.id === cv.dataset.mypic); if (it) try { drawMine(cv, it); } catch (e) { console.warn(e); } }
       const pics = [...dlg.querySelectorAll("canvas[data-libpic]")]; let i = 0;
       const step = () => { const t0 = Date.now(); while (i < pics.length && Date.now() - t0 < 30) { const cv = pics[i++], it = LIB.get(cv.dataset.libpic); try { drawPreset(cv, it, mode); if (mode === "world" && ctx && ctx.info && ctx.a) { const q = presetWorld(it, ctx.info, ctx.a, 0), f = dlg.querySelector(`[data-libfit="${CSS.escape(it.id)}"]`); if (f) f.textContent = LIB.fits(it, q) ? "fits here" : `here: ${String(q.kname || q.kind).toLowerCase()}`; } } catch (e) { console.warn(e); } } if (i < pics.length && dlg.open) setTimeout(step, 0); };
       setTimeout(step, 0);
     };
-    dlg.onclick = e => { const b = e.target.closest("[data-lib]"); if (!b) { if (e.target === dlg) dlg.close(); return; } if (b.dataset.lib === "x") dlg.close(); else if (b.dataset.lib === "tab") { cur = b.dataset.g; draw(); } else if (b.dataset.lib === "pick") { const it = LIB.get(b.dataset.id); dlg.close(); if (it) onPick(it); } };
+    dlg.onclick = e => { const b = e.target.closest("[data-lib]"); if (!b) { if (e.target === dlg) dlg.close(); return; } if (b.dataset.lib === "x") dlg.close(); else if (b.dataset.lib === "tab") { cur = b.dataset.g; draw(); } else if (b.dataset.lib === "pick") { const it = LIB.get(b.dataset.id); dlg.close(); if (it) onPick(it); }
+      else if (b.dataset.lib === "pickmine") { const it = mine.find(x => x.id === b.dataset.id); dlg.close(); if (it) onPick(mode === "look" ? { mine: it, look: it.data.look || it.data, name: it.name } : { mine: it, name: it.name }); }
+      else if (b.dataset.lib === "forget") { if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Forget it? Click again"; return; } MY.forget(b.dataset.id).then(() => { mine = mine.filter(x => x.id !== b.dataset.id); if (!mine.length) { const k = groups.findIndex(g => g[0] === "mine"); if (k >= 0) groups.splice(k, 1); } draw(); }); } };
     draw(); if (!dlg.open) dlg.showModal();
+  }
+  // a picture of something of your own: a system by its star, a world as it is painted, a look on a world of its kind
+  function drawMine(cv, it) {
+    const c = cv.getContext("2d"); c.imageSmoothingEnabled = false; c.clearRect(0, 0, 64, 64); c.fillStyle = "#04060b"; c.fillRect(0, 0, 64, 64); const d = it.data || {};
+    if (it.kind === "system") { const ic = A.starSystem && A.starSystem.starIcon ? A.starSystem.starIcon(d.cls || "G", d.special || "", 14) : null; if (ic) { const s0 = "DN".includes(d.cls) ? 22 : 44; c.drawImage(ic, 32 - s0 / 2, 32 - s0 / 2, s0, s0); } return; }
+    const p = it.kind === "look" ? Object.assign({}, d.ref || { kind: "rocky", name: it.name, palette: {} }, { look: d.look || d }) : d;
+    if (!A.pixelPlanet) return; const pic = A.pixelPlanet.canvasOf(p, 24, .6, "#fff4ea"), k = Math.min(44 / 24, 62 / pic.width); c.drawImage(pic, 32 - pic.width * k / 2, 32 - pic.height * k / 2, pic.width * k, pic.height * k);
+  }
+  // something of your own put into this campaign, as a copy of its own: a world at an orbit (worked out there, or its
+  // figures kept), a system where the game master right-clicked
+  function addMyWorld(s, a, it, ev) {
+    const D = doc(s.id), B = D.bodies = D.bodies || {}, info = bodiesOf(s), n = nextN(info), nm = `${s.name} ${nextLetter(info)}`, w = JSON.parse(JSON.stringify(it.data));
+    const base = Object.assign(w, { n, name: nm, hand: true, mine: it.id }); delete base.moonNames;
+    const put = x => { B.add = (B.add || []).concat(x); setG(s.id, D); UI.planet = n; UI.moon = null; refresh(); if (A.tableUI) A.tableUI.api.note(`${nm}: your ${it.name}, ${x.keepA ? "its figures kept" : "worked out"} ${a} AU from ${s.name}.`); };
+    const work = () => put(Object.assign({}, base, base.inputs ? { a, phys: Object.assign({}, base.phys || {}, { a }) } : { a }));
+    const keep = () => put(Object.assign({}, base, { a, keepA: true }));
+    if (!base.inputs || !Gg.rework) { keep(); return; }
+    if (A.ux && ev) A.ux.menu(ev, [{ label: "Work it out at this orbit", hint: "its warmth, its air, its seas follow", run: work }, { label: "Keep its figures", hint: "your setting's", run: keep }], `Your ${it.name}, ${a} AU out`); else work();
+  }
+  function addMySystem(wx, wy, it) {
+    const id = "C" + Date.now().toString(36), d = JSON.parse(JSON.stringify(it.data));
+    for (const k of ["kept", "i0", "lock", "mark", "gone"]) delete d[k];
+    setG(id, Object.assign(d, { added: true, whole: true, noGen: true, x: r1c(wx), y: r1c(wy), mine: it.id, t: Date.now() }));
+    UI.tools = true; UI.sel = id; refresh(); if (A.tableUI) A.tableUI.api.note(`${d.name}: your system from your library, its star and worlds as you kept them.`);
+  }
+  // kept in your own library: a copy, taken out of this campaign's ties (its id, its place on this chart)
+  async function keepMine(kind, name, say, data) {
+    if (!A.myLibrary) return; try { await A.myLibrary.save({ kind, name, say, data }); if (A.tableUI) A.tableUI.api.note(`${name} kept in your library, ${A.myLibrary.where()}.`); } catch (e) { if (A.tableUI) A.tableUI.api.note("Not kept: " + e.message); }
   }
   function drawPreset(cv, it, mode) {
     const c = cv.getContext("2d"); c.imageSmoothingEnabled = false; c.clearRect(0, 0, 64, 64); c.fillStyle = "#04060b"; c.fillRect(0, 0, 64, 64);
@@ -853,6 +931,7 @@
   }
   // a premade world put at an orbit: worked out there; if it is no longer of its kind, the game master chooses
   function sysAddPreset(s, a, w, ev) {
+    if (w.mine) return addMyWorld(s, a, w.mine, ev);
     const D = doc(s.id), B = D.bodies = D.bodies || {}, info = bodiesOf(s), n = nextN(info), nm = `${s.name} ${nextLetter(info)}`, q = presetWorld(w, info, a, n, nm);
     const put = x => { B.add = (B.add || []).concat(x); setG(s.id, D); UI.planet = n; UI.moon = null; refresh(); };
     if (LIB.fits(w, q)) { put(q); if (A.tableUI) A.tableUI.api.note(`${nm}: the library's “${w.name}”, worked out ${a} AU from ${s.name}.`); return; }
@@ -864,6 +943,7 @@
   function setStarPreset(id, sp) { const s = findSys(id); if (!s) return; setG(id, Object.assign(doc(id), { cls: sp.cls, special: sp.special || "", m2: { cls: sp.cls, mass: sp.mass, m0: sp.mass, age: sp.age, feh: sp.feh, lum: sp.lum, teff: sp.teff, radius: sp.radius, name: sp.name }, t: Date.now() })); refresh(); if (A.tableUI) A.tableUI.api.note(`${s.name}: ${sp.name.toLowerCase()}. Its worlds are made again round it; your own stay.`); }
   // a premade system where the game master right-clicked: its star, and its worlds and belts at their orbits
   function addSystemPreset(wx, wy, sy) {
+    if (sy.mine) return addMySystem(wx, wy, sy.mine);
     const sp = LIB.get(sy.star); if (!sp) return; const id = "C" + Date.now().toString(36), nm = Gg.nameOf ? Gg.nameOf(Gg.rng(id + "|name")) : "A new system", info = { star: presetStar(sp), planets: [], belts: [], sites: [] };
     const worlds = sy.worlds.map(([wid, a], i) => { const w = LIB.get(wid); return w ? presetWorld(w, info, a, 100 + i, `${nm} ${"bcdefghijklmnop"[i]}`) : null; }).filter(Boolean);
     setG(id, { added: true, name: nm, x: r1c(wx), y: r1c(wy), f: {}, cls: sp.cls, special: sp.special || "", noGen: true, m2: { cls: sp.cls, mass: sp.mass, m0: sp.mass, age: sp.age, feh: sp.feh, lum: sp.lum, teff: sp.teff, radius: sp.radius, name: sp.name }, bodies: { add: worlds, addB: (sy.belts || []).map((a, i) => ({ k: 100 + i, a, name: a > info.star.frost ? "An icy belt" : "An asteroid belt", rich: false, icy: a > info.star.frost })) }, t: Date.now() });
@@ -883,7 +963,7 @@
       ${giant ? `${rng0("bandsN", "How many bands", 2, 20, 1, L.bandsN || 8, L.bandsN != null)}<label class="t-fogck"><input type="checkbox" name="storm"${(L.storm != null ? L.storm : /great/.test((p.winds || {}).storms || "")) ? " checked" : ""}${L.storm != null ? ' data-on="1"' : ""}> A great storm</label>` : `${rng0("clouds", "Clouds", 0, 1, .05, L.clouds != null ? L.clouds : .5, L.clouds != null)}${rng0("ice", "Ice", 0, 1, .05, L.ice != null ? L.ice : (p.ice || 0), L.ice != null)}${rng0("ocean", "How much is sea, in its picture", 0, 1, .05, L.ocean != null ? L.ocean : (p.ocean || 0), L.ocean != null)}${rng0("craters", "Craters", 0, 4, .1, L.craters != null ? L.craters : 1, L.craters != null)}`}
       <fieldset class="lk-ring"><legend class="t-small">Rings</legend><label class="t-fogck"><input type="checkbox" name="r_on"${(L.rings ? rg.on : !!p.rings) ? " checked" : ""}${L.rings ? ' data-on="1"' : ""}> Rings</label>${rng0("r_w", "Width", .5, 1.8, .05, rg.width || 1, L.rings != null)}${rng0("r_tilt", "Tilt", -80, 80, 1, rg.tilt != null ? rg.tilt : 18, L.rings != null)}${col("r_tint", "Their colour", rg.tint || (p.rings && !p.rings.icy ? "#968a78" : "#e2dccc"), L.rings != null)}</fieldset>
       ${rng0("rot", "Turned", 0, 360, 5, L.rot || 0, L.rot != null)}${rng0("size", "Its size on the map (the picture only)", .4, 2.5, .05, L.size || 1, L.size != null)}
-      <div class="t-row"><button class="t-btn prim">Keep it</button><button type="button" class="t-mini" data-gx="look" data-n="">Cancel</button>${p.look ? `<button type="button" class="t-mini" data-gx="unlook" data-id="${esc(s.id)}" data-n="${p.n}">As it was</button>` : ""}</div></form>`;
+      <div class="t-row"><button class="t-btn prim">Keep it</button><button type="button" class="t-mini" data-gx="look" data-n="">Cancel</button>${p.look ? `<button type="button" class="t-mini" data-gx="unlook" data-id="${esc(s.id)}" data-n="${p.n}">As it was</button>` : ""}${A.myLibrary ? `<button type="button" class="t-mini" data-gx="myliblook" data-id="${esc(s.id)}" data-n="${p.n}" title="This look, to give any world in any of your campaigns">Keep this look in my library</button>` : ""}</div></form>`;
   }
   // the look the form says: only what the game master touched (or had set before)
   function lookOfForm(f) {
@@ -1000,16 +1080,17 @@
   const LANEK = [["lane", "A lane"], ["trade", "A trade route"], ["corridor", "A corridor (its own length)"]];
   function tools() {
     if (!host) return; const t = host.querySelector(".gx-tools"), g = G(), on = UI.tools;
-    if (A.ux) A.ux.editing(host.querySelector(".gx-canvas"), on ? "the galaxy · " + (UI.adding ? "adding a system" : ({ region: "adding a region", lane: "adding a lane", sector: "adding a sector", terr: "painting territory" }[UI.tool] || "choose what to change")) : null);
+    if (A.ux) A.ux.editing(host.querySelector(".gx-canvas"), on ? "the galaxy · " + (UI.adding ? "adding a system" : ({ region: "adding a region", lane: "adding a lane", sector: "adding a sector", terr: "painting territory", remake: "remaking a region" }[UI.tool] || "choose what to change")) : null);
     t.hidden = !on; host.querySelector('[data-gx="tools"]').setAttribute("aria-pressed", on);
     if (!on) return;
     const tb = (k, l, title) => `<button type="button" class="gx-b" data-gx="tool" data-t="${k}" aria-pressed="${k === "add" ? UI.adding : UI.tool === k}" title="${esc(title)}">${l}</button>`;
-    const how = UI.adding ? "Click the map where the new system stands." : UI.moving ? "Click the map where it should stand." : UI.movingReg ? "Click the map where the region's middle should be." : UI.tool === "region" ? "Click the middle of the new region." : UI.tool === "sector" ? "Click where the new sector's heart is: the systems nearest it join it." : UI.tool === "lane" ? (UI.first ? `Now click the star the lane from ${esc((findSys(UI.first) || {}).name || "")} goes to.` : "Click the star the lane starts from.") : UI.tool === "terr" ? "Drag over the stars to give them to the power chosen; click one star to give just it." : "Click a star, a region or a lane to change it. Esc puts a tool down.";
+    const how = UI.adding ? "Click the map where the new system stands." : UI.moving ? "Click the map where it should stand." : UI.movingReg ? "Click the map where the region's middle should be." : UI.tool === "region" ? "Click the middle of the new region." : UI.tool === "remake" ? "Click the middle of the region to grow again." : UI.tool === "sector" ? "Click where the new sector's heart is: the systems nearest it join it." : UI.tool === "lane" ? (UI.first ? `Now click the star the lane from ${esc((findSys(UI.first) || {}).name || "")} goes to.` : "Click the star the lane starts from.") : UI.tool === "terr" ? "Drag over the stars to give them to the power chosen; click one star to give just it." : "Click a star, a region or a lane to change it. Esc puts a tool down.";
     t.innerHTML = tb("add", "+ System", "Then click the map where it stands") + tb("region", "+ Region", "A dangerous, restricted, charted or unexplored region") + tb("lane", "+ Lane", "A lane, a trade route or a corridor between two stars") + tb("sector", "+ Sector", "A new sector: the stars nearest it join it")
       + tb("terr", "Paint territory", "Give stars to a power or a faction") + (UI.tool === "terr" ? `<select class="t-in gx-sel" data-gx="paint" aria-label="Whose territory">${[["", "No one"], ...g.powers.map(p => [p.id, p.name]), ...Object.entries(A.factionsData || {}).filter(([id]) => !g.powers.some(p => p.id === id)).map(([id, f]) => [id, (f.n || id) + " (a faction)"])].map(([v, l]) => `<option value="${esc(v)}"${v === UI.paint ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>` : "")
+      + tb("remake", "Remake a region", "Grow the stars inside a circle again, keeping what you made there") + `<button type="button" class="gx-b" data-gx="regrow" aria-pressed="${!!UI.regrow}" title="The galaxy grown again from another seed, keeping your work">Grow it again…</button>` + (smallMap() ? `<button type="button" class="gx-b" data-gx="growround" aria-pressed="${!!UI.grow}" title="A galaxy grown round your systems, which stay as they are">Grow the space round it…</button>` : "")
       + `<button type="button" class="gx-b" data-gx="panel" data-p="sp" aria-pressed="${UI.panel === "sp"}">Sectors and powers</button><button type="button" class="gx-b" data-gx="undo"${HIST.length ? "" : " disabled"} title="Ctrl+Z">Undo</button><button type="button" class="gx-b" data-gx="redo"${REDO.length ? "" : " disabled"} title="Ctrl+Y">Redo</button><button type="button" class="gx-b" data-gx="export" title="Your changes, for the campaign's table.js">Copy the changes</button><span class="gx-how">${how}</span>`;
   }
-  function undo(back) { const from = back ? HIST : REDO, to = back ? REDO : HIST, h = from.pop(); if (!h) return; to.push(h); setG(h.id, back ? h.before : h.after, "hist"); keepH(); refresh(); if (A.tableUI) A.tableUI.api.note(back ? "Undone." : "Done again."); }
+  function undo(back) { const from = back ? HIST : REDO, to = back ? REDO : HIST, h = from.pop(); if (!h) return; to.push(h); if (h.many) for (const x of (back ? h.many.slice().reverse() : h.many)) setG(x.id, back ? x.before : x.after, "hist"); else setG(h.id, back ? h.before : h.after, "hist"); keepH(); refresh(); if (A.tableUI) A.tableUI.api.note(back ? "Undone." : "Done again."); }
   // painting territory: every star under the brush given to the power chosen (kept when the stroke ends: one change)
   function paintAt(e) {
     const [wx, wy] = chartAt(e), rad = 16 / (CAM.s * FR.k);
@@ -1025,6 +1106,7 @@
     if (UI.movingThing) { const id = UI.movingThing, t = thingById(id); UI.movingThing = null; if (t) setThing(id, Object.assign({ x: r1(wx), y: r1(wy) }, t.drift ? { drift: Object.assign({}, t.drift, { t0: nowMin() }) } : {})); refresh(); return; }
     if (UI.movingReg) { const R = doc("~regions"), id = UI.movingReg, own = (R.add || []).find(q => q.id === id); if (own) Object.assign(own, { x: r1(wx), y: r1(wy) }); else { R.edit = R.edit || {}; R.edit[id] = Object.assign(R.edit[id] || {}, { x: r1(wx), y: r1(wy) }); } setG("~regions", R); UI.movingReg = null; refresh(); return; }
     if (UI.tool === "region") { const id = nid("rg"), R = doc("~regions"); R.add = (R.add || []).concat({ id, kind: "danger", x: r1(wx), y: r1(wy), r: 30, name: "A new region" }); setG("~regions", R); UI.tool = null; UI.selReg = id; UI.sel = null; UI.selLane = null; refresh(); return; }
+    if (UI.tool === "remake") { UI.tool = null; UI.remake = { x: r1(wx), y: r1(wy), r: 40, seed: 1000 + Math.floor(Math.random() * 900000) }; UI.sel = null; UI.selReg = null; UI.selLane = null; tools(); side(); request(); return; }
     if (UI.tool === "sector") { const id = nid("sc"), X = doc("~sectors"); X.add = (X.add || []).concat({ id, x: r1(wx), y: r1(wy), name: "The New Sector" }); setG("~sectors", X); UI.tool = null; UI.panel = "sp"; refresh(); return; }
     const best = pickAt(e);
     if (UI.tool === "lane") {
@@ -1058,6 +1140,8 @@
   function shipHTML() {
     const sh = ship(), at = findSys(sh.at), rule = fuelRule(), pct = Math.max(0, Math.min(100, sh.fuel / sh.cap * 100));
     const nearT = sh.near && thingById(sh.near);
+    // (the ship walked through: its place, or made one, deck by deck, by the ship maker; the editing plan, stage 5)
+    const shipPl = A.order.find(id => ((A.meta[id] || {}).name || "").toLowerCase() === String(sh.name || "").toLowerCase());
     return `<section class="gx-card"><h3>${esc(sh.name)}</h3><div class="gx-f"><span class="kn">At</span> ${nearT ? `<button type="button" class="t-link" data-gx="tpick" data-id="${esc(nearT.id)}">${esc(nearT.name)}</button>, out from ` : ""}<button type="button" class="t-link" data-gx="pick" data-id="${esc(sh.at || "")}">${esc(at ? at.name : sh.at || "nowhere yet")}</button></div>
       ${rule[2] ? `<div class="gx-fuel" title="${Math.round(sh.fuel)} of ${sh.cap}"><i style="width:${pct.toFixed(1)}%"></i></div><div class="gx-f"><span class="kn">Fuel</span> ${Math.round(sh.fuel)} of ${sh.cap}${at && at.f.fuel && sh.fuel < sh.cap ? ` <button type="button" class="t-mini" data-gx="refuel">Refuel here</button>` : ""}</div>` : ""}
       <div class="gx-f"><span class="kn">Reach</span> ${round1(sh.range)} light years a jump · <span class="kn">Speed</span> ${round1(sh.speed)} light years a day</div>
@@ -1066,6 +1150,7 @@
       ${SP && sh.at ? `<div class="t-row"><button type="button" class="t-mini" data-gx="sweep" title="Anything hidden that a sweep can find, within reach of its sensors">Sweep with the sensors</button><span class="kn">${round1(reachLy() * 1.5)} light years round the ship, an hour</span></div>` : ""}
       ${sh.crew ? `<div class="gx-f"><span class="kn">Crew</span> ${esc(sh.crew)}</div>` : ""}${(sh.equipment || []).length ? `<div class="gx-f"><span class="kn">Equipment</span> ${esc(sh.equipment.join(", "))}</div>` : ""}${(sh.upgrades || []).length ? `<div class="gx-f"><span class="kn">Upgrades</span> ${esc(sh.upgrades.join(", "))}</div>` : ""}
       <div class="gx-f"><span class="kn">Fuel</span> <select class="t-in gx-sel" data-gx="rule">${FUEL.map(([k, l]) => `<option value="${k}"${k === rule[0] ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+      ${shipPl ? `<div class="t-row"><button type="button" class="t-go" data-go="${esc(shipPl)}">Its decks</button></div>` : A.locations && A.locations.forPlace ? `<div class="t-row"><button type="button" class="t-mini" data-gx="shipplace">Its decks…</button><span class="kn">the ship made a place: its decks, its rooms and what is aboard</span></div>` : ""}
       ${(sh.log || []).length ? `<details class="fa-more"><summary>Its log (${sh.log.length})</summary><ol class="tw-hist" reversed>${sh.log.slice().reverse().slice(0, 30).map(l => `<li><span class="kn">${esc(l.when || "")}</span> ${esc(l.what)}</li>`).join("")}</ol></details>` : ""}</section>`;
   }
   function sysHTML(s) {
@@ -1081,8 +1166,27 @@
       <div class="gx-f"><span class="kn">Their charts</span> <select class="t-in gx-sel" data-gx="chart" data-id="${esc(s.id)}">${STATE.map(([k, l]) => `<option value="${k}"${k === st ? " selected" : ""}>${l}</option>`).join("")}</select> <select class="t-in gx-sel" data-gx="how" data-id="${esc(s.id)}" aria-label="How they came by it">${HOW.map(([k, l]) => `<option value="${k}"${k === (c.how || "") ? " selected" : ""}>${l}</option>`).join("")}</select></div>
       ${places.length ? `<div class="gx-f"><span class="kn">Your places here</span> ${places.map(id => `<button type="button" class="t-go" data-go="${esc(id)}">${esc(A.meta[id].name || id)}</button>`).join(" ")}</div>` : ""}
       ${UI.tools ? `<div class="gx-f"><span class="kn">Lanes</span> ${(g.adj[s.i] || []).map(j => { const k = lk(s.i, j), t = sys(j); return t && !t.gone ? `<button type="button" class="t-link" data-gx="pickl" data-k="${k}">${esc(t.name)}${g.laneKind.get(k) === "trade" ? " (trade)" : g.laneLy.has(k) ? " (corridor)" : ""}</button>` : ""; }).join(" · ") || "none"} <button type="button" class="t-mini" data-gx="lanefrom" data-id="${esc(s.id)}">+ Lane from here</button></div>` : ""}
-      <div class="t-row">${here ? `<span class="kn">The ship is here.</span>` : `<button type="button" class="t-btn prim" data-gx="plot" data-id="${esc(s.id)}">Plot a course here</button>`}<button type="button" class="t-mini" data-gx="open" data-id="${esc(s.id)}">${UI.sys === s.id ? "Close the system" : "Open the system"}</button><button type="button" class="t-mini" data-gx="edit" data-id="${esc(s.id)}">Change it</button>${A.askChange ? `<button type="button" class="t-mini" data-gx="ask" data-id="${esc(s.id)}" title="Say what should change: its details, a world or a site added; see what it replaces before anything does">Ask for a change…</button>` : ""}</div></section>
+      <div class="t-row">${here ? `<span class="kn">The ship is here.</span>` : `<button type="button" class="t-btn prim" data-gx="plot" data-id="${esc(s.id)}">Plot a course here</button>`}<button type="button" class="t-mini" data-gx="open" data-id="${esc(s.id)}">${UI.sys === s.id ? "Close the system" : "Open the system"}</button><button type="button" class="t-mini" data-gx="edit" data-id="${esc(s.id)}">Change it</button>${A.myLibrary ? `<button type="button" class="t-mini" data-gx="mylibsys" data-id="${esc(s.id)}" title="A copy of it, its star and worlds, to put in any of your campaigns">Keep it in my library</button>` : ""}${A.askChange ? `<button type="button" class="t-mini" data-gx="ask" data-id="${esc(s.id)}" title="Say what should change: its details, a world or a site added; see what it replaces before anything does">Ask for a change…</button>` : ""}</div></section>
       ${UI.plan && UI.plan.to === s.id ? planHTML() : ""}${UI.edit === s.id ? editHTML(s) : ""}${UI.sys === s.id ? systemHTML(s, info, places) : ""}`;
+  }
+  /* ---- encounters along routes (the editing plan of 10 Nov 2026, section 4, item 2, approved): each region's table of
+          what may happen on a jump through it, and one for any jump (the Sectors and powers panel), rolled as the party
+          jumps; what comes up is told to the game master, who decides what it is */
+  const encLines = t => String(t || "").split(/\n+/).map(l => l.trim()).filter(Boolean).map(l => { const m = /^(\d{1,3})\s*%\s*(.+)$/.exec(l); return m ? [Math.min(100, +m[1]), m[2].trim()] : [20, l]; });
+  // (a leg passes through a region where either end lies in it, or where it comes within the region's reach)
+  const legThrough = (p, q, r) => { const dx = q.x - p.x, dy = q.y - p.y, L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((r.x - p.x) * dx + (r.y - p.y) * dy) / L2)); return Math.hypot(p.x + dx * t - r.x, p.y + dy * t - r.y) <= r.r; };
+  function rollEncounters(path, rnd) {
+    const g = G(), out = [], rr = rnd || Math.random, any = encLines((edits()["~enc"] || {}).any);
+    for (let k = 1; k < path.length; k++) {
+      const p = findSys(path[k - 1]), q = findSys(path[k]); if (!p || !q) continue;
+      const tables = g.regions.filter(r => r.enc && legThrough(p, q, r)).map(r => [r.name, encLines(r.enc)]).concat(any.length ? [["any jump", any]] : []);
+      for (const [where, lines] of tables) for (const [pc, what] of lines) { const roll = Math.floor(rr() * 100) + 1; if (roll <= pc) out.push({ leg: k, from: p.name, to: q.name, where, what, roll, pc }); }
+    }
+    return out;
+  }
+  function encHTML() {
+    const E = UI.encs; if (!E) return "";
+    return `<section class="gx-card gx-encs"><h3>On the way</h3>${E.length ? `<ul class="gx-enc">${E.map(x => `<li><b>${esc(x.what)}</b> <span class="kn">between ${esc(x.from)} and ${esc(x.to)}, in ${esc(x.where)} (rolled ${x.roll} against ${x.pc}%)</span></li>`).join("")}</ul><p class="t-small kn">What it is, and whether it happens, is yours to say.</p>` : `<p class="kn">Nothing came up on the way.</p>`}<div class="t-row"><button type="button" class="t-mini" data-gx="encx">Put it away</button></div></section>`;
   }
   function planHTML() {
     const p = UI.plan; if (!p.path) return `<section class="gx-card gx-plan"><h4>The course</h4><p class="gx-warn">${esc(p.why)}</p></section>`;
@@ -1152,6 +1256,8 @@
   const SITEK = [["station", "A station"], ["orbital", "An orbital facility"], ["colony", "A colony"], ["settlement", "A settlement"], ["mining", "A mining installation"], ["research", "A research facility"], ["derelict", "A derelict ship"], ["anomaly", "An anomaly"], ["ruin", "Ruins"], ["other", "Something else"]];
   function bodiesOf(s) {
     const g = G(), info = (s.i >= 0 && Gg.system(g, s.i)) || { star: { name: Gg.STAR_NAME[s.cls] || "", color: (Gg.STARS[s.cls] || Gg.STARS.G)[0] }, planets: [], belts: [], sites: [] }, B = s.bodies || {};
+    // (a system kept whole when the galaxy was grown again: its worlds, belts and stations are all in its bodies)
+    if (s.whole) { info.planets = []; info.belts = []; info.sites = []; }
     // (a world the game master worked out again in the planet editor, e.phys: its whole profile from their changes; the
     // world as it was made is kept beside it, p.made, for the editor to start from)
     // (a world of the game master's own worked out again: its changes kept in it, as phys; its names and notes kept)
@@ -1452,13 +1558,123 @@
         ${p.landable && A.worldGenerate ? `<div class="t-row"><button type="button" class="t-btn prim" data-gx="surface" data-id="${esc(s.id)}" data-n="${p.n}">Open its surface</button></div><p class="t-small kn">The whole globe, made from this world's own physics the first time (a few minutes), then kept.</p>` : ""}
         ${canLand && !placeHere ? `<details class="gx-how"><summary class="t-small">Its surface as a map to explore</summary><p class="t-small">Ask Claude: “make the surface of ${esc(p.name)} as a place”, or: <code>node atlas.js wild &lt;campaign&gt; ${esc(String(p.name).toLowerCase().replace(/[^a-z0-9]+/g, "-"))} --system ${esc(s.id)} --planet ${p.n}</code></p></details>` : ""}
         ${p.override ? `<p class="gx-warn t-small">${esc(p.override)}.</p>` : ""}
-        ${gmMode() ? `<div class="t-row"><button type="button" class="t-mini" data-gx="look" data-n="${p.n}" title="Its picture's colours, clouds, ice, bands, rings, turn and size on the map: never its physics">Its look</button>${ed ? `<button type="button" class="t-mini" data-gx="pedit" data-n="${p.n}">Change this world</button>${(p.made || p).inputs && Gg.rework ? `<button type="button" class="t-mini" data-gx="phys" data-n="${p.n}">Work it out again</button>` : ""}` : ""}</div>` : ""}</div>`) : ""}
+        ${gmMode() ? `<div class="t-row"><button type="button" class="t-mini" data-gx="look" data-n="${p.n}" title="Its picture's colours, clouds, ice, bands, rings, turn and size on the map: never its physics">Its look</button>${A.myLibrary ? `<button type="button" class="t-mini" data-gx="mylibworld" data-id="${esc(s.id)}" data-n="${p.n}" title="A copy of this world, to put at an orbit in any of your campaigns">Keep it in my library</button>` : ""}${ed ? `<button type="button" class="t-mini" data-gx="pedit" data-n="${p.n}">Change this world</button>${(p.made || p).inputs && Gg.rework ? `<button type="button" class="t-mini" data-gx="phys" data-n="${p.n}">Work it out again</button>` : ""}` : ""}</div>` : ""}</div>`) : ""}
       ${ed ? `<details class="gx-add"><summary>Add to the system</summary>
         <form class="t-row" data-gx="addworld" data-id="${esc(s.id)}"><select class="t-in" name="kind" aria-label="What kind of world">${kinds}</select><label class="kn">at <input class="t-in t-n" type="number" name="a" min="0.01" step="any" value="${Math.round((Math.max(0, ...info.planets.map(x => x.a)) * 1.6 || 1) * 100) / 100}"> AU</label><button class="t-mini">+ A world</button>${LIB ? `<button type="button" class="t-mini" data-gx="libadd" data-id="${esc(s.id)}">+ From the library…</button>` : ""}</form>
         <form class="t-row" data-gx="addsite" data-id="${esc(s.id)}"><select class="t-in" name="kind" aria-label="What">${SITEK.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select><input class="t-in" name="name" placeholder="Its name" maxlength="60"><select class="t-in" name="on" aria-label="Where"><option value="">In orbit</option>${info.planets.map(x => `<option value="${x.n}">On ${esc(x.name)}</option>`).join("")}</select><button class="t-mini">+ Add it</button></form>
         <form class="t-row" data-gx="addbelt" data-id="${esc(s.id)}"><input class="t-in" name="name" placeholder="An asteroid belt" maxlength="60"><label class="kn">at <input class="t-in t-n" type="number" name="a" min="0.01" step="any" value="2.5"> AU</label><button class="t-mini">+ A belt</button></form></details>` : ""}</section>`;
   }
   // a region, a lane, the sectors and powers: what the game master changes of them
+  /* ---- growing and keeping (the editing plan of 10 Nov 2026, stage 6): the galaxy or a region grown again, the game
+          master's work kept; a small map grown into a galaxy round it; a region opened on its own */
+  // why a system is the game master's to keep: what they made or changed, what the story or the table holds there
+  function keptWhy(q, E0) {
+    const why = [], e = E0[q.id], ov = ((A.galaxyOver || {}).systems || {})[q.id], st = S(), ch = st && st.get("charts", q.id), sh = st && st.get("ship", "now"), g = G();
+    if (q.lock) why.push("locked");
+    if (q.added) why.push(q.kept ? "kept before" : "added by you"); else if (e && Object.keys(e).some(k => k !== "t")) why.push("changed by you");
+    if (ov && (ov.name || ov.desc || ov.gm)) why.push("named in the story");
+    if (A.order.some(id => (A.meta[id] || {}).system === q.id)) why.push("with your places");
+    if ((sh && sh.at === q.id) || (!sh && g.systems[g.home] === q) || (A.galaxyOver || {}).home === q.id) why.push("the ship's");
+    if (ch && ch.state && ch.state !== "unknown") why.push("on the players' charts");
+    if (q.mark) why.push("marked");
+    if (Object.values(A.factionsData || {}).some(fa => (fa.systems || []).includes(q.id))) why.push("held by the story's factions");
+    return why;
+  }
+  // a system as it stands, its star and worlds written out under its own id, so that it stands the same in a galaxy
+  // grown again (its worlds keep their numbers, its places and surfaces their ties)
+  function snapshot(q) {
+    const info = bodiesOf(q), st = info.star, comp = st.companion || (A.starSystem ? A.starSystem.companion(q, info) : null), d = doc(q.id);
+    const bodies = { add: info.planets.map(p => Object.assign(strip(p), { hand: true })), addB: info.belts.map((b, i) => ({ k: b.k != null ? b.k : i, a: b.a, name: b.name, rich: b.rich, icy: b.icy })), addS: info.sites.map(t => ({ k: t.k, kind: t.kind, name: t.name, on: t.on, a: t.a, ph: t.ph })) };
+    const star0 = { cls: st.cls, color: st.color, lum: st.lum, mass: st.mass, teff: st.teff, age: st.age, flares: st.flares, metal: st.metal };
+    delete d.gone;
+    return Object.assign(d, { added: true, kept: true, whole: true, i0: q.i0 != null ? q.i0 : q.i, name: q.name, cls: q.cls, bin: !!comp, x: q.x, y: q.y, f: Object.assign({}, q.f), desc: q.desc || "", gm: q.gm || "", noGen: true, star0, bodies, t: Date.now() }, q.z != null ? { z: q.z } : {}, q.m2 ? { m2: q.m2 } : {}, q.special ? { special: q.special } : {}, q.mark ? { mark: true } : {}, q.lock ? { lock: true } : {},
+      comp ? { comp: { cls: comp.cls, mass: comp.mass, a: comp.a, e: comp.ecc != null ? comp.ecc : comp.e, both: !!comp.both }, compNat: true } : {}, st.companion2 ? { comp2: { cls: st.companion2.cls, mass: st.companion2.mass, a: st.companion2.a, e: st.companion2.ecc } } : {});
+  }
+  const smallMap = () => { const p = G().p || {}; return ["system", "cluster", "blank"].includes(p.kind) || p.layout === "schematic"; };
+  const GROWN = new Map();
+  const grownWith = P => { const k = JSON.stringify(P); if (!GROWN.has(k)) { GROWN.clear(); GROWN.set(k, Gg.grow(P)); } return GROWN.get(k); };
+  function regrowParams(seed, extra) { const E0 = allEdits(), n = ((E0["~grow"] || {}).n || 0) + 1; return Object.assign({}, gp(E0), extra || {}, { seed, idPre: "R" + n + "-" }); }
+  // what would change, before anything does
+  function regrowPlan(seed, extra, all) {
+    const E0 = allEdits(), live = allSys(), keep = all ? live : live.filter(q => keptWhy(q, E0).length), P = regrowParams(seed, extra), ng = grownWith(P);
+    const near = ng.systems.filter(q => keep.some(t => Math.hypot(t.x - q.x, t.y - q.y) < 1.6)).length, counts = {};
+    for (const q of keep) for (const w of (all ? ["yours"] : keptWhy(q, E0))) counts[w] = (counts[w] || 0) + 1;
+    return { keep, P, n0: live.length, nNew: ng.systems.length - near, counts };
+  }
+  function regrowHTML() {
+    const R = regrowPlan(UI.regrow.seed), why = Object.entries(R.counts).map(([w, n]) => `${n} ${esc(w)}`).join(", ");
+    return `<section class="gx-card gx-regrow"><h3>Grow it again, keeping your work</h3>
+      <p class="kn">The galaxy grown again from another seed. What you made, changed, named or locked stays as it is, and so does what the story and the table hold (your places, the ship, the players' charts); the rest is grown again round it.</p>
+      <div class="gx-f"><span class="kn">Kept as they are</span> ${R.keep.length} of ${R.n0} systems${why ? ": " + why : ""} (a system kept for more than one reason is counted under each)</div>
+      <div class="gx-f"><span class="kn">Grown again</span> ${R.n0 - R.keep.length} systems go and ${R.nNew} new ones are grown; what the players knew of those that go goes with them. The sectors and powers are grown again too; the story's factions keep the systems you keep.</div>
+      <div class="gx-f"><span class="kn">Its seed</span> <input class="t-in t-n" type="number" data-gx="rgseed" value="${UI.regrow.seed}" aria-label="The seed it is grown from"> <button type="button" class="t-mini" data-gx="regrowseed">Another seed</button></div>
+      <div class="t-row"><button type="button" class="t-btn prim" data-gx="regrowgo">Grow it again</button><button type="button" class="t-btn" data-gx="regrowx">Not now</button></div>
+      <p class="t-small kn">Undo brings the galaxy back as it was.</p></section>`;
+  }
+  // (the lanes, trade routes and corridors between the systems kept, kept with them: lengths the game master gave stay;
+  // routes asked to become real distances lose theirs)
+  function keptLanes(keepIds, own) {
+    const g = G(), L = doc("~lanes"), K = new Set(keepIds), have = new Set((L.add || []).map(x => [x[0], x[1]].sort().join("|")));
+    for (const [a, b] of g.lanes) { const p = g.systems[a], q = g.systems[b]; if (!K.has(p.id) || !K.has(q.id)) continue; const key = [p.id, q.id].sort().join("|"); if (have.has(key)) continue; have.add(key); const k = lk(a, b), ly0 = own ? own(a, b) : g.laneLy.get(k); L.add = (L.add || []).concat([[p.id, q.id, g.laneKind.get(k) || "lane"].concat(ly0 > 0 ? [Math.round(ly0 * 100) / 100] : [])]); }
+    return L;
+  }
+  function regrowGo(seed, extra, all, what, pos, own) {
+    const R = regrowPlan(seed, extra, all), E0 = allEdits(), n = ((E0["~grow"] || {}).n || 0) + 1, p = Object.assign({}, (E0["~grow"] || {}).p || {}, extra || {}, { seed: R.P.seed, idPre: R.P.idPre });
+    const list = R.keep.map(q => { const d = snapshot(q); if (pos && pos[q.id]) [d.x, d.y] = pos[q.id]; return { id: q.id, data: d }; });
+    list.push({ id: "~lanes", data: keptLanes(R.keep.map(q => q.id), own) });
+    list.push({ id: "~grow", data: { p, n, t: Date.now() } });
+    if (E0["~remake"]) list.push({ id: "~remake", data: null });
+    setGMany(list); UI.regrow = null; UI.grow = null; UI.sel = null; refresh(); fitChart();
+    if (A.tableUI) A.tableUI.api.note(what || `Grown again: ${R.keep.length} systems kept as they were, ${R.nNew} grown new round them. Undo brings it all back.`);
+  }
+  function remakeHTML() {
+    const c = UI.remake, E0 = allEdits(), g = G(), inC = q => Math.hypot(q.x - c.x, q.y - c.y) <= c.r, inside = allSys().filter(inC), keep = inside.filter(q => keptWhy(q, E0).length);
+    return `<section class="gx-card gx-remake"><h3>Remake a region</h3>
+      <p class="kn">The stars inside the circle grown again from a seed of their own; what you made, changed, named or locked there stays, and so does what the story and the table hold.</p>
+      <label class="tw-l"><span>How far it reaches (light years)</span><input class="t-in" type="range" data-gx="rmr" min="5" max="200" step="1" value="${c.r}" aria-label="How far the region reaches"> <span class="kn">${Math.round(c.r * g.ly)} ly</span></label>
+      <div class="gx-f"><span class="kn">Inside it</span> ${inside.length} systems: ${keep.length} kept as they are, ${inside.length - keep.length} grown again</div>
+      <div class="t-row"><button type="button" class="t-btn prim" data-gx="remakego"${inside.length - keep.length ? "" : " disabled"}>Remake it</button><button type="button" class="t-mini" data-gx="remakeseed">Another seed</button><button type="button" class="t-btn" data-gx="remakex">Not now</button></div>
+      <p class="t-small kn">Undo brings the region back as it was.</p></section>`;
+  }
+  function remakeGo() {
+    const c = UI.remake, E0 = allEdits(), RM = JSON.parse(JSON.stringify(E0["~remake"] || { list: [] })), k = (RM.list.reduce((m, x) => Math.max(m, x.k || 0), 0)) + 1;
+    const keep = allSys().filter(q => Math.hypot(q.x - c.x, q.y - c.y) <= c.r && keptWhy(q, E0).length).map(q => q.id);
+    RM.list.push({ k, x: c.x, y: c.y, r: c.r, seed: c.seed, keep });
+    setGMany([{ id: "~remake", data: RM }]); UI.remake = null; refresh();
+    const now = allSys().filter(q => Math.hypot(q.x - c.x, q.y - c.y) <= c.r).length;
+    if (A.tableUI) A.tableUI.api.note(`The region remade: ${keep.length} kept, ${now - keep.length} grown new. Undo brings it back.`);
+  }
+  // a small map (one system, a cluster, an empty canvas, a jump map) grown into a galaxy round it
+  function growHTML() {
+    const sch = (G().p || {}).layout === "schematic", R = regrowPlan(UI.grow.seed, growExtra(), true);
+    return `<section class="gx-card gx-growround"><h3>Grow the space round it</h3>
+      <p class="kn">A galaxy grown round your ${R.keep.length === 1 ? "system" : R.keep.length + " systems"}, from the real galaxy's own mix of stars. Yours stay as they are, with their worlds, places and lanes; the new stars stand round them.</p>
+      <label class="tw-l"><span>How much of it</span><select class="t-in" data-gx="grscope">${[["neighbourhood", "The neighbourhood: some hundreds of stars"], ["sector", "A sector"], ["arm", "An arm of the galaxy"]].map(([k, l]) => `<option value="${k}"${k === UI.grow.scope ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+      ${sch ? `<p class="kn">A jump map is a diagram, so first it is set into real space: each system placed at about the distances your routes give (a best fit).</p><label class="tw-l"><span>Your routes</span><select class="t-in" data-gx="grroutes"><option value="keep"${UI.grow.routes !== "real" ? " selected" : ""}>Keep their own lengths and days</option><option value="real"${UI.grow.routes === "real" ? " selected" : ""}>Become the real distances between the stars</option></select></label>` : ""}
+      <div class="gx-f"><span class="kn">Grown</span> about ${R.nNew} new systems round yours</div>
+      <div class="t-row"><button type="button" class="t-btn prim" data-gx="growgo">Grow it</button><button type="button" class="t-mini" data-gx="growseed">Another seed</button><button type="button" class="t-btn" data-gx="growx">Not now</button></div>
+      <p class="t-small kn">Undo brings back your map as it was.</p></section>`;
+  }
+  const growExtra = () => ({ kind: "galaxy", layout: "spatial", scope: (UI.grow && UI.grow.scope) || "neighbourhood", model: 2, systems: null, span: null });
+  // (a jump map set into real space: each system moved until its routes are about as long as they say, a best fit)
+  function fitSchematic(newLy) {
+    const g = G(), live = allSys(); if (live.length < 2) return {};
+    const P = new Map(live.map(q => [q.i, [q.x, q.y]])), want = [];
+    for (const [a, b] of g.lanes) { if (!P.has(a) || !P.has(b)) continue; const L = g.laneLy.get(lk(a, b)); want.push([a, b, (L > 0 ? L : Gg.dist(g, a, b)) / newLy]); }
+    // (from a ring of the right size, so the fit has room to settle)
+    { const n = live.length, avg = want.reduce((m, w) => m + w[2], 0) / Math.max(1, want.length) || 5; live.forEach((q, k) => { const a = k / n * Math.PI * 2; P.set(q.i, [Math.cos(a) * avg * n / 6, Math.sin(a) * avg * n / 6]); }); }
+    for (let it = 0; it < 400; it++) { const step = .5 * (1 - it / 400); for (const [a, b, d] of want) { const pa = P.get(a), pb = P.get(b), dx = pb[0] - pa[0], dy = pb[1] - pa[1], dd = Math.hypot(dx, dy) || .01, k = (dd - d) / dd * step * .5; pa[0] += dx * k; pa[1] += dy * k; pb[0] -= dx * k; pb[1] -= dy * k; } }
+    // (centred where the chart's middle is)
+    let mx = 0, my = 0; for (const [, p] of P) { mx += p[0]; my += p[1]; } mx /= P.size; my /= P.size;
+    const out = {}; for (const q of live) { const p = P.get(q.i); out[q.id] = [Math.round((p[0] - mx + 500) * 10) / 10, Math.round((p[1] - my + 500) * 10) / 10]; } return out;
+  }
+  function growGo() {
+    const g = G(), sch = (g.p || {}).layout === "schematic", newLy = grownWith(regrowParams(UI.grow.seed, growExtra())).ly || g.ly;
+    // (a jump map fitted to its routes' lengths at the new chart's scale; a small map of real distances scaled into it)
+    const pos = sch ? fitSchematic(newLy) : Object.fromEntries(allSys().map(q => [q.id, [Math.round((500 + (q.x - 500) * g.ly / newLy) * 100) / 100, Math.round((500 + (q.y - 500) * g.ly / newLy) * 100) / 100]]));
+    const own = sch && UI.grow.routes !== "real" ? (a, b) => { const L = g.laneLy.get(lk(a, b)); return L > 0 ? L : Gg.dist(g, a, b); } : sch ? () => 0 : null;
+    regrowGo(UI.grow.seed, growExtra(), true, sch ? "Your jump map set into real space, and a galaxy grown round it. Undo brings back your map as it was." : "A galaxy grown round your systems, which stand as they were. Undo brings back your map as it was.", pos, own);
+  }
   function regHTML(r) {
     const g = G(), n = allSys().filter(s => Math.hypot(s.x - r.x, s.y - r.y) <= r.r).length, X = edits()["~regions"] || {};
     const what = { danger: "Courses through it are warned of, and kept clear of it where another way is near.", restricted: "Courses through it are warned of: someone forbids it.", explored: "The systems in it are on the players' charts from the start.", unexplored: "Courses into it are warned of: no charts reach it." }[r.kind] || "";
@@ -1466,8 +1682,9 @@
       <label class="tw-l"><span>Name</span><input class="t-in" name="name" maxlength="60" value="${esc(r.name)}"></label>
       <label class="tw-l"><span>What it is</span><select class="t-in" name="kind">${REGK.map(([k, l]) => `<option value="${k}"${k === r.kind ? " selected" : ""}>${l}</option>`).join("")}</select></label>
       <label class="tw-l"><span>How far it reaches from its middle (light years)</span><input class="t-in" type="number" name="r" min="0.5" step="any" value="${Math.round(r.r * g.ly * 10) / 10}"></label>
+      <label class="tw-l"><span>What may happen on a jump through it, one to a line: its chance, then what (30% Pirates out of the dust)</span><textarea class="t-in" name="enc" rows="3" maxlength="2000" placeholder="30% Pirates out of the dust&#10;10% A distress call, faint">${esc(r.enc || "")}</textarea></label>
       <p class="t-small">${n} system${n === 1 ? "" : "s"} in it. ${what}</p>
-      <div class="t-row"><button class="t-btn prim">Keep it</button><button type="button" class="t-mini" data-gx="movereg" data-id="${esc(r.id)}">Move it</button>${!r.own && (X.edit || {})[r.id] ? `<button type="button" class="t-mini" data-gx="unreg" data-id="${esc(r.id)}">As it was</button>` : ""}<span class="t-sp"></span><button type="button" class="t-mini t-danger" data-gx="delreg" data-id="${esc(r.id)}">Take it away</button></div></form></section>`;
+      <div class="t-row"><button class="t-btn prim">Keep it</button><button type="button" class="t-mini" data-gx="movereg" data-id="${esc(r.id)}">Move it</button><button type="button" class="t-mini" data-gx="regonly" data-id="${esc(r.id)}" title="Only this region's systems and things, closer">Open it on its own</button>${!r.own && (X.edit || {})[r.id] ? `<button type="button" class="t-mini" data-gx="unreg" data-id="${esc(r.id)}">As it was</button>` : ""}<span class="t-sp"></span><button type="button" class="t-mini t-danger" data-gx="delreg" data-id="${esc(r.id)}">Take it away</button></div></form></section>`;
   }
   function laneHTML(key) {
     const g = G(), [a, b] = key.split("-").map(Number), p = sys(a), q = sys(b); if (!p || !q) return "";
@@ -1485,6 +1702,7 @@
       <h4>Powers</h4><p class="t-small">Paint territory above gives them their stars.</p>
       ${g.powers.map((p, k) => `<div class="t-row"><i class="gx-dot" style="background:${PCOL[k % PCOL.length]}"></i><input class="t-in" data-gx="pwname" data-id="${esc(p.id)}" value="${esc(p.name)}" aria-label="Power name"><span class="kn">${nPw[k] || 0}</span><button type="button" class="t-mini" data-gx="delpw" data-id="${esc(p.id)}" aria-label="Take away ${esc(p.name)}">×</button></div>`).join("")}
       <form class="t-row" data-gx="addpw"><input class="t-in" name="name" placeholder="The name of a new power" maxlength="60"><button class="t-mini">+ Power</button></form>
+      <h4>On any jump</h4><form data-gx="saveenc"><label class="tw-l"><span>What may happen on any jump, one to a line: its chance, then what. Each region has its own table besides, in its card.</span><textarea class="t-in" name="any" rows="3" maxlength="2000" placeholder="5% A drive fault">${esc((edits()["~enc"] || {}).any || "")}</textarea></label><div class="t-row"><button class="t-mini">Keep it</button></div></form>
       <div class="t-row"><button type="button" class="t-mini" data-gx="panel" data-p="">Close</button></div></section>`;
   }
   /* ---- the galaxy's own card, when nothing is chosen; and its black hole's (the galaxy plan, sections 2 and 3) */
@@ -1520,7 +1738,7 @@
     // (with a system's own map open, its cards first and the ship's after)
     const inSys = s && UI.sys === s.id && A.starSystem && A.starSystem.isOpen();
     const th = !inSys && UI.thing && thingById(UI.thing);
-    sd.innerHTML = (UI.panel === "sp" ? spHTML() : "") + (UI.hole ? holeHTML() : "") + (inSys ? sysHTML(s) + shipHTML() : (th ? thingHTML(th) + (UI.plan && UI.plan.thing === th.id ? planHTML() : "") + shipHTML() : shipHTML() + (s ? sysHTML(s) : rg ? regHTML(rg) : UI.selLane ? laneHTML(UI.selLane) : galaxyHTML())));
+    sd.innerHTML = encHTML() + (UI.regrow ? regrowHTML() : "") + (UI.remake ? remakeHTML() : "") + (UI.grow ? growHTML() : "") + (UI.only ? `<section class="gx-card gx-only"><h3>${esc(UI.only.name)}, on its own</h3><p class="kn">Only its systems and what lies between them, closer; the rest faint. It is the same chart: what you add or change here is in the galaxy.</p><div class="t-row"><button type="button" class="t-btn" data-gx="regall">← The whole chart</button></div></section>` : "") + (UI.panel === "sp" ? spHTML() : "") + (UI.hole ? holeHTML() : "") + (inSys ? sysHTML(s) + shipHTML() : (th ? thingHTML(th) + (UI.plan && UI.plan.thing === th.id ? planHTML() : "") + shipHTML() : shipHTML() + (s ? sysHTML(s) : rg ? regHTML(rg) : UI.selLane ? laneHTML(UI.selLane) : galaxyHTML())));
     { const pf = sd.querySelector("form.gx-phys"); if (pf) physPreview(pf); const lf = sd.querySelector("form.gx-look"); if (lf) lookPreview(lf); }
     // (the world in its card, turning, as pixel art: atlas-pixelplanet.js)
     if (A.pixelPlanet) sd.querySelectorAll("canvas.gx-pxg").forEach(cv => { const s2 = findSys(cv.dataset.id), info = s2 && bodiesOf(s2), p = info && info.planets.find(x => x.n === +cv.dataset.n); if (!p) return; const m = cv.dataset.m != null && cv.dataset.m !== "" ? (p.moonList || []).find(x => x.n === +cv.dataset.m) : null; A.pixelPlanet.spin(cv, m ? Object.assign({}, m, { name: moonName(p, m) }) : p, 48, info.star.color); });
@@ -1559,7 +1777,7 @@
       case "libadd": { const s = findSys(id), f = b.closest("form"), a = Math.max(.01, parseFloat(f && f.elements.a ? f.elements.a.value : "1") || 1); if (!s) return; libDlg("world", w => sysAddPreset(s, a, w, { clientX: b.getBoundingClientRect().left, clientY: b.getBoundingClientRect().bottom, target: b, preventDefault() {} }), { info: bodiesOf(s), a, say: `Each worked out ${a} AU from ${s.name}, as the planet maker would make it there; “fits here” means it stays of its kind.` }); return; }
       case "starlib": { libDlg("star", sp => setStarPreset(id, sp), { say: "Each a real kind of star: its mass, age, metals, light and warmth. The system's worlds are made again round it; your own stay." }); return; }
       case "tpick": { const t = thingById(id); if (t) A.galaxyThing(id); const fl = host.querySelector(".gx-found"); if (fl) fl.hidden = true; return; }
-      case "treveal": setThing(id, { found: true, ready: false, foundHow: (thingById(id) || {}).readyHow || "shown by the game master", foundAt: nowMin() }); refresh(); return;
+      case "treveal": setThing(id, { found: true, ready: false, foundHow: (thingById(id) || {}).readyHow || "shown by the game master", foundAt: nowMin(), foundT: Date.now() }); refresh(); return;
       case "thide": setThing(id, { found: false, ready: false }); refresh(); return;
       case "tplot": { const t = thingById(id); if (!t) return; UI.thing = id; UI.plan = Object.assign({}, courseToThing(ship().at, t)); side(); request(); return; }
       case "tplace": { const t = thingById(id); if (t) thingPlace(t); return; }
@@ -1567,11 +1785,29 @@
       case "tdel": if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Take it away? Click again"; return; } setThing(id, null); UI.thing = null; refresh(); return;
       case "tfill": { const t = thingById(id), f = b.closest("form"); if (t && f) fillThing(t, f, b); return; }
       case "sweep": { const out = checkThings({ swept: true }); if (!out.length && A.tableUI) A.tableUI.api.note(`The sensors sweep ${round1(reachLy() * 1.5)} light years round the ship: nothing new.`); if (A.worldTime) A.worldTime.advance(60); return; }
+      case "shipplace": { const sh = ship(); if (A.locations && A.locations.forPlace) A.locations.forPlace({ name: sh.name, kind: "ship", label: sh.name, done: () => side() }); return; }
       case "siteplace": { const s = findSys(id), info = s && bodiesOf(s), t = info && info.sites.find(x => x.k === +b.dataset.k); if (!t || !A.locations || !A.locations.forPlace) return; const on = t.on != null ? info.planets.find(p => p.n === t.on) : null; A.locations.forPlace({ system: s.id, planet: t.on != null ? t.on : undefined, site: t.k, name: t.name, kind: t.kind, label: t.name, done: () => { A._galaxy = null; if (A.starSystem && A.starSystem.isOpen()) A.starSystem.refresh(); } }); void on; return; }
       case "timelapse": tlOpen(); return;
       case "tlplay": if (TL) { TL.play = !TL.play; TL.last = 0; b.textContent = TL.play ? "Pause" : "Play"; b.setAttribute("aria-pressed", TL.play); } return;
       case "tlback": if (TL) TL.t = 0; return;
       case "ship": { const s = findSys(ship().at); if (s) { UI.sel = s.id; centreOn(s, 3); over(); side(); } return; }
+      case "mylibsys": { const q = findSys(id); if (!q) return; const d = snapshot(q); for (const k of ["kept", "i0", "lock", "mark", "x", "y", "t", "gone"]) delete d[k]; const info = bodiesOf(q); keepMine("system", q.name, `${info.star.name} · ${info.planets.length} world${info.planets.length === 1 ? "" : "s"}`, d); return; }
+      case "mylibworld": { const q = findSys(id), info = q && bodiesOf(q), p = info && info.planets.find(x => x.n === +b.dataset.n); if (!p) return; const d = strip(p); delete d.preset; keepMine("world", p.name, `${p.kname || p.kind}${p.tempC != null ? ", " + p.tempC + " °C" : ""}`, d); return; }
+      case "myliblook": { const q = findSys(id), info = q && bodiesOf(q), p = info && info.planets.find(x => x.n === +b.dataset.n), fm = b.closest("form"); if (!p || !fm) return; const L = lookOfForm(fm, p); const ref = strip(p); delete ref.look; keepMine("look", `${p.name}'s look`, `a look for ${String(p.kname || p.kind).toLowerCase()}`, { look: L, ref }); return; }
+      case "encx": UI.encs = null; side(); return;
+      case "regrow": UI.regrow = UI.regrow ? null : { seed: 1000 + Math.floor(Math.random() * 900000) }; UI.remake = null; UI.grow = null; side(); tools(); return;
+      case "regrowseed": if (UI.regrow) { UI.regrow.seed = 1000 + Math.floor(Math.random() * 900000); side(); } return;
+      case "regrowgo": if (UI.regrow) regrowGo(UI.regrow.seed); return;
+      case "regrowx": UI.regrow = null; side(); tools(); return;
+      case "remakego": if (UI.remake) remakeGo(); return;
+      case "remakeseed": if (UI.remake) { UI.remake.seed = 1000 + Math.floor(Math.random() * 900000); side(); } return;
+      case "remakex": UI.remake = null; side(); request(); return;
+      case "growround": UI.grow = UI.grow ? null : { seed: 1000 + Math.floor(Math.random() * 900000), scope: "neighbourhood", routes: "keep" }; UI.regrow = null; UI.remake = null; side(); tools(); return;
+      case "growseed": if (UI.grow) { UI.grow.seed = 1000 + Math.floor(Math.random() * 900000); side(); } return;
+      case "growgo": if (UI.grow) growGo(); return;
+      case "growx": UI.grow = null; side(); tools(); return;
+      case "regonly": { const r = G().regions.find(x => x.id === b.dataset.id); if (!r) return; UI.only = { id: r.id, x: r.x, y: r.y, r: r.r, name: r.name }; UI.selReg = null; const p = gxOf(r); flyTo(p.x, p.y, Math.min(Wpx(), Hpx()) * .42 / Math.max(.01, r.r * FR.k)); side(); request(); return; }
+      case "regall": UI.only = null; side(); fitChart(); return;
       case "tools": UI.tools = !UI.tools; UI.tool = null; UI.adding = false; UI.first = null; if (!UI.tools) { UI.panel = null; UI.pedit = null; } tools(); side(); return;
       case "tool": { const t = b.dataset.t; if (t === "add") { UI.adding = !UI.adding; UI.tool = null; } else { UI.tool = UI.tool === t ? null : t; UI.adding = false; } UI.first = null; UI.moving = null; UI.movingReg = null; tools(); over(); host.querySelector(".gx-canvas").focus({ preventScroll: true }); return; }
       case "panel": UI.panel = b.dataset.p || null; tools(); side(); return;
@@ -1608,7 +1844,11 @@
         const p = UI.plan; if (!p || !p.ok || !p.path) return;
         if (p.risks.length && !b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Sure? " + p.risks.length + " danger" + (p.risks.length > 1 ? "s" : "") + " on the way: click again"; return; }
         // (a course to a thing between the stars: the ship there, beside the system it jumped from)
-        const dest = findSys(p.to), tg = p.thing && thingById(p.thing); setShip({ at: p.to, near: tg ? tg.id : null, fuel: Math.max(0, p.left) }, `To ${tg ? tg.name : dest.name}: ${round1(p.ly)} ly in ${round1(p.days)} days${p.fuel ? ", " + Math.ceil(p.fuel) + " fuel" : ""}`);
+        const dest = findSys(p.to), tg = p.thing && thingById(p.thing);
+        // (what may happen on the way: each region's table and the table for any jump, rolled for each leg)
+        const hasEnc = G().regions.some(r => r.enc) || (edits()["~enc"] || {}).any, encs = hasEnc ? rollEncounters(p.path) : null;
+        setShip({ at: p.to, near: tg ? tg.id : null, fuel: Math.max(0, p.left) }, `To ${tg ? tg.name : dest.name}: ${round1(p.ly)} ly in ${round1(p.days)} days${p.fuel ? ", " + Math.ceil(p.fuel) + " fuel" : ""}${encs && encs.length ? "; on the way: " + encs.map(x => x.what).join("; ") : ""}`);
+        if (encs) { UI.encs = encs; if (A.tableUI && encs.length) A.tableUI.api.note(`On the way: ${encs.map(x => x.what).join("; ")}.`); }
         if (tg) { if (A.worldTime && p.days > 0) A.worldTime.advance(Math.round(p.days * 1440)); if (A.tableUI) A.tableUI.api.note(`The ship arrives at ${tg.name}.`); UI.plan = null; checkThings(); break; }
         for (const sid of p.path.slice(1)) S().set("charts", sid, Object.assign({}, S().get("charts", sid) || {}, { state: "visited", how: (S().get("charts", sid) || {}).how || "explored", t: Date.now() }));
         if (A.worldTime && p.days > 0) A.worldTime.advance(Math.round(p.days * 1440));
@@ -1638,6 +1878,9 @@
   function onChange(e) {
     const t = e.target, k = t.dataset && t.dataset.gx; if (!k) return;
     if (k === "paint") { UI.paint = t.value; return; }
+    if (k === "rgseed" && UI.regrow) { UI.regrow.seed = Math.max(1, parseInt(t.value, 10) || 1); side(); return; }
+    if (k === "grscope" && UI.grow) { UI.grow.scope = t.value; side(); return; }
+    if (k === "grroutes" && UI.grow) { UI.grow.routes = t.value; return; }
     if (k === "secname" || k === "pwname") { const key = k === "secname" ? "~sectors" : "~powers", X = doc(key), id = t.dataset.id, v = t.value.trim(); if (!v) return; const own = (X.add || []).find(a => a.id === id); if (own) own.name = v; else { X.edit = X.edit || {}; X.edit[id] = Object.assign(X.edit[id] || {}, { name: v }); } setG(key, X); t.blur(); refresh(); return; }
     if (k === "chart" || k === "how") { const c = Object.assign({}, S().get("charts", t.dataset.id) || {}, k === "chart" ? { state: t.value } : { how: t.value }, { t: Date.now() }); S().set("charts", t.dataset.id, c); refresh(); }
     else if (k === "cond") setShip({ condition: t.value }, `Now ${t.value.toLowerCase()}`);
@@ -1670,8 +1913,9 @@
       const was = s.pw != null && G().powers[s.pw] ? G().powers[s.pw].id : "", now = v("owner");
       if (now !== was) setG("~terr", Object.assign(doc("~terr"), { [id]: now }));
       UI.edit = null;
+    } else if (k === "saveenc") { setG("~enc", { any: (f.elements.any.value || "").trim().slice(0, 2000), t: Date.now() }); if (A.tableUI) A.tableUI.api.note("Kept: rolled on every jump.");
     } else if (k === "savereg") {
-      const R = doc("~regions"), body = { name: v("name") || "A region", kind: v("kind"), r: Math.max(.5, num("r", 3)) / G().ly }, own = (R.add || []).find(a => a.id === id);
+      const R = doc("~regions"), body = { name: v("name") || "A region", kind: v("kind"), r: Math.max(.5, num("r", 3)) / G().ly, enc: (f.elements.enc ? f.elements.enc.value : "").trim().slice(0, 2000) }, own = (R.add || []).find(a => a.id === id);
       if (own) Object.assign(own, body); else { R.edit = R.edit || {}; R.edit[id] = Object.assign(R.edit[id] || {}, body); }
       setG("~regions", R);
     } else if (k === "savelook") {
@@ -1749,7 +1993,7 @@
     }
     // (the things between the stars they have found, or that were never hidden: never the rest, nor anyone's secrets)
     const things = SP ? allThings().map(t => SP.forPlayers(t, nowMin())).filter(Boolean) : [];
-    return { name: (A.galaxyParams || {}).name || "", systems: L.map(s => ({ id: s.id, name: chartOf(s.id) === "rumoured" ? s.name + "?" : s.name, x: s.x, y: s.y, color: (Gg.STARS[s.cls] || Gg.STARS.G)[0], state: chartOf(s.id) })), lanes, regions, ship: ids.has(sh.at) ? sh.at : null, shipNear: sh.near && things.some(t => t.id === sh.near) ? sh.near : null, worlds: scannedWorlds(L), sysmaps, things, ly: G().ly, jump: (G().p || {}).layout === "schematic" };
+    return { name: (A.galaxyParams || {}).name || "", systems: L.map(s => ({ id: s.id, name: chartOf(s.id) === "rumoured" ? s.name + "?" : s.name, x: s.x, y: s.y, color: (Gg.STARS[s.cls] || Gg.STARS.G)[0], state: chartOf(s.id) })), lanes, regions, ship: ids.has(sh.at) ? sh.at : null, shipNear: sh.near && things.some(t => t.id === sh.near) ? sh.near : null, worlds: scannedWorlds(L), sysmaps, things, ly: G().ly, jump: (G().p || {}).layout === "schematic", reach: SP && sh.at ? Math.round(reachLy() / G().ly * 100) / 100 : 0 };
   };
 
   // the view, mounted by the page's shell when the game master opens it (atlas-shell.js)
@@ -1817,7 +2061,7 @@
     if (!o.p.landable) throw new Error(`${o.p.name} has no surface to land on`);
     const id = surfId(sid, n, m), have = A.worlds && A.worlds[id] && A.worlds[id].terrain && A.worlds[id].terrain.height;
     if (have) return id;
-    const flags = surfaceFlags(o.p, (G().p.seed || 1) * 31 + (o.s.i || 0) * 17 + (+n) + (m != null && m !== "" ? 1000 * (+m + 1) : 0), bodiesOf(o.s).star), key = "planet|" + JSON.stringify(flags);
+    const flags = surfaceFlags(o.p, surfSeed(o, n, m), bodiesOf(o.s).star), key = "planet|" + JSON.stringify(flags);
     let T = A.worldGenCache ? await A.worldGenCache(key) : null;
     if (!T) { if (say) say(`Making the whole globe of ${o.p.name}: about ${Math.round(A.worldGenSecs("planet") / 60)} minutes the first time, then it is kept.`); T = await A.worldGenerate(flags, { title: o.p.name, locations: [] }); if (A.worldGenCache) await A.worldGenCache(key, T); }
     registerSurface(sid, n, T, m);
@@ -1825,6 +2069,15 @@
     return id;
   }
   A.planetSurface = planetSurface;
+  function surfSeed(o, n, m) { return (G().p.seed || 1) * 31 + ((o.s.i0 != null ? o.s.i0 : o.s.i) || 0) * 17 + (+n) + (m != null && m !== "" ? 1000 * (+m + 1) : 0); }
+  // a surface's world, by the reference its world map keeps ({ system, n, moon }): the recipe its physics give and what
+  // they make of it (the editing plan of 10 Nov 2026, stage 4: the world map's Draw its surface and its brushes ask it)
+  A.planetSurfaceOf = ref => {
+    if (!ref || ref.system == null) return null; const o = planetOf(ref.system, ref.n, ref.moon); if (!o) return null;
+    const star = bodiesOf(o.s).star, flags = surfaceFlags(o.p, surfSeed(o, ref.n, ref.moon), star);
+    const env = flags.env || (A.planets && A.planets.environment ? A.planets.environment(o.p, star) : null);
+    return { name: o.p.name, p: o.p, flags, env };
+  };
   // the surfaces opened before come back with the page: named at once, their land from this browser's keeping (or made
   // again, the same, when opened)
   // (a surface made under rules older than the planetary layer's environment is made again when it is next opened: the
@@ -1839,7 +2092,7 @@
   // (a system's worlds, belts and sites as the page has them: grown and as the game master changed them)
   A.galaxyApi.bodies = id => { const s = findSys(id); return s ? bodiesOf(s) : null; };
   // (for the tests: what the chart has just drawn, and where its camera is; and a way to set the camera)
-  A.galaxyDebug = { tl: () => TL ? { t: TL.t, n: TL.P.length, play: TL.play, text: TL.el.textContent } : null, away: () => DRAWN.filter(d => d[4]).length, side: () => SV ? { open: true, text: SV.el.textContent } : null, where: id => { const d = DRAWN.find(q => q[2] && q[2].id === id); return d ? [Math.round(d[0]), Math.round(d[1])] : null; }, drawn: () => DRAWN.length, labels: () => (DRAWN.length), cam: () => Object.assign({}, CAM), set: (x, y, s) => { fly = null; CAM.x = x; CAM.y = y; CAM.s = clampS(s); request(); }, fitGalaxy: () => fitGalaxy(0), fitChart: () => fitChart(0), frame: () => frame(), picDone: () => !!(PIC && PIC.done), model: () => MG, frameOf: () => FR };
+  A.galaxyDebug = { remake: () => UI.remake ? Object.assign({}, UI.remake) : null, tl: () => TL ? { t: TL.t, n: TL.P.length, play: TL.play, text: TL.el.textContent } : null, away: () => DRAWN.filter(d => d[4]).length, side: () => SV ? { open: true, text: SV.el.textContent } : null, where: id => { const d = DRAWN.find(q => q[2] && q[2].id === id); return d ? [Math.round(d[0]), Math.round(d[1])] : null; }, drawn: () => DRAWN.length, labels: () => (DRAWN.length), cam: () => Object.assign({}, CAM), set: (x, y, s) => { fly = null; CAM.x = x; CAM.y = y; CAM.s = clampS(s); request(); }, fitGalaxy: () => fitGalaxy(0), fitChart: () => fitChart(0), frame: () => frame(), picDone: () => !!(PIC && PIC.done), model: () => MG, frameOf: () => FR };
   (A.searchers = A.searchers || []).push({ kind: "Among the stars", order: 22, mod: ["stars"], find: q => { const out = []; if (!A.galaxyParams) return out; for (const s of allSys()) { const x = A.nav && A.nav.hit(s.name, [s.desc, s.gm].join(" "), q, (Gg.STAR_NAME[s.cls] || "A star") + (s.f && s.f.colony ? " · a colony" : s.f && s.f.station ? " · a station" : "")); if (x) out.push(Object.assign(x, { go: () => { const v = document.getElementById("v-galaxy"); if (v) v.click(); setTimeout(() => A.galaxyOpen(s.id), 40); } })); if (out.length > 40) break; } return out; } });
   A.galaxyFocus = id => { if (!host) return; const s = findSys(id); if (!s) return; UI.sel = id; centreOn(s, 2.5); over(); side(); };
   if (A.tableUI) { const iv = setInterval(() => { const st = A.tableUI.api.store(); if (!st) return; clearInterval(iv); ST = st; A.planetSurfacesInit(st); setInterval(() => { if (host && host.isConnected && host.offsetParent) checkThings(); }, 20000); for (const c of ["charts", "ship", "gedits"]) st.watch(c, () => { if (host && host.isConnected && host.offsetParent) { if (c === "gedits" || c === "charts") refresh(); else { over(); side(); } } }); }, 200); setTimeout(() => clearInterval(iv), 120000); }

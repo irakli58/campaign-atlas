@@ -48,7 +48,7 @@
       else if (p.shape === "elliptical") { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * R; x = Math.cos(a) * d; y = Math.sin(a) * d * .62; }
       else { const arms = Math.max(1, Math.min(6, +p.arms || 3)), arm = Math.floor(r() * arms), d = Math.pow(r(), .7), a = arm * Math.PI * 2 / arms + d * 3.6 + (r() - .5) * .55 * (1.15 - d); x = Math.cos(a) * d * R + (r() - .5) * 22; y = Math.sin(a) * d * R + (r() - .5) * 22; }
       const cls = weighted(r, [["M", 55], ["K", 18], ["G", 11], ["F", 7], ["A", 4], ["B", 1.2], ["O", .1], ["D", 3], ["N", .4], ["X", .15]]);
-      S.push({ i, id: "S" + i, x: round(x + W / 2, 1), y: round(y + W / 2, 1), cls, bin: r() < .22, name: nameOf(r), f: {} });
+      S.push({ i, id: (P.idPre || "S") + i, x: round(x + W / 2, 1), y: round(y + W / 2, 1), cls, bin: r() < .22, name: nameOf(r), f: {} });
     }
     return settle(p, S, N, W, r, null);
   }
@@ -166,7 +166,7 @@
       // its star: born by the initial mass function, become what its age makes it; a companion by the odds for its mass
       let m0 = GM.imfSample(r); if (p.browns === false) { let g = 0; while (m0 < .08 && g++ < 40) m0 = GM.imfSample(r); }
       const now = GM.become(m0, pop.age), c0 = GM.companionOf(m0, r), c = c0 ? GM.become(c0.mass, pop.age) : null;
-      const s = { i, id: "S" + i, x: round(W / 2 + (gx - at.x) / ly, 1), y: round(W / 2 + (gy - at.y) / ly, 1), z: round(gz - at.z, 1), cls: now.cls, bin: !!c, name: nameOf(r), f: {}, m2: { cls: now.cls, mass: round(now.mass, 3), m0: round(m0, 3), age: Math.round(pop.age), feh: pop.feh, pop: pop.pop } };
+      const s = { i, id: (P.idPre || "S") + i, x: round(W / 2 + (gx - at.x) / ly, 1), y: round(W / 2 + (gy - at.y) / ly, 1), z: round(gz - at.z, 1), cls: now.cls, bin: !!c, name: nameOf(r), f: {}, m2: { cls: now.cls, mass: round(now.mass, 3), m0: round(m0, 3), age: Math.round(pop.age), feh: pop.feh, pop: pop.pop } };
       if (c) s.comp = { cls: c.cls, mass: round(c.mass, 3), a: c0.a, e: c0.e };
       S.push(s); i++;
     }

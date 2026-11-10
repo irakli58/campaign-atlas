@@ -140,6 +140,36 @@
     }
   });
 
+  /* ---- one history across the editors (the editing plan of 10 Nov 2026, section 4 item 5, approved: "one history showing
+          what changed where, so a change made two levels down can be taken back from above"). Each editor says where it
+          is and lists its changes; the Changes window shows them all, newest first, and takes back the newest of any of
+          them (each editor's own undo goes back in order, so an older one waits for those after it). An editor not open
+          now says how to open it. o: { where(), list() → [{ what, t }], undo(), live(), open() } */
+  const UNDO = new Map();
+  UX.undoable = (key, o) => { UNDO.set(key, o); setTimeout(paintChg, 0); };
+  UX.changed = () => paintChg();
+  UX.changes = () => {
+    const out = [];
+    for (const [key, o] of UNDO) { let L = [], live = true; try { L = o.list() || []; } catch (e) {} try { live = !o.live || !!o.live(); } catch (e) { live = true; } L.forEach((x, i) => out.push({ key, where: (() => { try { return o.where(); } catch (e) { return ""; } })(), what: x.what || "a change", t: x.t || 0, newest: i === L.length - 1, live })); }
+    return out.sort((a, b) => b.t - a.t || (b.newest ? 1 : 0) - (a.newest ? 1 : 0));
+  };
+  const ago = t => { if (!t) return "earlier"; const s = (Date.now() - t) / 1000; return s < 60 ? "just now" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : new Date(t).toLocaleDateString(); };
+  function paintChg() { const b = document.getElementById("nav-chg"); if (!b) return; let n = 0; try { n = UX.changes().length; } catch (e) {} b.disabled = !n; b.title = n ? `What you changed, everywhere (${n}), and taking it back` : "Nothing changed yet"; }
+  UX.changesOpen = () => {
+    let d = document.getElementById("uxChg");
+    if (!d) { d = document.createElement("dialog"); d.id = "uxChg"; d.className = "ux-chg"; document.body.appendChild(d);
+      d.addEventListener("click", e => { const b = e.target.closest("[data-chg]"); if (e.target === d || (b && b.dataset.chg === "x")) { d.close(); return; } if (!b) return; const o = UNDO.get(b.dataset.key); if (!o) return; if (b.dataset.chg === "undo") { try { o.undo(); } catch (x) { console.warn(x); } setTimeout(draw, 120); } else if (b.dataset.chg === "open" && o.open) { d.close(); o.open(); } }); }
+    const draw = () => {
+      const L = UX.changes().slice(0, 60);
+      d.innerHTML = `<div class="ux-chgh"><h3>What you changed</h3><button type="button" class="t-btn" data-chg="x">Close</button></div><p class="t-small kn">Every editor's changes, newest first. The newest of each can be taken back from here; an older one waits until those after it in the same place are taken back. Each is also undone in its own editor.</p>
+        ${L.length ? `<ol class="ux-chgl">${L.map(x => `<li${x.newest ? ' class="nw"' : ""}><span class="kn">${esc(ago(x.t))}</span> <b>${esc(x.where)}</b>: ${esc(x.what)} ${x.newest ? (x.live ? `<button type="button" class="t-mini" data-chg="undo" data-key="${esc(x.key)}">Take it back</button>` : `<button type="button" class="t-mini" data-chg="open" data-key="${esc(x.key)}">Open it, to take it back</button>`) : ""}</li>`).join("")}</ol>` : `<p class="kn">Nothing changed yet.</p>`}`;
+      paintChg();
+    };
+    draw(); if (!d.open) d.showModal();
+  };
+  UX.chgBtnHTML = () => `<button type="button" id="nav-chg" class="ux-chgb" data-nav="changes" title="What you changed, everywhere, and taking it back" disabled>Changes</button>`;
+  setTimeout(paintChg, 1500);
+
   /* ---- the hand mark: what the game master made or changed, which the generators never redraw */
   const PEN = `<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M3 17.3V21h3.7l11-11-3.7-3.7-11 11Zm17.7-10.2a1 1 0 0 0 0-1.4l-2.4-2.4a1 1 0 0 0-1.4 0l-1.8 1.8 3.7 3.7 1.9-1.7Z"/></svg>`;
   UX.hand = (words, title) => `<span class="ux-hand" title="${esc(title || "You made or changed this: nothing Atlas makes again draws over it")}">${PEN}${esc(words || "Made by hand: never redrawn")}</span>`;

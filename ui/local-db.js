@@ -77,6 +77,22 @@
       return fetch(URL_.replace(/db$/, "trace"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ image: image, prompt: prompt }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not read"); return d.plan; }); });
     },
+    // the game master's own library (atlas-mylib.js): systems, worlds, looks and places kept on this computer for every
+    // campaign, in the app's own folder
+    library: {
+      list: function () {
+        return fetch(URL_.replace(/db$/, "library"), { headers: { "x-atlas-token": TOKEN }, cache: "no-store" })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not read"); return x.items || []; }); });
+      },
+      save: function (item) {
+        return fetch(URL_.replace(/db$/, "library"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ item: item }) })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not kept"); return x; }); });
+      },
+      forget: function (id) {
+        return fetch(URL_.replace(/db$/, "library"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ forget: id }) })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not forgotten"); return x; }); });
+      }
+    },
     // word between campaigns that share a world (atlas-word.js): sent to this computer's other campaigns of that world,
     // and what they sent picked up
     word: {

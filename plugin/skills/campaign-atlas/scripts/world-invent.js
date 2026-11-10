@@ -549,6 +549,7 @@ function makeCover(o, L, R, rnd, log) {
     for (let n = 0; n < N; n++) {
       if (!land(n)) { if (liquid && !C[n]) put(n, liquid); continue; }
       if (C[n] && ![B.glacier, B.floodplain].includes(C[n])) continue;
+      if (o.paintLife && L.paint && (L.paint[n] === 1 || L.paint[n] === 3)) continue;
       const nat = BIO.byCode(NAT[n]), alt = nz2(I(n) / 9 + 70, J(n) / 9) > .62;
       const k = th(n) > .55 ? P.high : nat.group === "forest" ? (alt ? P.wet : P.forest) : [B.marsh, B.bog, B.mangrove, B.swampforest].includes(NAT[n]) ? P.wet : [B.tundra, B.icesheet].includes(NAT[n]) ? P.cold : alt ? P.forest : P.dry;
       put(n, k);
@@ -650,7 +651,7 @@ function invent(A, flags, log) {
   } else {
     // (a planet with its environment: its ground from its own materials and life, not an alien remap of Earth's biomes;
     // its liquid, if any, from its physics)
-    const co = { cols, rows, cell, seed, climate, setting: ENV ? "planet" : realism === "realistic" && setting === "fantasy" ? "realistic" : realism === "alien" ? "scifi" : setting, planet: planetWord, liquid: ENV ? ENV.liquid.kind : typeof flags.liquid === "string" ? flags.liquid : undefined, cover: planeCover, env: ENV };
+    const co = { cols, rows, cell, seed, climate, setting: ENV ? "planet" : realism === "realistic" && setting === "fantasy" ? "realistic" : realism === "alien" ? "scifi" : setting, planet: planetWord, liquid: ENV ? ENV.liquid.kind : typeof flags.liquid === "string" ? flags.liquid : undefined, cover: planeCover, env: ENV, paintLife: ENV && ENV.paintLife ? true : undefined };
     let geo = null, kmA0 = 3200;   // (kmA0: how far across, for what is sized in km after the geology)
     if (geoWord === "plates") {
       // an alien planet's own conditions: its gravity (mountains stand taller where it is weak), its air (the rain it
@@ -689,7 +690,7 @@ function invent(A, flags, log) {
       if (coastWord && !["natural", "geologic", "plain"].includes(coastWord)) throw new Error(`unknown coast "${coastWord}": geologic (shaped by rock, ice, sea level, rivers and waves), natural (waves, drift and sand) or plain`);
       const spinV = flags.spin != null && flags.spin !== true ? (/^(retro|-1|back)/i.test(String(flags.spin)) ? -1 : 1) : old.currents && old.currents.spin < 0 ? -1 : 1;
       const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", shores: coastWord === "geologic", currents: currentsOn && climateModel === "earth", spin: spinV, climateModel: climateModel === "earth" ? "earth" : undefined, lid: ENV ? (ENV.crust && ENV.crust !== "plates" ? ENV.crust : undefined) : typeof flags.lid === "string" ? flags.lid : undefined, dry: ENV ? (ENV.fall === "none" || ENV.fall === "frost" ? true : undefined) : flags.liquid === "none" || flags.liquid === "lava" ? true : undefined, plates: ENV && ENV.crust === "squishy" ? 3 : (ENV ? ENV.crust && ENV.crust !== "plates" && ENV.crust !== "squishy" : typeof flags.lid === "string" && flags.lid !== "plates" && flags.lid !== "squishy") ? 1 : undefined, env: ENV || undefined, noSea: envNoSea || undefined, fluvial: ENV ? ENV.erosion.fluvial : undefined, locked: flags.locked != null && flags.locked !== "off" ? (flags.locked === true ? .3 : +flags.locked) : undefined, lat: latA, warmC: ENV && ENV.climate && ENV.climate.temp != null ? ENV.climate.temp - (ENV.climate.model === "uniform" ? 28 : 13) : whole ? (flags.temp != null && flags.temp !== true ? +flags.temp - 13 : { cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
-      L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
+      L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river, paint: sketch && sketch.kind || null }; geo = G.info; T.rain = 1;
       if (G.ocean) T.currents = packCurrents(G.ocean, name, cell);
       // (the coasts as the waves, the drift and the sand made them: on trial until the user approves, 28 Oct 2026,
       // --coast natural; scripts/world-coast.js. Barrier islands and spits are land it adds in the shallows)

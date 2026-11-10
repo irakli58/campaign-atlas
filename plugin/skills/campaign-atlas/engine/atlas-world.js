@@ -769,6 +769,20 @@
     // changes (collection "world", or "world_<id>" for another world) and its own saved view (keys "...@<id>")
     const WID = ctx.world && A.worlds[ctx.world] && A.worlds[ctx.world].data ? ctx.world : "main", WCOLL = WID === "main" ? "world" : "world_" + WID;
     const wData = () => (A.worlds[WID] || {}).data, wTerrain = () => (A.worlds[WID] || {}).terrain, wRoads = () => (A.worlds[WID] || {}).roads;
+    // a planet's surface (the editing plan of 10 Nov 2026, stage 4): what its physics say, from the star chart
+    // (atlas-galaxy.js A.planetSurfaceOf), so that Draw its surface and the brushes keep to it
+    const planetNow = () => { const d = wData(); return d && d.planet && A.planetSurfaceOf ? A.planetSurfaceOf(d.planet) : null; };
+    const physWords = PL => {
+      const e = (PL && PL.env) || {}, lq = (e.liquid || {}).kind || "none", life = e.life || "complex";
+      const low = lq === "water" && (e.liquid || {}).surface ? "" : { methane: "Seas and lakes of methane", lava: "Seas of lava", ice: "Frozen seas: ice over the low ground", subsurface: "Frozen seas: ice over the low ground" }[lq] || "Low ground: a dry basin (no liquid stays on it)";
+      const brush = low ? { methane: "Sea or lake of methane", lava: "Sea of lava", ice: "Frozen sea", subsurface: "Frozen sea" }[lq] || "Basin (dry)" : "";
+      const plants = life === "none" ? "nothing lives here" : life === "microbial" ? "only microbial mats live here" : "";
+      const liqSay = { water: "water", methane: "methane", lava: "lava", ice: "ice", subsurface: "an ocean under its ice" }[lq] || "no liquid";
+      return { low, brush, plants, runs: lq === "water" || lq === "methane", say: `${PL.name}: ${lq === "none" ? "no liquid stays on its surface" : "its low ground holds " + liqSay}; ${life === "complex" ? "life covers its land" : plants}.` };
+    };
+    // (a plant brush on a world where nothing grows: said, and allowed, since it is the game master's setting)
+    const PLANT_BRUSH = new Set(["forest", "swamp", "grass"]);
+    const lifeWarn = k => { const PL = PLANT_BRUSH.has(k) || (A.worldBiomes && (A.worldBiomes.BY[k] || {}).group === "forest") ? planetNow() : null, W = PL && physWords(PL); return W && W.plants ? `${PL.name}: ${W.plants}, so its physics would leave this ground bare. Painted anyway: it is your setting.` : ""; };
     if (WID !== "main") { const st0 = ctx.store; ctx = Object.assign({}, ctx, { store: { get: k => st0.get(k + "@" + WID), set: (k, v) => st0.set(k + "@" + WID, v) } }); }
     const uid = "w" + Math.floor(Math.random() * 1e6).toString(36);
     const OV = ovFrom([]);
@@ -778,6 +792,8 @@
     const genKey = g => g ? JSON.stringify(g) : null;
     const terrainNow = () => OV.gen && GEN.T && GEN.key === genKey(OV.gen) ? GEN.T : wTerrain();
     let WD = prepareWorld(wData(), terrainNow(), OV); WD.wid = WID;
+    // (for the workspace's tests: what the map shows now, and its land's kind at a point, by fractions across; reads only)
+    A.worldMapNow = () => ({ wid: WID, gen: OV.gen ? JSON.parse(JSON.stringify(OV.gen)) : null, made: !!(OV.gen && GEN.T && GEN.key === genKey(OV.gen)), busy: !!GEN.busy, env: WD.T && WD.T.env || null, at: (fx, fy) => { const G = WD.G; if (!G) return null; const i = Math.min(G.cols - 1, Math.floor(fx * G.cols)), j = Math.min(G.rows - 1, Math.floor(fy * G.rows)), n = j * G.cols + i, b = G.B ? (A.worldBiomes ? A.worldBiomes.byCode(G.B[n]) : null) : null; return { h: G.H[n], sea: G.sea, land: G.H[n] > G.sea, biome: b ? b.id : null }; } });
     // the game master's own drawing, shown as drawn, or redrawn from its traced coasts (the choice is kept)
     const DRAW = WD.T.drawing && A.worldDrawingSrc ? { src: A.worldDrawingSrc, trace: null, mode: ctx.store.get("world-drawn") || "" } : null;
     const drawn = () => DRAW && (DRAW.mode === "drawn" || !DRAW.trace || WD.look === "stars");
@@ -790,6 +806,12 @@
     const S = { sel: null, selRoute: null, selFeat: null, hover: null, edit: false, tool: null, first: null, q: "", hits: null, journey: null, drag: null, note: "", brush: "land", size: 30, draft: null, cur: null, fdrag: null };
     const HIST = [], REDO = [];   // what the referee changed, to undo and do again (kept after a reload: the last twenty)
     const KH = A.ux ? A.ux.keepHist("wm-" + WID) : null; if (KH) KH.load(HIST, REDO);
+    // (this map's changes in the one history across the editors: A.ux.undoable)
+    if (A.ux && A.ux.undoable) A.ux.undoable("wm-" + WID, {
+      where: () => { const d = wData() || {}; return d.planet ? "The surface of " + (d.title || "a world") : WID === "main" ? "The world map" : "The map of " + (d.title || WID); },
+      list: () => HIST.map(h => { if (h.batch) return { what: h.batch.length + " changes at once", t: h.t }; const v = h.after || h.before || {}, k = String(h.doc || ""); return { t: h.t, what: k.startsWith("l-") ? (v.name || "a place") + (h.after ? (h.before ? " changed" : " added") : " taken away") : k.startsWith("r-") ? "a route" + (h.after ? "" : " taken away") : k.startsWith("f-") ? (v.name || "a river, name or realm") + (h.after ? "" : " taken away") : k === "shape" ? "the land reshaped" : k === "style" ? "its look" : k === "gen" ? (h.after ? "its land made anew" : "back to its own land") : "a change" }; }),
+      undo: () => undo(true), live: () => !gone, open: () => { if (A.openWorld) A.openWorld(WID); }
+    });
     let SPACE = false, MEAS = null, VSNAP = false;   // Space held (the map moves whatever the tool), a measure begun, this visit's version kept
     const ways = new Map();      // route id -> its way, worked out once for where its ends stand
     let PG = null;               // the grid routes are found on
@@ -1400,7 +1422,7 @@
         + (landy ? tb("brush", "Shape the land", S.tool === "brush", "Paint land, sea, mountains, forests, deserts and swamps") + tb("river", "+ River", S.tool === "river") : "")
         + tb("realm", WD.look === "stars" ? "+ Territory" : "+ Realm", S.tool === "realm", "Draw a kingdom, province or territory, and say who holds it") + tb("label", "+ Name", S.tool === "label", "Write a name on the map: a sea, a range, a forest")
         + `<button type="button" class="wm-btn" data-w="undo"${HIST.length ? "" : " disabled"} title="Undo (Ctrl+Z)">Undo</button><button type="button" class="wm-btn" data-w="redo"${REDO.length ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo</button>`
-        + (A.worldGenSrc && WD.look !== "stars" && !DRAW ? tb("newworld", "Make a new world", false, "Generate a whole new land: how big, its shape (from your own drawing if you like), its climate") : "")
+        + (A.worldGenSrc && WD.look !== "stars" && !DRAW ? (wData() || {}).planet ? tb("newworld", "Draw its surface", false, "Paint its land or give a drawing of your own: its physics decide what the low ground holds, whether rivers run and whether anything grows") : tb("newworld", "Make a new world", false, "Generate a whole new land: how big, its shape (from your own drawing if you like), its climate") : "")
         + tb("export", "Copy as world.js")
         + (vers() && vers().list(WID).length ? tb("vers", "Earlier versions", S.panelV, "The map as it was before each visit's changes, to look at and bring back") : "")
         + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
@@ -1457,14 +1479,17 @@
     function newWorldDlg() {
       const g = OV.gen || {}, SK = A.worldSketch, nk = v => Math.round(v / 100) * 100, fmt = v => v.toLocaleString("en"), km = k => k === "planet" ? "40,000 km around, 20,000 km from pole to pole" : `${fmt(nk(GEN_KM[k] || GEN_SIZES[k][0] * 2.3))} km by ${fmt(nk((GEN_KM[k] || GEN_SIZES[k][0] * 2.3) * GEN_SIZES[k][1] / GEN_SIZES[k][0]))} km`;
       const sizes = [["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"], ["vast", "Vast"], ["world", "A great continent"], ["supercontinent", "A supercontinent"], ["hemisphere", "Half a planet"], ["planet", "A whole planet"]].map(([k, l]) => [k, `${l}: ${km(k)}${GEN_SECS[k] >= 60 ? ` (takes about ${Math.round(GEN_SECS[k] / 60)} min)` : ""}`]);
-      const lands = [["masses", "Made for me: a preset, or how many landmasses"], ["coast", "A coast (the sea on one side)"], ["inland", "All land"], ["paint", "Paint it myself"], ["sketch", "From a picture of my own"]];
+      // (a planet's surface: its physics decide all but the shape, the game master's drawing or painting the shape)
+      const PL = planetNow(), PW = PL ? physWords(PL) : null; let plantsOk = !!(g.plantsAnyway);
+      const lands = PL ? [["masses", "As its physics make it (another seed, if you like)"], ["paint", "Paint it myself"], ["sketch", "From a picture of my own"]] : [["masses", "Made for me: a preset, or how many landmasses"], ["coast", "A coast (the sea on one side)"], ["inland", "All land"], ["paint", "Paint it myself"], ["sketch", "From a picture of my own"]];
       // (the presets: how many landmasses, and how much of the world is land)
       const PRESETS = [["One big continent", 1, .4], ["A Pangaea: one vast land", 1, .62], ["Two continents", 2, .35], ["Several continents, like the Earth", 6, .29], ["Many islands", 15, .2], ["An archipelago", 35, .12]];
       const looks = (A.worldArt ? A.worldArt.looksFor(WD) : []).map(([v, l]) => [v, l]);
       const clim = Object.entries(A.worldBiomes ? A.worldBiomes.CLIMATES : { varied: [0, 0, 0, "Varied"] }).map(([k, v]) => [k, v[3]]);
       let pic = null;
-      dlg.innerHTML = `<form method="dialog" class="ke wm-newworld"><h3>Make a new world</h3>
-        <p class="kn">A whole new land, made the way the Earth makes one: plates raise its mountains, rivers carve them, the winds bring its rain. Your places are set on it again; Undo brings back the old land.</p>${A.ux ? `<p>${A.ux.hand("Your own places and names are yours: they are set on the new land, not made again")}</p>` : ""}
+      const SKL = SK ? SK.KINDS.map(k => [k[0], PW && PW.plants && ["forest", "swamp"].includes(k[0]) ? `${k[1]} (${PW.plants})` : PW && PW.plants && k[0] === "plains" ? "Plains (bare ground)" : k[1], k[2]]) : [];
+      dlg.innerHTML = `<form method="dialog" class="ke wm-newworld"><h3>${PL ? "Draw the surface of " + esc(PL.name) : "Make a new world"}</h3>
+        ${PL ? `<p class="kn">Its whole globe made again from your shape: your drawing says where the land, the low ground and the mountains are; its physics say whether the low ground is a sea (of water, methane or lava) or a dry basin, whether rivers run, where craters and ice lie, and whether anything grows. Your places are set on it again; Undo brings back the land it had.</p><p class="wm-nw-phys"><b>Its physics:</b> ${esc(PW.say)}</p>` : `<p class="kn">A whole new land, made the way the Earth makes one: plates raise its mountains, rivers carve them, the winds bring its rain. Your places are set on it again; Undo brings back the old land.</p>`}${A.ux ? `<p>${A.ux.hand("Your own places and names are yours: they are set on the new land, not made again")}</p>` : ""}
         <label>How big <span class="wm-lsl"><span class="kn">Small</span><input type="range" name="sizeR" min="0" max="${sizes.length - 1}" step="1" value="${Math.max(0, sizes.findIndex(s2 => s2[0] === (g.size || "planet")))}" aria-label="How big the world is"><span class="kn">A whole planet</span></span><span class="kn wm-sval"></span><input type="hidden" name="size" value="${esc(g.size || "planet")}"></label>
         <label>Its shape <select name="land">${opt(lands, g.paint ? "paint" : g.sketch ? "sketch" : ["coast", "inland"].includes(g.land) ? g.land : "masses")}</select></label>
         <div class="wm-nw-pic" hidden><label>Your drawing <input type="file" name="pic" accept="image/*"></label><p class="kn">A drawing on paper or a coloured map: the land you outlined (or did not colour blue) becomes the land, and the mountains you drew (peaks, hatching, or brown and grey) become ranges. A photo of a sketch works.</p><p class="kn wm-nw-read"></p></div>
@@ -1474,10 +1499,11 @@
           <label>How much of the world is land <span class="wm-lsl"><span class="kn">10%</span><input type="range" name="share" min="0.1" max="0.9" step="0.01" value="${g.share || .4}"><span class="kn">90%</span></span><span class="kn wm-shval"></span></label>
         </div>
         <div class="wm-nw-paint" hidden>
-          <div class="wm-pal" role="radiogroup" aria-label="What to paint">${[["water", "Sea, lakes, rivers", SK ? SK.WATER : "#4f8fcf"], ...(SK ? SK.KINDS.map(k => [k[0], k[1], k[2]]) : [])].map(([k, l, c], i) => `<button type="button" class="wm-pc" data-pc="${c}" aria-pressed="${i === 1}" title="${esc(l)}"><i style="background:${c}"></i>${esc(l)}</button>`).join("")}</div>
-          <div class="wm-pbar"><label>Brush <input type="range" name="pbrush" min="2" max="60" value="14"></label><button type="button" class="wm-btn" data-nw="fromMap">Start from this map</button><button type="button" class="wm-btn" data-nw="blank">Start from the sea</button><label class="wm-btn wm-pload">Load a picture<input type="file" accept="image/*" hidden data-nw="load"></label><button type="button" class="wm-btn" data-nw="pundo">Undo stroke</button></div>
+          <div class="wm-pal" role="radiogroup" aria-label="What to paint">${[["water", PW && PW.low ? PW.low : "Sea, lakes, rivers", SK ? SK.WATER : "#4f8fcf"], ...SKL].map(([k, l, c], i) => `<button type="button" class="wm-pc" data-pc="${c}" aria-pressed="${i === 1}" title="${esc(l)}"><i style="background:${c}"></i>${esc(l)}</button>`).join("")}</div>
+          <div class="wm-pbar"><label>Brush <input type="range" name="pbrush" min="2" max="60" value="14"></label><button type="button" class="wm-btn" data-nw="fromMap">Start from this map</button><button type="button" class="wm-btn" data-nw="blank">${PL ? "Start from the low ground" : "Start from the sea"}</button><label class="wm-btn wm-pload">Load a picture<input type="file" accept="image/*" hidden data-nw="load"></label><button type="button" class="wm-btn" data-nw="pundo">Undo stroke</button></div>
           <canvas class="wm-pcv" width="600" height="400"></canvas>
-          <p class="kn">Paint the land on the sea, then forests, deserts, swamps, snow, hills, mountains and volcanoes where you want them; blue inside the land is a lake, a thin blue line a river. The plates, the rivers and the climate make the rest: the land you paint, as the Earth would make it.</p>
+          <p class="kn">${PL ? `Paint the land on the low ground (the blue), then hills, mountains, volcanoes and ice where you want them${PW.plants ? "" : ", and its forests, deserts and swamps"}; ${PW.runs ? "blue inside the land is a lake, a thin blue line a river" : "the blue is low ground, and nothing runs in it"}. Its physics make the rest.` : "Paint the land on the sea, then forests, deserts, swamps, snow, hills, mountains and volcanoes where you want them; blue inside the land is a lake, a thin blue line a river. The plates, the rivers and the climate make the rest: the land you paint, as the Earth would make it."}</p>
+          <p class="wm-nw-life" hidden></p>
         </div>
         <label class="wm-nw-loose" hidden>How closely to follow my drawing <span class="wm-lsl"><span class="kn">Exactly as drawn</span><input type="range" name="loose" min="0" max="1" step="0.05" value="${g.loose != null ? g.loose : .5}" aria-label="How closely to follow my drawing: left exactly as drawn, right loosely"><span class="kn">Loosely</span></span><span class="kn wm-lval"></span></label>
         <label>Climate <select name="climate">${opt(clim, g.climate || "varied")}</select></label>
@@ -1486,10 +1512,12 @@
         <label>The coasts <select name="coast">${opt([["geologic", "Shaped by their history: rock, ice-age glaciers, the sea's rise, rivers and waves (fjords, rias, deltas, reefs)"], ["natural", "Formed by waves, drift and sand only: beaches, cliffs, marsh, dunes, barrier islands"], ["", "Simple: beaches where the shore is low and gentle"]], g.coast != null ? g.coast : "geologic")}</select></label>
         <label>Kind of world <select name="realism">${opt([["fantasy", "Fantasy: its own places (enchanted woods, ...)"], ["realistic", "Realistic: only what the Earth would make"]], g.realism || (WD.T && WD.T.realism) || "fantasy")}</select></label>
         <label>Look <select name="look">${opt(looks, g.look || (looks.some(l => l[0] === "hydro") ? "hydro" : WD.look))}</select></label>
-        <label>Seed <input type="number" name="seed" min="1" max="999999" value="${g.seed || 1000 + Math.floor(Math.random() * 9000)}"> <button type="button" class="wm-btn" data-nw="roll">Roll</button></label>
+        <label>Seed <input type="number" name="seed" min="1" max="999999" value="${g.seed || (PL ? PL.flags.seed : 1000 + Math.floor(Math.random() * 9000))}"> <button type="button" class="wm-btn" data-nw="roll">Roll</button></label>
         <p class="kn">The same seed and choices always make the same world.</p>
-        <div class="ka">${OV.gen ? `<button type="button" data-nw="back">Back to the campaign's own land</button>` : ""}<button type="submit" value="cancel" formnovalidate>Cancel</button><button type="submit" value="make" class="prim">Make it</button></div></form>`;
+        <div class="ka">${OV.gen ? `<button type="button" data-nw="back">${PL ? "Back to the surface its physics made" : "Back to the campaign's own land"}</button>` : ""}<button type="submit" value="cancel" formnovalidate>Cancel</button><button type="submit" value="make" class="prim">Make it</button></div></form>`;
       const f = dlg.querySelector("form"), picBox = f.querySelector(".wm-nw-pic"), readOut = f.querySelector(".wm-nw-read");
+      // (a planet: its size is its own, and its climate, coasts, kind and look come from its physics)
+      if (PL) { f.elements.sizeR.value = sizes.length - 1; f.elements.size.value = "planet"; for (const nm of ["sizeR", "climate", "rules", "currents", "coast", "realism", "look"]) { const el = f.elements[nm]; if (el) el.closest("label").hidden = true; } }
       // the painter: the colour key's brushes on a little canvas the map's shape
       const pBox = f.querySelector(".wm-nw-paint"), pcv = f.querySelector(".wm-pcv"), pg = pcv.getContext("2d", { willReadFrequently: true }), pUndo = [];
       let pInit = false, pCol = (SK && SK.KINDS[0][2]) || "#a6d27c";
@@ -1507,7 +1535,7 @@
         pg.putImageData(img, 0, 0); pInit = true; pUndo.length = 0;
       };
       const blank = () => { pSize(); pg.fillStyle = SK.WATER; pg.fillRect(0, 0, pcv.width, pcv.height); pInit = true; pUndo.length = 0; };
-      const showPic = () => { const v = f.elements.land.value; picBox.hidden = v !== "sketch"; pBox.hidden = v !== "paint"; f.querySelector(".wm-nw-loose").hidden = v !== "sketch" && v !== "paint"; f.querySelector(".wm-nw-masses").hidden = v !== "masses";  if (v === "paint" && !pInit && SK) { if (g.paint) { const im = new Image(); im.onload = () => { pSize(); pg.drawImage(im, 0, 0, pcv.width, pcv.height); pInit = true; }; im.src = g.paint; } else fromMap(); } };
+      const showPic = () => { const v = f.elements.land.value; picBox.hidden = v !== "sketch"; pBox.hidden = v !== "paint"; f.querySelector(".wm-nw-loose").hidden = v !== "sketch" && v !== "paint"; f.querySelector(".wm-nw-masses").hidden = v !== "masses" || !!PL;  if (v === "paint" && !pInit && SK) { if (g.paint) { const im = new Image(); im.onload = () => { pSize(); pg.drawImage(im, 0, 0, pcv.width, pcv.height); pInit = true; }; im.src = g.paint; } else fromMap(); } };
       showPic(); f.elements.land.addEventListener("change", showPic);
       // (the size slider: its step names the size, and how big and how long it is)
       const sv = () => { const k = sizes[+f.elements.sizeR.value]; f.elements.size.value = k[0]; f.querySelector(".wm-sval").textContent = k[1]; f.elements.size.dispatchEvent(new Event("change")); };
@@ -1519,7 +1547,13 @@
       mv(); f.elements.masses.addEventListener("input", mv); f.elements.share.addEventListener("input", mv);
       for (const b of f.querySelectorAll("[data-preset]")) b.addEventListener("click", () => { const P = PRESETS[+b.dataset.preset]; f.elements.masses.value = P[1]; f.elements.share.value = P[2]; mv(); });
       f.elements.size.addEventListener("change", () => { if (pInit) pSize(); });
-      for (const b of f.querySelectorAll(".wm-pc")) b.addEventListener("click", () => { pCol = b.dataset.pc; for (const o of f.querySelectorAll(".wm-pc")) o.setAttribute("aria-pressed", o === b); });
+      // (a plant brush on a planet where nothing grows: said, and allowed when the game master says so)
+      const lifeNote = f.querySelector(".wm-nw-life"), PLANT_C = SK && PW && PW.plants ? new Set([SK.KINDS[SK.K.forest][2], SK.KINDS[SK.K.swamp][2]]) : new Set();
+      const pPick = b => { pCol = b.dataset.pc; for (const o of f.querySelectorAll(".wm-pc")) o.setAttribute("aria-pressed", o === b); };
+      for (const b of f.querySelectorAll(".wm-pc")) b.addEventListener("click", () => {
+        if (PLANT_C.has(b.dataset.pc) && !plantsOk) { lifeNote.hidden = false; lifeNote.innerHTML = `${esc(PL.name)}: ${esc(PW.plants)}, so its physics would leave that ground bare. <button type="button" class="wm-btn" data-nw="plants">Paint plants anyway</button>`; lifeNote.querySelector("button").addEventListener("click", () => { plantsOk = true; lifeNote.textContent = "Plants painted here will grow, though its physics would not have them: it is your setting."; pPick(b); }); return; }
+        pPick(b);
+      });
       f.querySelector('[data-nw="fromMap"]').addEventListener("click", fromMap);
       f.querySelector('[data-nw="blank"]').addEventListener("click", blank);
       f.querySelector('[data-nw="pundo"]').addEventListener("click", () => { const u = pUndo.pop(); if (u) pg.putImageData(u, 0, 0); });
@@ -1568,10 +1602,12 @@
           const [sw, sh] = GEN_SIZES[v.size], a = whole ? 2 : pic ? Math.max(.4, Math.min(3, pic.iw / pic.ih)) : (g.dims ? g.dims[0] / g.dims[1] : sw / sh);
           v.land = whole ? "continents" : "continent"; v.dims = whole ? [sw, sh] : [Math.round(Math.sqrt(sw * sh * a)), Math.round(Math.sqrt(sw * sh / a))];
           v.sketch = pic ? SK.encode(SK.read(pic.px, pic.iw, pic.ih, ...SK.gridFor(pic.iw, pic.ih, a))) : g.sketch;
-        } else { v.land = f.elements.land.value; if (v.land === "masses") { v.masses = +f.elements.masses.value; v.share = +f.elements.share.value; } }
+        } else { v.land = f.elements.land.value; if (v.land === "masses" && !PL) { v.masses = +f.elements.masses.value; v.share = +f.elements.share.value; } }
+        // (a planet: only its shape and seed are the game master's; the rest its physics give when it is made)
+        if (PL) { for (const k of ["climate", "rules", "currents", "coast", "realism", "look"]) delete v[k]; v.planet = true; v.size = "planet"; if (plantsOk && f.elements.land.value === "paint") v.plantsAnyway = true; }
         closeDlg();
         if (OV.shape && (OV.shape.strokes || []).length) save("shape", null);
-        if (v.look !== WD.look) save("style", Object.assign({}, OV.style || {}, { look: v.look }));
+        if (!PL && v.look !== WD.look) save("style", Object.assign({}, OV.style || {}, { look: v.look }));
         save("gen", v);
       });
       if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
@@ -1579,6 +1615,16 @@
     function genRun(g) {
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
       const W0 = JSON.parse(JSON.stringify(wData() || {})); delete W0.size;
+      // (a planet's surface: the recipe its physics give, with the game master's shape and seed; drawn in its own colours)
+      if (g.planet) {
+        const PL = planetNow(); if (!PL) return Promise.reject(new Error("its world is not in the star chart"));
+        const fl = Object.assign({}, PL.flags, { seed: g.seed || PL.flags.seed });
+        if (g.sketch) { fl.sketch = g.sketch; fl.land = g.land; if (g.dims) fl.dims = g.dims; if (g.loose != null) fl.loose = g.loose; }
+        if (g.plantsAnyway && fl.env) fl.env = Object.assign({}, fl.env, { paintLife: true });
+        // (plants painted on a world with none of its own: drawn in a plant's colour, not as its bare ground)
+        const pal = g.plantsAnyway && PL.p.palette && !PL.p.palette.plant ? Object.assign({}, PL.p.palette, { plant: "#5f7d4a" }) : PL.p.palette || null;
+        return A.worldGenerate(fl, W0).then(T => Object.assign({}, T, { look: "planet", planetPalette: pal }));
+      }
       const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
       flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.currents && g.rules !== "classic") { flags.currents = true; if (g.currents === "retro") flags.spin = "retrograde"; } else flags.currents = "off"; flags.coast = (g.coast === "natural" || g.coast === "geologic") && g.rules !== "classic" ? g.coast : "plain"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
       const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
@@ -1619,7 +1665,7 @@
     const vers = () => { const st = A.tableUI && A.tableUI.api && A.tableUI.api.store(); return st && A.ux ? A.ux.versions(st, "worldvers") : null; };
     function save(doc, data, how) {
       if (doc !== "party" && how !== "hist" && !VSNAP && vers()) { VSNAP = true; const o = ovAll(); if (Object.keys(o).length && JSON.stringify(o).length < 600000) vers().add(WID, o, "Before the changes of " + new Date().toLocaleDateString()); }
-      if (doc !== "party" && how !== "hist") { HIST.push({ doc, before: docNow(doc), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; if (KH) KH.save(HIST, REDO); }
+      if (doc !== "party" && how !== "hist") { HIST.push({ doc, before: docNow(doc), after: data == null ? null : JSON.parse(JSON.stringify(data)), t: Date.now() }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; if (KH) KH.save(HIST, REDO); if (A.ux && A.ux.changed) A.ux.changed(); }
       return put(doc, data);
     }
     function put(doc, data) {
@@ -1646,7 +1692,7 @@
       for (const doc of new Set([...Object.keys(now), ...Object.keys(was)])) if (JSON.stringify(now[doc] || null) !== JSON.stringify(was[doc] || null)) batch.push({ doc, before: now[doc] || null, after: was[doc] || null });
       if (!batch.length) { note("The map is already as it was then."); return; }
       VSNAP = true; vers().add(WID, now, "Before a version was brought back, " + new Date().toLocaleDateString());
-      HIST.push({ batch }); REDO.length = 0; if (KH) KH.save(HIST, REDO);
+      HIST.push({ batch, t: Date.now() }); REDO.length = 0; if (KH) KH.save(HIST, REDO); if (A.ux && A.ux.changed) A.ux.changed();
       for (const x of batch) put(x.doc, x.after);
       note("The map is as it was " + (A.ux ? A.ux.when(v.t) : "then") + ". Undo takes it back.");
     }
@@ -1706,7 +1752,9 @@
     const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(cur) === String(v) ? " selected" : ""}>${esc(l)}</option>`).join("");
     // the brush's kinds: the shape of the land, then every kind of land the world's setting may hold, in their groups
     function brushOptions() {
-      const K2 = A.worldBiomes, sh = [["land", BRUSH.land], ["sea", BRUSH.sea], ["mountains", BRUSH.mountains], ["hills", BRUSH.hills], ["flat", BRUSH.flat]], wet = [["forest", "Wetter (forest grows)"], ["swamp", "Wettest (swamp)"], ["grass", "Middling (grassland)"], ["desert", "Drier (desert)"]];
+      // (on a planet the brushes know it: its low ground is what its physics hold there, its plants marked where nothing grows)
+      const PL = planetNow(), PW = PL ? physWords(PL) : null, nl = s => PW && PW.plants ? `${s} (${PW.plants})` : s;
+      const K2 = A.worldBiomes, sh = [["land", BRUSH.land], ["sea", PW && PW.brush ? PW.brush : BRUSH.sea], ["mountains", BRUSH.mountains], ["hills", BRUSH.hills], ["flat", BRUSH.flat]], wet = [["forest", nl("Wetter (forest grows)")], ["swamp", nl("Wettest (swamp)")], ["grass", nl("Middling (grassland)")], ["desert", "Drier (desert)"]];
       let h = `<optgroup label="The shape of the land">${opt(sh, S.brush)}</optgroup><optgroup label="How wet the land is">${opt(wet, S.brush)}</optgroup>`;
       if (K2) { h += `<optgroup label="Clear">${opt([["natural", "As the climate makes it (erase what was painted)"]], S.brush)}</optgroup>`; for (const [label, list] of K2.brushKinds(K2.settingOf(WD.look))) h += `<optgroup label="${esc(label)}">${opt(list, S.brush)}</optgroup>`; }
       return h;
@@ -2070,7 +2118,7 @@
       const t = e.target;
       // the map drawn another way: kept with the world (the players' screen and copy follow)
       if (t.matches(".wm-look")) { if (gm()) save("style", { look: t.value }); return; }
-      if (t.matches("[data-wb]")) { if (t.dataset.wb === "m") { S.brush = t.value; renderBars(); } else S.size = +t.value || 30; drawFx(); return; }
+      if (t.matches("[data-wb]")) { if (t.dataset.wb === "m") { S.brush = t.value; renderBars(); const lw = lifeWarn(S.brush); if (lw) note(lw); } else S.size = +t.value || 30; drawFx(); return; }
       if (t.matches("[data-fk]")) filt.kinds[t.dataset.fk] = t.checked;
       else if (t.matches("[data-fr]")) filt.routes[t.dataset.fr] = t.checked;
       else if (t.matches("[data-fknow]")) filt.know = t.value;

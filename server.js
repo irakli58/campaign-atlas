@@ -179,6 +179,27 @@ async function route(req, res) {
         return send(res, 200, { word });
       }
     }
+    // the game master's own library (the editing plan of 10 Nov 2026, approved: systems, worlds, looks and places kept to
+    // use in any campaign): one file each in data/library/, on this computer only (data/ is never in the repository)
+    if (rest === "library") {
+      if (!authed) return fail(res, 403, "forbidden");
+      const LIBD = path.join(DATA, "library"), fileOf = id => /^my-[a-z0-9]{4,40}$/.test(id || "") ? path.join(LIBD, id + ".json") : null;
+      if (m === "GET") {
+        if (!fs.existsSync(LIBD)) return send(res, 200, { items: [] });
+        const items = []; for (const f of fs.readdirSync(LIBD).filter(f => /^my-[a-z0-9]+\.json$/.test(f))) { try { items.push(JSON.parse(fs.readFileSync(path.join(LIBD, f), "utf8"))); } catch (e) {} }
+        return send(res, 200, { items });
+      }
+      if (m === "POST") {
+        try {
+          const d = await body(req, 4 << 20);
+          if (d && d.forget) { const f = fileOf(d.forget); if (!f) return fail(res, 400, "Not an item of the library."); if (fs.existsSync(f)) fs.unlinkSync(f); return send(res, 200, { ok: true }); }
+          const it = d && d.item, f = it && fileOf(it.id);
+          if (!f || it.atlasLib !== 1 || !["system", "world", "look", "place"].includes(it.kind) || !it.data || typeof it.data !== "object") return fail(res, 400, "That cannot be kept in the library.");
+          fs.mkdirSync(LIBD, { recursive: true }); fs.writeFileSync(f, JSON.stringify(it));
+          return send(res, 200, { ok: true });
+        } catch (e) { return fail(res, 400, e.message); }
+      }
+    }
     // the world map's "Make its 3D map now"
     if (m === "POST" && rest === "make-city") {
       if (!authed) return fail(res, 403, "forbidden");

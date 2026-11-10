@@ -226,7 +226,10 @@
     // (the city as it was before this visit's changes, kept to bring back: item 11)
     const VS = A.ux ? A.ux.versions(st, "cityvers") : null; let vsnap = false;
     const save = steps => { ctl.ce.busy = true; st.set("cityedits", id, { steps, t: Date.now() }); ctl.ce.busy = false; redraw(ctl); };
-    const push = s => { if (VS && !vsnap) { vsnap = true; const cur = stepsOf(id); if (cur.length) VS.add(id, cur, "Before the changes of " + new Date().toLocaleDateString()); } U.redo = []; keepH(); save(stepsOf(id).concat([s])); };
+    // (this city's changes in the one history across the editors: A.ux.undoable)
+    const OPW = { add: "added", change: "changed", gate: "a gate", move: "moved", remove: "taken away" };
+    if (A.ux && A.ux.undoable) A.ux.undoable("ce-" + id, { where: () => "The city" + ((A.cities && A.cities[id] && A.cities[id].name) ? " of " + A.cities[id].name : ""), list: () => stepsOf(id).map(x => ({ what: (x.kind || x.what || (x.at && x.at.kind) || "a building") + " " + (OPW[x.op] || "changed"), t: x.t })), undo: () => undo(true), live: () => A.cityEditor.current === ctl, open: () => { const b = document.getElementById("v-city") || document.getElementById("v-gaz"); if (b) b.click(); } });
+    const push = s => { if (VS && !vsnap) { vsnap = true; const cur = stepsOf(id); if (cur.length) VS.add(id, cur, "Before the changes of " + new Date().toLocaleDateString()); } U.redo = []; keepH(); save(stepsOf(id).concat([Object.assign({ t: Date.now() }, s)])); if (A.ux && A.ux.changed) A.ux.changed(); };
     const savePeople = list => { st.set("citypeople", id, { list, t: Date.now() }); showPeople(ctl, U.selP); render(); };
     const facs = () => A.lives ? A.lives.ids().map(f => [f, (A.lives.fac(f) || {}).n || f]) : [];
     const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(cur) ? " selected" : ""}>${esc(l)}</option>`).join("");

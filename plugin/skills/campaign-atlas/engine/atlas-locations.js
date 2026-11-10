@@ -44,6 +44,29 @@
     ["hotel", "Hotel", { g: [["Lobby", "carpet-r", "waiting"], ["Dining room", "boards", "dining"], ["Kitchen", "flag", "kitchen"], ["Office", "boards", "office"]], u: [["Room", "carpet-b", "bedroom"], ["Room", "carpet-g", "bedroom"], ["Room", "carpet-b", "bedroom"], ["Room", "carpet-r", "bedroom"]], ext: { size: "large", floors: 4, roof: "pitched", sign: true } }],
     ["prison", "Prison", { g: [["Gatehouse", "flag", "office"], ["Cells", "stone", "cell"], ["Cells", "stone", "cell"], ["Guardroom", "flag", "dorm"]], u: [["Cells", "stone", "cell"], ["Cells", "stone", "cell"], ["Governor's office", "boards", "office"]], ext: { size: "large", floors: 2, roof: "flat" } }],
     ["station", "Station or base module", { g: [["Airlock", "metal", ""], ["Control room", "metal", "office"], ["Mess", "metal", "dining"], ["Laboratory", "metal", "lab"]], u: [["Quarters", "metal", "dorm"], ["Quarters", "metal", "dorm"]], c: [["Engineering", "grating", "boiler"]], ext: { size: "medium", floors: 1, roof: "dome" } }],
+    // science fiction (the editing plan of 10 Nov 2026, stage 5), each with its own starting plan
+    ["spaceport", "Spaceport", { g: [["Arrivals hall", "lino", "waiting"], ["Customs", "metal", "office"], ["Security", "metal", "cell"], ["Hangar", "grating", "store"], ["Cargo depot", "grating", "store"], ["Bar", "metal", "bar"]], u: [["Traffic control", "metal", "office"], ["Offices", "lino", "office"], ["Lounge", "carpet-b", "parlour"]], c: [["Fuel store", "concrete", "boiler"], ["Maintenance", "grating", "workshop"]], ext: { size: "huge", floors: 2, roof: "flat", sign: true } }],
+    ["colony", "Colony dome", { g: [["Commons", "lino", "dining"], ["Hydroponics", "grating", ""], ["Infirmary", "tile", "surgery"], ["Workshop", "grating", "workshop"], ["Airlock", "metal", ""], ["School", "lino", "classroom"]], u: [["Quarters", "lino", "dorm"], ["Quarters", "lino", "dorm"], ["Family rooms", "carpet-g", "bedroom"], ["Administrator's office", "carpet-b", "office"]], c: [["Life support", "grating", "boiler"], ["Water plant", "concrete", "boiler"], ["Stores", "metal", "store"]], ext: { size: "huge", floors: 2, roof: "dome" } }],
+    ["research", "Research station", { g: [["Laboratory", "tile", "lab"], ["Laboratory", "tile", "lab"], ["Clean room", "tile", "lab"], ["Specimen store", "tile", "ice"], ["Director's office", "carpet-b", "office"], ["Airlock", "metal", ""]], u: [["Quarters", "lino", "dorm"], ["Mess", "lino", "dining"], ["Observatory", "metal", "lab"], ["Library", "carpet-g", "library"]], c: [["Containment", "tile", "cell"], ["Server room", "metal", "office"], ["Generator", "metal", "boiler"]], ext: { size: "large", floors: 2, roof: "flat" } }],
+    ["miningfac", "Mining facility", { g: [["Processing plant", "grating", "workshop"], ["Ore store", "grating", "store"], ["Control room", "metal", "office"], ["Locker room", "metal", "wash"], ["Mess", "lino", "dining"]], u: [["Bunkhouse", "metal", "dorm"], ["Bunkhouse", "metal", "dorm"], ["Foreman's office", "lino", "office"]], c: [["Shaft head", "earth", ""], ["Gallery", "earth", ""], ["Explosives store", "concrete", "strong"]], ext: { size: "large", floors: 2, roof: "flat", cond: "worn" } }],
+    ["milbase", "Military base", { g: [["Guardhouse", "concrete", "office"], ["Command centre", "metal", "office"], ["Armoury", "metal", "strong"], ["Barracks", "metal", "dorm"], ["Mess hall", "lino", "dining"], ["Motor pool", "concrete", "workshop"]], u: [["Officers' quarters", "carpet-b", "bedroom"], ["Communications", "metal", "office"], ["Briefing room", "lino", "classroom"], ["Infirmary", "tile", "ward"]], c: [["Bunker", "concrete", "office"], ["Brig", "metal", "cell"], ["Ammunition store", "concrete", "store"]], ext: { size: "huge", floors: 2, roof: "flat" } }],
+    ["outpost", "Outpost", { g: [["Airlock", "metal", ""], ["Common room", "metal", "parlour"], ["Bunk room", "metal", "dorm"], ["Workshop", "grating", "workshop"], ["Radio room", "metal", "office"]], c: [["Generator", "metal", "boiler"], ["Stores", "metal", "store"]], ext: { size: "small", floors: 1, roof: "dome", cond: "worn" } }],
+    // (a ring station: its rooms round the outside, a corridor round inside them, the hub in the middle)
+    ["ring", "Space station: a ring", { layout: "ring", core: ["The hub", "metal", "office"], g: [["Docking port", "metal", ""], ["Concourse", "lino", "waiting"], ["Market", "lino", "shop"], ["Medical bay", "tile", "surgery"], ["Security", "metal", "cell"], ["Quarters", "lino", "dorm"], ["Quarters", "lino", "dorm"], ["Observation deck", "carpet-b", "parlour"], ["Bar", "metal", "bar"], ["Hydroponics", "grating", ""]], u: [["Cabins", "lino", "bedroom"], ["Cabins", "lino", "bedroom"], ["Cabins", "lino", "bedroom"], ["Cabins", "lino", "bedroom"], ["Mess", "lino", "dining"], ["Gym", "lino", ""], ["Laundry", "tile", "wash"], ["Stores", "metal", "store"]], c: [["Reactor", "metal", "boiler"], ["Life support", "grating", "boiler"], ["Cargo", "grating", "store"], ["Maintenance", "grating", "workshop"]], ext: { size: "huge", floors: 3, roof: "dome" } }],
+    ["hub", "Space station: a hub", { g: [["Docking bay", "grating", "store"], ["Customs", "metal", "office"], ["Concourse", "lino", "waiting"], ["Market", "lino", "shop"], ["Medical bay", "tile", "surgery"], ["Security", "metal", "cell"]], u: [["Command", "metal", "office"], ["Quarters", "lino", "dorm"], ["Quarters", "lino", "dorm"], ["Observation deck", "carpet-b", "parlour"]], c: [["Reactor", "metal", "boiler"], ["Life support", "grating", "boiler"], ["Cargo", "grating", "store"]], ext: { size: "huge", floors: 3, roof: "dome" } }],
+    ["habitat", "Habitat", { g: [["Commons", "lino", "parlour"], ["Galley", "tile", "kitchen"], ["Hydroponics", "grating", ""], ["Medical bay", "tile", "surgery"], ["Airlock", "metal", ""]], u: [["Cabin", "lino", "bedroom"], ["Cabin", "lino", "bedroom"], ["Cabin", "lino", "bedroom"], ["Cabin", "lino", "bedroom"]], c: [["Life support", "grating", "boiler"], ["Water recycling", "concrete", "boiler"], ["Stores", "metal", "store"]], ext: { size: "medium", floors: 2, roof: "dome" } }],
+    // (ships, made deck by deck by the ship maker, scripts/ship.js, as atlas.js ship makes them: the bridge forward,
+    // engineering aft, a lift through the decks, every room with its guide, and a first draft of what is aboard)
+    ["shuttle", "Ship: a shuttle or small craft", { ship: "small", ext: { size: "small", floors: 1, roof: "flat" } }],
+    ["freighter", "Ship: a freighter", { ship: "medium", ext: { size: "large", floors: 2, roof: "flat" } }],
+    ["cruiser", "Ship: a cruiser or large ship", { ship: "large", ext: { size: "huge", floors: 3, roof: "flat" } }],
+    ["derelictship", "A derelict ship", { ship: "medium", derelict: true, ext: { size: "large", floors: 2, roof: "flat", cond: "ruined" } }],
+    // fantasy and modern
+    ["village", "Village", { g: [["The green", "grass", ""], ["Smithy", "earth", "workshop"], ["The inn", "boards", "taproom"], ["The well", "yard", "yard"], ["Chapel", "flag", "chapel"], ["Cottage", "boards", "bedroom"], ["Cottage", "boards", "bedroom"], ["Mill", "boards", "store"]], hall: "The lane", ext: { size: "huge", floors: 1, roof: "pitched" } }],
+    ["farm", "Farm", { g: [["Farmhouse kitchen", "flag", "kitchen"], ["Parlour", "boards", "parlour"], ["Dairy", "flag", "pantry"], ["Barn", "straw", "stable"], ["Stable", "straw", "stable"], ["Yard", "yard", "yard"]], u: [["Bedroom", "boards", "bedroom"], ["Bedroom", "boards", "bedroom"], ["Hayloft", "straw", "attic"]], c: [["Root cellar", "earth", "cellar"]], ext: { size: "large", floors: 2, roof: "pitched", chimney: true } }],
+    ["ruin", "Ruin", { g: [["Fallen hall", "stone", ""], ["Broken tower", "stone", ""], ["Overgrown court", "grass", ""], ["Collapsed chapel", "flag", "chapel"]], c: [["Crypt", "stone", "cellar"], ["Sealed vault", "stone", "strong"]], ext: { size: "large", floors: 1, roof: "tower", cond: "ruined" } }],
+    ["dungeon", "Dungeon", { g: [["Entrance", "stone", ""], ["Guardroom", "stone", "dorm"], ["Cells", "stone", "cell"], ["Store", "stone", "store"]], c: [["Torture chamber", "stone", ""], ["Crypt", "stone", "cellar"], ["Treasure room", "stone", "strong"], ["Shrine", "stone", "chapel"]], hall: "Passage", ext: { size: "medium", floors: 1, roof: "tower", cond: "worn" } }],
+    ["home", "Modern home", { g: [["Living room", "carpet-g", "parlour"], ["Kitchen", "lino", "kitchen"], ["Dining room", "boards", "dining"], ["Garage", "concrete", "workshop"], ["Bathroom", "tile", "wash"]], u: [["Bedroom", "carpet-b", "bedroom"], ["Bedroom", "boards", "bedroom"], ["Child's room", "boards", "nursery"], ["Bathroom", "tile", "wash"], ["Study", "carpet-g", "office"]], c: [["Basement", "concrete", "store"]], ext: { size: "medium", floors: 2, roof: "pitched" } }],
     // a cave (atlas-cave.js): its inside is a generated cave, or solid rock to carve; outside, a mound of rock
     ["cave", "Cave or mine", { g: [], u: [], c: [], ext: { size: "medium", floors: 1, roof: "dome", cond: "ruined", wall: "#6b6258", roofc: "#5a5248" } }],
     ["other", "Something else", { g: [["Room", "boards", ""], ["Room", "boards", ""], ["Room", "boards", ""]], u: [["Room", "boards", ""], ["Room", "boards", ""]], c: [["Cellar", "flag", "cellar"]], ext: { size: "medium", floors: 1, roof: "pitched" } }]
@@ -82,10 +105,11 @@
       const floors = [empty("Ground floor")]; for (let i = 0; i < nUp; i++) floors.push(empty(["First", "Second", "Third", "Fourth", "Fifth", "Sixth"][i] ? ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"][i] + " floor" : "Floor " + (i + 2))); if (o.cellar) floors.push(empty("Cellar"));
       link(floors, W, H, o.cellar); return { floors, entry: [floors[0].R[0][0]] };
     }
-    const floors = [floorOf("Ground floor", K.g, fut ? "Corridor" : "Hall")];
+    if (K.layout === "ring" && !(o && o.blank)) return ringInside(K, W, H, nUp, o, kindFor);
+    const floors = [floorOf("Ground floor", K.g, K.hall || (fut ? "Corridor" : "Hall"))];
     floors[0].D.push([0, Math.floor(H / 2) - 1, "v", "dd", 2]);          // the way in, from the street
     for (let i = 0; i < nUp; i++) floors.push(floorOf(["First", "Second", "Third", "Fourth", "Fifth", "Sixth"][i] ? ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"][i] + " floor" : "Floor " + (i + 2), K.u || K.g, fut ? "Corridor" : "Landing"));
-    if (o && o.cellar) floors.push(floorOf(fut ? "Lower deck" : "Cellar", K.c || [["Cellar", "flag", "cellar"]], fut ? "Corridor" : "Passage"));
+    if (o && o.cellar) floors.push(floorOf(fut ? "Lower deck" : "Cellar", K.c || [["Cellar", "flag", "cellar"]], K.hall || (fut ? "Corridor" : "Passage")));
     link(floors, W, H, o && o.cellar);
     // the way in: the hall the front door opens into
     return { floors, entry: [floors[0].R[0][0]] };
@@ -97,6 +121,50 @@
     }
   }
   L.interior = interior;
+  // a ring station's deck: the rooms in a band round the outside, each with its door onto the corridor that runs round
+  // inside them, and the hub in the middle with a door on each side; the decks joined by stairs in the hub
+  function ringInside(K, W, H, nUp, o, kindFor) {
+    let rid = 0, sid = 0; const t = Math.max(3, Math.floor(Math.min(W, H) / 4.5));
+    const deck = (n, rooms, core) => {
+      const R = [], D = [], cor = [["R" + (++rid), t, t, W - 2 * t, 2], ["R" + (++rid), t, H - t - 2, W - 2 * t, 2], ["R" + (++rid), t, t + 2, 2, H - 2 * t - 4], ["R" + (++rid), W - t - 2, t + 2, 2, H - 2 * t - 4]];
+      for (const c of cor) R.push(c.concat(["The ring corridor", kindFor("metal")]));
+      const cx = t + 2, cy = t + 2, cw = W - 2 * t - 4, ch = H - 2 * t - 4, cr = ["R" + (++rid), cx, cy, cw, ch, core[0], kindFor(core[1])]; if (core[2]) cr.push({ fx: core[2] }); R.push(cr);
+      D.push([cx + Math.floor(cw / 2), cy, "h", "d", 1], [cx + Math.floor(cw / 2), cy + ch, "h", "d", 1], [cx, cy + Math.floor(ch / 2), "v", "d", 1], [cx + cw, cy + Math.floor(ch / 2), "v", "d", 1]);
+      // (the band: the top and bottom rows across the whole width, the sides between them)
+      const n4 = rooms.length, top = rooms.slice(0, Math.ceil(n4 * .3)), bot = rooms.slice(top.length, top.length + Math.ceil(n4 * .3)), lft = rooms.slice(top.length + bot.length, top.length + bot.length + Math.ceil((n4 - top.length - bot.length) / 2)), rgt = rooms.slice(top.length + bot.length + lft.length);
+      const put = (nm, k, fx, x, y, w, h, door) => { const r = ["R" + (++rid), x, y, w, h, nm, kindFor(k)]; if (fx) r.push({ fx }); R.push(r); D.push(door); };
+      const row = (list, y, h, dy) => { const step = W / Math.max(1, list.length); list.forEach(([nm, k, fx], i) => { const x0 = Math.round(i * step), x1 = Math.round((i + 1) * step), dx = Math.max(t, Math.min(W - t - 1, x0 + Math.floor((x1 - x0) / 2))); put(nm, k, fx, x0, y, x1 - x0, h, [dx, dy, "h", "d", 1]); }); };
+      const col = (list, x, w, dx) => { const span = H - 2 * t, step = span / Math.max(1, list.length); list.forEach(([nm, k, fx], i) => { const y0 = t + Math.round(i * step), y1 = t + Math.round((i + 1) * step); put(nm, k, fx, x, y0, w, y1 - y0, [dx, y0 + Math.floor((y1 - y0) / 2), "v", "d", 1]); }); };
+      row(top.length ? top : [["Ring section", "metal", ""]], 0, t, t); row(bot.length ? bot : [["Ring section", "metal", ""]], H - t, t, H - t);
+      col(lft.length ? lft : [["Ring section", "metal", ""]], 0, t, t); col(rgt.length ? rgt : [["Ring section", "metal", ""]], W - t, t, W - t);
+      return { n, w: W, h: H, R, D, ST: [], M: [], I: [] };
+    };
+    const floors = [deck("Ring deck", K.g, K.core)];
+    // (the way in: through the hull, into the first room of the left side's band)
+    floors[0].D.push([0, Math.floor(H / 2), "v", "dd", 2]);
+    for (let i = 0; i < nUp; i++) floors.push(deck(["Upper ring", "Second ring", "Third ring", "Fourth ring"][i] || "Ring " + (i + 2), K.u || K.g, ["The hub", "metal", ""]));
+    if (o && o.cellar) floors.push(deck("Lower deck", K.c || [["Stores", "metal", "store"]], ["Core shaft", "metal", "boiler"]));
+    const ups = o && o.cellar ? floors.length - 1 : floors.length, sx = t + 3, sy = t + 3, ex = W - t - 5;
+    for (let i = 0; i + 1 < ups; i++) { const id = "ST" + (++sid); floors[i].ST.push([id, ex, sy, 2, 2, "up", floors[i + 1].n, "e"]); floors[i + 1].ST.push([id, ex, sy, 2, 2, "down", floors[i].n, "e"]); }
+    if (o && o.cellar) { const c = floors[floors.length - 1], id = "ST" + (++sid); floors[0].ST.push([id, sx, sy, 2, 2, "down", c.n, "w"]); c.ST.push([id, sx, sy, 2, 2, "up", floors[0].n, "w"]); }
+    return { floors, entry: [floors[0].R[0][0]] };
+  }
+  // a ship's inside, deck by deck, from the ship maker (scripts/ship.js, put in the page by atlas.js build): its rooms
+  // and their guide, and a first draft of what is aboard; without it, a plan of rooms of a station module
+  function shipInside(def, blank) {
+    const K = (KIND[def.type] || KIND.other)[2];
+    if (blank || !A.shipGen || !A.shipGen.makeShipPlace) return interior("station", def.ext, { blank, cellar: (+def.ext.floors || 1) > 1 });
+    try { return A.shipGen.makeShipPlace({ name: def.name || "The ship", size: K.ship, seed: def.name + "|" + Date.now(), derelict: !!K.derelict, tier: K.ship === "large" ? 1 : 2, decks: Math.max(1, Math.min(5, +def.ext.floors || 0)) || undefined }).map; } catch (e) { console.warn(e); return interior("station", def.ext, { blank }); }
+  }
+  L.isShip = type => !!((KIND[type] || [])[2] || {}).ship;
+  // a new place's inside, by its kind
+  function insideOf(def, r) {
+    const m = def.type === "cave" ? caveInside(def, r.start === "blank") : L.isShip(def.type) ? shipInside(def, r.start === "blank") : interior(def.type, def.ext, { blank: r.start === "blank", cellar: r.cellar });
+    // (what a generated inside says it is, for the game master's notes where they wrote none)
+    if (m && m.ov && !def.kp) def.kp = m.ov;
+    if (m && typeof m.ext === "string" && m.ext && !def.pd && L.isShip(def.type)) def.pd = m.ext;
+    return m;
+  }
 
   /* ---- keeping them: the page's database, and in the Atlas app the campaign's own files */
   const slug = s => String(s || "place").toLowerCase().normalize("NFKD").replace(/[^\w\s-]/g, "").trim().replace(/[\s_]+/g, "-").replace(/-+/g, "-").slice(0, 28) || "place";
@@ -124,7 +192,13 @@
   let dlg = null, draft = null, cityCtl = null, where = null;
   // (a place made somewhere other than a city, the editing plan of 10 Nov 2026: at a location of the world map or a
   // planet's surface, or at a station or site of a star system; its kind from what stands there)
-  const FROMW = { inn: "tavern", manor: "mansion", capital: "mansion", castle: "castle", keep: "castle", fort: "castle", tower: "tower", lighthouse: "tower", temple: "temple", monastery: "temple", shrine: "shrine", cave: "cave", lair: "cave", dungeon: "cave", mine: "mine", mining: "mine", camp: "hideout", base: "bunker", station: "station", outpost: "station", orbital: "station", ship: "station", wreck: "station", derelict: "station", colony: "station", research: "laboratory", farm: "house", village: "house", hamlet: "house", settlement: "house", town: "shop", city: "shop", port: "warehouse", airport: "warehouse", lostship: "station", freighter: "station", ambush: "station", abandoned: "station", military: "bunker", hidden: "bunker", refuel: "station", gate: "station", alien: "other", beacon: "other", signal: "other", transmission: "other" };
+  const FROMW = { inn: "tavern", manor: "mansion", capital: "mansion", castle: "castle", keep: "castle", fort: "castle", tower: "tower", lighthouse: "tower", temple: "temple", monastery: "temple", shrine: "shrine", cave: "cave", lair: "cave", dungeon: "cave", mine: "mine", mining: "miningfac", camp: "hideout", base: "milbase", station: "hub", outpost: "outpost", orbital: "ring", ship: "freighter", wreck: "derelictship", derelict: "derelictship", colony: "colony", research: "research", spaceport: "spaceport", habitat: "habitat", farm: "farm", village: "village", hamlet: "village", ruin: "ruin", settlement: "house", town: "shop", city: "shop", port: "warehouse", airport: "warehouse", lostship: "freighter", freighter: "freighter", ambush: "freighter", abandoned: "derelictship", military: "milbase", hidden: "bunker", refuel: "hub", gate: "hub", alien: "other", beacon: "other", signal: "other", transmission: "other" };
+  // (the kinds in their groups: science fiction first in a story of the future)
+  const KGROUP = { sf: ["Science fiction", ["spaceport", "colony", "research", "miningfac", "milbase", "outpost", "ring", "hub", "habitat", "station", "shuttle", "freighter", "cruiser", "derelictship"]], fa: ["Fantasy and the past", ["castle", "tower", "village", "farm", "ruin", "dungeon", "temple", "shrine", "cave", "mine", "hideout"]] };
+  function kindOpts(cur) {
+    const grp = k => KGROUP.sf[1].includes(k) ? "sf" : KGROUP.fa[1].includes(k) ? "fa" : "ev", order = future() ? ["sf", "ev", "fa"] : ["ev", "fa", "sf"], name = { sf: KGROUP.sf[0], fa: KGROUP.fa[0], ev: "Towns and cities, then and now" };
+    return order.map(g => `<optgroup label="${esc(name[g])}">${opts(KINDS.filter(k => grp(k[0]) === g && k[0] !== "other").map(k => [k[0], k[1]]), cur)}</optgroup>`).join("") + opts([["other", KIND.other[1]]], cur);
+  }
   const opts = (list, cur) => list.map(([k, n]) => `<option value="${esc(k)}"${k === cur ? " selected" : ""}>${esc(n)}</option>`).join("");
   function districtsOf(ctl) { const D = (ctl && ctl.D) || {}; return Object.keys(D.districts || {}); }
   function form(def, isNew) {
@@ -132,7 +206,7 @@
     return `<form class="loc-form" method="dialog">
       <div class="loc-head"><h3>${isNew ? "A place of your own" : real ? "Name and notes" : "Name, outside and notes"}</h3><button type="button" class="t-btn" data-locd="x" aria-label="Close">Close</button></div>
       <div class="loc-g2"><label>Name<input class="t-in" name="name" value="${esc(def.name || "")}" maxlength="80" required placeholder="The Rusty Anchor"></label>
-        <label>What kind of place<select class="t-in" name="type">${opts(kinds, def.type || "tavern")}</select></label></div>
+        <label>What kind of place<select class="t-in" name="type">${kindOpts(def.type || (future() ? "hub" : "tavern"))}</select></label></div>
       ${isNew ? `<p class="t-small">That is all it needs: the rest can be left for later, and changed whenever you like.${real ? " This is a real city, so nothing new is built in it: next, you choose which of its own buildings the place is in, and it stays as it stands." : ""}</p>` : ""}
       <details class="loc-more"${isNew ? "" : " open"}><summary>What it is</summary>
         <label>What the players see when they arrive (read aloud)<textarea class="t-in" name="pd" rows="3" maxlength="3000">${esc(def.pd || "")}</textarea></label>
@@ -182,8 +256,20 @@
     }
     draft = { def: copy(def), isNew };
     dlg.innerHTML = form(def, isNew);
+    if (isNew) offerMine();
     if (!dlg.open) dlg.showModal();
     setTimeout(() => { const n = dlg.querySelector('[name="name"]'); if (n) { n.focus(); n.select(); } }, 30);
+  }
+  // (places of your own library, offered as a start: a copy of one, its kind, outside, words and inside)
+  let MYPL = [];
+  function offerMine() {
+    if (!A.myLibrary || !dlg) return; A.myLibrary.list("place").then(l => { MYPL = l; const sel = dlg.querySelector('select[name="start"]'); if (!sel || !l.length || sel.querySelector("optgroup")) return; sel.insertAdjacentHTML("beforeend", `<optgroup label="From my library">${l.map(it => `<option value="my:${esc(it.id)}">${esc(it.name)}${it.say ? " (" + esc(it.say) + ")" : ""}</option>`).join("")}</optgroup>`); });
+  }
+  function fromMine(def, r) {
+    const it = String(r.start || "").startsWith("my:") && MYPL.find(x => x.id === r.start.slice(3)); if (!it) return null; const d = it.data || {};
+    Object.assign(def, { type: d.type || def.type, typeName: d.typeName || def.typeName, ext: Object.assign({}, copy(d.ext || {}), def.ext && def.ext.sign ? { sign: def.ext.sign } : {}) });
+    if (!def.pd && d.pd) def.pd = d.pd; if (!def.kp && d.kp) def.kp = d.kp; if (!def.notes && d.notes) def.notes = d.notes;
+    return copy(d.map || {});
   }
   async function onDialogClick(e) {
     const b = e.target.closest("[data-locd]"); if (!b) return;
@@ -196,8 +282,7 @@
       // a new place: its inside is drawn now, from its kind (or an empty shell), and kept with it
       const id = newId(r.def.name), def = Object.assign(r.def, { city: (cityCtl && cityCtl.city) || undefined });
       if (def.ext.sign === "" && (KIND[def.type] || KIND.other)[2].ext.sign) def.ext.sign = def.name;
-      def.map = def.type === "cave" ? caveInside(def, r.start === "blank") : interior(def.type, def.ext, { blank: r.start === "blank", cellar: r.cellar });
-      if (def.type === "cave" && def.map.ov && !def.kp) def.kp = def.map.ov;
+      def.map = fromMine(def, r) || insideOf(def, r);
       dlg.close(); draft = null;
       startPlacing(id, def, true);
     }
@@ -205,8 +290,7 @@
       // a place of the campaign at a world's location, a planet's, or a star system's site: its inside drawn from its
       // kind as a city's is, kept, and its page opened (where "Build the interior" is)
       const id = newId(r.def.name), w = where, def = Object.assign(r.def, { location: w.location || undefined, world: w.world || undefined, system: w.system || undefined, planet: w.planet != null ? w.planet : undefined, site: w.site != null ? w.site : undefined, thing: w.thing || undefined, from: w.label || undefined });
-      def.map = def.type === "cave" ? caveInside(def, r.start === "blank") : interior(def.type, def.ext, { blank: r.start === "blank", cellar: r.cellar });
-      if (def.type === "cave" && def.map.ov && !def.kp) def.kp = def.map.ov;
+      def.map = fromMine(def, r) || insideOf(def, r);
       dlg.close(); draft = null; where = null;
       await keep(id, def); if (w.done) try { w.done(id); } catch (e) { console.warn(e); }
     }
@@ -300,7 +384,7 @@
     const made = def.created ? new Date(def.created).toLocaleDateString() : "";
     return `<section class="sec keeper loc-panel"><h3>${ICON} A place of your own</h3>
       <p class="loc-sum">${esc(def.typeName || "A place")}${def.district ? " · " + esc(def.district) : ""} · ${esc(cond)}${def.locked ? " · locked" : ""}${made ? ` · made ${esc(made)}` : ""}${def.t && def.t !== def.created ? ` · changed ${esc(new Date(def.t).toLocaleDateString())}` : ""}</p>
-      <div class="loc-acts"><button type="button" class="t-btn prim" data-loc="build" data-id="${esc(p.id)}">Build the interior</button><button type="button" class="t-btn" data-loc="edit" data-id="${esc(p.id)}">${((def.city && A.cities && A.cities[def.city]) || A.cityData || {}).real ? "Name and notes" : "Name, outside and notes"}</button><button type="button" class="t-btn" data-loc="move" data-id="${esc(p.id)}">Move it</button><button type="button" class="t-btn" data-loc="dup" data-id="${esc(p.id)}">Duplicate</button>${A.askChange ? `<button type="button" class="t-btn" data-loc="ask" data-id="${esc(p.id)}" title="Say what should change; see what it replaces before anything does">Ask for a change…</button>` : ""}${def.prevMap ? `<button type="button" class="t-btn" data-loc="prevmap" data-id="${esc(p.id)}" title="Put back the inside it had before it was drawn again (the one it has now is kept in its place)">Bring back the inside it had</button>` : ""}<button type="button" class="t-btn loc-del" data-loc="del" data-id="${esc(p.id)}">Delete…</button></div>
+      <div class="loc-acts"><button type="button" class="t-btn prim" data-loc="build" data-id="${esc(p.id)}">Build the interior</button><button type="button" class="t-btn" data-loc="edit" data-id="${esc(p.id)}">${((def.city && A.cities && A.cities[def.city]) || A.cityData || {}).real ? "Name and notes" : "Name, outside and notes"}</button><button type="button" class="t-btn" data-loc="move" data-id="${esc(p.id)}">Move it</button><button type="button" class="t-btn" data-loc="dup" data-id="${esc(p.id)}">Duplicate</button>${A.myLibrary ? `<button type="button" class="t-btn" data-loc="mylib" data-id="${esc(p.id)}" title="A copy of it, its inside as it stands, to start a place with in any of your campaigns">Keep it in my library</button>` : ""}${A.askChange ? `<button type="button" class="t-btn" data-loc="ask" data-id="${esc(p.id)}" title="Say what should change; see what it replaces before anything does">Ask for a change…</button>` : ""}${def.prevMap ? `<button type="button" class="t-btn" data-loc="prevmap" data-id="${esc(p.id)}" title="Put back the inside it had before it was drawn again (the one it has now is kept in its place)">Bring back the inside it had</button>` : ""}<button type="button" class="t-btn loc-del" data-loc="del" data-id="${esc(p.id)}">Delete…</button></div>
       ${def.notes ? `<p class="loc-notes"><span class="kl">Your notes</span>${esc(def.notes)}</p>` : ""}
       <div class="loc-links"><span class="kl">Who and what belongs here</span>${links.length ? `<ul>${links.map(l => `<li>${esc(St.name(l.other))} <span class="t-small">(${esc(l.rel)})</span></li>`).join("")}</ul>` : `<p class="t-small">Nobody yet. People and things joined here are joined in the investigation too, and the clues you put on its maps are its clues.</p>`}
         ${St && St.link ? `<form class="loc-link" data-locform="link" data-id="${esc(p.id)}"><select class="t-in" name="who" aria-label="Who or what"><option value="">Someone or something…</option>${people.map(q => `<option value="${esc(q.ref)}">${esc(q.name)}</option>`).join("")}${items.map(([r, n]) => `<option value="${esc(r)}">${esc(n)}</option>`).join("")}</select><select class="t-in" name="rel" aria-label="How">${opts(RELS, "involves")}</select><button class="t-btn">Join</button></form>` : ""}</div>
@@ -331,6 +415,12 @@
       const src = A.mapEdits[id] ? { floors: copy(A.mapEdits[id].floors) } : def.map ? copy(def.map) : null;
       const nd = Object.assign(copy(def), { name: def.name + " (copy)", map: src, created: 0, at: def.at ? [def.at[0] + 6, def.at[1] + 6] : def.at });
       withCity(def.city, () => startPlacing(newId(nd.name), nd, true)); return;
+    }
+    if (a === "mylib") {
+      // (a copy: its kind, outside, words and its inside as it stands now, redrawn or not; nothing that ties it here)
+      if (!A.myLibrary) return; const map = Object.assign(def.map ? copy(def.map) : {}, A.mapEdits[id] ? { floors: copy(A.mapEdits[id].floors) } : {});
+      A.myLibrary.save({ kind: "place", name: def.name, say: (def.typeName || (KIND[def.type] || KIND.other)[1]) + (map.floors ? `, ${map.floors.length} floor${map.floors.length === 1 ? "" : "s"}` : ""), data: { type: def.type, typeName: def.typeName, ext: copy(def.ext || {}), pd: def.pd || "", kp: def.kp || "", notes: def.notes || "", map } })
+        .then(() => tell(`${def.name} kept in your library, ${A.myLibrary.where()}: a new place can start from it.`), e => tell("Not kept: " + e.message)); return;
     }
     if (a === "del") askDelete(id);
     if (a === "ask" && A.askChange) { A.askChange(askTarget(id)); return; }
@@ -395,7 +485,7 @@
           plan: v => ({ change: `Draw ${def.name}'s inside again${v.blank ? ", as an empty shell" : `, as ${((KIND[v.type] || K)[1]).toLowerCase()}`}${v.cellar ? ", with a cellar" : ""}`,
             replaces: [`its inside as it is: ${fl(floors)}, ${rooms} rooms${edited ? ", with your changes to it" : ""}`, ...(clues ? [`where its ${clues} clue${clues === 1 ? " lies" : "s lie"} on the floors (the clue${clues === 1 ? " stays" : "s stay"} in the investigation: put ${clues === 1 ? "it" : "them"} on the new floors)`] : []), ...(npcs ? [`where ${npcs} ${npcs === 1 ? "person stands" : "people stand"} on its floors (they stay in the campaign)`] : []), ...(v.type !== def.type ? [`what kind of place it is: ${K[1].toLowerCase()} → ${(KIND[v.type] || K)[1].toLowerCase()}`] : [])],
             keeps: ["its name, its outside and where it stands", "its people and clues in the investigation", "the inside it had, kept with it: \"Bring back the inside it had\" on its page undoes this"] }),
-          apply: v => { const old = A.mapEdits[id] ? { floors: cp(A.mapEdits[id].floors) } : def.map ? cp(def.map) : null; const nd = Object.assign({}, def, { type: v.type, typeName: (KIND[v.type] || K)[1], prevMap: old }); return setInside(id, nd, v.type === "cave" ? caveInside(nd, v.blank) : interior(v.type, nd.ext || {}, { blank: v.blank, cellar: v.cellar })); } }
+          apply: v => { const old = A.mapEdits[id] ? { floors: cp(A.mapEdits[id].floors) } : def.map ? cp(def.map) : null; const nd = Object.assign({}, def, { type: v.type, typeName: (KIND[v.type] || K)[1], prevMap: old }); return setInside(id, nd, v.type === "cave" ? caveInside(nd, v.blank) : L.isShip(v.type) ? shipInside(nd, v.blank) : interior(v.type, nd.ext || {}, { blank: v.blank, cellar: v.cellar })); } }
       }
     };
     if (realCity) delete t.ops.outside;

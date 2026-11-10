@@ -169,6 +169,9 @@
         const rows = (h.rows || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("");
         return `<article class="ho ho-survey era-${e}"><header><span>${esc(h.title || "Survey")}</span><span>${esc(h.date || "")}</span></header><div class="ho-sv">${h.svg ? `<div class="ho-globe">${h.svg}</div>` : ""}<table>${rows}</table></div>${h.text ? `<div class="ho-body">${paras(h.text)}</div>` : ""}${h.from ? `<footer>${esc(h.from)}</footer>` : ""}</article>`;
       }
+      case "deckplan": {   // a place's plan, floor by floor or deck by deck, only what the players have seen (atlas-table-gm.js)
+        return `<article class="ho ho-deckplan era-${e}"><header><span>${esc(h.title || "A plan")}</span><span>${esc(h.date || "")}</span></header>${(h.decks || []).map(d => `<section class="ho-deck"><h5>${esc(d.name)}</h5><div class="ho-dsvg">${d.svg || ""}</div></section>`).join("")}${h.text ? `<div class="ho-body">${paras(h.text)}</div>` : ""}</article>`;
+      }
       case "inscription":   // words cut in stone: a riddle shown to the players (atlas-caveui.js)
         return `<article class="ho ho-stone era-${e}">${head}<div class="ho-body">${body}</div></article>`;
       case "scroll":

@@ -496,6 +496,8 @@ reviews/2026-11-05-ux-review.md). Two engine files hold what every part of Atlas
 
 **engine/atlas-ux.js (the pieces each editor and each of Claude's tools use):**
 - `A.ux.editing(el, label, host)`: the edge round a map being edited, and what is in hand. Every editor shows it.
+- **One history across the editors** (the editing plan of 10 Nov 2026, section 4 item 5): an editor registers with `A.ux.undoable(key, { where(), list() → [{ what, t }], undo(), live(), open() })` and calls `A.ux.changed()` after a change; the **Changes** button beside Back and Forward (`#nav-chg`) opens the window of every change, newest first, taking back the newest of any editor. Registered: the star chart (`gx`), each world map (`wm-<world>`), each city editor (`ce-<city>`). A new editor registers too.
+- **A plan for the players** (section 4 item 4): the fog panel's *Hand them its plan* gives a handout of kind `deckplan` (`decks: [{ name, svg }]`, each floor as the players' map draws it under the fog), kept in `given`.
 - The save mark: every write through the table's store says "Saving…", then "Saved" or "Not saved", in each
   `.ux-save` (`A.ux.saveMark()`); an editor's own writes go through `A.ux.track(promise)`. An editor that keeps changes
   until Save says so in its own mark and with `A.ux.dirty(name, fn)` (a warning on leaving).

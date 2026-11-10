@@ -110,6 +110,7 @@
       for (const i of l) { const p = P()[i]; if (!p) continue; s += `<polygon class="me-psel" points="${corners(p).map(([x, y]) => `${(x * C).toFixed(1)},${(y * C).toFixed(1)}`).join(" ")}"/>`; }
       if (l.length === 1) { const p = P()[l[0]], [, d] = foot(p), a = (p.r || 0) * Math.PI / 180, hx = p.x + Math.sin(a) * (d / 2 + .55), hy = p.y - Math.cos(a) * (d / 2 + .55); s += `<line class="me-prot-l" x1="${p.x * C}" y1="${p.y * C}" x2="${hx * C}" y2="${hy * C}"/><circle class="me-prot" cx="${hx * C}" cy="${hy * C}" r="7"><title>Drag to turn</title></circle>`; }
     }
+    if (e.pickRooms) for (const r of (F().R || []).filter(q => e.pickRooms.includes(q[0]))) s += `<rect class="me-pickr" x="${r[1] * C}" y="${r[2] * C}" width="${r[3] * C}" height="${r[4] * C}"/>`;
     if (e.place) s += `<g class="me-pghost" visibility="hidden" transform="translate(0 0)">${ghostInner(e.place.spec, e.place.r)}</g>`;
     return s + `<rect class="me-pbox" x="0" y="0" width="0" height="0" visibility="hidden"/>`;
   }
@@ -201,9 +202,85 @@
   function duplicate() { const l = sel(); if (!l.length) return; api.change(() => { const n0 = P().length; for (const i of l) { const p = copy(P()[i]); p.x = Math.min(F().w, p.x + .5); p.y = Math.min(F().h, p.y + .5); P().push(p); } setSel(l.map((_, k) => n0 + k)); }); }
   function turnSel(by) { const l = sel(); if (l.length > 1) { const ps = l.map(i => P()[i]), cx = ps.reduce((a, p) => a + p.x, 0) / ps.length, cy = ps.reduce((a, p) => a + p.y, 0) / ps.length, a = by * Math.PI / 180; edit(p => { const dx = p.x - cx, dy = p.y - cy; p.x = snapXY(cx + dx * Math.cos(a) - dy * Math.sin(a)); p.y = snapXY(cy + dx * Math.sin(a) + dy * Math.cos(a)); p.r = snapR((p.r || 0) + by); }); } else edit(p => { p.r = snapR((p.r || 0) + by); }); }
 
+  /* ---- Furnish the rooms I choose (the editing plan of 10 Nov 2026, stage 5): the rooms clicked, each furnished from
+          what it is for, in the library's models; a room that says nothing of its use takes the kit for the place's
+          kind, fitted into it. One change: Undo takes it all back */
+  const USE = [[/kitchen|galley|scullery/, "kitchen"], [/taproom|tavern|\binn\b/, "taproom"], [/bunk|barrack|dorm|quarters|bunkhouse/, "dorm"], [/bedroom|cabin|bedchamber|guest room|master|lord's chamber|family rooms/, "bedroom"], [/nursery|child/, "nursery"],
+    [/laborator|\blab\b|clean room|observatory|research/, "lab"], [/medic|infirmar|surgery|medbay|operating|clinic/, "surgery"], [/\bward\b/, "ward"], [/cold store|specimen|mortuary/, "ice"],
+    [/cell|brig|prison|containment|holding/, "cell"], [/armou?ry|vault|strong|safe|treasure|evidence|explosive|ammunition/, "strong"], [/office|study|command|control|bridge|comms|communication|traffic|radio|records|reception|director|foreman|administrator|guardhouse|server/, "office"],
+    [/store|storage|cargo|\bhold\b|depot|warehouse|hangar|docking bay|loading|ore\b/, "store"], [/engine|reactor|generator|boiler|life support|water plant|recycl|fuel|core shaft/, "boiler"], [/workshop|maintenance|processing|motor pool|smithy|garage|works/, "workshop"],
+    [/mess|dining|commons|canteen|great hall|banquet/, "dining"], [/\bbar\b|nightclub/, "bar"], [/parlour|living|lounge|common room|observation|solar|drawing room/, "parlour"], [/library|archive/, "library"], [/chapel|shrine|temple|nave|crypt/, "chapel"],
+    [/bath|wash|laundry|locker room/, "wash"], [/class|school|briefing/, "classroom"], [/waiting|arrivals|concourse|lobby|customs|front desk/, "waiting"], [/shop|market/, "shop"], [/cellar|basement/, "cellar"], [/pantry|dairy/, "pantry"], [/stable|barn/, "stable"], [/yard|well/, "yard"], [/hayloft|attic|loft/, "attic"]];
+  const useOf = r => (r[7] && r[7].fx) || (USE.find(([re]) => re.test(String(r[5] || "").toLowerCase())) || [])[1] || "";
+  // (the ways through, left to the game master, said so)
+  const NOKIT = /corridor|\blift\b|\bhall\b|landing|passage|\blane\b|stair|entrance/;
+  const KIT_OF = { tavern: "tavern", club: "neon", castle: "castle", dungeon: "prison-block", ruin: "catacomb", tower: "wizard", laboratory: "hospital", clinic: "hospital", research: "hospital", apartment: "apartment", home: "apartment", house: "apartment", mansion: "apartment", hotel: "apartment", office: "office", bank: "office", police: "police", prison: "prison-block", factory: "factory", warehouse: "factory", miningfac: "factory", mine: "cavern", milbase: "outpost", outpost: "outpost", bunker: "outpost", station: "station", hub: "station", ring: "station", habitat: "station", colony: "station", spaceport: "station", shuttle: "spaceship", freighter: "spaceship", cruiser: "spaceship", derelictship: "spaceship", cave: "cavern", temple: "catacomb", shrine: "catacomb", hideout: "shelter" };
+  function kitFor() { const m = A.meta[E().id] || {}, id = KIT_OF[m.kind] || (A.config && /future|scifi/.test(A.config.era || "") ? "station" : ""); return M.kits().find(k => k.id === id && (k.set || []).length) || null; }
+  // a room the uses do not cover, furnished by its name: the library's models its words call for (hydroponics its
+  // racks, an airlock its lock and the suits beside it), of the place's age, the kit for its kind's own first; along its
+  // walls, facing in
+  const SYN = { hydroponics: "hydro plant", greenhouse: "plant", garden: "plant bush", airlock: "airlock spacesuit", gym: "treadmill", laundry: "washing", reactor: "reactor", engine: "reactor", smithy: "anvil forge", forge: "anvil forge", mill: "millstone sack", chapel: "altar pew", shrine: "altar", court: "bush", green: "bush", docking: "crate", hangar: "crate", fuel: "tank barrel" };
+  const SKIPW = new Set(["room", "rooms", "deck", "main", "upper", "lower", "the", "and", "with", "first", "second", "third", "great", "small", "large", "little", "ring", "section"]);
+  function eraGenres(kit) {
+    if (kit && kit.g && kit.g.length) return kit.g;
+    const e = String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase();
+    return /future|scifi|space/.test(e) ? ["scifi", "futuristic"] : /medieval|fantasy|ancient/.test(e) ? ["fantasy", "medieval"] : /modern|now|today|20(1|2)\d/.test(e) ? ["modern"] : ["historical", "modern"];
+  }
+  function byName(r, kit) {
+    // (its words in order: its own first, then what they call for)
+    const name = String(r[5] || "").toLowerCase(), own = name.split(/[^a-z']+/).filter(w => w.length >= 4 && !SKIPW.has(w)).map(w => w.replace(/'s$/, "")), words = [...own];
+    for (const w of own) for (const x of (SYN[w] || "").split(" ")) if (x && !words.includes(x)) words.push(x);
+    for (const [k, v] of Object.entries(SYN)) if (name.includes(k)) for (const x of v.split(" ")) if (!words.includes(x)) words.push(x);
+    if (!words.length) return [];
+    const gens = eraGenres(kit), inKit = new Set((kit && kit.ids) || []), txt = e => (e.n + " " + (e.tags || []).join(" ") + " " + e.s + " " + e.id).toLowerCase();
+    const rank = e => { const t = txt(e), i = words.findIndex(w => t.includes(w)); return i < 0 ? 99 : i * 2 - (inKit.has(e.id) ? 1 : 0); };
+    const hits = M.all().filter(e => !e.d2 && !e.custom && e.mount !== "wall" && e.g.some(g => gens.includes(g)) && rank(e) < 99).sort((a, b) => rank(a) - rank(b));
+    const ids = [...new Set(hits.map(e => e.id))].slice(0, 2); if (!ids.length) return [];
+    // (the room's own fixture, named by it, as an airlock's lock: once; the rest round it)
+    const fixture = ids.length > 1 && own.some(w => ids[0].split("-").includes(w)), pickId = i => fixture ? (i === 0 ? ids[0] : ids[1]) : ids[i % ids.length];
+    const [, x, y, w, h] = r, n = Math.max(1, Math.min(6, Math.round(w * h / 5))), perRow = Math.max(1, Math.floor((w - 1) / 1.6)), out = [];
+    for (let i = 0; i < n; i++) { const top = Math.floor(i / perRow) % 2 === 0, k = i % perRow, cnt = Math.min(perRow, n - Math.floor(i / perRow) * perRow); out.push({ a: pickId(i), x: snapXY(x + (k + .5) * w / cnt), y: snapXY(top ? y + .9 : y + h - .9), r: top ? 0 : 180 }); }
+    return out;
+  }
+  const roomAt = (x, y) => { let best = null; for (const r of F().R || []) if (x >= r[1] && x <= r[1] + r[3] && y >= r[2] && y <= r[2] + r[4] && (!best || r[3] * r[4] < best[3] * best[4])) best = r; return best; };
+  function furnishRooms(ids, clear) {
+    const kit = kitFor(); let n = 0, rooms = 0; const none = [], byKit = [];
+    api.change(() => {
+      const f = F(), fin = api.finished(f);
+      for (const r of (f.R || []).filter(q => ids.includes(q[0]))) {
+        const [, x, y, w, h] = r, inside = q => q.x > x && q.x < x + w && q.y > y && q.y < y + h;
+        if (clear) f.P = P().filter(q => !inside(q));
+        const use = useOf(r); let made = [];
+        if (use && A.FX[use] && A.room3d) {
+          const rr = r.slice(0, 7).concat([Object.assign({}, r[7] || {}, { fx: use })]);
+          for (const it of A.furnishRoom(rr)) for (const sp of A.room3d.raise(it, fin) || []) made.push(Object.assign({}, sp, it[6] ? { h: 1 } : {}));
+          // (its drawn furniture let go: the models stand in its place)
+          if (made.length && r[7] && r[7].fx) { const o = Object.assign({}, r[7]); delete o.fx; if (Object.keys(o).length) r[7] = o; else r.length = 7; }
+        }
+        if (!made.length && !NOKIT.test(String(r[5] || "").toLowerCase())) { made = byName(r, kit); if (made.length) byKit.push(r[5]); }
+        if (!made.length) { none.push(r[5]); continue; }
+        rooms++;
+        for (const sp of made) { if (!M.entry(sp.a)) continue; const p = { a: sp.a, x: sp.x, y: sp.y, r: sp.r || 0 }; for (const k2 of ["s", "p", "col", "c", "m", "z", "h"]) if (sp[k2] != null) p[k2] = sp[k2]; P().push(clean(p)); n++; }
+      }
+    });
+    E().pickRooms = null; api.paint();
+    api.tip(`${rooms} room${rooms === 1 ? "" : "s"} furnished: ${n} models${byKit.length ? `, by ${byKit.length === 1 ? "its name" : "their names"} in ${byKit.join(", ")}` : ""}.${none.length ? ` Nothing was found for ${none.join(", ")}: furnish ${none.length === 1 ? "it" : "them"} from the library.` : ""} Move or change any of them; Undo takes it all back.`);
+    return { rooms, models: n, none, byKit };
+  }
+  M.furnishRooms = (ids, clear) => furnishRooms(ids, clear !== false);
+  M.roomUse = r => useOf(r);
+
   /* ---- the panel beside the map */
   function side() {
     const e = E(); if (e.tool !== "furnish" && !sel().length) return "";
+    if (e.pickRooms) {
+      const ch = (F().R || []).filter(r => e.pickRooms.includes(r[0])), kit = kitFor();
+      return `<section class="me-fur me-pickrooms"><h4>${icon("furnish")} Furnish the rooms I choose</h4>
+        <p class="me-help">Click a room to choose it, again to let it go. Each is furnished from what it is for (its use, or its name: a galley as a kitchen, quarters with bunks, hydroponics with its racks), in models from the library of the place's age${kit ? `, the ${esc(kit.n.toLowerCase())} kit's first` : ""}. Undo takes it all back.</p>
+        <p class="me-help"><b>${ch.length ? esc(ch.map(r => r[5] || "a room").join(", ")) : "No room chosen yet."}</b></p>
+        <label class="me-ck"><input type="checkbox" data-pfk="clear"${e.pickClear === false ? "" : " checked"}> First take away the models already in them</label>
+        <div class="me-row"><button type="button" class="prim" data-pf="furnrooms"${ch.length ? "" : " disabled"}>Furnish ${ch.length === 1 ? "it" : ch.length ? "these " + ch.length : "them"}</button><button type="button" data-pf="pickstop">Stop</button></div></section>`;
+    }
     if (e.place) {
       const sp = e.place.spec;
       return `<section class="me-fur"><h4>${icon("furnish")} Putting down</h4><div class="me-pl"><img class="me-plth" alt="" data-th='${esc(JSON.stringify(sp.set ? { a: sp.set[0][0] } : sp))}'><b>${esc(e.place.label)}</b></div>
@@ -223,6 +300,7 @@
       <p class="me-help">Choose a model in the library and click the map to put it down. Click a model on the map to choose it: drag it to move it, drag its round handle to turn it. Drag across empty floor to choose several.</p>
       <button type="button" class="prim me-libbtn" data-pf="lib">${icon("lib")} Open the library</button>
       ${rec.length ? `<h5>Used lately</h5><div class="me-recent">${rec.map(id => `<button type="button" class="me-rc" data-qadd="${esc(id)}" title="${esc(M.entry(id).n)}"><img alt="${esc(M.entry(id).n)}" data-th='${esc(JSON.stringify({ a: id }))}'></button>`).join("")}</div>` : ""}
+      <h5>Furnish the rooms I choose</h5><p class="me-help">Click the rooms, then Furnish them: each from what it is for, in the library's models.</p><button type="button" data-pf="pickrooms">Choose the rooms</button>
       <h5>Kits</h5><div class="me-kits">${M.kits().map(k => `<button type="button" data-kitset="${k.id}" title="${esc(k.d)}">${esc(k.n)}</button>`).join("")}</div>
       <label class="me-f"><span>Snap models to</span><select data-pfs="step">${[[.25, "a quarter of a square"], [.5, "half a square"], [1, "whole squares"]].map(([v, n]) => `<option value="${v}"${v === step() ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <p class="me-help">Keys: <kbd>R</kbd> turn, <kbd>[</kbd> <kbd>]</kbd> smaller and bigger, <kbd>PgUp</kbd> <kbd>PgDn</kbd> raise and lower, arrows nudge, <kbd>Ctrl+C</kbd> <kbd>Ctrl+V</kbd> copy and paste, <kbd>Ctrl+D</kbd> duplicate, <kbd>Del</kbd> take away.</p></section>`;
@@ -527,6 +605,7 @@
       const lib = $("#mlLib"), ed = E();
       if (lib && !lib.hidden) { closeLib(); return true; }
       if (ed.place) { stopPlacing(); return true; }
+      if (ed.pickRooms) { ed.pickRooms = null; api.paint(); return true; }
       if (sel().length) { setSel([]); api.paintCanvas(); api.paintSide(); return true; }
       return false;
     },
@@ -541,6 +620,7 @@
       if (e.button === 2) { if (ed.place && !choose) { stopPlacing(); return true; } return false; }
       if (e.button && e.button !== 0) return false;
       if (ed.place && !choose) { placeAt(p.x, p.y); return true; }
+      if (ed.pickRooms && !choose) { const r = roomAt(p.x, p.y); if (r) { ed.pickRooms = ed.pickRooms.includes(r[0]) ? ed.pickRooms.filter(x => x !== r[0]) : ed.pickRooms.concat(r[0]); api.paintCanvas(); api.paintSide(); } return true; }
       const l = sel();
       if (l.length === 1) { const q = P()[l[0]], [, d] = foot(q), a = (q.r || 0) * Math.PI / 180, hx = q.x + Math.sin(a) * (d / 2 + .55), hy = q.y - Math.cos(a) * (d / 2 + .55); if (Math.hypot(p.x - hx, p.y - hy) < .35) { ed.pdrag = { kind: "rot", i: l[0], r0: q.r || 0, a0: Math.atan2(p.y - q.y, p.x - q.x) }; return true; } }
       if (choose && (markerNear(p) || handleNear(p))) { if (l.length) setSel([]); return false; }
@@ -625,6 +705,9 @@
           case "nocol": edit(p => { delete p.col; }); break;
           case "reshape": edit(p => { delete p.p; }); break;
           case "fav": { const l = sel(); if (l.length === 1) { const id = P()[l[0]].a; favs = favs.includes(id) ? favs.filter(x => x !== id) : [id].concat(favs); keep("fav", favs); pf.setAttribute("aria-pressed", favs.includes(id)); } break; }
+          case "pickrooms": ed.place = null; setSel([]); ed.pickRooms = []; ed.tool = "furnish"; api.paint(); api.tip("Click the rooms to furnish, then Furnish them. Esc stops."); break;
+          case "pickstop": ed.pickRooms = null; api.paint(); break;
+          case "furnrooms": if (ed.pickRooms && ed.pickRooms.length) furnishRooms(ed.pickRooms, ed.pickClear !== false); break;
           case "snap": ed.snap = !snapOn(); keep("snap", ed.snap); pf.setAttribute("aria-pressed", snapOn()); api.tip(snapOn() ? "Snapping on: models go to the grid and turn by 15°." : "Snapping off: models go exactly where you put them."); break;
         }
         return true;
@@ -634,6 +717,7 @@
     change(e) {
       const t = e.target;
       if (t.matches("[data-ml-import]")) { if (t.files && t.files[0]) importFile(t.files[0]); t.value = ""; return true; }
+      if (t.dataset.pfk === "clear") { E().pickClear = t.checked; return true; }
       if (t.dataset.pfs === "step") { E().snapStep = +t.value || .25; keep("step", E().snapStep); return true; }
       if (t.dataset.lf) { L[t.dataset.lf] = t.value; L.shown = 60; saveUI(); paintNav(); paintList(); return true; }
       if (t.dataset.im && L.imp && L.imp.meta) { const m = L.imp.meta, k = t.dataset.im; if (k === "h") m.p.h = Math.max(.02, +t.value || 1); else if (k === "ry") m.ry = +t.value; else m[k] = t.value; if (k === "h" || k === "ry") { sizeImport(); impPreview(); } return true; }

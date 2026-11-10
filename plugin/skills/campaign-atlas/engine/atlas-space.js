@@ -53,6 +53,6 @@
     return null;
   }
   // what the players may know of it: only once found; its signal's words only if it broadcasts
-  function forPlayers(t, now) { if (t.hidden && !t.found) return null; const p = where(t, now); return { id: t.id, kind: t.kind, name: t.name, x: p.x, y: p.y, r: t.r || 0, desc: t.desc || "", signal: t.signal && t.signal.on ? t.signal.message || "" : "" }; }
+  function forPlayers(t, now) { if (t.hidden && !t.found) return null; const p = where(t, now); return { id: t.id, kind: t.kind, name: t.name, x: p.x, y: p.y, r: t.r || 0, desc: t.desc || "", signal: t.signal && t.signal.on ? t.signal.message || "" : "", pingT: t.foundT || 0 }; }
   A.space = { KINDS, GROUPS, ATTITUDE, REACH, CONDS, label, isArea, icon, fresh, where, met, forPlayers };
 })(typeof ATLAS !== "undefined" ? ATLAS : null);

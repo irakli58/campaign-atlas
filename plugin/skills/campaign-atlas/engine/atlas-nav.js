@@ -71,7 +71,7 @@
   NAV.back = () => step(-1); NAV.forward = () => step(1);
   NAV.can = () => ({ back: at > 0, forward: at < H.length - 1 });
   window.addEventListener("popstate", ev => { const n = ev.state && ev.state.atlasNav; if (n == null || !H[n]) return; at = n; NAV.restore(H[n]); });
-  NAV.btnsHTML = () => `<span class="ux-navb" role="group" aria-label="Back and forward"><button type="button" id="nav-back" data-nav="back" title="Back (Alt+←)" aria-label="Back" disabled>‹</button><button type="button" id="nav-fwd" data-nav="fwd" title="Forward (Alt+→)" aria-label="Forward" disabled>›</button></span>`;
+  NAV.btnsHTML = () => `<span class="ux-navb" role="group" aria-label="Back and forward"><button type="button" id="nav-back" data-nav="back" title="Back (Alt+←)" aria-label="Back" disabled>‹</button><button type="button" id="nav-fwd" data-nav="fwd" title="Forward (Alt+→)" aria-label="Forward" disabled>›</button></span>${A.ux && A.ux.chgBtnHTML ? A.ux.chgBtnHTML() : ""}`;
   function paintBtns() {
     const c = NAV.can(), b = $("#nav-back"), f = $("#nav-fwd");
     if (b) { b.disabled = !c.back; b.title = c.back ? "Back to " + label(H[at - 1]) + " (Alt+←)" : "Back"; }
@@ -200,7 +200,7 @@
     const it = t.closest("[data-sri]"); if (it) { openHit(+it.dataset.sri); return; }
     const m = t.closest("[data-srmore]"); if (m) { SR.more[m.dataset.srmore] = 1; const q = $("#q"); paintSR(fold(q ? q.value : "").trim()); return; }
     if (SR.open && !t.closest("#uxSr, #q")) closeSR();
-    const nb = t.closest("[data-nav]"); if (nb) { if (nb.dataset.nav === "back") NAV.back(); else if (nb.dataset.nav === "fwd") NAV.forward(); }
+    const nb = t.closest("[data-nav]"); if (nb) { if (nb.dataset.nav === "back") NAV.back(); else if (nb.dataset.nav === "fwd") NAV.forward(); else if (nb.dataset.nav === "changes" && A.ux && A.ux.changesOpen) A.ux.changesOpen(); }
   });
   document.addEventListener("keydown", e => {
     const t = e.target;
