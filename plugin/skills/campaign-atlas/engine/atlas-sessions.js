@@ -594,7 +594,7 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
   function waitingCard(rec, ms) {
     const wait = ms.filter(([, m]) => m.state === "proposed").sort((a, b) => a[1].t - b[1].t); if (!wait.length || !A.ux) return "";
     const sure = m => m.conf >= .8 && (m.src === "canon" || m.src === "narration");
-    return A.ux.card({ id: "notes-" + rec, title: `What to remember from session ${recOf(rec).session}`, intro: "Ticked: what happened, and Claude is sure of it. Untick what is wrong, write over what is nearly right, or ask again for one note.",
+    return A.ux.card({ id: "notes-" + rec, title: `What to remember from session ${recOf(rec).session}`, intro: "Ticked: what happened, and Claude is sure of it. Untick what is wrong, write over what is nearly right, or ask again for one note. Each is also below, where it can be played back, kept as unsure, or said not to be so.",
       made: ["what was said at the table", "what the campaign already remembers"], touches: ["the campaign's memory, which the copilot, the council and the history recall"], keeps: ["everything kept before", "what you leave unticked, still waiting here"],
       parts: wait.map(([id, m]) => ({ id, label: `${word(KINDS, m.kind)} · ${cite(m)}${m.conf < .5 ? " · Claude is unsure" : ""}`, text: m.text, on: sure(m) })), keepAllLabel: "Keep them all",
       onKeep: sel => { for (const p of sel) { const m = memOf(p.id); if (!m) continue; if (p.text && p.text !== m.text) S().set("memory", p.id, Object.assign({}, m, { text: String(p.text).slice(0, 400), by: "gm" })); keep(p.id, "kept"); } api.note(`Kept ${sel.length}. The rest wait here.`); paint(); },
@@ -610,7 +610,7 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
   }
   function notesHTML(rec) {
     const ms = mems().filter(([, m]) => m.rec === rec), f = UI.filter, w = ms.filter(([, m]) => m.state === "proposed").length, card = f ? "" : waitingCard(rec, ms);
-    const shown = ms.filter(([, m]) => (!f || m.state === f || m.kind === f) && !(card && m.state === "proposed")).sort((a, b) => a[1].t - b[1].t);
+    const shown = ms.filter(([, m]) => (!f || m.state === f || m.kind === f) ).sort((a, b) => a[1].t - b[1].t);
     return `<section class="t-card"><div class="tw-hh"><h3>What to remember</h3>${UI.busy === rec ? `<span class="kn">Reading part ${UI.prog ? UI.prog[0] + 1 : 1} of ${UI.prog ? UI.prog[1] : "?"}… <button type="button" class="t-link" data-sm="halt">stop</button></span>` : segsOf(rec).length ? `<button type="button" class="t-btn prim" data-sm="remember" data-id="${esc(rec)}">${ms.length ? "Read it again" : "Find what to remember"}</button>` : ""}</div>
       <p class="t-small">Claude reads the words a part at a time and writes down what the campaign should remember, each with where it was said. Nothing counts until you keep it; "Not so" stays here, crossed out, in case you change your mind.</p>
       ${UI.err ? `<p class="t-err">${esc(UI.err)}</p>` : ""}

@@ -214,7 +214,7 @@
   });
 
   /* ================================================================ 3. the trail at the top of the maps */
-  const crumbs = (parts, here) => `<nav class="trail ux-trail" aria-label="Where this is">${parts.map(p => p.attr ? `<button type="button" ${p.attr} title="${esc(p.tip || "")}">${esc(p.t)}</button>` : `<span>${esc(p.t)}</span>`).join('<span class="tr-sep" aria-hidden="true">›</span>')}${here ? `<span class="tr-sep" aria-hidden="true">›</span><span aria-current="page">${esc(here)}</span>` : ""}</nav>`;
+  const crumbs = (parts, here) => `<nav class="trail ux-trail" aria-label="Where this is">${parts.map(p => p.attr ? `<button type="button" ${p.attr} title="${esc(p.tip || "")}">${esc(p.t)}</button>` : `<span>${esc(p.t)}</span>`).join('<span class="tr-sep" aria-hidden="true">›</span>')}${here ? `${parts.length ? `<span class="tr-sep" aria-hidden="true">›</span>` : ""}<span aria-current="page">${esc(here)}</span>` : ""}</nav>`;
   // the world map's head: the world, and where it stands (a planet in its system among the stars; a plane's layer in
   // its dimension), and the place chosen on it
   NAV.worldTitle = (wid, selName) => {
