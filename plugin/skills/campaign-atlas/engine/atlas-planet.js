@@ -20,7 +20,19 @@
 
   /* ---- the stars: [colour, luminosity, mass, temperature K, lifetime Gyr, flares 0..1] (main sequence; white dwarfs,
           neutron stars and black holes keep few planets, and those strange) */
-  const STAR = { O: ["#9bb0ff", 30000, 16, 35000, .01, .1], B: ["#aabfff", 800, 6, 15000, .1, .1], A: ["#cad7ff", 20, 2, 8500, 1.2, .1], F: ["#f8f7ff", 3, 1.3, 6700, 4, .2], G: ["#fff4ea", 1, 1, 5770, 10, .25], K: ["#ffd2a1", .3, .75, 4500, 20, .45], M: ["#ffad74", .04, .35, 3200, 100, .9], D: ["#e8eaff", .01, .6, 10000, 50, 0], N: ["#c7d2ff", .001, 1.4, 600000, 50, 1], X: ["#401a5a", 0, 10, 0, 50, 1] };
+  // (the brown dwarfs L, T and Y and the red giants R come only from the galaxy's model 2, which gives each star as it is)
+  const STAR = { O: ["#9bb0ff", 30000, 16, 35000, .01, .1], B: ["#aabfff", 800, 6, 15000, .1, .1], A: ["#cad7ff", 20, 2, 8500, 1.2, .1], F: ["#f8f7ff", 3, 1.3, 6700, 4, .2], G: ["#fff4ea", 1, 1, 5770, 10, .25], K: ["#ffd2a1", .3, .75, 4500, 20, .45], M: ["#ffad74", .04, .35, 3200, 100, .9], D: ["#e8eaff", .01, .6, 10000, 50, 0], N: ["#c7d2ff", .001, 1.4, 600000, 50, 1], X: ["#401a5a", 0, 10, 0, 50, 1],
+    L: ["#d2693c", .0001, .07, 1900, 1000, .5], T: ["#a3527a", .00002, .045, 1100, 1000, .2], Y: ["#7a5a92", .000002, .02, 400, 1000, 0], R: ["#ffb26b", 150, 1.1, 4300, 1, .1] };
+  // a star given as it is (model 2 of the galaxy: its mass, age in billions of years, metals, and the light of a close
+  // companion added): its light from its mass by the main sequence's law, its warmth from its light and size
+  // [L ~ M^4 between half the Sun's mass and twice it, ~ 0.23 M^2.3 below, ~ 1.4 M^3.5 above; R ~ M^0.8]
+  function starAs(cls, o) {
+    const s = STAR[cls] || STAR.G, m = o.mass > 0 ? o.mass : s[2], age = clamp(o.age != null ? o.age : 4.6, .005, 13.5);
+    const ms = "OBAFGKM".includes(cls), L = ms ? (m < .43 ? .23 * Math.pow(m, 2.3) : m < 2 ? Math.pow(m, 4) : m < 55 ? 1.4 * Math.pow(m, 3.5) : 32000 * m) : cls === "R" ? 60 + m * 120 : s[1];
+    const R = ms ? Math.pow(m, .8) : cls === "R" ? 25 * Math.sqrt(m) : null, teff = R ? Math.round(5772 * Math.pow(L / (R * R), .25)) : s[3];
+    const fl = cls === "M" ? s[5] * clamp(1.6 - age / 5, .5, 1.6) : cls === "L" ? s[5] * clamp(1.4 - age / 5, .3, 1.4) : s[5];
+    return { cls, color: s[0], lum: sig(L + (o.lum2 || 0)), mass: r2(m), teff, age: r1(age), flares: fl, metal: r2(clamp(o.feh || 0, -3, .6)), given: true };
+  }
   function star(cls, r) {
     const s = STAR[cls] || STAR.G, v = .75 + r() * .5;
     const mass = s[2] * (cls === "D" || cls === "N" || cls === "X" ? 1 : v), L = cls === "D" || cls === "N" || cls === "X" ? s[1] : s[1] * Math.pow(v, 4);
@@ -183,7 +195,10 @@
     else if (water > .00002 && T > 273 && T < Tb && P > .006) { liquid = "water"; oceanCover = water > .005 ? 1 : r2(clamp(.71 * Math.pow(water / .00023, .35), .02, 1)); why.liquid = oceanCover >= .98 ? "so much water that it covers the whole world [an ocean world]" : "warm enough and its air thick enough for seas, lakes and rivers"; }
     else if (water > .0001 && T <= 273 && T > 150 && P > .006) { liquid = mode === "iceshell" || tidal > .3 ? "subsurface" : "ice"; iceCover = 1; why.liquid = liquid === "subsurface" ? "frozen over, with an ocean beneath its ice" : "its water is frozen: ice sheets and frozen seas"; }
     else if (ch4 > 0 && T > 88 && T < 120 && P > .3) { liquid = "methane"; oceanCover = r2(.02 + r() * .1); why.liquid = "methane and ethane rain into rivers, lakes and seas [Titan]"; }
-    else if (wf > .05) { liquid = mode === "iceshell" ? "subsurface" : "ice"; iceCover = 1; why.liquid = liquid === "subsurface" ? "an ocean hidden under a shell of ice, kept liquid from within" : "ice and rock, frozen through"; }
+    else if (wf > .05 && T < 273) { liquid = mode === "iceshell" ? "subsurface" : "ice"; iceCover = 1; why.liquid = liquid === "subsurface" ? "an ocean hidden under a shell of ice, kept liquid from within" : "ice and rock, frozen through"; }
+    // (a world rich in water but too hot to keep it as ice or sea: its water boils to steam and is lost to space over
+    // time [a runaway greenhouse, then escape]; found 10 Nov 2026, when a water-rich world was put close to its star)
+    else if (wf > .05) why.liquid = "so hot that its water would be steam, not ice or sea: boiled off and lost to space over time";
     else why.liquid = water < .00002 ? "it has almost no water" : T >= Tb ? "too hot for liquid water to stay" : "its air is too thin to hold liquid water";
     if (liquid === "water" && T < 285) iceCover = r2(clamp((285 - T) / 40, 0, .9));
     Object.assign(out, { liquid, ocean: oceanCover, ice: iceCover });
@@ -289,9 +304,11 @@
   /* ---- a system: its star, its disc, its planets in order outward, their moons and rings */
   function system(cls, r, opt) {
     opt = opt || {};
-    const S = star(cls, r), frost = 2.7 * Math.sqrt(Math.max(S.lum, .0005));
+    // (a copy of a system: its original's star exactly, opt.starFixed; model 2: a star given as it is; else drawn by kind)
+    const S = opt.starFixed ? Object.assign({}, opt.starFixed) : opt.star ? starAs(cls, opt.star) : star(cls, r), frost = 2.7 * Math.sqrt(Math.max(S.lum, .0005));
     const disc = clamp(S.mass * Math.pow(10, S.metal) * (.4 + r() * 1.6), .05, 4);  // the disc's mass against the Sun's
-    const n = cls === "X" ? Math.floor(r() * 2) : cls === "N" || cls === "D" ? Math.floor(r() * 3) : 2 + Math.floor(r() * (cls === "M" ? 4 : 7));
+    // (a brown dwarf's small disc makes a few small worlds; a red giant has swallowed or scorched its inner ones)
+    const n = cls === "X" ? Math.floor(r() * 2) : cls === "N" || cls === "D" ? Math.floor(r() * 3) : cls === "L" || cls === "T" || cls === "Y" ? Math.floor(r() * 4) : cls === "R" ? 1 + Math.floor(r() * 4) : 2 + Math.floor(r() * (cls === "M" ? 4 : 7));
     const fe = clamp(.2 + r() * .2, .15, .4);   // [one rocky make-up for the whole system: Agol 2021]
     const planets = [], belts = [];
     let a = (.02 + r() * .2) * Math.max(.3, Math.sqrt(Math.max(S.lum, .001)));

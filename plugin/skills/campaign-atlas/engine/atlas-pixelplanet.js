@@ -52,8 +52,12 @@
     const liquid = p.liquid || "none", oc = sea && ["water", "methane", "lava"].includes(liquid) ? clamp(p.ocean || 0, 0, 1) : 0, lava = liquid === "lava" || p.kind === "lava";
     const thick = (p.pressure || 0) > 20 && P.clouds, airless = (p.pressure || 0) < .01;
     // its height everywhere, and the level its seas fill to (as much as its ocean share)
-    for (let j = 0; j < TH; j++) for (let i = 0; i < TW; i++) { const [x, y, z] = sph(i, j); elev[j * TW + i] = fbm(N1, x * 2.1 + 3, y * 2.1, z * 2.1, 4) * .75 + fbm(N2, x * 6, y * 6, z * 6, 3) * .25; }
-    let seaLv = -1; if (oc > 0) { const s = Float32Array.from(elev).sort(); seaLv = s[Math.min(s.length - 1, Math.floor(oc * s.length))]; if (oc >= .97) seaLv = 2; }
+    // (once its surface has been opened, the globe is painted from that map's own heights and its sea: its continents
+    // are the map's; the galaxy plan of 5 Nov 2026, section 6. Before, from its noise, the same every time)
+    const real = A.pixelPlanet.heightOf ? A.pixelPlanet.heightOf(p) : null;
+    if (real) { for (let j = 0; j < TH; j++) for (let i = 0; i < TW; i++) { const gi = Math.min(real.cols - 1, Math.floor((i + .5) / TW * real.cols)), gj = Math.min(real.rows - 1, Math.floor((j + .5) / TH * real.rows)); elev[j * TW + i] = real.H[gj * real.cols + gi] / 255; } }
+    else for (let j = 0; j < TH; j++) for (let i = 0; i < TW; i++) { const [x, y, z] = sph(i, j); elev[j * TW + i] = fbm(N1, x * 2.1 + 3, y * 2.1, z * 2.1, 4) * .75 + fbm(N2, x * 6, y * 6, z * 6, 3) * .25; }
+    let seaLv = -1; if (real) { if (oc > 0 || real.sea > 0) seaLv = sea && oc > 0 ? real.sea / 255 : -1; } else if (oc > 0) { const s = Float32Array.from(elev).sort(); seaLv = s[Math.min(s.length - 1, Math.floor(oc * s.length))]; if (oc >= .97) seaLv = 2; }
     // craters where nothing wears them away (as the surface map has them): many small, few great
     const craters = [], nC = airless || (p.pressure < .1 && p.tectonics === "stagnant") ? (airless ? 26 : 12) : p.tectonics === "frozen" ? 18 : 0;
     for (let c = 0; c < nC; c++) { const u = r() * 2 - 1, a = r() * Math.PI * 2, s = Math.sqrt(1 - u * u); craters.push([s * Math.cos(a), u, s * Math.sin(a), .04 + Math.pow(r(), 3) * .22]); }
@@ -89,12 +93,12 @@
     return { col, glow, lights, cloud, giant: false, haze: liquid === "methane" ? [217, 154, 78] : null };
   }
   const TEX = new Map();
-  const texOf = p => { const key = [p.name, p.kind, p.ocean, p.liquid, p.ice, p.pressure, JSON.stringify(p.palette || {})].join("|"); let t = TEX.get(key); if (!t) { t = texture(p); TEX.set(key, t); if (TEX.size > 80) TEX.delete(TEX.keys().next().value); } return t; };
+  const texOf = p => { const key = [p.name, p.kind, p.ocean, p.liquid, p.ice, p.pressure, JSON.stringify(p.palette || {}), A.pixelPlanet.heightOf && A.pixelPlanet.heightOf(p) ? "real" : ""].join("|"); let t = TEX.get(key); if (!t) { t = texture(p); TEX.set(key, t); if (TEX.size > 80) TEX.delete(TEX.keys().next().value); } return t; };
 
   /* ---- the sphere: N pixels across, turned by rot, lit from the upper left by its star; with rings, wider */
-  function render(p, N, rot, star) {
+  function render(p, N, rot, star, light) {
     const T = texOf(p), P = p.palette || {}, rings = p.rings, M = rings ? Math.round(N * 2.2) : N + 6, img = new Uint8ClampedArray(M * M * 4);
-    const R = N / 2 - .5, cx = M / 2, cy = M / 2, L = [-.8, -.3, .52], LN = Math.hypot(...L); L[0] /= LN; L[1] /= LN; L[2] /= LN;
+    const R = N / 2 - .5, cx = M / 2, cy = M / 2, L = light ? light.slice(0, 3) : [-.8, -.3, .52], LN = Math.hypot(...L); L[0] /= LN; L[1] /= LN; L[2] /= LN;
     const sun = star ? hex(star).map(v => .82 + v / 255 * .18) : [1, 1, 1], sky = P.sky ? hex(P.sky) : null, air = clamp(Math.log10(Math.max(p.pressure || 0, 1e-4) * 1000) / 4, 0, 1);
     const ringC = rings ? (rings.icy ? [226, 220, 204] : [150, 138, 120]) : null, tilt = -.32, ct = Math.cos(tilt), st = Math.sin(tilt);
     const putPx = (i, j, c, a) => { const o = (j * M + i) * 4; img[o] = c[0]; img[o + 1] = c[1]; img[o + 2] = c[2]; img[o + 3] = a == null ? 255 : a; };
@@ -126,15 +130,15 @@
     }
     return { data: img, size: M };
   }
-  function canvasOf(p, N, rot, star) {
-    const r = render(p, N, rot || 0, star), cv = document.createElement("canvas"); cv.width = cv.height = r.size;
+  function canvasOf(p, N, rot, star, light) {
+    const r = render(p, N, rot || 0, star, light), cv = document.createElement("canvas"); cv.width = cv.height = r.size;
     const ctx = cv.getContext("2d"), id = ctx.createImageData(r.size, r.size); id.data.set(r.data); ctx.putImageData(id, 0, 0); return cv;
   }
   // a still picture, as a data URL, for the star chart's system and the survey sheet (kept: the chart redraws often)
   const URLS = new Map();
   function url(p, N, star) {
     if (typeof document === "undefined") return "";
-    const key = [p.name, p.kind, N, star, p.ocean, p.liquid, JSON.stringify(p.palette || {})].join("|"); let u = URLS.get(key);
+    const key = [p.name, p.kind, N, star, p.ocean, p.liquid, JSON.stringify(p.palette || {}), A.pixelPlanet.heightOf && A.pixelPlanet.heightOf(p) ? "real" : ""].join("|"); let u = URLS.get(key);
     if (!u) { u = canvasOf(p, N || 32, .6, star).toDataURL("image/png"); URLS.set(key, u); if (URLS.size > 300) URLS.delete(URLS.keys().next().value); }
     return u;
   }
@@ -149,5 +153,6 @@
     const tick = t => { if (!cv.isConnected) return; if (t - last > 80) { rot += (t - (last || t)) / 1000 / per * Math.PI * 2; last = t; draw(); } requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
   }
-  A.pixelPlanet = { render, canvasOf, url, spin };
+  // (heightOf(p): the world's opened surface, { H, cols, rows, sea }, or null; set by the star chart, atlas-galaxy.js)
+  A.pixelPlanet = { render, canvasOf, url, spin, heightOf: null };
 })(typeof ATLAS !== "undefined" ? ATLAS : typeof window !== "undefined" ? (window.ATLAS = window.ATLAS || {}) : null);

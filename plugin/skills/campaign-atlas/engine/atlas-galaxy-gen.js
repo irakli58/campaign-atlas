@@ -29,11 +29,14 @@
   const SECTORS = ["Reach", "Expanse", "March", "Drift", "Verge", "Shoals", "Deep", "Marches", "Rim", "Hollows", "Narrows", "Cradle"];
 
   /* ---- stars: their class, colour, how bright and how heavy (the sun is 1) */
-  const STARS = { O: ["#9bb0ff", 30000, 16], B: ["#aabfff", 800, 6], A: ["#cad7ff", 20, 2], F: ["#f8f7ff", 3, 1.3], G: ["#fff4ea", 1, 1], K: ["#ffd2a1", .3, .75], M: ["#ffad74", .04, .35], D: ["#e8eaff", .01, .6], N: ["#c7d2ff", .001, 1.4], X: ["#401a5a", 0, 10] };
-  const STAR_NAME = { O: "a blue giant", B: "a blue-white star", A: "a white star", F: "a yellow-white star", G: "a yellow star like the sun", K: "an orange dwarf", M: "a red dwarf", D: "a white dwarf", N: "a neutron star", X: "a black hole" };
+  // (model 2 adds the brown dwarfs, warm L, cool T and coldest Y, and the red giants R: after the ten model 1 has)
+  const STARS = { O: ["#9bb0ff", 30000, 16], B: ["#aabfff", 800, 6], A: ["#cad7ff", 20, 2], F: ["#f8f7ff", 3, 1.3], G: ["#fff4ea", 1, 1], K: ["#ffd2a1", .3, .75], M: ["#ffad74", .04, .35], D: ["#e8eaff", .01, .6], N: ["#c7d2ff", .001, 1.4], X: ["#401a5a", 0, 10], L: ["#d2693c", .0001, .07], T: ["#a3527a", .00002, .045], Y: ["#7a5a92", .000002, .02], R: ["#ffb26b", 150, 1.1] };
+  const STAR_NAME = { O: "a blue giant", B: "a blue-white star", A: "a white star", F: "a yellow-white star", G: "a yellow star like the sun", K: "an orange dwarf", M: "a red dwarf", D: "a white dwarf", N: "a neutron star", X: "a black hole", L: "a brown dwarf, warm", T: "a brown dwarf, cool", Y: "a brown dwarf, the coldest kind", R: "a red giant" };
 
   /* ---- the galaxy: where every system stands, and what the lanes, sectors, regions and powers are */
   function grow(P) {
+    // (model 2, grown from the real galaxy, for new campaigns; every galaxy made before keeps model 1 below, untouched)
+    if (P && +P.model === 2 && A.galaxyModel) return grow2(P);
     const p = Object.assign({ seed: "atlas", systems: 300, shape: "spiral", arms: 3, span: 100, name: "" }, P || {});
     const N = Math.max(20, Math.min(5000, +p.systems || 300)), r = rng(p.seed + "|stars"), W = 1000, R = 470;
     const S = [];
@@ -46,8 +49,13 @@
       const cls = weighted(r, [["M", 55], ["K", 18], ["G", 11], ["F", 7], ["A", 4], ["B", 1.2], ["O", .1], ["D", 3], ["N", .4], ["X", .15]]);
       S.push({ i, id: "S" + i, x: round(x + W / 2, 1), y: round(y + W / 2, 1), cls, bin: r() < .22, name: nameOf(r), f: {} });
     }
+    return settle(p, S, N, W, r, null);
+  }
+  // what follows the stars' places, for both models: the lanes, sectors, what is in each system, home, the regions and
+  // the powers (zc: a system's height above the plane in chart units, model 2's; model 1's are all in the plane)
+  function settle(p, S, N, W, r, zc) {
     // the lanes: each system to its nearest neighbours, and a tree through all of them so every system can be reached
-    const ly = p.span / W, d2 = (a, b) => (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
+    const ly = p.span / W, d2 = zc ? (a, b) => (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (zc(a) - zc(b)) * (zc(a) - zc(b)) : (a, b) => (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
     const cell = 30, grid = new Map(), key = (cx, cy) => cx + "," + cy;
     for (const s of S) { const k = key(Math.floor(s.x / cell), Math.floor(s.y / cell)); (grid.get(k) || grid.set(k, []).get(k)).push(s); }
     const near = (s, rad) => { const out = [], c = Math.ceil(rad / cell), cx = Math.floor(s.x / cell), cy = Math.floor(s.y / cell); for (let a = -c; a <= c; a++) for (let b = -c; b <= c; b++) for (const t of grid.get(key(cx + a, cy + b)) || []) if (t !== s && d2(s, t) <= rad * rad) out.push(t); return out; };
@@ -81,7 +89,9 @@
       if (rf() < .02) s.f.research = 1;
     }
     // home: the most settled place near the middle of a populated sector; the charted space round it
-    const homeS = S.filter(s => s.f.colony && s.f.fuel).sort((a, b) => Math.hypot(a.x - 500, a.y - 500) - Math.hypot(b.x - 500, b.y - 500))[0] || S[0];
+    // (model 2 grows real mixes of stars: its home is a Sun-like star where there is one near the middle)
+    const pref = zc ? s => ("GKF".includes(s.cls) ? 0 : s.cls === "M" ? 150 : 400) : () => 0;
+    const homeS = S.filter(s => s.f.colony && s.f.fuel).sort((a, b) => (Math.hypot(a.x - 500, a.y - 500) + pref(a)) - (Math.hypot(b.x - 500, b.y - 500) + pref(b)))[0] || S[0];
     homeS.f.colony = 1; homeS.f.station = 1; homeS.f.fuel = 1;
     const rr = rng(p.seed + "|regions"), regions = [{ kind: "explored", x: homeS.x, y: homeS.y, r: 120 + rr() * 60, name: "Charted space" }];
     for (let k = 0; k < Math.max(2, Math.round(N / 120)); k++) { const s = S[Math.floor(rr() * N)]; if (Math.hypot(s.x - homeS.x, s.y - homeS.y) < 90) continue; regions.push({ kind: "danger", x: s.x, y: s.y, r: 30 + rr() * 45, name: pick(rr, ["The %s Nebula", "The %s Maelstrom", "%s's Graveyard", "The %s Storm", "The Pirate %s"]).replace("%s", word(rr)) }); }
@@ -94,8 +104,64 @@
     const reach = Math.max(4, Math.round(N / caps.length / 6));
     while (q.length) { const [i, dd] = q.shift(); if (dd >= reach) continue; for (const j of adj[i]) if (owner[j] < 0 && rp() < .85) { owner[j] = owner[i]; q.push([j, dd + 1]); } }
     S.forEach((s, i) => { if (owner[i] >= 0) s.pw = owner[i]; });
-    return { p, N, W, ly, systems: S, lanes: [...lanes.values()], sectors: secs, regions, powers, home: homeS.i, adj };
+    return { p, N, W, ly, systems: S, lanes: [...lanes.values()], sectors: secs, regions, powers, home: homeS.i, adj, model: zc ? 2 : 1 };
   }
+
+  /* ---- model 2 (the galaxy plan of 5 Nov 2026, approved 10 Nov: section 2): the campaign's systems grown from the real
+          galaxy (atlas-galaxy-model.js). How far they spread is the campaign's: a neighbourhood (100 light years, the
+          default), a sector (1,000), a stretch of an arm (10,000) or the whole galaxy. In a neighbourhood or a sector
+          they are placed in a ball of space by the galaxy's own density there, each with its height above or below the
+          plane; across an arm or the galaxy they trace its arms, bar and bulge (by the density to the power 0.6, so the
+          crowded heart does not take them all). Each star from the real mix: its mass by the initial mass function
+          (brown dwarfs too, unless left out), its age and metals by the part of the galaxy it is in, what it has become by
+          now (a giant, a white dwarf, a neutron star, a black hole), and a real companion by the odds for its mass, with
+          its own mass, distance and stretch; all of it passed to the planet maker, so the worlds follow their star. */
+  const SCOPES = { neighbourhood: 100, sector: 1000, arm: 10000, galaxy: 0 };
+  // a star's light, by its mass and what it has become (Suns): the main sequence's mass-luminosity law; the rest by kind
+  const lumOf = (cls, m) => cls === "R" ? 150 : cls === "D" ? .003 : cls === "N" || cls === "X" ? 0 : cls === "L" ? 1e-4 : cls === "T" ? 2e-5 : cls === "Y" ? 2e-6 : m < .43 ? .23 * Math.pow(m, 2.3) : m < 2 ? Math.pow(m, 4) : m < 55 ? 1.4 * Math.pow(m, 3.5) : 32000 * m;
+  function grow2(P) {
+    const GM = A.galaxyModel, KPC = GM.KPC;
+    const p = Object.assign({ seed: "atlas", systems: 300, name: "", scope: "neighbourhood", galaxyType: "barred" }, P || {}, { model: 2 });
+    const M = GM.galaxyOf({ type: p.galaxyType, seed: p.seed, milkyWay: !!p.milkyWay });
+    p.scope = SCOPES[p.scope] != null ? p.scope : "neighbourhood"; p.galaxyType = M.type;
+    if (!(+p.span > 0)) p.span = p.scope === "galaxy" ? Math.round(M.Rmax * 2.1 / 1000) * 1000 : SCOPES[p.scope];
+    const N = Math.max(20, Math.min(5000, +p.systems || 300)), W = 1000, span = +p.span, ly = span / W, R2 = span / 2, r = rng(p.seed + "|stars2");
+    const at = p.scope === "galaxy" ? { x: 0, y: 0, z: 0 } : p.at && Number.isFinite(+p.at.x) ? { x: +p.at.x, y: +p.at.y, z: +p.at.z || 0 } : { x: M.sun.x, y: M.sun.y, z: M.sun.z };
+    if (p.scope !== "galaxy") p.at = at;
+    const big = p.scope === "arm" || p.scope === "galaxy", T = M.T;
+    // (across an arm or the galaxy: the stars' column through the disc, on a grid, so each place is weighed quickly)
+    let grid = null, gmax = 0; const GN = 72;
+    if (big) { grid = new Float32Array(GN * GN); for (let j = 0; j < GN; j++) for (let i = 0; i < GN; i++) { const x = at.x - R2 + (i + .5) / GN * span, y = at.y - R2 + (j + .5) / GN * span, c = GM.column(M, x, y), v = Math.pow(Math.max(0, c.thin + c.thick + c.bulge + c.halo), .6); grid[j * GN + i] = v; if (v > gmax) gmax = v; } }
+    const gridAt = (x, y) => { const u = clampN((x - at.x + R2) / span * GN - .5, 0, GN - 1.001), v = clampN((y - at.y + R2) / span * GN - .5, 0, GN - 1.001), i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j, g = (a, b) => grid[Math.min(GN - 1, b) * GN + Math.min(GN - 1, a)]; return g(i, j) * (1 - fu) * (1 - fv) + g(i + 1, j) * fu * (1 - fv) + g(i, j + 1) * (1 - fu) * fv + g(i + 1, j + 1) * fu * fv; };
+    // (in a ball of space: the density there, against the most there is in it)
+    let dmax = 0; if (!big) for (let k = 0; k < 96; k++) { const u = rng(p.seed + "|dmax" + k), x = at.x + (u() * 2 - 1) * R2, y = at.y + (u() * 2 - 1) * R2; dmax = Math.max(dmax, GM.density(M, x, y, 0), GM.density(M, x, y, at.z)); }
+    dmax *= 1.25;
+    const H = { young: .05, thin: T.hz || .3, thick: (T.thick || {}).hz || .9, bulge: T.bar ? T.bar.c * .6 : T.bulge ? T.bulge.a * .7 : .5, halo: 4 };
+    const S = [];
+    for (let i = 0, tries = 0; i < N && tries < N * 4000; tries++) {
+      let gx, gy, gz, pop;
+      if (big) {
+        gx = at.x + (r() * 2 - 1) * R2; gy = at.y + (r() * 2 - 1) * R2;
+        if (r() * gmax > gridAt(gx, gy)) continue;
+        pop = GM.populationAt(M, gx, gy, 0, r); gz = (r() < .5 ? -1 : 1) * -Math.log(1 - r() * .995) * H[pop.pop] * KPC;
+      } else {
+        const dx = (r() * 2 - 1) * R2, dy = (r() * 2 - 1) * R2, dz = (r() * 2 - 1) * R2; if (dx * dx + dy * dy + dz * dz > R2 * R2) continue;
+        gx = at.x + dx; gy = at.y + dy; gz = at.z + dz;
+        if (r() * dmax > GM.density(M, gx, gy, gz)) continue;
+        pop = GM.populationAt(M, gx, gy, gz, r);
+      }
+      // its star: born by the initial mass function, become what its age makes it; a companion by the odds for its mass
+      let m0 = GM.imfSample(r); if (p.browns === false) { let g = 0; while (m0 < .08 && g++ < 40) m0 = GM.imfSample(r); }
+      const now = GM.become(m0, pop.age), c0 = GM.companionOf(m0, r), c = c0 ? GM.become(c0.mass, pop.age) : null;
+      const s = { i, id: "S" + i, x: round(W / 2 + (gx - at.x) / ly, 1), y: round(W / 2 + (gy - at.y) / ly, 1), z: round(gz - at.z, 1), cls: now.cls, bin: !!c, name: nameOf(r), f: {}, m2: { cls: now.cls, mass: round(now.mass, 3), m0: round(m0, 3), age: Math.round(pop.age), feh: pop.feh, pop: pop.pop } };
+      if (c) s.comp = { cls: c.cls, mass: round(c.mass, 3), a: c0.a, e: c0.e };
+      S.push(s); i++;
+    }
+    const G = settle(p, S, S.length, W, r, s => (s.z || 0) / ly);
+    G.model = 2; G.frame = { x: at.x, y: at.y, z: at.z, k: ly };
+    return G;
+  }
+  const clampN = (v, a, b) => v < a ? a : v > b ? b : v;
 
   /* ---- a system opened: its planets, belts, moons and what orbits them, grown from the seed and the system */
   const KINDS = { lava: "Lava world", rocky: "Rocky world", desert: "Desert world", ocean: "Ocean world", garden: "Living world", ice: "Ice world", barren: "Barren world", toxic: "Hothouse world", gas: "Gas giant", icegiant: "Ice giant", dwarf: "Dwarf planet", hotjupiter: "Hot Jupiter", mini: "Mini-Neptune" };
@@ -122,9 +188,30 @@
     // (the planets worked out from their physics by the planetary layer, engine/atlas-planet.js: the user's approved
     // plan of 3 Nov 2026, "every galaxy upgraded"; the same seed always gives the same system; the star chart's own
     // fields kept as they were, the whole profile beside them)
-    const r = rng(G.p.seed + "|sys|" + i), P = A.planets;
-    const SYS = P.system(s.cls, r, { realism: G.p.realism || "balanced", tech: G.p.tech || "armoured" });
+    // (a system the game master added: its worlds from its own id, so taking back another added system never changes it)
+    const r = rng(G.p.seed + "|sys|" + (s.added ? s.id : i)), P = A.planets;
+    // (model 2: the planet maker given the star as it is, its mass, age and metals, and the light of a close companion;
+    // model 1: the star drawn from its class, as always)
+    // (a star the game master gave another kind is made as that kind, as in model 1; a companion the game master set is
+    // used in either model; a copy of a system keeps its original's star exactly)
+    const m2 = s.m2 && s.m2.cls === s.cls ? s.m2 : null, c = s.bin && s.comp && (m2 || s.compOwn) ? s.comp : null, close = c && (c.both != null ? c.both : c.a <= 2);
+    const fixed = s.star0 && s.star0.cls === s.cls ? s.star0 : null;
+    const SYS = P.system(s.cls, r, Object.assign({ realism: G.p.realism || "balanced", tech: G.p.tech || "armoured" }, fixed ? { starFixed: fixed } : m2 ? { star: { mass: m2.mass, age: m2.age / 1000, feh: m2.feh, lum2: close ? lumOf(c.cls, c.mass || (STARS[c.cls] || STARS.M)[2]) : 0 } } : {}));
+    // (built by hand or copied: no worlds grown, only the game master's own)
+    if (s.noGen) { SYS.planets = []; SYS.belts = []; }
     const S = SYS.star, out = { star: { cls: s.cls, name: STAR_NAME[s.cls], color: S.color, lum: S.lum, mass: S.mass, teff: S.teff, age: S.age, flares: S.flares, metal: S.metal, binary: s.bin, frost: SYS.frost }, planets: [], belts: SYS.belts, sites: [] };
+    // (a real companion: only the worlds whose orbits last are kept; round both stars beyond about 3.5 times the pair's
+    // separation, round one within about a quarter of its companion's nearest approach [Holman & Wiegert 1999])
+    if (c) {
+      const rc = rng(G.p.seed + "|comp|" + (s.added ? s.id : i)), cm = c.mass || (STARS[c.cls] || STARS.M)[2], ce = c.e != null ? c.e : c.ecc || 0;
+      out.star.companion = { cls: c.cls, mass: cm, a: c.a, ecc: ce, both: close, P: Math.sqrt(Math.pow(c.a, 3) / Math.max(.02, S.mass + cm)) * 365.25, w: rc() * Math.PI * 2, M0: rc() * Math.PI * 2, color: (STARS[c.cls] || STARS.M)[0], name: STAR_NAME[c.cls] || "a star", own: !!s.compOwn };
+      // (only the worlds whose orbits last are grown beside a real companion; the game master's own companion keeps every
+      // world they have, and the system's card warns of those that would not last)
+      const ok = a => close ? a > 3.5 * c.a : a < .25 * c.a * (1 - ce);
+      if (!s.compOwn) { SYS.planets = SYS.planets.filter(p => ok(p.a * (close ? 1 - (p.ecc || 0) : 1 + (p.ecc || 0)))); SYS.belts = SYS.belts.filter(b => ok(b.a)); out.belts = SYS.belts; }
+      // a third star, far out round the pair (the game master's)
+      if (s.comp2 && s.comp2.cls) { const c2 = s.comp2, m2c = c2.mass || (STARS[c2.cls] || STARS.M)[2], e2 = c2.e || 0; out.star.companion2 = { cls: c2.cls, mass: m2c, a: c2.a, ecc: e2, both: false, P: Math.sqrt(Math.pow(c2.a, 3) / Math.max(.02, S.mass + cm + m2c)) * 365.25, w: rc() * Math.PI * 2, M0: rc() * Math.PI * 2, color: (STARS[c2.cls] || STARS.M)[0], name: STAR_NAME[c2.cls] || "a star", own: true }; }
+    }
     const MINERALS = ["iron and nickel", "rare earths", "water ice", "silicates", "heavy metals", "platinum group metals", "radioactives", "carbon and graphite", "helium-3"];
     for (const p of SYS.planets) {
       const name = `${s.name} ${"bcdefghijk"[out.planets.length] || out.planets.length + 1}`;
@@ -145,7 +232,8 @@
   }
 
   /* ---- distances and routes: light years, and the way from one system to another within a ship's reach */
-  const dist = (G, a, b) => { const s = G.systems[a], t = G.systems[b]; return Math.hypot(s.x - t.x, s.y - t.y) * G.ly; };
+  // (in model 2 the stars stand above and below the plane too: the distance is through space, z kept in light years)
+  const dist = (G, a, b) => { const s = G.systems[a], t = G.systems[b]; if (!s.z && !t.z) return Math.hypot(s.x - t.x, s.y - t.y) * G.ly; return Math.hypot((s.x - t.x) * G.ly, (s.y - t.y) * G.ly, (s.z || 0) - (t.z || 0)); };
   // the shortest way, hop by hop, each hop no longer than the jump range; lanes are safer (they count a little less)
   function route(G, from, to, range, opt) {
     const o = opt || {}, N = G.N, best = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N), laneSet = G._laneSet || (G._laneSet = new Set(G.lanes.map(([a, b]) => a + "-" + b)));
@@ -177,7 +265,7 @@
   }
   const inRegion = (G, i, kind) => { const s = G.systems[i]; return G.regions.filter(g => (!kind || g.kind === kind) && Math.hypot(g.x - s.x, g.y - s.y) <= g.r); };
 
-  A.galaxyGen = { hash, rng, grow, system, route, dist, inRegion, STARS, STAR_NAME, KINDS, chartPlanet, rework };
+  A.galaxyGen = { hash, rng, grow, system, route, dist, inRegion, STARS, STAR_NAME, KINDS, chartPlanet, rework, nameOf, lumOf };
   // the campaign's galaxy: its settings (galaxy.js, written by atlas.js galaxy) and the council's own names and changes
   // over it (ATLAS.galaxyEdit in table.js): { systems: { S12: { name, desc, gm, flags, state } }, territories, home, ship, fuel }
   A.galaxy = p => { A.galaxyParams = Object.assign({}, A.galaxyParams || {}, p || {}); A._galaxy = null; return A; };

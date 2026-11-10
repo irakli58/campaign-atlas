@@ -121,7 +121,10 @@
   }
 
   /* ---- the dialog: what the place is, what it looks like outside, what it starts with inside, notes for the table */
-  let dlg = null, draft = null, cityCtl = null;
+  let dlg = null, draft = null, cityCtl = null, where = null;
+  // (a place made somewhere other than a city, the editing plan of 10 Nov 2026: at a location of the world map or a
+  // planet's surface, or at a station or site of a star system; its kind from what stands there)
+  const FROMW = { inn: "tavern", manor: "mansion", capital: "mansion", castle: "castle", keep: "castle", fort: "castle", tower: "tower", lighthouse: "tower", temple: "temple", monastery: "temple", shrine: "shrine", cave: "cave", lair: "cave", dungeon: "cave", mine: "mine", mining: "mine", camp: "hideout", base: "bunker", station: "station", outpost: "station", orbital: "station", ship: "station", wreck: "station", derelict: "station", colony: "station", research: "laboratory", farm: "house", village: "house", hamlet: "house", settlement: "house", town: "shop", city: "shop", port: "warehouse", airport: "warehouse" };
   const opts = (list, cur) => list.map(([k, n]) => `<option value="${esc(k)}"${k === cur ? " selected" : ""}>${esc(n)}</option>`).join("");
   function districtsOf(ctl) { const D = (ctl && ctl.D) || {}; return Object.keys(D.districts || {}); }
   function form(def, isNew) {
@@ -136,7 +139,7 @@
         <label>What it really is, for you only: its history, its purpose, its secrets<textarea class="t-in" name="kp" rows="3" maxlength="4000">${esc(def.kp || "")}</textarea></label>
         <label>District<select class="t-in" name="district"><option value="">None</option>${opts(ds.map(d => [d, d]), def.district || "")}${def.district && !ds.includes(def.district) ? `<option selected>${esc(def.district)}</option>` : ""}</select></label>
       </details>
-      <details class="loc-more"${isNew ? "" : " open"}${real ? " hidden" : ""}><summary>Its outside</summary>
+      <details class="loc-more"${isNew ? "" : " open"}${real || (isNew && where) ? " hidden" : ""}><summary>Its outside</summary>
         <div class="loc-g3"><label>Size<select class="t-in" name="size">${opts([["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["huge", "Huge"]], x.size || "medium")}</select></label>
           <label>Storeys<input class="t-in" type="number" name="floors" min="1" max="40" value="${+x.floors || 2}"></label>
           <label>Roof<select class="t-in" name="roof">${opts(ROOFS, x.roof || "pitched")}</select></label>
@@ -155,7 +158,7 @@
         <label class="loc-ck"><input type="checkbox" name="locked"${def.locked ? " checked" : ""}> Locked: the way in has to be found</label>
       </details>
       <div class="loc-ai"><span class="kl">Optional help</span><button type="button" class="t-btn" data-locd="aitext">Suggest what it is</button>${real ? "" : `<button type="button" class="t-btn" data-locd="aiext">Suggest its outside</button>`}<span class="loc-aimsg t-small" aria-live="polite"></span></div>
-      <div class="loc-go">${isNew ? `<button type="button" class="t-btn prim" data-locd="place">Put it in the city →</button>` : `<button type="button" class="t-btn prim" data-locd="save">Save</button>`}<button type="button" class="t-btn" data-locd="x">Cancel</button></div>
+      <div class="loc-go">${isNew && where ? `<button type="button" class="t-btn prim" data-locd="make">Make it, at ${esc(where.label || "its place")} →</button>` : isNew ? `<button type="button" class="t-btn prim" data-locd="place">Put it in the city →</button>` : `<button type="button" class="t-btn prim" data-locd="save">Save</button>`}<button type="button" class="t-btn" data-locd="x">Cancel</button></div>
     </form>`;
   }
   function read() {
@@ -198,7 +201,23 @@
       dlg.close(); draft = null;
       startPlacing(id, def, true);
     }
+    if (a === "make" && where) {
+      // a place of the campaign at a world's location, a planet's, or a star system's site: its inside drawn from its
+      // kind as a city's is, kept, and its page opened (where "Build the interior" is)
+      const id = newId(r.def.name), w = where, def = Object.assign(r.def, { location: w.location || undefined, world: w.world || undefined, system: w.system || undefined, planet: w.planet != null ? w.planet : undefined, site: w.site != null ? w.site : undefined, from: w.label || undefined });
+      def.map = def.type === "cave" ? caveInside(def, r.start === "blank") : interior(def.type, def.ext, { blank: r.start === "blank", cellar: r.cellar });
+      if (def.type === "cave" && def.map.ov && !def.kp) def.kp = def.map.ov;
+      dlg.close(); draft = null; where = null;
+      await keep(id, def); if (w.done) try { w.done(id); } catch (e) { console.warn(e); }
+    }
   }
+  // the way in from elsewhere: o = { location, world } (the world map), or { system, planet, site } (a star system), with
+  // its name, its kind as there, what it is, and the words for the button (label)
+  L.forPlace = o => {
+    cityCtl = null; where = o || {};
+    const type = FROMW[o.kind] || (KIND[o.kind] ? o.kind : "other"), K = KIND[type] || KIND.other;
+    openDialog({ name: o.name || "", type, pd: o.pd || "", kp: o.kp || "", ext: Object.assign({}, K[2].ext || {}, o.kind === "ruin" ? { cond: "ruined" } : {}) }, true);
+  };
   // Claude's suggestions fill the form and nothing else: nothing is kept until the game master saves
   async function suggest(kind, btn) {
     const msg = dlg.querySelector(".loc-aimsg"), r = read(), ask = A.tableUI && A.tableUI.api && A.tableUI.api.askRaw;
@@ -328,7 +347,7 @@
   function withCity(cid, then) { const sh = L.__shell; if (sh && sh.mountCity) sh.mountCity(cid, c => { cityCtl = c; then(); }); else if (cityCtl) then(); }
 
   /* ---- the public part */
-  L.create = ctl => { cityCtl = ctl; const K = KIND.tavern; openDialog({ type: "tavern", ext: Object.assign({}, K[2].ext) }, true); };
+  L.create = ctl => { cityCtl = ctl; where = null; const K = KIND.tavern; openDialog({ type: "tavern", ext: Object.assign({}, K[2].ext) }, true); };
   // a building of the city made into a place of the game master's own (the city editor's "Make it a place"): the
   // dialog opens with the building's kind, its footprint (a little inside it, so a terrace's neighbours sharing its walls
   // stand), floors, roof and colours, and the place is held where the

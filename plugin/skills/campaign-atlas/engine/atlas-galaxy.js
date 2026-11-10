@@ -19,6 +19,7 @@
 
   /* ---- the players' drawing: only what the game master's page sent (charted systems, their lanes, the ship) */
   A.galaxyDraw = function (d, o) {
+    if (o && o.sys && d && d.sysmaps && d.sysmaps[o.sys]) return sysDraw(d.sysmaps[o.sys]);
     if (!d || !(d.systems || []).length) return `<div class="gx-empty">No star charts yet.</div>`;
     const S = d.systems, by = {}; for (const s of S) by[s.id] = s;
     const xs = S.map(s => s.x), ys = S.map(s => s.y), pad = 40, x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad, w = Math.max(160, Math.max(...xs) - x0 + pad), h = Math.max(120, Math.max(...ys) - y0 + pad);
@@ -29,6 +30,30 @@
       ${d.ship && by[d.ship] ? `<g class="gx-ship"><circle cx="${by[d.ship].x}" cy="${by[d.ship].y}" r="${Math.max(6, w / 60)}"/></g>` : ""}</svg>${(d.worlds || []).length ? `
       <details class="gx-pworlds"><summary>The worlds you have scanned (${d.worlds.length})</summary>${d.worlds.map(x => `<section><h4>${esc(x.name)} <span>${esc(x.sys)} · ${esc(x.level)}</span></h4><table class="gx-pt">${(x.rows || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table></section>`).join("")}</details>` : ""}`;
   };
+
+  // a system's own map on the players' screen (the galaxy plan, section 6): distances squeezed as on the game master's
+  // map, the worlds they have scanned in their pictures and names, the rest dashed outlines; names kept apart
+  function sysDraw(m) {
+    const W = 800, H = 520, cx = W / 2, cy = H / 2 + 10, ws = m.worlds || [], bl = m.belts || [];
+    const aIn = Math.min(...ws.map(w => w.a * (1 - (w.e || 0))), ...(bl.length ? bl : [1])), aOut = Math.max(.1, ...ws.map(w => w.a * (1 + (w.e || 0))), ...bl.map(b => b * 1.1));
+    const d0 = Math.max(.004, aIn * .45), R0 = 30, K = (Math.min(W, H) / 2 - 40 - R0) / Math.log(1 + aOut / d0), rad = d => R0 + K * Math.log(1 + d / d0);
+    const pt = (x, y) => { const d = Math.hypot(x, y) || 1e-9, r = rad(d); return [cx + x / d * r, cy + y / d * r]; }, placed = [];
+    const free = q => q[0] > 0 && q[2] < W && q[1] > 30 && q[3] < H - 20 && !placed.some(p => q[0] < p[2] && q[2] > p[0] && q[1] < p[3] && q[3] > p[1]);
+    let body = "", names = "";
+    for (const b of bl) body += `<circle cx="${cx}" cy="${cy}" r="${rad(b).toFixed(1)}" fill="none" stroke="#8a7d6a" stroke-width="5" stroke-dasharray="1 3" opacity=".55"/>`;
+    const at = ws.map(w => { const [x, y] = pt(w.x, w.y), D = w.r === 3 ? 34 : w.r === 2 ? 24 : 18; placed.push([x - D / 2, y - D / 2, x + D / 2, y + D / 2]); return [x, y, D]; });
+    ws.forEach((w, i) => {
+      const [x, y, D] = at[i];
+      body += `<circle cx="${cx}" cy="${cy}" r="${rad(w.a).toFixed(1)}" fill="none" stroke="#9fb0c9" stroke-opacity=".25"/>`;
+      body += w.lv >= 1 && w.img ? `<image href="${esc(w.img)}" x="${(x - D * .6).toFixed(1)}" y="${(y - D * .6).toFixed(1)}" width="${(D * 1.2).toFixed(1)}" height="${(D * 1.2).toFixed(1)}" style="image-rendering:pixelated"/>` : `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(D / 3).toFixed(1)}" fill="none" stroke="#9fb0c9" stroke-dasharray="2 3"/>`;
+    });
+    ws.forEach((w, i) => { if (!w.name) return; const [x, y, D] = at[i], t = w.name + (w.kind ? " · " + w.kind : ""), tw = t.length * 7 + 6; const c = [[x + D / 2 + 4, y - 8], [x - D / 2 - 4 - tw, y - 8], [x - tw / 2, y + D / 2 + 3], [x - tw / 2, y - D / 2 - 19]].map(([a, b]) => [a, b, a + tw, b + 16]).find(free); if (!c) return; placed.push(c); names += `<text x="${(c[0] + 3).toFixed(1)}" y="${(c[1] + 12).toFixed(1)}" font-size="12" fill="#dfe8f8">${esc(t)}</text>`; });
+    const col = esc(m.color || "#fff4ea");
+    return `<svg class="gx-svg gx-players gx-psys" viewBox="0 0 ${W} ${H}" role="img" aria-label="The ${esc(m.name)} system"><defs><radialGradient id="psg"><stop offset="0" stop-color="${col}"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient></defs><rect width="${W}" height="${H}" fill="#04060b"/>
+      <text x="16" y="26" font-size="17" fill="#e8eefc">The ${esc(m.name)} system</text>${m.at ? `<text x="${W - 16}" y="26" font-size="12" fill="#8fa0bb" text-anchor="end">Where the worlds stand on ${esc(m.at)}</text>` : ""}
+      <circle cx="${cx}" cy="${cy}" r="30" fill="url(#psg)"/><circle cx="${cx}" cy="${cy}" r="10" fill="${col}"/>${body}${names}
+      <text x="16" y="${H - 8}" font-size="11" fill="#8fa0bb">Not to scale. The worlds not yet scanned are outlines.</text></svg>`;
+  }
 
   const Gg = A.galaxyGen; if (!Gg) return;
   // the galaxy as grown, with the council's names and the game master's changes lain over it
@@ -62,6 +87,10 @@
       if (!s) continue;
       if (e.name) s.name = e.name; if (e.cls && Gg.STARS[e.cls]) s.cls = e.cls; if (Number.isFinite(+e.x) && e.x != null) { s.x = +e.x; s.y = +e.y; }
       if (e.f) s.f = Object.assign({}, s.f, e.f); if (e.bin != null) s.bin = !!e.bin; if (e.desc != null) s.desc = e.desc; if (e.gm != null) s.gm = e.gm; if (e.gone) s.gone = true; if (e.bodies) s.bodies = e.bodies;
+      // (the editing plan of 10 Nov 2026: its height above the plane, a star given as it is, companions the game master
+      // set, a copy's own star, no worlds grown for a system built by hand or copied, a mark)
+      if (Number.isFinite(+e.z) && e.z != null) s.z = +e.z; if (e.m2) s.m2 = e.m2; if (e.comp !== undefined) { s.comp = e.comp || null; s.compOwn = !e.compNat; } if (e.comp2 !== undefined) s.comp2 = e.comp2 || null;
+      if (e.star0) s.star0 = e.star0; if (e.noGen) s.noGen = true; if (e.mark != null) s.mark = !!e.mark;
     }
     g.N = g.systems.length;
     // the lanes: a system added joins its two nearest; the game master's own lanes, trade routes and corridors, and cuts
@@ -136,7 +165,7 @@
   /* ---- the view */
   // tools: the editor's row (UI.tools), and the tool in hand: region, lane, terr (painting territory), sector
   const UI = { sel: null, sys: null, planet: null, plan: null, z: 1, cx: 500, cy: 500, edit: null, adding: false, moving: null, filter: "", tools: false, tool: null, first: null, paint: "", selReg: null, selLane: null, panel: null, pedit: null, phys: null, movingReg: null };
-  let host = null, svg = null, drag = null;
+  let host = null, drag = null;
   const HIST = [], REDO = [];   // the game master's changes to the galaxy, to undo and do again (kept after a reload: the last twenty)
   let KH = null; const keepH = () => { if (!KH && A.ux) { KH = A.ux.keepHist("gx"); KH.load(HIST, REDO); } if (KH) KH.save(HIST, REDO); };
   function setG(id, data, how) {
@@ -145,64 +174,568 @@
     S().set("gedits", id, data); A._galaxy = null;
   }
   const doc = id => JSON.parse(JSON.stringify(edits()[id] || {}));
+  /* ---- the chart drawn (the galaxy plan of 5 Nov 2026, approved 10 Nov: sections 5 to 7). One camera, in light years
+          of the real galaxy (atlas-galaxy-model.js), from the whole galaxy down to one system:
+          - far out: the galaxy's picture (atlas-galaxy-art.js), its arms and heart named, the campaign's space marked;
+          - closer: the galaxy's own unresolved stars fade in, as many as it has there, the same each time;
+          - the campaign's systems over them, each a steady size on the screen whatever the zoom, by how bright its star
+            is; the most important first (the ship, the chosen, capitals, colonies, stations, your places, what the
+            council or you named, what the party knows), crowded ones gathered with a count until you come closer;
+          - names never over each other, more of them the closer; lanes only those of the system chosen and the course,
+            unless the whole network is asked for; territories as soft areas; regions as drawn;
+          - a card on hover, a trail at the top, layers each switched on and off, an overview map in the corner, a scale.
+          The campaign's own coordinates (the chart's units) are unchanged: every edit, course and distance uses them. */
+  const GMOD = A.galaxyModel, ART = A.galaxyArt;
+  const CAM = { x: 0, y: 0, s: 1 }, LAY0 = { picture: true, field: true, terr: true, regions: true, lanes: "near", trade: true, known: false, sites: true, journey: false, grid: false, reach: true, mini: true, depth: 100 };
+  // (the depth slice, for a galaxy whose stars stand above and below the plane, model 2: the stars within so many light
+  // years of the ship's own height, as a share of the whole; the rest dimmed, as a flattened 3D galaxy is crowded by nature)
+  let ZR = 0; const zRange = () => ZR;
+  function slice() { const d = +LAY.depth; if (!ZR || !(d > 0) || d >= 100) return null; const at = findSys(ship().at); return { z: (at && at.z) || 0, half: Math.max(.5, d / 100 * ZR) }; }
+  function depthSay() { const v = host && host.querySelector(".gx-depthv"); if (!v) return; const S0 = slice(); v.textContent = S0 ? `within ${Math.round(S0.half).toLocaleString("en")} light years of the ship's height` : "all of them"; }
+  const LAY = (() => { try { return Object.assign({}, LAY0, JSON.parse(localStorage.getItem(((A.config || {}).storageKey || "atlas") + "-gx-layers") || "{}")); } catch (e) { return Object.assign({}, LAY0); } })();
+  const keepLay = () => { try { localStorage.setItem(((A.config || {}).storageKey || "atlas") + "-gx-layers", JSON.stringify(LAY)); } catch (e) {} };
+  let MG = null, FR = null, PIC = null, cvs = null, ctx = null, raf = 0, hoverId = null, fly = null, DRAWN = [], paintPts = [];
+  // the galaxy round this campaign: its kind (the barred spiral of the Milky Way unless galaxy.js says), and the chart set in it
+  function galaxyModel() {
+    const g = G(), p = (A.galaxyParams || {});
+    if (!MG || MG.__seed !== p.seed || MG.__type !== (p.galaxyType || p.type)) { MG = GMOD ? GMOD.galaxyOf({ type: p.galaxyType || (p.model === 2 ? p.type : "barred"), seed: p.seed, milkyWay: !!p.milkyWay, galaxyName: p.galaxyName, active: p.active }) : null; if (MG) { MG.__seed = p.seed; MG.__type = p.galaxyType || p.type; } PIC = null; }
+    FR = MG ? GMOD.frameOf(g, MG) : { x: 0, y: 0, z: 0, k: g.ly }; return MG;
+  }
+  const Wpx = () => (cvs && cvs.clientWidth) || 800, Hpx = () => (cvs && cvs.clientHeight) || 500;
+  const gxOf = s => ({ x: FR.x + (s.x - 500) * FR.k, y: FR.y + (s.y - 500) * FR.k });
+  const scr = (x, y) => [Wpx() / 2 + (x - CAM.x) * CAM.s, Hpx() / 2 + (y - CAM.y) * CAM.s];
+  // a point of the screen in the chart's own units (what the editing tools use)
+  function chartAt(e) { const r = cvs.getBoundingClientRect(), x = CAM.x + (e.clientX - r.left - r.width / 2) / CAM.s, y = CAM.y + (e.clientY - r.top - r.height / 2) / CAM.s; return [500 + (x - FR.x) / FR.k, 500 + (y - FR.y) / FR.k]; }
+  const chartPx = () => 1000 * FR.k * CAM.s;          // how wide the campaign's chart is on the screen
+  const sMin = () => MG ? Math.min(Wpx(), Hpx()) / (2.5 * MG.Rmax) : .01, sMax = () => 300 / Math.max(.02, FR ? FR.k * 10 : 1);
+  const sChart = () => Math.min(Wpx(), Hpx()) * .92 / (1000 * FR.k);
+  const clampS = s => Math.max(sMin(), Math.min(sMax(), s));
+  function request() { if (!raf && cvs) raf = requestAnimationFrame(() => { raf = 0; frame(); }); }
+  // a smooth flight to a place and a scale (the scale eased in proportion, so a long zoom feels even)
+  function flyTo(x, y, s, ms) {
+    s = clampS(s); const a = { x: CAM.x, y: CAM.y, s: CAM.s }, t0 = performance.now(), d = ms == null ? 520 : ms;
+    if (d <= 0 || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) { CAM.x = x; CAM.y = y; CAM.s = s; fly = null; request(); return; }
+    fly = { a, b: { x, y, s }, t0, d }; request();
+  }
+  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  function stepFly(now) {
+    if (!fly) return false; const t = Math.min(1, (now - fly.t0) / fly.d), e = ease(t), ls = Math.log(fly.a.s) + (Math.log(fly.b.s) - Math.log(fly.a.s)) * e, ws = Math.exp(ls);
+    // (keep the target where the eye expects it while the scale changes so much: move in proportion to the zoom)
+    const k = (Math.abs(Math.log(fly.b.s / fly.a.s)) > .5) ? (1 / ws - 1 / fly.a.s) / ((1 / fly.b.s - 1 / fly.a.s) || 1) : e;
+    CAM.x = fly.a.x + (fly.b.x - fly.a.x) * clamp01(k); CAM.y = fly.a.y + (fly.b.y - fly.a.y) * clamp01(k); CAM.s = ws;
+    if (t >= 1) fly = null; return true;
+  }
+  const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+  // the views the buttons and the trail go to
+  const fitGalaxy = ms => { galaxyModel(); flyTo(0, 0, sMin() * 1.08, ms); };
+  const fitChart = ms => { galaxyModel(); flyTo(FR.x, FR.y, sChart(), ms); };
+  function centreOn(s, z) { galaxyModel(); const p = gxOf(s); flyTo(p.x, p.y, Math.max(CAM.s, sChart() * (z || 2.5))); }
+  function zoomAt(f, e) {
+    const r = cvs.getBoundingClientRect(), px = e ? e.clientX - r.left : r.width / 2, py = e ? e.clientY - r.top : r.height / 2;
+    const wx = CAM.x + (px - r.width / 2) / CAM.s, wy = CAM.y + (py - r.height / 2) / CAM.s, s = clampS(CAM.s * f);
+    fly = null; CAM.s = s; CAM.x = wx - (px - r.width / 2) / s; CAM.y = wy - (py - r.height / 2) / s; request(); trail();
+  }
+  function view() { request(); trail(); }
+  // the rank of a system: who comes first when the chart is crowded, and whose name shows
+  let RANK = new Map();
+  function ranks() {
+    RANK = new Map(); const g = G(), sh = ship(), caps = new Set(g.powers.map(p => p.capital).filter(x => x != null)), placed = new Set(A.order.map(id => (A.meta[id] || {}).system).filter(Boolean)), named = (A.galaxyOver || {}).systems || {}, E = edits();
+    { const at = findSys(sh.at), z0 = (at && at.z) || 0; ZR = 0; for (const s of g.systems) if (s.z) ZR = Math.max(ZR, Math.abs(s.z - z0)); }
+    for (const s of allSys()) {
+      const st = chartOf(s.id);
+      RANK.set(s.id, (s.id === sh.at ? 100 : 0) + (placed.has(s.id) ? 45 : 0) + (caps.has(s.i) ? 40 : 0) + (s.f.colony ? 30 : 0) + (s.f.station ? 18 : 0) + (named[s.id] || (E[s.id] && E[s.id].name) ? 15 : 0) + (st === "visited" ? 10 : known(st) ? 5 : 0) + (s.cls === "O" || s.cls === "B" || s.cls === "R" ? 4 : 0) + (s.mark ? 35 : 0));
+    }
+  }
+  const rank = s => (s.id === UI.sel ? 120 : 0) + (RANK.get(s.id) || 0);
+  // the soft territories: each power's systems as one area, drawn on a canvas of its own and laid down faintly
+  let TERR = null;
+  function territories(W, H) {
+    const g = G(); if (!LAY.terr || !g.powers.length) return;
+    const held = allSys().filter(s => s.pw != null); if (!held.length) return;
+    const near = Math.max(1.6, (g._nn || (g._nn = medNN(g))) * 1.25), rpx = near * FR.k * CAM.s; if (rpx < 1.5) return;
+    if (!TERR || TERR.width !== W || TERR.height !== H) { TERR = document.createElement("canvas"); TERR.width = W; TERR.height = H; }
+    const t = TERR.getContext("2d");
+    for (let k = 0; k < g.powers.length; k++) {
+      const mine = held.filter(s => s.pw === k); if (!mine.length) continue;
+      t.clearRect(0, 0, W, H); t.fillStyle = PCOL[k % PCOL.length];
+      for (const s of mine) { const p = gxOf(s), [x, y] = scr(p.x, p.y); if (x < -rpx || y < -rpx || x > W + rpx || y > H + rpx) continue; t.beginPath(); t.arc(x, y, rpx, 0, 6.2832); t.fill(); }
+      ctx.globalAlpha = .13; ctx.drawImage(TERR, 0, 0, W, H); ctx.globalAlpha = 1;
+    }
+  }
+  // (the typical distance between neighbours, in chart units: how big a system's share of a territory is)
+  function medNN(g) { const L = g.systems.filter(s => !s.gone).slice(0, 600), d = L.map(s => { let b = 1e9; for (const t of L) if (t !== s) { const q = (s.x - t.x) ** 2 + (s.y - t.y) ** 2; if (q < b) b = q; } return Math.sqrt(b); }).sort((a, b) => a - b); return d[Math.floor(d.length / 2)] || 10; }
+  const ly1 = v => v >= 9950 ? (Math.round(v / 1000)).toLocaleString("en") + ",000" : v >= 100 ? Math.round(v).toLocaleString("en") : v >= 10 ? Math.round(v) : Math.round(v * 10) / 10;
+  function frame() {
+    if (!cvs || !cvs.isConnected) return;
+    const now = performance.now(), moving = stepFly(now);
+    const dpr = Math.min(2, window.devicePixelRatio || 1), W = Wpx(), H = Hpx();
+    if (cvs.width !== Math.round(W * dpr) || cvs.height !== Math.round(H * dpr)) { cvs.width = Math.round(W * dpr); cvs.height = Math.round(H * dpr); TERR = null; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = "#03050a"; ctx.fillRect(0, 0, W, H);
+    galaxyModel();
+    const g = G(), viewLy = W / CAM.s, x0 = CAM.x - W / 2 / CAM.s, y0 = CAM.y - H / 2 / CAM.s, x1 = CAM.x + W / 2 / CAM.s, y1 = CAM.y + H / 2 / CAM.s;
+    // 1. the galaxy's picture (made once, in slices; a sign while it is first made)
+    if (MG && LAY.picture) {
+      if (!PIC) { PIC = ART.picture(MG, 640, () => request()); }
+      if (PIC.done) { const L = PIC.L, [ax, ay] = scr(-L, -L), sz = 2 * L * CAM.s; ctx.globalAlpha = viewLy > 30000 ? 1 : viewLy > 1500 ? .35 + .65 * Math.log(viewLy / 1500) / Math.log(20) : .35; ctx.imageSmoothingEnabled = true; ctx.drawImage(PIC.cv, ax, ay, sz, sz); ctx.globalAlpha = 1; }
+    }
+    // 2. its unresolved stars, fading in as the view closes in
+    if (MG && LAY.field && viewLy < 60000) ART.field(ctx, MG, { x0, y0, x1, y1 }, scr, Math.min(1, Math.log(60000 / viewLy) / Math.log(6)));
+    // 3. the galaxy's own parts named, when far out: its arms, its bar, its heart; the campaign's space marked
+    const cw = chartPx(), C0 = scr(FR.x, FR.y);
+    if (MG && viewLy > 4000) {
+      ctx.font = "600 11px " + (getComputedStyle(cvs).getPropertyValue("--f-mono") || "monospace"); ctx.textAlign = "center"; ctx.fillStyle = "rgba(200,214,240,.62)";
+      if (MG.T.arms && MG.T.arms.pitch) for (const a of MG.arms) { const Rk = MG.T.arms.r0 * 1.9 + a.k * .35, u = Math.log(Rk / MG.T.arms.r0) / Math.tan(MG.T.arms.pitch * Math.PI / 180), th = a.th0 + u, [px, py] = scr(Math.cos(th) * Rk * GMOD.KPC, Math.sin(th) * Rk * GMOD.KPC); if (px > 0 && py > 0 && px < W && py < H) ctx.fillText(a.name.replace(/^The /, "").toUpperCase(), px, py); }
+      if (MG.bh) { const [hx, hy] = scr(0, 0); ctx.strokeStyle = "rgba(255,226,190,.55)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(hx, hy, 7, 0, 6.2832); ctx.stroke(); ctx.fillStyle = "rgba(255,236,210,.85)"; ctx.fillText(MG.bh.name, hx, hy - 12); }
+      // the campaign's space: where the chart stands in the galaxy
+      const rr = Math.max(5, cw / 2); ctx.strokeStyle = "rgba(143,209,158,.9)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(C0[0], C0[1], rr, 0, 6.2832); ctx.stroke();
+      ctx.fillStyle = "rgba(170,235,185,.95)"; ctx.fillText((A.galaxyParams || {}).name || "Our space", C0[0], C0[1] - rr - 6);
+    }
+    // 4. the campaign's own space, once it is big enough on the screen to show
+    DRAWN = [];
+    if (cw > 36) {
+      const near = cw > 220, L = allSys();
+      if (LAY.grid) grid(W, H);
+      if (LAY.regions) for (const r of g.regions) { const p = gxOf(r), [x, y] = scr(p.x, p.y), rp = r.r * FR.k * CAM.s; if (x + rp < 0 || y + rp < 0 || x - rp > W || y - rp > H) continue; const c = { danger: "239,68,68", restricted: "245,158,11", explored: "59,130,246", unexplored: "109,122,144" }[r.kind] || "109,122,144"; ctx.fillStyle = `rgba(${c},${r.kind === "unexplored" ? .3 : .06})`; ctx.strokeStyle = `rgba(${c},${UI.selReg === r.id ? .95 : .6})`; ctx.lineWidth = UI.selReg === r.id ? 2.2 : 1; ctx.setLineDash(UI.selReg === r.id ? [] : [4, 4]); ctx.beginPath(); ctx.arc(x, y, rp, 0, 6.2832); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); if (rp > 34) { ctx.font = "11px " + "sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = `rgba(${c},.85)`; ctx.fillText(r.name, x, y - rp - 4); } }
+      territories(W, H);
+      // lanes: the chosen system's and the course, or the whole network
+      const lanes = LAY.lanes === "all" ? g.lanes : LAY.lanes === "near" && UI.sel ? g.lanes.filter(([a, b]) => { const s = findSys(UI.sel); return s && (a === s.i || b === s.i); }) : [];
+      const tradeOnly = LAY.trade ? g.lanes.filter(([a, b]) => { const k = g.laneKind.get(lk(a, b)); return k === "trade" || k === "corridor"; }) : [];
+      for (const [a, b] of new Set([...lanes, ...tradeOnly])) { const p = sys(a), q = sys(b); if (!p || !q || p.gone || q.gone) continue; const P = gxOf(p), Q = gxOf(q), [ax, ay] = scr(P.x, P.y), [bx, by] = scr(Q.x, Q.y), k = g.laneKind.get(lk(a, b)) || (g.laneLy.has(lk(a, b)) ? "corridor" : ""); ctx.strokeStyle = UI.selLane === lk(a, b) ? "#fff" : k === "trade" ? "rgba(224,184,74,.85)" : k === "corridor" ? "rgba(180,140,255,.85)" : "rgba(80,120,180,.75)"; ctx.lineWidth = UI.selLane === lk(a, b) ? 2.4 : k ? 1.5 : 1; ctx.setLineDash(k === "corridor" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); }
+      ctx.setLineDash([]);
+      // the party's way so far: the systems they visited, in order
+      if (LAY.journey) { const v = Object.entries((S() && S().get("charts")) || {}).filter(([, c]) => c && c.state === "visited" && c.t).sort((a, b) => a[1].t - b[1].t).map(([id]) => findSys(id)).filter(Boolean); if (v.length > 1) { ctx.strokeStyle = "rgba(143,209,158,.55)"; ctx.lineWidth = 1.6; ctx.setLineDash([2, 4]); ctx.beginPath(); v.forEach((s, i) => { const p = gxOf(s), [x, y] = scr(p.x, p.y); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.setLineDash([]); } }
+      if (UI.plan && UI.plan.path) { const pts = UI.plan.path.map(id => findSys(id)).filter(Boolean); ctx.strokeStyle = UI.plan.ok ? "#8fd19e" : "#ef4444"; ctx.lineWidth = 2.2; ctx.setLineDash([6, 4]); ctx.beginPath(); pts.forEach((s, i) => { const p = gxOf(s), [x, y] = scr(p.x, p.y); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.setLineDash([]); }
+      // the systems: a steady size on the screen; where they crowd, the most important shown and the rest counted
+      const cell = near ? 7 : 11, cells = new Map(), sorted = L.slice().sort((a, b) => rank(b) - rank(a)), sp = cw / Math.sqrt(Math.max(1, L.length)), dimUnknown = LAY.known, SL = slice();
+      for (const s of sorted) {
+        const p = gxOf(s), [x, y] = scr(p.x, p.y); if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+        // (outside the depth slice: faint, unnamed, not counted among the crowd; the ship's and the chosen always shown)
+        const away = SL && Math.abs((s.z || 0) - SL.z) > SL.half && s.id !== UI.sel && s.id !== ship().at;
+        const key = Math.floor(x / cell) + ":" + Math.floor(y / cell), c = away ? null : cells.get(key);
+        if (c && rank(s) < 30) { c.n++; continue; }
+        if (!c && !away) cells.set(key, { s, x, y, n: 1 });
+        const st = chartOf(s.id), rr = ART.radius(s.cls) * (sp > 26 ? 1.15 : 1) * (rank(s) >= 30 ? 1.12 : 1) * (away ? .7 : 1), col = ART.colour(s.cls);
+        ctx.globalAlpha = (dimUnknown && !known(st) ? .32 : st === "hidden" ? .4 : 1) * (away ? .22 : 1);
+        // a soft glow for the bright, then the star
+        if (rr > 2.8 || rank(s) >= 30) { const gr = ctx.createRadialGradient(x, y, 0, x, y, rr * 3.2); gr.addColorStop(0, col + "55"); gr.addColorStop(1, col + "00"); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, rr * 3.2, 0, 6.2832); ctx.fill(); }
+        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, rr, 0, 6.2832); ctx.fill();
+        if (s.cls === "X") { ctx.strokeStyle = "#c6a8ff"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 1.6, 0, 6.2832); ctx.stroke(); }
+        if (st === "visited") { ctx.strokeStyle = "rgba(143,209,158,.9)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 2, 0, 6.2832); ctx.stroke(); }
+        // (a system the game master marked as important: a gold ring with four ticks)
+        if (s.mark) { ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x, y, rr + 4, 0, 6.2832); ctx.stroke(); for (let q = 0; q < 4; q++) { const a = q * Math.PI / 2 + .785; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * (rr + 4), y + Math.sin(a) * (rr + 4)); ctx.lineTo(x + Math.cos(a) * (rr + 7), y + Math.sin(a) * (rr + 7)); ctx.stroke(); } }
+        // what is there, as a small mark: a colony, a station
+        if (LAY.sites && sp > 16 && (s.f.colony || s.f.station)) { ctx.fillStyle = s.f.colony ? "#8fd19e" : "#9fc2ff"; if (s.f.colony) { ctx.beginPath(); ctx.arc(x + rr + 3.5, y - rr - 2, 1.8, 0, 6.2832); ctx.fill(); } else { ctx.save(); ctx.translate(x + rr + 3.5, y - rr - 2); ctx.rotate(.785); ctx.fillRect(-1.6, -1.6, 3.2, 3.2); ctx.restore(); } }
+        ctx.globalAlpha = 1;
+        DRAWN.push([x, y, s, rr, away]);
+      }
+      // the crowded: a count where many were gathered under one (until the view comes closer)
+      ctx.font = "10px sans-serif"; ctx.textAlign = "left";
+      for (const c of cells.values()) if (c.n >= 4) { ctx.fillStyle = "rgba(160,180,220,.18)"; ctx.beginPath(); ctx.arc(c.x, c.y, 6 + Math.min(10, c.n), 0, 6.2832); ctx.fill(); if (c.n >= 6) { ctx.fillStyle = "rgba(190,205,235,.8)"; ctx.fillText(String(c.n), c.x + 7, c.y + 11); } }
+      // the ship, its reach; what is chosen; what the search found
+      const sh = ship(), at = findSys(sh.at);
+      if (at) { const p = gxOf(at), [x, y] = scr(p.x, p.y); ctx.strokeStyle = "#8fd19e"; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(x, y, 8, 0, 6.2832); ctx.stroke(); if (LAY.reach) { const rr = sh.range / G().ly * FR.k * CAM.s; if (rr > 12 && rr < W * 3) { ctx.fillStyle = "rgba(143,209,158,.035)"; ctx.strokeStyle = "rgba(143,209,158,.55)"; ctx.lineWidth = 1; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(x, y, rr, 0, 6.2832); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); } } }
+      const sel = UI.sel && findSys(UI.sel); if (sel) { const p = gxOf(sel), [x, y] = scr(p.x, p.y); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 11, 0, 6.2832); ctx.stroke(); }
+      if (UI.filter) for (const s of L.filter(s => s.name.toLowerCase().includes(UI.filter)).slice(0, 40)) { const p = gxOf(s), [x, y] = scr(p.x, p.y); ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 9, 0, 6.2832); ctx.stroke(); }
+      if (paintPts.length) { ctx.fillStyle = "rgba(255,209,102,.5)"; for (const [x, y] of paintPts) { ctx.beginPath(); ctx.arc(x, y, 5, 0, 6.2832); ctx.fill(); } }
+      labels(sp);
+      // the sectors' names, faint, while the chart is whole on the screen
+      if (cw > 200 && cw < 2600) { ctx.font = "600 13px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(109,134,173,.32)"; for (const c of g.sectors) { const p = gxOf(c), [x, y] = scr(p.x, p.y); ctx.fillText(c.name.toUpperCase(), x, y); } }
+    }
+    scale(W, H); mini();
+    if (moving || fly) { request(); }
+    else { trail(); }
+  }
+  // names: a steady size, never over each other nor over a star, the most important placed first, more the closer
+  function labels(sp) {
+    const thr = sp > 70 ? -1 : sp > 38 ? 4 : sp > 20 ? 14 : sp > 11 ? 29 : 44, placed = [], rows = DRAWN.slice().sort((a, b) => rank(b[2]) - rank(a[2]));
+    ctx.font = "12px " + (getComputedStyle(cvs).fontFamily || "sans-serif"); ctx.textAlign = "left"; let n = 0;
+    for (const [x, y, s, rr, away] of rows) {
+      if (rank(s) <= thr || away) continue;
+      const t = s.name, w = ctx.measureText(t).width, bx = x + rr + 4, by = y - 7, bw = w + 2, bh = 14;
+      if (placed.some(p => bx < p[0] + p[2] && bx + bw > p[0] && by < p[1] + p[3] && by + bh > p[1]) || DRAWN.some(d => d[2] !== s && Math.abs(d[0] - (bx + bw / 2)) < bw / 2 + 2 && Math.abs(d[1] - y) < 5)) continue;
+      placed.push([bx, by, bw, bh]);
+      const st = chartOf(s.id); ctx.fillStyle = "rgba(3,5,10,.55)"; ctx.fillRect(bx - 1, by, bw + 2, bh); ctx.fillStyle = known(st) || st === "unknown" ? (s.id === UI.sel ? "#fff" : "#dbe7ff") : "#7d8aa0"; ctx.fillText(t, bx, y + 4);
+      if (++n > 160) break;
+    }
+  }
+  // a scale: a round number of light years
+  function scale(W, H) {
+    const want = 110 / CAM.s, p10 = Math.pow(10, Math.floor(Math.log10(want))), step = [1, 2, 5, 10].map(m => m * p10).filter(v => v <= want).pop() || p10, px = step * CAM.s;
+    ctx.strokeStyle = "rgba(200,214,240,.75)"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(W - 16 - px, H - 46); ctx.lineTo(W - 16, H - 46); ctx.moveTo(W - 16 - px, H - 50); ctx.lineTo(W - 16 - px, H - 42); ctx.moveTo(W - 16, H - 50); ctx.lineTo(W - 16, H - 42); ctx.stroke();
+    ctx.font = "11px sans-serif"; ctx.textAlign = "right"; ctx.fillStyle = "rgba(200,214,240,.85)"; ctx.fillText(`${ly1(step)} light year${step === 1 ? "" : "s"}`, W - 16, H - 54);
+  }
+  // a grid of light years, if asked for: lines at round distances, labelled from the galaxy's centre
+  function grid(W, H) {
+    const want = 140 / CAM.s, p10 = Math.pow(10, Math.floor(Math.log10(want))), step = [1, 2, 5, 10].map(m => m * p10).filter(v => v <= want).pop() || p10, x0 = CAM.x - W / 2 / CAM.s, y0 = CAM.y - H / 2 / CAM.s;
+    ctx.strokeStyle = "rgba(109,134,173,.16)"; ctx.lineWidth = 1; ctx.font = "10px sans-serif"; ctx.fillStyle = "rgba(109,134,173,.5)"; ctx.textAlign = "left";
+    for (let gx = Math.ceil(x0 / step) * step; gx < x0 + W / CAM.s; gx += step) { const [x] = scr(gx, 0); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); ctx.fillText(ly1(gx), x + 3, 12); }
+    for (let gy = Math.ceil(y0 / step) * step; gy < y0 + H / CAM.s; gy += step) { const [, y] = scr(0, gy); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); ctx.fillText(ly1(gy), 3, y - 3); }
+  }
+  // the overview: the whole galaxy small in the corner, where the view is on it
+  function mini() {
+    const box = host && host.querySelector(".gx-mini"); if (!box) return; box.hidden = !LAY.mini || !PIC || !PIC.done; if (box.hidden) return;
+    const c = box.getContext("2d"), n = box.width, L = PIC.L; c.clearRect(0, 0, n, n); c.drawImage(PIC.cv, 0, 0, n, n);
+    const m = v => (v + L) / (2 * L) * n, W = Wpx(), H = Hpx(), vx = m(CAM.x - W / 2 / CAM.s), vy = m(CAM.y - H / 2 / CAM.s), vw = W / CAM.s / (2 * L) * n, vh = H / CAM.s / (2 * L) * n;
+    c.strokeStyle = "#8fd19e"; c.lineWidth = 1.2; if (vw > 3) c.strokeRect(vx, vy, vw, vh); else { c.beginPath(); c.arc(m(CAM.x), m(CAM.y), 4, 0, 6.2832); c.stroke(); }
+  }
+  // the trail: the galaxy, the part of it in view, the campaign's space, its sector, the system chosen; each a way there
+  function trail() {
+    const el = host && host.querySelector(".gx-trail"); if (!el || !MG) return;
+    const parts = [`<button type="button" data-gx="galaxy" title="The whole galaxy">${esc(MG.name)}</button>`], W = Wpx(), viewLy = W / CAM.s;
+    if (viewLy < 40000) { const w = GMOD.whereIs(MG, CAM.x, CAM.y, 0); parts.push(`<button type="button" data-gx="part" title="This part of the galaxy">${esc(w.name.charAt(0).toUpperCase() + w.name.slice(1))}</button>`); }
+    if (chartPx() > 60) {
+      parts.push(`<button type="button" data-gx="fit" title="The campaign's space">${esc((A.galaxyParams || {}).name || "Our space")}</button>`);
+      const s = UI.sel && findSys(UI.sel), g = G(); if (s && s.sec != null && g.sectors[s.sec]) parts.push(`<span>${esc(g.sectors[s.sec].name)}</span>`);
+      if (s) parts.push(`<button type="button" data-gx="pick" data-id="${esc(s.id)}" aria-current="page">${esc(s.name)}</button>`);
+    }
+    const h = `<nav class="trail ux-trail" aria-label="Where this is">${parts.join('<span class="tr-sep" aria-hidden="true">›</span>')}</nav><span class="gx-where">${esc(viewLy > 9999 ? ly1(viewLy) + " light years across" : ly1(viewLy) + " light years across")}${MG ? ` · the centre ${ly1(Math.hypot(CAM.x, CAM.y))} light years away` : ""}</span>`;
+    if (el.__h !== h) { el.__h = h; el.innerHTML = h; }
+  }
+  // the card on hover: a star's name, its kind, what is there, how far from the ship
+  function hoverAt(e) {
+    const r = cvs.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, card = host.querySelector(".gx-hover");
+    let best = null, bd = 12 * 12; for (const d of DRAWN) { const q = (d[0] - px) ** 2 + (d[1] - py) ** 2; if (q < bd) { bd = q; best = d; } }
+    if (!best) { if (card) card.hidden = true; hoverId = null; cvs.style.cursor = ""; return; }
+    const s = best[2]; cvs.style.cursor = "pointer"; if (hoverId === s.id && card && !card.hidden) return; hoverId = s.id;
+    const sh = ship(), at = findSys(sh.at), d = at ? ly(at, s) : null, st = chartOf(s.id), g = G(), sec = s.sec != null ? g.sectors[s.sec] : null;
+    card.innerHTML = `<b>${esc(s.name)}</b><span>${esc(Gg.STAR_NAME[s.cls] || (ART.NAME[s.cls]) || "a star")}${s.bin ? ", with a companion" : ""}</span><span>${[s.f.colony && "a colony", s.f.station && "a station", s.f.fuel && "fuel", s.f.anomaly && "something strange"].filter(Boolean).join(" · ") || "&nbsp;"}</span><span class="kn">${sec ? esc(sec.name) + " · " : ""}${d != null && at !== s ? ly1(d) + " light years from the ship" : at === s ? "The ship is here" : ""}${st !== "unknown" ? " · " + esc((STATE.find(x => x[0] === st) || [0, ""])[1]).toLowerCase() : ""}</span>`;
+    card.style.left = Math.min(r.width - 230, best[0] + 14) + "px"; card.style.top = Math.max(44, Math.min(r.height - 90, best[1] + 10)) + "px"; card.hidden = false;
+  }
   function mount(el) {
-    host = el; host.innerHTML = `<div class="gx-wrap"><div class="gx-map"><div class="gx-bar"><input type="search" class="gx-find" placeholder="Find a system" aria-label="Find a system"><button type="button" class="gx-b" data-gx="zin" aria-label="Closer">+</button><button type="button" class="gx-b" data-gx="zout" aria-label="Further">−</button><button type="button" class="gx-b" data-gx="fit">The whole galaxy</button><button type="button" class="gx-b" data-gx="ship">The ship</button><button type="button" class="gx-b" data-gx="tools" aria-pressed="false" title="Systems, regions, lanes, sectors, powers and territories">Edit the galaxy</button>${A.ux ? `<span class="gx-uxs">${A.ux.saveMark()}${A.ux.keysBtn("stars")}</span>` : ""}<div class="gx-tools" hidden></div></div><div class="gx-canvas" tabindex="0" aria-label="The star chart: drag to move, scroll to come closer"></div><div class="gx-key"></div></div><aside class="gx-side"></aside></div>`;
+    host = el; host.innerHTML = `<div class="gx-wrap"><div class="gx-map"><div class="gx-bar"><span class="gx-findw"><input type="search" class="gx-find" placeholder="Find a system, a sector, an arm" aria-label="Find a system, a sector or a part of the galaxy" autocomplete="off"><div class="gx-found" hidden role="listbox"></div></span><button type="button" class="gx-b" data-gx="zin" aria-label="Closer" title="Closer (+)">+</button><button type="button" class="gx-b" data-gx="zout" aria-label="Further" title="Further (−)">−</button><button type="button" class="gx-b" data-gx="galaxy" title="The whole galaxy">The galaxy</button><button type="button" class="gx-b" data-gx="fit" title="The campaign's own space">Our space</button><button type="button" class="gx-b" data-gx="sideview" aria-pressed="false" title="The galaxy seen from the side, and how high above or below its plane our stars stand">Edge-on</button><button type="button" class="gx-b" data-gx="timelapse" aria-pressed="false" title="A film of the galaxy turning: 500 million years in a minute (your stars stay where they are)">Turning</button><button type="button" class="gx-b" data-gx="ship">The ship</button><details class="gx-lay"><summary class="gx-b">Layers</summary><div class="gx-layp">${[["picture", "The galaxy itself"], ["field", "Its unresolved stars"], ["terr", "Territories"], ["regions", "Regions: dangerous, restricted, charted"], ["trade", "Trade routes and corridors"], ["known", "Dim what the party does not know"], ["sites", "Colonies and stations"], ["journey", "Where the party has been"], ["reach", "The ship's reach"], ["grid", "A grid of light years"], ["mini", "The overview map"]].map(([k, l]) => `<label><input type="checkbox" data-gxl="${k}"${LAY[k] ? " checked" : ""}> ${l}</label>`).join("")}<label class="gx-lanesel">Lanes <select class="t-in" data-gxl="lanes"><option value="off"${LAY.lanes === "off" ? " selected" : ""}>none</option><option value="near"${LAY.lanes === "near" ? " selected" : ""}>of the system chosen</option><option value="all"${LAY.lanes === "all" ? " selected" : ""}>the whole network</option></select></label><label class="gx-depth"${G().systems.some(s => s.z) ? "" : " hidden"} title="The stars near the ship's own height, the rest dimmed">Depth <input type="range" data-gxl="depth" min="2" max="100" step="2" value="${+LAY.depth || 100}" aria-label="How far above and below the ship's height the stars are shown"> <span class="gx-depthv"></span></label></div></details><button type="button" class="gx-b" data-gx="tools" aria-pressed="false" title="Systems, regions, lanes, sectors, powers and territories">Edit the galaxy</button>${A.ux ? `<span class="gx-uxs">${A.ux.saveMark()}${A.ux.keysBtn("stars")}</span>` : ""}<div class="gx-tools" hidden></div><div class="gx-trail"></div></div><div class="gx-canvas" tabindex="0" role="img" aria-label="The star chart: drag to move, scroll to come closer, click a star to open its system"><canvas class="gx-cv"></canvas><div class="gx-hover" hidden></div><canvas class="gx-mini" width="130" height="130" title="The whole galaxy, and where the view is: click to go there" hidden></canvas></div><div class="gx-key"></div></div><aside class="gx-side"></aside></div>`;
     if (A.ux && !KH) { KH = A.ux.keepHist("gx"); KH.load(HIST, REDO); }
-    svg = null; base(); over(); side(); tools();
+    cvs = host.querySelector(".gx-cv"); ctx = cvs.getContext("2d");
+    galaxyModel(); ranks();
+    // the first view: the campaign's own space, as before
+    CAM.x = FR.x; CAM.y = FR.y; CAM.s = sChart();
+    base(); side(); tools(); keyHTML();
+    if (typeof ResizeObserver === "function") new ResizeObserver(() => request()).observe(cvs);
     const cv = host.querySelector(".gx-canvas");
     // what can be done where the game master right-clicks (or presses long): a star, or open space
     const onMenu = e => {
       if (!A.ux || (document.getElementById("app") || {}).dataset.mode !== "gm") return;
-      const r0 = cv.getBoundingClientRect(), wx = UI.cx - viewW() / 2 + (e.clientX - r0.left) / r0.width * viewW(), wy = UI.cy - viewH() / 2 + (e.clientY - r0.top) / r0.height * viewH();
-      let best = null, bd = (14 / Math.sqrt(UI.z)) ** 2; for (const q of allSys()) { const d = (q.x - wx) ** 2 + (q.y - wy) ** 2; if (d < bd) { bd = d; best = q; } }
+      const [wx, wy] = chartAt(e), best = pickAt(e);
       const tool = (k, extra) => () => { if (!UI.tools) { UI.tools = true; } if (k === "add") { UI.adding = true; UI.tool = null; } else { UI.tool = k; UI.adding = false; } UI.first = null; if (extra) extra(); tools(); side(); };
       const it = [];
       if (best) {
-        it.push({ label: "Its system", run: () => { UI.sel = best.id; UI.sys = best.id; over(); side(); } });
+        it.push({ label: "Its system", run: () => enterSystem(best.id) });
         it.push({ label: "Plot a course here", run: () => { UI.sel = best.id; over(); side(); setTimeout(() => { const b = host.querySelector('[data-gx="plot"]'); if (b) b.click(); }, 30); } });
-        it.push("-", { label: "Change it", run: () => { UI.tools = true; UI.sel = best.id; UI.edit = best.id; tools(); side(); } }, { label: "Move it", run: () => { UI.tools = true; UI.moving = best.id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); } }, { label: "A lane from it", run: tool("lane", () => { UI.first = best.id; }) });
+        it.push("-", { label: "Change it", run: () => { UI.tools = true; UI.sel = best.id; UI.edit = best.id; tools(); side(); } }, { label: "Move it", run: () => { UI.tools = true; UI.moving = best.id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); } }, { label: "Duplicate it", run: () => dupSystem(best.id) }, { label: best.mark ? "Unmark it" : "Mark it", hint: "important", run: () => markSystem(best.id) }, { label: "A lane from it", run: tool("lane", () => { UI.first = best.id; }) });
       } else {
-        it.push({ label: "A new system here", run: () => { UI.tools = true; const id = "C" + Date.now().toString(36); setG(id, { added: true, name: "A new system", cls: "G", x: Math.round(wx * 10) / 10, y: Math.round(wy * 10) / 10, f: {}, t: Date.now() }); UI.sel = id; UI.edit = id; refresh(); } }, { label: "A region here", run: tool("region") }, "-", { label: "The whole galaxy", run: () => { UI.z = 1; UI.cx = 500; UI.cy = 500; view(); } });
+        it.push({ label: "A star system here…", run: () => A.ux.menu(e, [{ label: "As the galaxy would have one here", hint: "its star from the real mix, its worlds from its star", run: () => addSystemAt(wx, wy, "random") }, { label: "By hand", hint: "a star of your choosing, no worlds yet", run: () => addSystemAt(wx, wy, "hand") }], "A star system here") }, { label: "A region here", run: tool("region") }, "-", { label: "Our space", run: () => fitChart() }, { label: "The whole galaxy", run: () => fitGalaxy() });
       }
       A.ux.menu(e, it, best ? best.name : "Open space");
     };
     cv.addEventListener("contextmenu", e => { e.preventDefault(); onMenu(e); });
     if (A.ux) A.ux.longPress(cv, onMenu);
-    cv.addEventListener("wheel", e => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.25 : .8, e); }, { passive: false });
-    cv.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, cx: UI.cx, cy: UI.cy, moved: false, paint: UI.tool === "terr" ? {} : null }; cv.setPointerCapture(e.pointerId); if (drag.paint) paintAt(e); });
-    cv.addEventListener("pointermove", e => { if (!drag) return; if (drag.paint) { drag.moved = true; paintAt(e); return; } const k = viewW() / cv.clientWidth, dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k; if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true; UI.cx = drag.cx - dx; UI.cy = drag.cy - dy; view(); });
-    cv.addEventListener("pointerup", e => { const d = drag; drag = null; if (d && d.paint) { const T = Object.assign(doc("~terr"), d.paint); if (Object.keys(d.paint).length) { setG("~terr", T); refresh(); } return; } if (d && !d.moved) clickAt(e); });
+    // the wheel: smooth, about the pointer; two fingers on a pad the same
+    cv.addEventListener("wheel", e => { e.preventDefault(); const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; zoomAt(Math.exp(-dy * .0016), e); }, { passive: false });
+    cv.addEventListener("dblclick", e => { if (e.target.closest(".gx-mini")) return; const r = cvs.getBoundingClientRect(), wx = CAM.x + (e.clientX - r.left - r.width / 2) / CAM.s, wy = CAM.y + (e.clientY - r.top - r.height / 2) / CAM.s; flyTo(wx, wy, CAM.s * 2.4, 380); });
+    const ptrs = new Map();
+    cv.addEventListener("pointerdown", e => {
+      if (e.target.closest(".gx-mini")) return;
+      ptrs.set(e.pointerId, [e.clientX, e.clientY]); cv.setPointerCapture(e.pointerId);
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; drag = { pinch: Math.hypot(a[0] - b[0], a[1] - b[1]), s: CAM.s }; return; }
+      fly = null; drag = { x: e.clientX, y: e.clientY, cx: CAM.x, cy: CAM.y, moved: false, paint: UI.tool === "terr" ? {} : null }; if (drag.paint) paintAt(e);
+    });
+    cv.addEventListener("pointermove", e => {
+      if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+      if (!drag) { hoverAt(e); return; }
+      if (drag.pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); CAM.s = clampS(drag.s * d / drag.pinch); request(); return; }
+      if (drag.paint) { drag.moved = true; paintAt(e); return; }
+      const dx = (e.clientX - drag.x) / CAM.s, dy = (e.clientY - drag.y) / CAM.s;
+      if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) drag.moved = true;
+      CAM.x = drag.cx - dx; CAM.y = drag.cy - dy; request();
+    });
+    const up = e => { ptrs.delete(e.pointerId); const d = drag; if (ptrs.size) return; drag = null; if (!d || d.pinch) { trail(); return; } if (d.paint) { paintPts = []; const T = Object.assign(doc("~terr"), d.paint); if (Object.keys(d.paint).length) { setG("~terr", T); refresh(); } else request(); return; } if (!d.moved) clickAt(e); else trail(); };
+    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+    cv.addEventListener("pointerleave", () => { const c = host.querySelector(".gx-hover"); if (c) c.hidden = true; hoverId = null; });
+    // the overview: click it to go there
+    host.querySelector(".gx-mini").addEventListener("click", e => { if (!PIC) return; const b = e.target.getBoundingClientRect(), L = PIC.L, x = -L + (e.clientX - b.left) / b.width * 2 * L, y = -L + (e.clientY - b.top) / b.height * 2 * L; flyTo(x, y, Math.max(CAM.s, Wpx() / 12000)); });
     host.addEventListener("keydown", e => {
       if (e.target.closest("input, textarea, select")) return;
       if (A.ux && A.ux.isHelpKey(e)) { e.preventDefault(); A.ux.keys("stars", host.querySelector(".ux-keysb")); return; }
       if ((e.ctrlKey || e.metaKey) && /^[zy]$/i.test(e.key)) { e.preventDefault(); undo(!(e.key.toLowerCase() === "y" || e.shiftKey)); return; }
+      if (e.key === "Escape" && TL) { e.preventDefault(); tlClose(); return; }
+      if (e.key === "Escape" && SV) { e.preventDefault(); sideClose(); return; }
+      if (e.key === "Escape" && A.starSystem && A.starSystem.isOpen() && !(UI.tool || UI.adding || UI.moving || UI.movingReg)) { e.preventDefault(); leaveSystem(true); return; }
       if (e.key === "Escape") { if (UI.tool || UI.adding || UI.moving || UI.movingReg) { UI.tool = null; UI.adding = false; UI.moving = null; UI.movingReg = null; UI.first = null; } else if (UI.sel || UI.selReg || UI.selLane) { UI.sel = null; UI.selReg = null; UI.selLane = null; } else if (UI.tools) { UI.tools = false; UI.panel = null; UI.pedit = null; } else return; e.preventDefault(); tools(); over(); side(); return; }
       if ((e.key === "+" || e.key === "=") && !e.ctrlKey) { e.preventDefault(); zoomAt(1.6); return; }
       if (e.key === "-" && !e.ctrlKey) { e.preventDefault(); zoomAt(.62); return; }
+      const step = 80 / CAM.s; if (e.key === "ArrowLeft") { CAM.x -= step; } else if (e.key === "ArrowRight") { CAM.x += step; } else if (e.key === "ArrowUp") { CAM.y -= step; } else if (e.key === "ArrowDown") { CAM.y += step; }
+      if (/^Arrow/.test(e.key) && e.target.closest(".gx-canvas")) { e.preventDefault(); request(); trail(); return; }
       if (UI.tools && A.ux) { const t = A.ux.numKey(e, ["add", "region", "lane", "sector", "terr"]); if (t) { e.preventDefault(); const b = host.querySelector(`[data-gx="tool"][data-t="${t}"]`); if (b) b.click(); return; } }
       if ((e.key === "Delete" || e.key === "Backspace") && UI.tools && UI.sel) { const b = host.querySelector('[data-gx="remove"]'); if (b) { e.preventDefault(); b.click(); } }
     });
-    host.querySelector(".gx-find").addEventListener("input", e => { UI.filter = e.target.value.trim().toLowerCase(); over(); });
+    // the search: what it finds, listed, and gone to
+    const find = host.querySelector(".gx-find"), list = host.querySelector(".gx-found");
+    find.addEventListener("input", () => { UI.filter = find.value.trim().toLowerCase(); findList(); request(); });
+    find.addEventListener("keydown", e => { if (e.key === "Enter") { const b = list.querySelector("button"); if (b) { e.preventDefault(); b.click(); } } else if (e.key === "Escape") { find.value = ""; UI.filter = ""; list.hidden = true; request(); } else if (e.key === "ArrowDown") { const b = list.querySelector("button"); if (b) { e.preventDefault(); b.focus(); } } });
+    host.addEventListener("change", e => { const t = e.target; if (!t.dataset || t.dataset.gxl == null) return; const k = t.dataset.gxl; LAY[k] = t.type === "checkbox" ? t.checked : t.value; keepLay(); PIC = LAY.picture ? PIC : PIC; request(); });
     host.addEventListener("click", onClick); host.addEventListener("change", onChange); host.addEventListener("submit", onSubmit);
     // (the planet editor shows what its changes would do as they are made)
-    host.addEventListener("input", e => { const f = e.target.closest && e.target.closest("form.gx-phys"); if (f) physPreview(f); });
+    host.addEventListener("input", e => { if (e.target.dataset && e.target.dataset.gxl === "depth") { LAY.depth = +e.target.value; keepLay(); depthSay(); request(); if (SV) sideDraw(); return; } const f = e.target.closest && e.target.closest("form.gx-phys"); if (f) physPreview(f); });
+    depthSay();
+    request();
   }
-  const viewW = () => 1000 / UI.z, viewH = () => viewW() * .62;
-  function view() { if (!svg) return; svg.setAttribute("viewBox", `${UI.cx - viewW() / 2} ${UI.cy - viewH() / 2} ${viewW()} ${viewH()}`); host.querySelector(".gx-canvas").dataset.z = UI.z >= 3.5 ? "near" : UI.z >= 1.8 ? "mid" : "far"; labels(); }
-  function zoomAt(f, e) { const cv = host.querySelector(".gx-canvas"), r = cv.getBoundingClientRect(), px = e ? (e.clientX - r.left) / r.width : .5, py = e ? (e.clientY - r.top) / r.height : .5, wx = UI.cx - viewW() / 2 + px * viewW(), wy = UI.cy - viewH() / 2 + py * viewH(); UI.z = Math.max(.8, Math.min(24, UI.z * f)); UI.cx = wx - (px - .5) * viewW(); UI.cy = wy - (py - .5) * viewH(); view(); }
-  function centreOn(s, z) { UI.cx = s.x; UI.cy = s.y; if (z) UI.z = Math.max(UI.z, z); view(); }
-  // what never changes while looking: the regions, the territories, the lanes, the systems
-  function base() {
-    const g = G(), L = allSys(), cv = host.querySelector(".gx-canvas");
-    const terr = L.filter(s => s.pw != null).map(s => `<circle cx="${s.x}" cy="${s.y}" r="13" fill="${PCOL[s.pw % PCOL.length]}" class="gx-terr"/>`).join("");
-    // (a trade route in gold, a corridor of the game master's own length in violet)
-    const lanes = g.lanes.map(([a, b]) => { const p = sys(a), q = sys(b), k = g.laneKind.get(lk(a, b)) || (g.laneLy.has(lk(a, b)) ? "corridor" : ""); return p.gone || q.gone ? "" : `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" class="gx-lane${k ? " gx-l-" + k : ""}${UI.selLane === lk(a, b) ? " sel" : ""}"/>`; }).join("");
-    const stars = L.map(s => { const st = chartOf(s.id), c = (Gg.STARS[s.cls] || Gg.STARS.G)[0]; return `<circle cx="${s.x}" cy="${s.y}" r="${s.cls === "O" || s.cls === "B" ? 2.6 : s.cls === "X" ? 2.2 : 1.8}" fill="${c}" class="gx-star gx-${st}" data-sys="${esc(s.id)}"/>`; }).join("");
-    cv.innerHTML = `<svg class="gx-svg" role="img" aria-label="${esc((A.galaxyParams || {}).name || "The galaxy")}"><rect x="-500" y="-500" width="2000" height="2000" class="gx-bg"/><g class="gx-terrs">${terr}</g>${g.regions.map(r => `<circle cx="${r.x}" cy="${r.y}" r="${r.r}" class="gx-reg gx-${esc(r.kind)}${UI.selReg === r.id ? " sel" : ""}"><title>${esc(r.name)}</title></circle>`).join("")}${g.sectors.map(c => `<text x="${c.x}" y="${c.y}" class="gx-sector">${esc(c.name)}</text>`).join("")}<g class="gx-lanes">${lanes}</g><g class="gx-stars">${stars}</g><g class="gx-over"></g><g class="gx-labels"></g></svg>`;
-    svg = cv.querySelector("svg"); view();
-    const key = host.querySelector(".gx-key");
-    key.innerHTML = `${g.powers.map((p, k) => `<span><i style="background:${PCOL[k % PCOL.length]}"></i>${esc(p.name)}</span>`).join("")}<span><i class="gx-k-danger"></i>Dangerous</span><span><i class="gx-k-restricted"></i>Restricted</span><span><i class="gx-k-explored"></i>Charted space</span>${g.regions.some(r => r.kind === "unexplored") ? `<span><i class="gx-k-unexplored"></i>Unexplored</span>` : ""}${[...g.laneKind.values()].includes("trade") ? `<span><i class="gx-k-trade"></i>Trade route</span>` : ""}${g.laneLy.size ? `<span><i class="gx-k-corridor"></i>Corridor</span>` : ""}`;
+  // what the chart's own search finds: systems by name, sectors, regions, the galaxy's arms and its heart
+  function findList() {
+    const list = host.querySelector(".gx-found"), q = UI.filter; if (!q || q.length < 2) { list.hidden = true; return; }
+    const g = G(), out = [];
+    // (the systems by name; "marked" lists the ones the game master marked as important)
+    for (const s of allSys()) if (s.name.toLowerCase().includes(q) || (s.mark && "marked".startsWith(q))) out.push([`<b>${esc(s.name)}</b><span>${esc(Gg.STAR_NAME[s.cls] || ART.NAME[s.cls] || "")}${s.sec != null && g.sectors[s.sec] ? " · " + esc(g.sectors[s.sec].name) : ""}${s.mark ? " · marked" : ""}</span>`, `data-gx="pick" data-id="${esc(s.id)}"`]);
+    for (const c of g.sectors) if (c.name.toLowerCase().includes(q)) out.push([`<b>${esc(c.name)}</b><span>A sector</span>`, `data-gx="gosec" data-id="${esc(c.id)}"`]);
+    for (const r of g.regions) if (String(r.name || "").toLowerCase().includes(q)) out.push([`<b>${esc(r.name)}</b><span>A region</span>`, `data-gx="goreg" data-id="${esc(r.id)}"`]);
+    if (MG) { for (const a of MG.arms) if (a.name.toLowerCase().includes(q)) out.push([`<b>${esc(a.name)}</b><span>An arm of the galaxy</span>`, `data-gx="goarm" data-k="${a.k}"`]); if (MG.bh && (MG.bh.name.toLowerCase().includes(q) || /black hole|centre|center|heart/.test(q))) out.push([`<b>${esc(MG.bh.name)}</b><span>The black hole at the centre</span>`, `data-gx="gohole"`]); }
+    list.innerHTML = out.slice(0, 30).map(([h, a]) => `<button type="button" ${a}>${h}</button>`).join("") || `<p class="kn">Nothing on the chart is called that.</p>`; list.hidden = false;
   }
+  // the key: the powers, the regions, the lanes, the kinds of star
+  function keyHTML() {
+    const g = G(), key = host.querySelector(".gx-key");
+    key.innerHTML = `${g.powers.map((p, k) => `<span><i style="background:${PCOL[k % PCOL.length]}"></i>${esc(p.name)}</span>`).join("")}<span><i class="gx-k-danger"></i>Dangerous</span><span><i class="gx-k-restricted"></i>Restricted</span><span><i class="gx-k-explored"></i>Charted space</span>${g.regions.some(r => r.kind === "unexplored") ? `<span><i class="gx-k-unexplored"></i>Unexplored</span>` : ""}${[...g.laneKind.values()].includes("trade") ? `<span><i class="gx-k-trade"></i>Trade route</span>` : ""}${g.laneLy.size ? `<span><i class="gx-k-corridor"></i>Corridor</span>` : ""}<span class="gx-kstars">${["O", "B", "A", "F", "G", "K", "M"].map(c => `<i style="background:${ART.colour(c)}" title="${esc(Gg.STAR_NAME[c] || c)}"></i>`).join("")} hot to cool</span>`;
+  }
+  // what changes: the static caches, then a drawing
+  function base() { galaxyModel(); ranks(); if (host) keyHTML(); request(); }
+  function over() { request(); }
+  // the system under the pointer (a steady reach on the screen)
+  function pickAt(e) { const r = cvs.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top; let best = null, bd = 13 * 13; for (const d of DRAWN) { const q = (d[0] - px) ** 2 + (d[1] - py) ** 2; if (q < bd) { bd = q; best = d[2]; } } return best; }
+  // a star clicked: fly to it, then into its system's own map (atlas-starsystem.js), the chart kept as it was to come back to
+  function enterSystem(id) {
+    const s = findSys(id); if (!s) return;
+    UI.sel = id; UI.selReg = null; UI.selLane = null; UI.planet = null; UI.plan = null;
+    UI.back = { x: CAM.x, y: CAM.y, s: CAM.s };
+    const p = gxOf(s), into = () => { if (A.starSystem && host) { UI.sys = id; A.starSystem.open(host, { s, info: bodiesOf(s), api: SYSAPI }); } else { UI.sys = id; } side(); };
+    flyTo(p.x, p.y, Math.max(CAM.s, sChart() * 6), 420); setTimeout(into, 430);
+    side(); if (A.nav) A.nav.mark();
+  }
+
+  // what the system's own map asks of the chart (atlas-starsystem.js): the world or moon chosen, the places on it, the
+  // ship, the date, the players' screen; and the way back to the chart as it was left
+  const SYSAPI = {
+    pick: (n, m) => {
+      UI.planet = n == null ? null : +n; UI.moon = m == null ? null : +m; UI.pedit = null; UI.phys = null; side(); if (A.starSystem) A.starSystem.redraw();
+      // (its card brought into the side's view, the map left where it is)
+      const sd = host && host.querySelector(".gx-side"), wc = sd && sd.querySelector(".gx-world"); if (wc && sd.scrollHeight > sd.clientHeight + 4) sd.scrollTop = Math.max(0, sd.scrollTop + wc.getBoundingClientRect().top - sd.getBoundingClientRect().top - 8);
+    },
+    sel: () => ({ planet: UI.planet, moon: UI.moon }),
+    back: () => leaveSystem(true),
+    places: sid => A.order.filter(id => (A.meta[id] || {}).system === sid).map(id => ({ id, name: A.meta[id].name || id, planet: A.meta[id].planet, site: A.meta[id].site })),
+    shipHere: sid => ship().at === sid, shipName: () => ship().name,
+    moonName: (p, m) => moonName(p, m),
+    date: dt => A.worldTime ? A.worldTime.at(A.worldTime.now() + Math.round((dt || 0) * 1440)).short : dt ? Math.round(dt) + " days on" : "",
+    show: sid => { if (A.tableUI) { A.tableUI.api.show({ kind: "galaxy", sys: sid }); A.tableUI.api.note("The players' screen shows the system: the worlds they have scanned, the rest as outlines."); } },
+    // (the system as it stands now, after a world, a site or a belt was added, changed or taken away)
+    fresh: id => findSys(id), info: s => { const f = findSys(s.id) || s; return bodiesOf(f); },
+    // (changing it from its own map: the galaxy's tools out, the game master's menu, a world dragged)
+    editing: () => !!UI.tools, menu: (ctx, ev) => sysMenu(ctx, ev), moveWorld: (n, a, ev) => sysMoveWorld(n, a, ev)
+  };
+  function leaveSystem(back) {
+    const was = UI.sys; if (A.starSystem && A.starSystem.isOpen()) A.starSystem.close();
+    UI.sys = null; UI.moon = null; UI.planet = null; UI.pedit = null; UI.phys = null;
+    if (was) UI.sel = was;
+    if (back && UI.back) flyTo(UI.back.x, UI.back.y, UI.back.s, 420);
+    UI.back = null; request(); side(); trail();
+    if (back) { if (A.nav) A.nav.mark(); const c = host && host.querySelector(".gx-canvas"); if (c) c.focus({ preventScroll: true }); }
+  }
+  /* ---- a system changed from its own map (the editing plan of 10 Nov 2026, stage 1): a right-click on an empty orbit
+          offers a world there (what its star would make there, a world of a kind made from its physics, or one by hand),
+          a belt or a station; on a world, its card, its changes, a copy, a moon, its surface, taking it away; a world
+          dragged to another orbit, with the choice of what follows. Every change is one step of the galaxy's undo */
+  const gmMode = () => ((document.getElementById("app") || {}).dataset || {}).mode === "gm";
+  const nextLetter = info => "bcdefghijklmnopqrstuvwxyz"[Math.min(24, info.planets.length)];
+  const nextN = info => Math.max(99, ...info.planets.map(x => x.n)) + 1;
+  function toolsOn() { if (!UI.tools) { UI.tools = true; tools(); } }
+  const strip = p => { const o = JSON.parse(JSON.stringify(p)); for (const k of ["own", "edited", "made", "sid", "pn", "phys", "keepA"]) delete o[k]; for (const m of o.moonList || []) { delete m.sid; delete m.pn; } return o; };
+  function sysAddWorld(s, a, how, kind) {
+    const D = doc(s.id), B = D.bodies = D.bodies || {}, info = bodiesOf(s), n = nextN(info), nm = `${s.name} ${nextLetter(info)}`;
+    const w = how === "hand" ? Object.assign(newWorld(s, kind || "rocky", a, n), { name: nm, hand: true }) : madeWorld(s, info, how === "random" ? null : kind, a, n, nm);
+    B.add = (B.add || []).concat(w); setG(s.id, D); UI.planet = n; UI.moon = null; UI.phys = null; UI.pedit = null;
+    if (how === "hand" || w.rough) { toolsOn(); UI.pedit = n; }
+    refresh();
+    if (A.tableUI) A.tableUI.api.note(w.rough ? `Its star would not make ${/^[aeiou]/i.test(Gg.KINDS[kind] || "") ? "an" : "a"} ${(Gg.KINDS[kind] || "world").toLowerCase()} ${a} AU out: ${nm} is kept as your setting has it, its card saying why.` : how === "hand" ? `${nm}: set its figures in its card.` : `${nm}: ${String(w.kname || "a world").toLowerCase()}, made from its star's physics ${a} AU out.`);
+  }
+  function sysDupWorld(s, n) {
+    const info = bodiesOf(s), p = info.planets.find(x => x.n === n); if (!p) return;
+    const D = doc(s.id), B = D.bodies = D.bodies || {}, nn = nextN(info), nm = `${s.name} ${nextLetter(info)}`, a = +(p.a * 1.3).toPrecision(3), base = p.made || p;
+    // (the same world, a little further out: worked out again there from its own makings, so its warmth follows its orbit)
+    const w = base.inputs && Gg.rework ? Object.assign(Gg.rework(G(), info, base, Object.assign({}, p.phys || {}, { a })), { n: nn, name: nm, hand: true, minerals: p.minerals, chance: p.chance }) : Object.assign(strip(p), { n: nn, name: nm, a, hand: true });
+    B.add = (B.add || []).concat(w); setG(s.id, D); UI.planet = nn; UI.moon = null; refresh();
+    if (A.tableUI) A.tableUI.api.note(`${nm}: a copy of ${p.name}, ${a} AU out. Drag it to the orbit you want.`);
+  }
+  function delWorld(s, n) { const D = doc(s.id), B = D.bodies = D.bodies || {}; if ((B.add || []).some(p => p.n === n)) B.add = B.add.filter(p => p.n !== n); else { B.p = B.p || {}; B.p[n] = { gone: true }; } setG(s.id, D); if (UI.planet === n) { UI.planet = null; UI.moon = null; } UI.pedit = null; UI.phys = null; refresh(); }
+  // a world moved to another orbit: worked out again there, or its figures kept as the game master's
+  function sysMoveWorld(n, a, ev) {
+    const s = findSys(UI.sys); if (!s) return; const info = bodiesOf(s), p = info.planets.find(x => x.n === n); if (!p || !(a > 0)) return;
+    const D = doc(s.id), B = D.bodies = D.bodies || {}, own = (B.add || []).find(x => x.n === n), phys = (p.made || p).inputs && Gg.rework;
+    const work = () => { if (own) { if (own.inputs) { own.phys = Object.assign({}, own.phys || {}, { a }); delete own.keepA; } else own.a = a; } else { const e = (B.p = B.p || {})[n] || {}; B.p[n] = Object.assign(e, { phys: Object.assign({}, e.phys || {}, { a }), t: Date.now() }); delete B.p[n].a; delete B.p[n].keepA; } setG(s.id, D); UI.planet = n; refresh(); };
+    const keep = () => { if (own) { own.a = a; own.keepA = true; } else { const e = (B.p = B.p || {})[n] || {}; B.p[n] = Object.assign(e, { a, keepA: true, t: Date.now() }); } setG(s.id, D); UI.planet = n; refresh(); };
+    if (!phys) { keep(); return; }
+    if (A.ux && ev) A.ux.menu(ev, [{ label: "Work out what follows", hint: "its warmth, its air, its seas", run: work }, { label: "Keep its figures", hint: "your setting's", run: keep }], `${p.name} to ${a} AU`); else work();
+  }
+  // a large moon added to a world, made by the planet maker as its own are; or one taken away
+  function sysAddMoon(s, n) {
+    const info = bodiesOf(s), p = info.planets.find(x => x.n === n); if (!p || !A.planets || !A.planets.body) return;
+    const D = doc(s.id), B = D.bodies = D.bodies || {}, own = (B.add || []).find(x => x.n === n), E = own || ((B.p = B.p || {})[n] = (B.p[n] || {})), list = p.moonList || [];
+    const km = Math.round(Math.max((p.radius || p.size || 1) * 6371 * 14, ...list.map(m => m.distance || m.a || 0)) * 1.5), aAU = km / 1.496e8, yrs = Math.sqrt(Math.pow(aAU, 3) / (Math.max(1e-4, p.mass || p.size || 1) / 332946));
+    const k = (E.addM || []).length, r = Gg.rng(`${(A.galaxyParams || {}).seed}|moon|${s.id}|${n}|${k}`), mass = .002 + r() * .03, wf = p.a > (info.star.frost || 2.7) * .7 ? .2 + r() * .3 : .00005;
+    const mb = A.planets.body(info.star, { a: p.a, mass, wf, env: "rock", host: { a: p.a, name: p.name }, period: yrs, tidal: 0 }, r, { realism: (G().p || {}).realism || "balanced", tech: (G().p || {}).tech || "armoured" });
+    E.addM = (E.addM || []).concat(Object.assign(mb, { n: 50 + k, distance: km, period: Math.round(yrs * 365.25 * 10) / 10, own: true }));
+    setG(s.id, D); UI.planet = n; UI.moon = 50 + k; refresh();
+  }
+  function sysDelMoon(s, n, m) {
+    const D = doc(s.id), B = D.bodies = D.bodies || {}, own = (B.add || []).find(x => x.n === n), E = own || ((B.p = B.p || {})[n] = (B.p[n] || {}));
+    if ((E.addM || []).some(x => x.n === m)) E.addM = E.addM.filter(x => x.n !== m); else E.mGone = Object.assign({}, E.mGone || {}, { [m]: 1 });
+    setG(s.id, D); UI.moon = null; refresh();
+  }
+  function sysAddBelt(s, a) { const D = doc(s.id), B = D.bodies = D.bodies || {}, info = bodiesOf(s), k = Math.max(99, ...info.belts.map(x => x.k)) + 1; B.addB = (B.addB || []).concat({ k, a, name: a > (info.star.frost || 2.7) ? "An icy belt" : "An asteroid belt", rich: false, icy: a > (info.star.frost || 2.7) }); setG(s.id, D); refresh(); }
+  function sysAddSite(s, kind, a, ph) { const D = doc(s.id), B = D.bodies = D.bodies || {}, info = bodiesOf(s), k = Math.max(99, ...info.sites.map(x => x.k)) + 1; B.addS = (B.addS || []).concat({ k, kind, name: (SITEK.find(x => x[0] === kind) || [0, "A site"])[1], on: null, a, ph }); setG(s.id, D); refresh(); if (A.tableUI) A.tableUI.api.note("Name it in the system's card, under Add to the system, or right-click it."); }
+  function sysMenu(ctx, ev) {
+    if (!A.ux || !gmMode()) return; const s = findSys(UI.sys); if (!s) return;
+    const info = bodiesOf(s), it = [], KI = how => Object.entries(Gg.KINDS).map(([k, l]) => ({ label: l, run: () => sysAddWorld(s, ctx.a, how, k) }));
+    if (ctx.kind === "space") {
+      if (!(ctx.a > 0)) return;
+      it.push({ label: "What its star would make here", hint: "from its physics", run: () => sysAddWorld(s, ctx.a, "random") }, { label: "A world of a kind…", hint: "made from its physics", run: () => A.ux.menu(ev, KI("kind"), `A world ${ctx.a} AU out`) }, { label: "A world by hand…", hint: "your own figures", run: () => A.ux.menu(ev, KI("hand"), "By hand: what kind?") },
+        "-", { label: "A belt here", run: () => sysAddBelt(s, ctx.a) }, { label: "A station here", run: () => sysAddSite(s, "station", ctx.a, ctx.ph) }, { label: "Something else here…", run: () => A.ux.menu(ev, SITEK.filter(([k]) => k !== "station").map(([k, l]) => ({ label: l, run: () => sysAddSite(s, k, ctx.a, ctx.ph) })), `${ctx.a} AU out`) });
+      A.ux.menu(ev, it, `${ctx.a} AU from ${s.name}`); return;
+    }
+    if (ctx.kind === "world" || ctx.kind === "rock") {
+      const p = info.planets.find(x => x.n === ctx.n); if (!p) return;
+      it.push({ label: "Its card", run: () => SYSAPI.pick(p.n) }, { label: "Change this world", run: () => { toolsOn(); UI.planet = p.n; UI.moon = null; UI.pedit = p.n; UI.phys = null; side(); } });
+      if ((p.made || p).inputs && Gg.rework) it.push({ label: "Work it out again", run: () => { toolsOn(); UI.planet = p.n; UI.moon = null; UI.phys = p.n; UI.pedit = null; side(); } });
+      it.push({ label: "Duplicate it", run: () => sysDupWorld(s, p.n) }, { label: "Add a moon", run: () => sysAddMoon(s, p.n) });
+      if (p.landable && A.worldGenerate) it.push({ label: "Open its surface", run: () => { SYSAPI.pick(p.n); setTimeout(() => { const b = host.querySelector('.gx-side .gx-world [data-gx="surface"]:not([data-m])'); if (b) b.click(); }, 80); } });
+      it.push("-", { label: "Take it away", danger: true, run: () => delWorld(s, p.n) });
+      A.ux.menu(ev, it, p.name); return;
+    }
+    if (ctx.kind === "moon") { const p = info.planets.find(x => x.n === ctx.n); if (!p) return; const m = (p.moonList || []).find(x => x.n === ctx.m); A.ux.menu(ev, [{ label: "Its card", run: () => SYSAPI.pick(p.n, ctx.m) }, "-", { label: "Take it away", danger: true, run: () => sysDelMoon(s, p.n, ctx.m) }], m ? moonName(p, m) : "A moon"); return; }
+    if (ctx.kind === "site") { const t = info.sites.find(x => x.k === ctx.site); if (!t) return; const pl = A.order.find(id => (A.meta[id] || {}).system === s.id && (A.meta[id] || {}).site === t.k); A.ux.menu(ev, [pl ? { label: "Open it", hint: "its page and its inside", run: () => { const g = document.createElement("button"); g.dataset.go = pl; host.appendChild(g); g.click(); g.remove(); } } : { label: "Its inside…", hint: "a place with its page and its maps", run: () => { const b = document.createElement("button"); b.dataset.gx = "siteplace"; b.dataset.id = s.id; b.dataset.k = t.k; host.appendChild(b); b.click(); b.remove(); } }, "-", { label: "Take it away", danger: true, run: () => { const D = doc(s.id), B = D.bodies = D.bodies || {}; if ((B.addS || []).some(x => x.k === t.k)) B.addS = B.addS.filter(x => x.k !== t.k); else { B.s = B.s || {}; B.s[t.k] = { gone: true }; } setG(s.id, D); refresh(); } }], t.name); return; }
+    if (ctx.kind === "star") { A.ux.menu(ev, [{ label: "Change its star and companions", run: () => { toolsOn(); UI.edit = s.id; side(); } }], s.name); }
+  }
+
+  /* ---- a system added where the game master right-clicked: grown as the galaxy would have one there (its star from the
+          real mix at that place, a companion by the odds for its mass, its worlds from its star), or built by hand (a
+          star of their choosing and no worlds yet); a system copied (its star, companions, worlds, belts and sites the
+          same, a little way off); a system marked as important */
+  const r1c = v => Math.round(v * 10) / 10;
+  function starHere(wx, wy, id) {
+    if (!GMOD || !MG) return { cls: "G" };
+    const r = Gg.rng(`${(A.galaxyParams || {}).seed}|here|${id}`), gx = FR.x + (wx - 500) * FR.k, gy = FR.y + (wy - 500) * FR.k, pop = GMOD.populationAt(MG, gx, gy, FR.z, r);
+    let m0 = GMOD.imfSample(r); if ((G().p || {}).browns === false) { let g = 0; while (m0 < .08 && g++ < 40) m0 = GMOD.imfSample(r); }
+    const now = GMOD.become(m0, pop.age), c0 = GMOD.companionOf(m0, r), c = c0 ? GMOD.become(c0.mass, pop.age) : null;
+    return Object.assign({ cls: now.cls, bin: !!c, m2: { cls: now.cls, mass: Math.round(now.mass * 1000) / 1000, m0: Math.round(m0 * 1000) / 1000, age: Math.round(pop.age), feh: pop.feh, pop: pop.pop } }, c ? { comp: { cls: c.cls, mass: Math.round(c.mass * 1000) / 1000, a: c0.a, e: c0.e, both: c0.a <= 2 }, compNat: true } : {});
+  }
+  function addSystemAt(wx, wy, how) {
+    const id = "C" + Date.now().toString(36), base = { added: true, name: Gg.nameOf ? Gg.nameOf(Gg.rng(id + "|name")) : "A new system", x: r1c(wx), y: r1c(wy), f: {}, t: Date.now() };
+    Object.assign(base, how === "hand" ? { cls: "G", noGen: true } : starHere(wx, wy, id));
+    UI.tools = true; setG(id, base); UI.sel = id; UI.edit = how === "hand" ? id : null; refresh();
+    if (A.tableUI) A.tableUI.api.note(how === "hand" ? `${base.name}: a star of your choosing and no worlds yet. Open the system and right-click an orbit to add one.` : `${base.name}: ${Gg.STAR_NAME[base.cls] || "a star"}${base.bin ? " with a companion" : ""}, as the galaxy would have one here; its worlds from its star.`);
+  }
+  function dupSystem(id) {
+    const s = findSys(id); if (!s) return; const info = bodiesOf(s), nid = "C" + Date.now().toString(36), nm = s.name + " II", st = info.star, comp = st.companion || (A.starSystem ? A.starSystem.companion(s, info) : null);
+    const map = {}, worlds = info.planets.map((p, i) => { map[p.n] = 100 + i; return Object.assign(strip(p), { n: 100 + i, name: String(p.name).replace(s.name, nm), hand: true }); });
+    const bodies = { add: worlds, addB: info.belts.map((b, i) => ({ k: 100 + i, a: b.a, name: b.name, rich: b.rich, icy: b.icy })), addS: info.sites.map((t, i) => ({ k: 100 + i, kind: t.kind, name: String(t.name).replace(s.name, nm), on: t.on != null ? map[t.on] : null, a: t.a, ph: t.ph })) };
+    const star0 = { cls: st.cls, color: st.color, lum: st.lum, mass: st.mass, teff: st.teff, age: st.age, flares: st.flares, metal: st.metal };
+    setG(nid, Object.assign({ added: true, name: nm, cls: s.cls, bin: !!comp, x: r1c(s.x + 9), y: r1c(s.y + 6), z: s.z || undefined, f: Object.assign({}, s.f), desc: s.desc || "", noGen: true, star0, bodies, t: Date.now() }, comp ? { comp: { cls: comp.cls, mass: comp.mass, a: comp.a, e: comp.ecc != null ? comp.ecc : comp.e, both: !!comp.both }, compNat: true } : {}, st.companion2 ? { comp2: { cls: st.companion2.cls, mass: st.companion2.mass, a: st.companion2.a, e: st.companion2.ecc } } : {}));
+    UI.tools = true; UI.sel = nid; refresh(); if (A.tableUI) A.tableUI.api.note(`${nm}: a copy of ${s.name}, its star and worlds the same. Move it where it belongs.`);
+  }
+  function markSystem(id) { const s = findSys(id); if (!s) return; setG(id, Object.assign(doc(id), { mark: !s.mark, t: Date.now() })); refresh(); }
+
+  // (Back in the page's own history to the chart without a system: the system's map closed)
+  A.galaxyClose = () => { if (UI.sys || (A.starSystem && A.starSystem.isOpen())) leaveSystem(false); if (SV) sideClose(); if (TL) tlClose(); };
+
+  /* ---- the galaxy edge-on (the galaxy plan, section 5: "a side view shows the galaxy edge-on"): the whole of it seen
+          from the side, across the line from its centre through our space; and our space itself from the side, each
+          system at its height above or below the plane, the ship's height and the depth slice marked. Over the chart's
+          picture, as a system's map is */
+  let SV = null;
+  function sideOpen() {
+    if (SV) { sideClose(); return; }
+    if (A.starSystem && A.starSystem.isOpen()) leaveSystem(false);
+    galaxyModel(); if (!MG || !host) return;
+    const under = host.querySelector(".gx-canvas"), el = document.createElement("div");
+    el.className = "gx-sidev"; el.tabIndex = -1; el.setAttribute("role", "region"); el.setAttribute("aria-label", "The galaxy edge-on");
+    el.innerHTML = `<div class="ss-bar"><button type="button" class="gx-b" data-gx="sideview" title="Back to the chart (Esc)">← The chart</button><span class="ss-title"><b>${esc(MG.name)}, edge-on</b></span></div>
+      <div class="gx-svb"><canvas class="gx-sv1" role="img" aria-label="The whole galaxy seen from the side, with our space marked"></canvas><p class="gx-svs t-small"></p><canvas class="gx-sv2" role="img" aria-label="Our space seen from the side: each system at its height above or below the plane"></canvas><p class="gx-svs2 t-small"></p></div>`;
+    under.parentNode.appendChild(el); el.style.top = under.offsetTop + "px"; el.style.height = under.offsetHeight + "px";
+    SV = { el }; const b = host.querySelector('.gx-bar [data-gx="sideview"]'); if (b) b.setAttribute("aria-pressed", "true");
+    sideDraw(); el.focus({ preventScroll: true });
+  }
+  /* ---- the galaxy turning (the galaxy plan, section 4 and stage E): a film, 500 million years in a minute. Its stars go
+          round at the speed the galaxy's weight gives them where they are (inner ones lap outer ones), weave in and out
+          and bob through the plane; the arms are a pattern they pass through, lit by the young stars born in it, who
+          drift away as they age; the bar turns at its own pace. It never moves the campaign's stars: they keep their
+          charted places, and the film says so, with the honest figure for the campaign's own time. */
+  let TL = null;
+  function tlOpen() {
+    if (TL) { tlClose(); return; }
+    if (A.starSystem && A.starSystem.isOpen()) leaveSystem(false); if (SV) sideClose();
+    galaxyModel(); if (!MG || !host) return;
+    const under = host.querySelector(".gx-canvas"), el = document.createElement("div"), R = Math.hypot(FR.x, FR.y), Rk = R / GMOD.KPC;
+    const v = Rk > .3 ? GMOD.vcirc(MG, Rk) : 0, ten = v * 3.156e7 * 10 / 9.461e12;   // light years in ten years (km/s, seconds in a year, km in a light year)
+    el.className = "gx-sidev gx-tl"; el.tabIndex = -1; el.setAttribute("role", "region"); el.setAttribute("aria-label", "The galaxy turning, as a film");
+    el.innerHTML = `<div class="ss-bar"><button type="button" class="gx-b" data-gx="timelapse" title="Back to the chart (Esc)">← The chart</button><span class="ss-title"><b>${esc(MG.name)}, turning</b></span><span class="ss-sp"></span><button type="button" class="gx-b" data-gx="tlplay" aria-pressed="true">Pause</button><button type="button" class="gx-b" data-gx="tlback">From the start</button></div>
+      <div class="gx-tlb"><canvas class="gx-tlcv" role="img" aria-label="The galaxy's stars going round its centre"></canvas><div class="gx-tlt"></div>
+      <p class="t-small">A film: 500 million years in a minute. Your campaign's stars stay where they are charted. ${v ? `In ten years of the campaign's own time a star near ours moves about ${ten < .1 ? (Math.round(ten * 1000) / 1000) : Math.round(ten * 10) / 10} light years: nothing anyone could see.` : ""} Stars further in go round sooner: our space once in about ${Rk > .3 ? Math.round(GMOD.period(MG, Rk)) : "?"} million years. The arms are drawn as waves the stars pass through, lit by the young stars born in them; that is one of two ideas of what arms are (in the other they come and go).</p></div>`;
+    under.parentNode.appendChild(el); el.style.top = under.offsetTop + "px"; el.style.height = under.offsetHeight + "px";
+    const n = Math.min(14000, Math.max(5000, Math.round((Wpx() * Hpx()) / 50)));
+    TL = { el, P: GMOD.particles(MG, n, (A.galaxyParams || {}).seed || "tl"), t: 0, last: 0, play: !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches), raf: 0, sun: { Rk, th: Math.atan2(FR.y, FR.x), o: Rk > .3 ? GMOD.omega(MG, Rk) : 0 } };
+    if (!TL.play) { const b = el.querySelector('[data-gx="tlplay"]'); b.textContent = "Play"; b.setAttribute("aria-pressed", "false"); }
+    const b = host.querySelector('.gx-bar [data-gx="timelapse"]'); if (b) b.setAttribute("aria-pressed", "true");
+    TL.raf = requestAnimationFrame(tlFrame); el.focus({ preventScroll: true });
+  }
+  function tlClose() { if (!TL) return; cancelAnimationFrame(TL.raf); TL.el.remove(); TL = null; const b = host && host.querySelector('.gx-bar [data-gx="timelapse"]'); if (b) b.setAttribute("aria-pressed", "false"); }
+  function tlFrame(now) {
+    if (!TL || !TL.el.isConnected) { TL = null; return; }
+    const cv = TL.el.querySelector(".gx-tlcv"), w = Math.max(260, Math.min(1000, TL.el.clientWidth - 24)), h = Math.max(220, Math.min(TL.el.clientHeight - 150, w * .62)), dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.width = w + "px"; cv.style.height = h + "px"; }
+    if (TL.play && TL.last) TL.t += (now - TL.last) / 1000 * (500 / 60);       // million years: 500 in a minute
+    TL.last = now;
+    // (the old stars faint, so the young ones show the arms as a real galaxy's blue light does)
+    const g = cv.getContext("2d"), L = MG.Rmax * .78, k = Math.min(w, h) / (2 * L), cx = w / 2, cy = h / 2;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = "rgba(4,6,11,1)"; g.fillRect(0, 0, w, h);
+    g.globalCompositeOperation = "lighter";
+    for (const p of TL.P) { const q = GMOD.particleAt(MG, p, TL.t), x = cx + q.x * k, y = cy + q.y * k; if (x < 0 || y < 0 || x > w || y > h) continue; if (q.young) { const a = Math.max(.12, 1 - q.age / 160); g.fillStyle = `rgba(150,190,255,${(a * .9).toFixed(2)})`; g.fillRect(x, y, 2, 2); } else { g.fillStyle = p.bulge ? "rgba(255,205,150,.22)" : "rgba(255,236,210,.13)"; g.fillRect(x, y, 1.4, 1.4); } }
+    g.globalCompositeOperation = "source-over";
+    // the bar's own turning, and our space going round with the stars near it
+    if (MG.T.bar) { const a = MG.T.bar.angle * Math.PI / 180 + GMOD.patternAngle(MG, TL.t, "bar"), l = MG.T.bar.a * GMOD.KPC * k; g.strokeStyle = "rgba(255,220,180,.22)"; g.lineWidth = 2; g.beginPath(); g.moveTo(cx - Math.cos(a) * l, cy - Math.sin(a) * l); g.lineTo(cx + Math.cos(a) * l, cy + Math.sin(a) * l); g.stroke(); }
+    if (TL.sun.o) { const th = TL.sun.th + TL.sun.o * TL.t, x = cx + Math.cos(th) * TL.sun.Rk * GMOD.KPC * k, y = cy + Math.sin(th) * TL.sun.Rk * GMOD.KPC * k; g.strokeStyle = "#8fd19e"; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, 5, 0, 6.2832); g.stroke(); g.fillStyle = "#8fd19e"; g.font = "11px sans-serif"; g.fillText("our space", x + 8, y + 4); }
+    const tt = TL.el.querySelector(".gx-tlt"), say = TL.t < 1 ? "now" : `${Math.round(TL.t).toLocaleString("en")} million years on${TL.sun.o ? `: our space ${Math.floor(TL.t * TL.sun.o / (Math.PI * 2) * 10) / 10} times round` : ""}`;
+    if (tt.textContent !== say) tt.textContent = say;
+    TL.raf = requestAnimationFrame(tlFrame);
+  }
+  function sideClose() { if (!SV) return; SV.el.remove(); SV = null; const b = host && host.querySelector('.gx-bar [data-gx="sideview"]'); if (b) b.setAttribute("aria-pressed", "false"); }
+  function sideDraw() {
+    if (!SV || !SV.el.isConnected) return;
+    const el = SV.el, c1 = el.querySelector(".gx-sv1"), c2 = el.querySelector(".gx-sv2"), w = Math.max(280, Math.min(1100, el.clientWidth - 24)), h = Math.round(w / 4);
+    const R = Math.hypot(FR.x, FR.y), ux = R > 1 ? FR.x / R : 1, uy = R > 1 ? FR.y / R : 0, nice2 = v => Math.round(v).toLocaleString("en");
+    // the whole galaxy, from the side
+    c1.width = w; c1.height = h; const g1 = c1.getContext("2d");
+    const P = ART.sidePicture(MG, Math.round(w / 2), Math.round(h / 2), ux, uy, () => sideDraw());
+    g1.fillStyle = "#04060b"; g1.fillRect(0, 0, w, h);
+    const X = u => (u + P.L) / (2 * P.L) * w, Y = z => h / 2 - z / P.Z * h / 2;
+    if (P.done) g1.drawImage(P.cv, 0, 0, w, h); else { g1.fillStyle = "#8fa0bb"; g1.font = "12px sans-serif"; g1.fillText("Painting the galaxy from the side…", 12, 20); }
+    g1.font = "11px sans-serif"; g1.textAlign = "center";
+    if (MG.bh) { g1.strokeStyle = "#ffd9a8"; g1.beginPath(); g1.arc(X(0), Y(0), 3, 0, 6.2832); g1.stroke(); g1.fillStyle = "#ffe9c8"; g1.fillText(MG.bh.name, X(0), Y(0) - 8); }
+    const span = G().p.span || 100, x0 = X(R - span / 2), x1 = X(R + span / 2), bw = Math.max(5, x1 - x0);
+    g1.strokeStyle = "#8fd19e"; g1.lineWidth = 1.4; g1.strokeRect((x0 + x1) / 2 - bw / 2, Y(FR.z) - Math.max(4, bw / 2), bw, Math.max(8, bw)); g1.fillStyle = "#8fd19e"; g1.fillText(R > 1 ? "our space" : "our space: all of it", (x0 + x1) / 2, Y(FR.z) + Math.max(8, bw / 2) + 12);
+    { const L10 = 10000, px = L10 / (2 * P.L) * w; g1.strokeStyle = "#cfe0ff"; g1.lineWidth = 1; g1.beginPath(); g1.moveTo(10, h - 10); g1.lineTo(10 + px, h - 10); g1.stroke(); g1.textAlign = "left"; g1.fillStyle = "#cfe0ff"; g1.fillText("10,000 light years", 14 + px, h - 6); }
+    el.querySelector(".gx-svs").textContent = `${MG.label}. Its thin disc of stars is some ${nice2(MG.T.hz * GMOD.KPC * 2)} light years thick${MG.T.thick ? `, its older thick disc some ${nice2(MG.T.thick.hz * GMOD.KPC * 2)}` : ""}; across, some ${nice2(MG.Rmax * 2)}. Our space stands ${nice2(Math.abs(FR.z))} light years ${FR.z >= 0 ? "above" : "below"} the middle of its plane.`;
+    // our space, from the side: each system at its height
+    const L = allSys(), pts = L.map(s => { const p = gxOf(s); return [(p.x - FR.x) * ux + (p.y - FR.y) * uy, s.z || 0, s]; });
+    const umax = Math.max(1, ...pts.map(q => Math.abs(q[0]))), zmax = Math.max(0, ...pts.map(q => Math.abs(q[1]))), h2 = 230, w2 = w;
+    const k = Math.min((w2 - 40) / (2 * umax), (h2 - 40) / (2 * Math.max(zmax, umax * .04, .5)));
+    c2.width = w2; c2.height = h2; const g2 = c2.getContext("2d"); g2.fillStyle = "#04060b"; g2.fillRect(0, 0, w2, h2);
+    const U = u => w2 / 2 + u * k, Zs = z => h2 / 2 - z * k, SL = slice(), at = findSys(ship().at), zs = (at && at.z) || 0;
+    // the galaxy's own plane, where it is in view; the slice; the ship's height
+    const zp = -FR.z; if (Math.abs(zp * k) < h2 / 2) { g2.strokeStyle = "rgba(255,230,190,.35)"; g2.setLineDash([5, 5]); g2.beginPath(); g2.moveTo(0, Zs(zp)); g2.lineTo(w2, Zs(zp)); g2.stroke(); g2.setLineDash([]); g2.fillStyle = "rgba(255,230,190,.6)"; g2.font = "11px sans-serif"; g2.textAlign = "left"; g2.fillText("the middle of the galaxy's plane", 8, Zs(zp) - 4); }
+    if (SL) { g2.fillStyle = "rgba(143,209,158,.08)"; g2.fillRect(0, Zs(SL.z + SL.half), w2, SL.half * 2 * k); }
+    g2.strokeStyle = "rgba(143,209,158,.55)"; g2.beginPath(); g2.moveTo(0, Zs(zs)); g2.lineTo(w2, Zs(zs)); g2.stroke();
+    for (const [u, z, s] of pts) { const away = SL && Math.abs(z - SL.z) > SL.half; g2.globalAlpha = away ? .25 : .95; g2.fillStyle = ART.colour(s.cls); g2.beginPath(); g2.arc(U(u), Zs(z), Math.max(1.2, ART.radius(s.cls) * .75), 0, 6.2832); g2.fill(); }
+    g2.globalAlpha = 1; if (at) { const q = pts.find(x => x[2] === at); if (q) { g2.strokeStyle = "#8fd19e"; g2.lineWidth = 2; g2.beginPath(); g2.arc(U(q[0]), Zs(q[1]), 6, 0, 6.2832); g2.stroke(); } }
+    { const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000].find(v => v * k >= 70) || 20000; g2.strokeStyle = "#cfe0ff"; g2.lineWidth = 1; g2.beginPath(); g2.moveTo(10, h2 - 10); g2.lineTo(10 + step * k, h2 - 10); g2.stroke(); g2.fillStyle = "#cfe0ff"; g2.font = "11px sans-serif"; g2.textAlign = "left"; g2.fillText(step.toLocaleString("en") + " light years", 14 + step * k, h2 - 6); }
+    el.querySelector(".gx-svs2").textContent = zmax ? `Our space from the side, at the same scale both ways: its systems stand up to ${nice2(zmax)} light years above or below the ship's height. The green line is the ship's height${SL ? `; the band, the stars within ${nice2(SL.half)} light years of it (the depth slice in Layers)` : ""}.` : "Our space from the side: this galaxy was made before the heights of its stars were worked out, so its systems all lie in one plane.";
+  }
+
   // the editor's row: what each tool does, the power a territory is painted for, undo and redo
   const REGK = [["danger", "Dangerous"], ["restricted", "Restricted"], ["explored", "Charted space"], ["unexplored", "Unexplored"]];
   const LANEK = [["lane", "A lane"], ["trade", "A trade route"], ["corridor", "A corridor (its own length)"]];
@@ -220,44 +753,20 @@
   function undo(back) { const from = back ? HIST : REDO, to = back ? REDO : HIST, h = from.pop(); if (!h) return; to.push(h); setG(h.id, back ? h.before : h.after, "hist"); keepH(); refresh(); if (A.tableUI) A.tableUI.api.note(back ? "Undone." : "Done again."); }
   // painting territory: every star under the brush given to the power chosen (kept when the stroke ends: one change)
   function paintAt(e) {
-    const cv = host.querySelector(".gx-canvas"), r = cv.getBoundingClientRect(), wx = UI.cx - viewW() / 2 + (e.clientX - r.left) / r.width * viewW(), wy = UI.cy - viewH() / 2 + (e.clientY - r.top) / r.height * viewH(), rad = 16 * viewW() / r.width;
-    for (const s of allSys()) if ((s.x - wx) ** 2 + (s.y - wy) ** 2 <= rad * rad) drag.paint[s.id] = UI.paint || "";
-    const o = svg.querySelector(".gx-over"); o.querySelectorAll(".gx-paint").forEach(n => n.remove());
-    o.insertAdjacentHTML("beforeend", Object.keys(drag.paint).map(id => { const s = findSys(id); return s ? `<circle class="gx-paint" cx="${s.x}" cy="${s.y}" r="${(6 * viewW() / r.width).toFixed(2)}"/>` : ""; }).join("") + `<circle class="gx-paint gx-brush" cx="${wx}" cy="${wy}" r="${rad}"/>`);
-  }
-  // what changes as the game master looks: the ship, the course plotted, the system chosen, systems found by name
-  function over() {
-    if (!svg) return; const o = svg.querySelector(".gx-over"), sh = ship(), at = findSys(sh.at), parts = [];
-    if (UI.plan && UI.plan.path) { const pts = UI.plan.path.map(id => findSys(id)).filter(Boolean); parts.push(`<polyline points="${pts.map(s => s.x + "," + s.y).join(" ")}" class="gx-route${UI.plan.ok ? "" : " bad"}"/>`); }
-    if (at) parts.push(`<circle cx="${at.x}" cy="${at.y}" r="${Math.max(2, 9 / Math.sqrt(UI.z))}" class="gx-shipmark"/><circle cx="${at.x}" cy="${at.y}" r="${sh.range / G().ly}" class="gx-reach"/>`);
-    const sel = UI.sel && findSys(UI.sel); if (sel) parts.push(`<circle cx="${sel.x}" cy="${sel.y}" r="${Math.max(3, 12 / Math.sqrt(UI.z))}" class="gx-selmark"/>`);
-    if (UI.filter) for (const s of allSys().filter(s => s.name.toLowerCase().includes(UI.filter)).slice(0, 40)) parts.push(`<circle cx="${s.x}" cy="${s.y}" r="${Math.max(3, 8 / Math.sqrt(UI.z))}" class="gx-found"/>`);
-    o.innerHTML = parts.join(""); labels();
-  }
-  // names: the systems on screen, more of them the closer the view (those with people or the council's names first)
-  function labels() {
-    // (a steady size on screen whatever the zoom; never two names over each other: the most important placed first)
-    if (!svg) return; const l = svg.querySelector(".gx-labels"), x0 = UI.cx - viewW() / 2, y0 = UI.cy - viewH() / 2, cw = (host.querySelector(".gx-canvas") || {}).clientWidth || 600, fs = 11.5 * viewW() / cw;
-    const vis = allSys().filter(s => s.x >= x0 && s.x <= x0 + viewW() && s.y >= y0 && s.y <= y0 + viewH());
-    const imp = s => (s.id === UI.sel ? 20 : 0) + (s.id === ship().at ? 10 : 0) + (((A.galaxyOver || {}).systems || {})[s.id] ? 6 : 0) + (s.f.colony ? 3 : 0) + (s.f.station ? 2 : 0) + (known(chartOf(s.id)) ? 1 : 0);
-    const placed = [], out = [];
-    for (const s of vis.sort((a, b) => imp(b) - imp(a))) {
-      const txt = s.name + (s.f.colony ? " ●" : s.f.station ? " ◇" : ""), bx = s.x + fs * .5, by = s.y - fs * .55, bw = txt.length * fs * .56, bh = fs * 1.1;
-      if (placed.some(p => bx < p[0] + p[2] && bx + bw > p[0] && by < p[1] + p[3] && by + bh > p[1])) continue;
-      placed.push([bx, by, bw, bh]); out.push(`<text x="${bx.toFixed(1)}" y="${(s.y + fs * .35).toFixed(1)}" class="gx-name gx-${chartOf(s.id)}" style="font-size:${fs.toFixed(2)}px">${esc(txt)}</text>`);
-      if (out.length >= 400) break;
-    }
-    l.innerHTML = out.join("");
+    const [wx, wy] = chartAt(e), rad = 16 / (CAM.s * FR.k);
+    for (const q of allSys()) if ((q.x - wx) ** 2 + (q.y - wy) ** 2 <= rad * rad) drag.paint[q.id] = UI.paint || "";
+    paintPts = Object.keys(drag.paint).map(id => { const q = findSys(id); if (!q) return null; const p = gxOf(q); return scr(p.x, p.y); }).filter(Boolean);
+    request();
   }
   function clickAt(e) {
-    const cv = host.querySelector(".gx-canvas"), r = cv.getBoundingClientRect(), wx = UI.cx - viewW() / 2 + (e.clientX - r.left) / r.width * viewW(), wy = UI.cy - viewH() / 2 + (e.clientY - r.top) / r.height * viewH();
+    const [wx, wy] = chartAt(e);
     const r1 = v => Math.round(v * 10) / 10, nid = p => p + Date.now().toString(36) + Math.floor(Math.random() * 90 + 10);
-    if (UI.adding) { const id = "C" + Date.now().toString(36); setG(id, { added: true, name: "A new system", cls: "G", x: r1(wx), y: r1(wy), f: {}, t: Date.now() }); UI.adding = false; UI.sel = id; UI.edit = id; refresh(); return; }
+    if (UI.adding) { UI.adding = false; addSystemAt(wx, wy, "random"); return; }
     if (UI.moving) { const id = UI.moving; setG(id, Object.assign(doc(id), { x: r1(wx), y: r1(wy) })); UI.moving = null; refresh(); return; }
-    if (UI.movingReg) { const R = doc("~regions"), id = UI.movingReg, own = (R.add || []).find(a => a.id === id); if (own) Object.assign(own, { x: r1(wx), y: r1(wy) }); else { R.edit = R.edit || {}; R.edit[id] = Object.assign(R.edit[id] || {}, { x: r1(wx), y: r1(wy) }); } setG("~regions", R); UI.movingReg = null; refresh(); return; }
+    if (UI.movingReg) { const R = doc("~regions"), id = UI.movingReg, own = (R.add || []).find(q => q.id === id); if (own) Object.assign(own, { x: r1(wx), y: r1(wy) }); else { R.edit = R.edit || {}; R.edit[id] = Object.assign(R.edit[id] || {}, { x: r1(wx), y: r1(wy) }); } setG("~regions", R); UI.movingReg = null; refresh(); return; }
     if (UI.tool === "region") { const id = nid("rg"), R = doc("~regions"); R.add = (R.add || []).concat({ id, kind: "danger", x: r1(wx), y: r1(wy), r: 30, name: "A new region" }); setG("~regions", R); UI.tool = null; UI.selReg = id; UI.sel = null; UI.selLane = null; refresh(); return; }
     if (UI.tool === "sector") { const id = nid("sc"), X = doc("~sectors"); X.add = (X.add || []).concat({ id, x: r1(wx), y: r1(wy), name: "The New Sector" }); setG("~sectors", X); UI.tool = null; UI.panel = "sp"; refresh(); return; }
-    let best = null, bd = (14 / Math.sqrt(UI.z)) ** 2; for (const s of allSys()) { const d = (s.x - wx) ** 2 + (s.y - wy) ** 2; if (d < bd) { bd = d; best = s; } }
+    const best = pickAt(e);
     if (UI.tool === "lane") {
       if (!best) return;
       if (!UI.first) { UI.first = best.id; tools(); over(); return; }
@@ -266,16 +775,19 @@
       setG("~lanes", L); UI.first = null; UI.tool = null; UI.sel = null; UI.selLane = lk(findSys(a).i, findSys(b).i); UI.selReg = null; refresh(); return;
     }
     if (UI.tool === "terr") return;
-    if (best) { UI.sel = best.id; UI.selReg = null; UI.selLane = null; UI.sys = null; UI.planet = null; UI.plan = null; over(); side(); return; }
+    // a star: with the tools out it is chosen to be changed; otherwise the chart flies into its system (the user's choice)
+    if (best) { if (UI.tools) { UI.sel = best.id; UI.selReg = null; UI.selLane = null; UI.sys = null; UI.planet = null; UI.plan = null; UI.hole = false; over(); side(); } else enterSystem(best.id); return; }
+    // the black hole at the centre: its own card
+    if (MG && MG.bh) { const r = cvs.getBoundingClientRect(), [hx, hy] = scr(0, 0); if (Math.hypot(e.clientX - r.left - hx, e.clientY - r.top - hy) < 16) { UI.hole = true; UI.sel = null; UI.selReg = null; UI.selLane = null; side(); request(); return; } }
     // no star there: the smallest region the click is in, or a lane passing close by
     if (UI.tools) {
-      const g = G(), tol = 6 / Math.sqrt(UI.z), segD = (p, q) => { const dx = q.x - p.x, dy = q.y - p.y, t = Math.max(0, Math.min(1, ((wx - p.x) * dx + (wy - p.y) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(wx - p.x - dx * t, wy - p.y - dy * t); };
+      const g = G(), tol = 6 / (CAM.s * FR.k), segD = (p, q) => { const dx = q.x - p.x, dy = q.y - p.y, t = Math.max(0, Math.min(1, ((wx - p.x) * dx + (wy - p.y) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(wx - p.x - dx * t, wy - p.y - dy * t); };
       const ln = g.lanes.map(([a, b]) => [lk(a, b), segD(sys(a), sys(b))]).filter(x => x[1] < tol).sort((x, y) => x[1] - y[1])[0];
       if (ln) { UI.selLane = ln[0]; UI.sel = null; UI.selReg = null; refresh(); return; }
       const rg = g.regions.filter(r => Math.hypot(r.x - wx, r.y - wy) <= r.r).sort((x, y) => x.r - y.r)[0];
       if (rg) { UI.selReg = rg.id; UI.sel = null; UI.selLane = null; refresh(); return; }
     }
-    if (UI.sel || UI.selReg || UI.selLane) { UI.sel = null; UI.selReg = null; UI.selLane = null; refresh(); }
+    if (UI.sel || UI.selReg || UI.selLane || UI.hole) { UI.sel = null; UI.selReg = null; UI.selLane = null; UI.hole = false; refresh(); }
   }
 
   /* ---- the side: the ship, the system chosen, its worlds, a course */
@@ -334,19 +846,31 @@
         world: { label: "Add a world to it", values: `{"kind": one of ${wkinds.join("|")}, "a": its distance from the star in AU (0.1 to 60), "name": "its name" (optional)}`,
           read: v => { const kind = AC.one(v.kind, wkinds); if (!kind) return null; const a = Math.max(.05, Math.min(60, +v.a > 0 ? +v.a : 1)); if (info.planets.some(p => Math.abs(p.a - a) < .05)) return null; return { kind, a: Math.round(a * 100) / 100, name: AC.str(v.name, 60) || undefined }; },
           plan: v => ({ change: `Add ${/^[aeiou]/i.test(Gg.KINDS[v.kind]) ? "an" : "a"} ${Gg.KINDS[v.kind].toLowerCase()}${v.name ? " named " + v.name : ""} to ${s.name}, ${v.a} AU from its star`, replaces: [], keeps: [`${s.name}'s other worlds and sites as they are`, ...keepsAll] }),
-          apply: v => { const D = doc(s.id), B = D.bodies = D.bodies || {}, n = Math.max(99, ...info.planets.map(x => x.n)) + 1, w = newWorld(s, v.kind, v.a, n); if (v.name) w.name = v.name; B.add = (B.add || []).concat(w); setG(s.id, D); UI.sel = s.id; UI.sys = s.id; UI.planet = n; refresh(); } },
+          apply: v => { const D = doc(s.id), B = D.bodies = D.bodies || {}, n = Math.max(99, ...info.planets.map(x => x.n)) + 1, w = madeWorld(s, info, v.kind, v.a, n, v.name || undefined); B.add = (B.add || []).concat(w); setG(s.id, D); UI.sel = s.id; UI.sys = s.id; UI.planet = n; refresh(); } },
         site: { label: "Add a station, colony, mining installation or other site to it", values: `{"kind": one of ${skinds.join("|")}, "name": "its name", "on": the name of the world it is on, one of ${worlds.map(w => JSON.stringify(w[1])).join("|") || "none"}, or omitted for open space}`,
           read: v => { const kind = AC.one(v.kind, skinds); if (!kind) return null; const on = v.on ? byName(worlds, v.on) : null; return { kind, name: AC.str(v.name, 60) || (SITEK.find(x => x[0] === kind) || [0, "A site"])[1], on: on ? on[0] : null, onName: on ? on[1] : null }; },
           plan: v => ({ change: `Add ${(SITEK.find(x => x[0] === v.kind) || [0, "a site"])[1].toLowerCase()}, ${v.name}, to ${s.name}${v.onName ? ", on " + v.onName : ", in open space"}`, replaces: [], keeps: [`${s.name}'s worlds and other sites as they are`, ...keepsAll] }),
           apply: v => { const D = doc(s.id), B = D.bodies = D.bodies || {}, nk = Math.max(99, ...info.sites.map(x => x.k)) + 1; B.addS = (B.addS || []).concat({ k: nk, kind: v.kind, name: v.name, on: v.on }); setG(s.id, D); UI.sel = s.id; UI.sys = s.id; refresh(); } }
       } };
   }
+  // its stars (none, a close pair, a far companion, or three: a close pair with a far third) and where it stands, as
+  // numbers: light years from the chart's middle and its height above the plane (the editing plan of 10 Nov 2026)
+  function starsOf(s) { const info = bodiesOf(s), c = info.star.companion || (A.starSystem ? A.starSystem.companion(s, info) : null), c2 = info.star.companion2 || null; return { mode: c2 ? "three" : c ? (c.both ? "pair" : "far") : "none", c, c2 }; }
+  function starsForm(s) {
+    const g = G(), { mode, c, c2 } = starsOf(s), cls = v => Object.keys(Gg.STARS).map(k => `<option value="${k}"${k === v ? " selected" : ""}>${esc(Gg.STAR_NAME[k])}</option>`).join("");
+    const r2f = v => Math.round(v * 100) / 100, pos = [r2f((s.x - 500) * g.ly), r2f((s.y - 500) * g.ly), r2f(s.z || 0)], st0 = JSON.stringify([mode, c ? c.cls : "M", c ? +c.a : 40, c ? +(c.ecc != null ? c.ecc : c.e || 0) : .3, c2 ? c2.cls : "M", c2 ? +c2.a : 900]);
+    return `<label class="tw-l"><span>Its stars</span><select class="t-in" name="stars">${[["none", "One star"], ["pair", "A close pair: the worlds go round both"], ["far", "A far companion: the worlds keep to the brighter"], ["three", "Three: a close pair and a far third"]].map(([k, l]) => `<option value="${k}"${k === mode ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+      <div class="gx-comp"><label class="tw-l"><span>The companion</span><select class="t-in" name="c_cls">${cls(c ? c.cls : "M")}</select></label><label class="tw-l"><span>How far apart (AU)</span><input class="t-in" type="number" step="any" min="0.005" name="c_a" value="${c ? +c.a : 40}"></label><label class="tw-l"><span>How stretched its orbit (0 round, 0.9 long)</span><input class="t-in" type="number" step="0.05" min="0" max="0.95" name="c_e" value="${c ? +(c.ecc != null ? c.ecc : c.e || 0) : .3}"></label>
+      <label class="tw-l"><span>A third star, far out</span><select class="t-in" name="t_cls">${cls(c2 ? c2.cls : "M")}</select></label><label class="tw-l"><span>Its distance from the pair (AU)</span><input class="t-in" type="number" step="any" min="1" name="t_a" value="${c2 ? +c2.a : 900}"></label></div>
+      <p class="t-small kn">Atlas warns of any world whose orbit would not last beside them, and lets it be: it is your setting.</p><input type="hidden" name="stars0" value="${esc(st0)}">
+      <div class="gx-pos"><span class="kn">Where it stands, in light years from the chart's middle, and its height above the plane</span><label>East <input class="t-in t-n" type="number" step="any" name="px" value="${pos[0]}"></label><label>South <input class="t-in t-n" type="number" step="any" name="py" value="${pos[1]}"></label><label>Height <input class="t-in t-n" type="number" step="any" name="pz" value="${pos[2]}"></label><input type="hidden" name="pos0" value="${esc(JSON.stringify(pos))}"></div>`;
+  }
   function editHTML(s) {
     const e = edits()[s.id] || {}, ov = ((A.galaxyOver || {}).systems || {})[s.id] || {};
     return `<section class="gx-card"><h4>Change ${esc(s.name)}</h4><form data-gx="save" data-id="${esc(s.id)}">
       <label class="tw-l"><span>Name</span><input class="t-in" name="name" maxlength="60" value="${esc(s.name)}"></label>
       <label class="tw-l"><span>Its star</span><select class="t-in" name="cls">${Object.keys(Gg.STARS).map(k => `<option value="${k}"${k === s.cls ? " selected" : ""}>${esc(Gg.STAR_NAME[k])}</option>`).join("")}</select></label>
-      <label class="t-fogck"><input type="checkbox" name="bin"${s.bin ? " checked" : ""}> With a companion star</label>
+      ${starsForm(s)}
       <label class="tw-l"><span>Held by</span><select class="t-in" name="owner">${[["", "No one"], ...G().powers.map(p => [p.id, p.name]), ...Object.entries(A.factionsData || {}).filter(([id]) => !G().powers.some(p => p.id === id)).map(([id, f]) => [id, (f.n || id) + " (a faction)"])].map(([v, l]) => `<option value="${esc(v)}"${(s.pw != null && G().powers[s.pw] && G().powers[s.pw].id === v) || (s.pw == null && !v) ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
       <div class="tj-keys">${[["colony", "A colony"], ["station", "A station"], ["fuel", "Fuel"], ["mining", "Mining"], ["research", "Research"], ["derelict", "A derelict"], ["anomaly", "An anomaly"]].map(([k, l]) => `<label class="t-fogck"><input type="checkbox" name="f_${k}"${s.f[k] ? " checked" : ""}> ${l}</label>`).join("")}</div>
       <label class="tw-l"><span>What it is</span><textarea class="t-in" name="desc" rows="2">${esc(e.desc || ov.desc || s.desc || "")}</textarea></label>
@@ -363,9 +887,15 @@
     const g = G(), info = (s.i >= 0 && Gg.system(g, s.i)) || { star: { name: Gg.STAR_NAME[s.cls] || "", color: (Gg.STARS[s.cls] || Gg.STARS.G)[0] }, planets: [], belts: [], sites: [] }, B = s.bodies || {};
     // (a world the game master worked out again in the planet editor, e.phys: its whole profile from their changes; the
     // world as it was made is kept beside it, p.made, for the editor to start from)
-    info.planets = info.planets.map(p => { const e = (B.p || {})[p.n]; if (!e) return p; if (e.gone) return null; const q = e.phys && p.inputs && Gg.rework ? Object.assign(Gg.rework(g, info, p, e.phys), { made: p }) : p; return Object.assign({}, q, e, { edited: true }); }).filter(Boolean).concat((B.add || []).map(p => Object.assign({ own: true }, p))).sort((a, b) => a.a - b.a);
+    // (a world of the game master's own worked out again: its changes kept in it, as phys; its names and notes kept)
+    info.planets = info.planets.map(p => { const e = (B.p || {})[p.n]; if (!e) return p; if (e.gone) return null; const q = e.phys && p.inputs && Gg.rework ? Object.assign(Gg.rework(g, info, p, e.phys), { made: p }) : p; return Object.assign({}, q, e, { edited: true }); }).filter(Boolean)
+      .concat((B.add || []).map(p => { const q = p.phys && p.inputs && Gg.rework ? Object.assign(Gg.rework(g, info, p, p.phys), { made: p }) : p; return Object.assign({ own: true }, q, { n: p.n, name: p.name, owner: p.owner, gm: p.gm, phys: p.phys, hand: p.hand, rough: p.rough, moonNames: p.moonNames, a: p.keepA ? p.a : q.a, keepA: p.keepA }); })).sort((a, b) => a.a - b.a);
+    // (moons the game master added to a world, and those taken away)
+    for (const p of info.planets) { const E = (p.own && (B.add || []).find(x => x.n === p.n)) || (B.p || {})[p.n]; if (!E || !(E.addM || E.mGone)) continue; const gone = E.mGone || {}; p.moonList = (p.moonList || []).filter(m => !gone[m.n]).concat((E.addM || []).map(m => Object.assign({}, m))); p.moons = Math.max(0, (p.moons || 0) - Object.keys(gone).length + (E.addM || []).length); }
     info.belts = info.belts.map((b, k) => (B.b || {})[k] ? null : Object.assign({ k }, b)).filter(Boolean).concat((B.addB || []).map(b => Object.assign({ own: true }, b)));
     info.sites = info.sites.map((t, k) => { const e = (B.s || {})[k]; return e ? (e.gone ? null : Object.assign({ k }, t, e)) : Object.assign({ k }, t); }).filter(Boolean).concat((B.addS || []).map(t => Object.assign({ own: true }, t)));
+    // (each world knows its system, so its globe can be painted from its opened surface: heightOf)
+    for (const p of info.planets) { p.sid = s.id; for (const m of p.moonList || []) { m.sid = s.id; m.pn = p.n; } }
     return info;
   }
   // a world's warmth where it orbits, and what follows from its numbers: whether anyone could land, live there
@@ -375,6 +905,31 @@
     const air = giant ? "Deep hydrogen and helium" : kind === "dwarf" ? "None" : kind === "garden" ? "Nitrogen and oxygen: breathable" : kind === "toxic" ? "Thick carbon dioxide, sulphur clouds" : kind === "lava" ? "Thin, sulphurous" : "Thin nitrogen";
     const p = { n, name: `${s.name} ${"bcdefghijklmnop"[Math.min(14, n % 15)]}`, kind, kname: Gg.KINDS[kind], a, size, grav: giant ? Math.round(size * .35 * 10) / 10 : size, temp, air, pres: giant ? null : air === "None" ? 0 : kind === "toxic" ? 60 : 1, water: { ocean: "A world ocean", garden: "Seas, lakes and rivers", ice: "Frozen water", lava: "Seas of molten rock" }[kind] || "", life: kind === "garden" ? "Complex life: forests, beasts" : "", hazards: [], minerals: "silicates", moons: giant ? 4 : 0, geo: giant ? "Banded storms over no surface at all" : "", climate: "", chance: "" };
     return derive(p);
+  }
+  /* a world added by hand, made by the planet maker as the generated ones are (the editing plan of 10 Nov 2026, stage 1):
+     a body of the kind asked at that distance, tried with a few hundred makings until its star gives one, so it has its
+     whole profile, its own colours and the planet editor. If its star would never make that kind there, it is kept as
+     the game master's own (the rough figures above, its warnings saying why): their setting, never refused */
+  const RECIPE = {
+    gas: r => ({ env: "gas", mass: 60 + r() * 900, wf: .1 }), hotjupiter: r => ({ env: "gas", mass: 100 + r() * 700, wf: .1 }), icegiant: r => ({ env: "ice", mass: 10 + r() * 16, wf: .3 }), mini: r => ({ env: "mini", mass: 3 + r() * 7, wf: .05 }),
+    dwarf: r => ({ env: "rock", mass: .0005 + r() * .006, wf: .15 + r() * .35 }), ice: r => ({ env: "rock", mass: .01 + r() * 1.5, wf: .05 + r() * .45 }), ocean: r => ({ env: "rock", mass: .3 + r() * 4, wf: .004 + r() * .06 }),
+    garden: r => ({ env: "rock", mass: .5 + r() * 1.6, wf: .0001 + r() * .0008 }), desert: r => ({ env: "rock", mass: .1 + r() * 1.6, wf: Math.pow(10, -6.5 + r() * 2) }), barren: r => ({ env: "rock", mass: .005 + r() * .3, wf: .000001 }),
+    rocky: r => ({ env: "rock", mass: .05 + r() * 2.5, wf: Math.pow(10, -5 + r() * 2.5) }), toxic: r => ({ env: "rock", mass: .5 + r() * 2.5, wf: .0002, pressure: 30 + r() * 70, gas: "co2" }), lava: r => ({ env: "rock", mass: .3 + r() * 3, wf: .00001, tect: "tidal" })
+  };
+  // (the planet maker calls a rocky world with no seas a desert or a barren one: those do for "a rocky world")
+  const sameKind = (a, b) => a === b || (/^(gas|hotjupiter)$/.test(a) && /^(gas|hotjupiter)$/.test(b)), NEAR = { rocky: ["desert", "barren"] };
+  function madeWorld(s, info, kind, a, n, name) {
+    const nm = name || `${s.name} ${"bcdefghijklmnop"[Math.min(14, (info.planets.length) % 15)]}`;
+    let near = null;
+    if (Gg.rework) for (let t = 0; t < 320; t++) {
+      const r = Gg.rng(`${(A.galaxyParams || {}).seed}|hand|${s.id}|${n}|${kind || "any"}|${t}`), rc = (RECIPE[kind] || RECIPE[["rocky", "desert", "ocean", "ice", "barren", "gas", "icegiant", "mini"][Math.floor(r() * 8)]])(r);
+      const q = Gg.rework(G(), info, { a, mass: rc.mass, env: rc.env, ecc: 0, name: nm }, { a, mass: rc.mass, wf: rc.wf, fe: .2 + r() * .2, tect: rc.tect, pressure: rc.pressure, gas: rc.gas, life: rc.life, seed: t + 1 });
+      const fin = () => Object.assign(q, { n, name: nm, hand: true, minerals: q.minerals || ["iron and nickel", "silicates", "water ice", "rare earths"][Math.floor(r() * 4)], chance: q.chance || "Nothing yet found" });
+      if (!kind || sameKind(q.kind, kind)) return fin();
+      if (!near && (NEAR[kind] || []).includes(q.kind)) near = fin();
+    }
+    if (near) return near;
+    return Object.assign(newWorld(s, kind || "rocky", a, n), { name: nm, rough: true });
   }
   function derive(p) {
     const giant = p.kind === "gas" || p.kind === "icegiant", breath = /breathable/i.test(p.air || "") && !/not|too little/i.test(p.air || "");
@@ -386,13 +941,16 @@
   // what does not hang together in a world the game master changed: said, never refused (it is their setting)
   function warnings(p, s) {
     const out = [], giant = p.kind === "gas" || p.kind === "icegiant", breath = /breathable/i.test(p.air || "") && !/not|too little/i.test(p.air || ""), exp = warmth(s, p.a);
+    if (p.rough) out.push(`Its star would not make ${/^[aeiou]/i.test(p.kname || "") ? "an" : "a"} ${String(p.kname || "world").toLowerCase()} ${p.a} AU out: it is kept as your setting has it, with rough figures until you change them.`);
     if (giant && !/^Impossible/.test(p.land || "")) out.push("A giant has no surface to land on.");
     if (breath && (p.temp > 60 || p.temp < -50)) out.push(`Breathable air at ${p.temp} °C: people could breathe it, but not live in that ${p.temp > 0 ? "heat" : "cold"}.`);
     if (/Seas|ocean|lakes/i.test(p.water || "") && !/molten|acid|under the ice/i.test(p.water || "") && (p.temp < -10 || p.temp > 100)) out.push(`Open water at ${p.temp} °C would ${p.temp < 0 ? "freeze" : "boil away"}.`);
     if (/^none/i.test(p.air || "") && /Seas|ocean|lakes/i.test(p.water || "") && !/molten|under the ice/i.test(p.water || "")) out.push("Open water with no air above it would boil away.");
     if (p.life && /Complex/i.test(p.life) && !p.water) out.push("Complex life with no water.");
     if (p.hab === "Habitable" && !breath) out.push("Called habitable, but the air cannot be breathed.");
-    const dens = giant ? .35 : p.kind === "ice" || p.kind === "dwarf" ? .55 : 1, g0 = p.size * dens;
+    // (a world worked out from its physics has its own mass: its gravity is that mass over its size squared, so a giant
+    // two or three times Jupiter's weight is not unusual; the rough rule only for a world without one)
+    const dens = giant ? .35 : p.kind === "ice" || p.kind === "dwarf" ? .55 : 1, g0 = p.mass > 0 && p.size > 0 ? p.mass / (p.size * p.size) : p.size * dens;
     if (p.size > 0 && Math.abs(p.grav - g0) > Math.max(.6, g0 * .8)) out.push(`Gravity ${p.grav} g for a world ${p.size} times the Earth's size is unusual (about ${Math.round(g0 * 10) / 10} g would be expected).`);
     if (Math.abs(p.temp - exp) > 120 && !giant && p.kind !== "lava") out.push(`At ${p.a} AU from ${s.name} it would be about ${exp} °C, not ${p.temp} °C (a thick atmosphere, an inner heat, or something stranger could explain it).`);
     if (p.kind === "lava" && p.temp < 150) out.push(`A lava world at ${p.temp} °C: its seas would have set hard.`);
@@ -540,8 +1098,9 @@
   }
   // a moon's name, as astronomers number them: its planet's name and a Roman numeral, outward from the planet
   // (the council's or the game master's own name, when the moon was given one: p.moonNames)
-  const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
-  function moonName(p, m) { return (p.moonNames || {})[m.n] || `${p.name} ${ROMAN[m.n] || m.n + 1}`; }
+  const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"];
+  // (a moon the game master added takes the next numeral after the moons the world was made with)
+  function moonName(p, m) { if ((p.moonNames || {})[m.n]) return p.moonNames[m.n]; let k = m.n; if (m.own) { const made = (p.moonList || []).filter(x => !x.own).map(x => x.n); k = (made.length ? Math.max(...made) + 1 : 0) + (m.n - 50); } return `${p.name} ${ROMAN[k] || k + 1}`; }
   // a world's whole profile, worked out from its physics (engine/atlas-planet.js; the user's approved plan of 3 Nov 2026):
   // physical, atmosphere, environment, astronomy, each with why it is so, and its colours
   function profileHTML(p, info, sid) {
@@ -591,22 +1150,34 @@
     return `<g class="gx-planet gx-p-${esc(p.kind)}${on ? " on" : ""}" data-gx="planet" data-n="${p.n}"><title>${esc(p.name)}: ${esc(p.kname)}</title><clipPath id="${id}"><circle cx="${X}" cy="${Y}" r="${R}"/></clipPath><g clip-path="url(#${id})">${body}<circle cx="${(x + r * .35).toFixed(1)}" cy="${Y}" r="${(r * 1.05).toFixed(1)}" fill="#000" opacity=".35"/></g>${air}${rings}${on ? `<circle cx="${X}" cy="${Y}" r="${(r + 2.5).toFixed(1)}" fill="none" stroke="#fff" stroke-width="1"/>` : ""}</g>`;
   }
   // the system: its star in the middle, each world on its orbit, belts, and what people put there
+  // a large moon chosen on the system's map: its own card, and its surface to open
+  const MOONW = { lava: "volcanic", rocky: "rocky", desert: "desert", ocean: "ocean", garden: "living", ice: "icy", barren: "barren", toxic: "hothouse", dwarf: "icy" };
+  function moonHTML(s, p, m) {
+    const nm = moonName(p, m), row = (k, v) => v == null || v === "" ? "" : `<div class="gx-f"><span class="kn">${k}</span> ${esc(v)}</div>`, w = MOONW[m.kind] || "";
+    return `<div class="gx-world gx-moon">${A.pixelPlanet ? `<canvas class="gx-pxg" data-id="${esc(s.id)}" data-n="${p.n}" data-m="${m.n}" role="img" aria-label="${esc(nm)}, turning"></canvas>` : ""}<h4>${esc(nm)}: ${/^[aeiou]/.test(w) ? "an" : "a"} ${esc(w)} moon of ${esc(p.name)}</h4>
+      ${row("Size", m.radius != null ? m.radius + " times the Earth" : "")}${row("Gravity", m.gravity != null ? m.gravity + " g" : "")}${row("Orbit", m.distance ? `${m.distance.toLocaleString("en")} km from ${p.name}, once round in ${m.period} days` : "")}
+      ${row("Warmth", m.tempC != null ? m.tempC + " °C at the surface, on average" : "")}${row("Air", m.air)}${m.pressure != null ? row("Pressure", m.pressure + " bar") : ""}${row("Liquids", m.water)}${row("Life", m.life || "None found")}${row("Landing", m.landing)}${row("For people", m.habitable)}
+      ${m.landable && A.worldGenerate ? `<div class="t-row"><button type="button" class="t-btn prim" data-gx="surface" data-id="${esc(s.id)}" data-n="${p.n}" data-m="${m.n}">Open its surface</button></div>` : ""}
+      <div class="t-row"><button type="button" class="t-mini" data-gx="moon" data-m="">${esc(p.name)} itself</button></div></div>`;
+  }
   function systemHTML(s, info, places) {
-    const W = 320, H = 200, n = info.planets.length + info.belts.length, maxA = Math.max(1, ...info.planets.map(p => p.a), ...info.belts.map(b => b.a));
-    const rx = a => 22 + Math.log(1 + a * 6) / Math.log(1 + maxA * 6) * (W / 2 - 34), ang = k => -Math.PI / 2 + k * 2.399;
-    const orbits = info.planets.map((p, k) => { const r = rx(p.a), a = ang(k), x = W / 2 + Math.cos(a) * r, y = H / 2 + Math.sin(a) * r * .6, pr = p.kind === "gas" || p.kind === "hotjupiter" ? 7 : p.kind === "icegiant" || p.kind === "mini" ? 5.5 : Math.max(2.2, 2 + p.size * 1.6); return `<ellipse cx="${W / 2}" cy="${H / 2}" rx="${r}" ry="${r * .6}" class="gx-orbit"/>${globe(p, x, y, A.pixelPlanet ? pr * 1.4 : pr, s.id, info.star.color)}`; }).join("");
-    const belts = info.belts.map(b => { const r = rx(b.a); return `<ellipse cx="${W / 2}" cy="${H / 2}" rx="${r}" ry="${r * .6}" class="gx-belt"/>`; }).join("");
-    const p = UI.planet != null ? info.planets.find(x => x.n === UI.planet) : null, ed = UI.tools;
+    const comp = A.starSystem ? A.starSystem.companion(s, info) : null, mapOpen = !!(A.starSystem && A.starSystem.isOpen());
+    const p = UI.planet != null ? info.planets.find(x => x.n === UI.planet) : null, ed = UI.tools, mo = p && UI.moon != null ? (p.moonList || []).find(x => x.n === UI.moon && !x.small) : null;
     const onP = n => info.sites.filter(t => t.on === n), here = places.filter(id => (A.meta[id] || {}).planet == null);
     const row = (k, v) => v ? `<div class="gx-f"><span class="kn">${k}</span> ${esc(v)}</div>` : "";
-    const siteRow = (lbl, t) => `<div class="gx-f"><span class="kn">${lbl}</span> ${esc(t.name)}${ed ? ` <button type="button" class="t-mini" data-gx="delsite" data-id="${esc(s.id)}" data-k="${t.k}" aria-label="Take away ${esc(t.name)}">×</button>` : ""}</div>`;
+    // (a station or site: its own place, with its page and its inside, opened; or made, for the game master)
+    const sitePlace = t => A.order.find(id => (A.meta[id] || {}).system === s.id && (A.meta[id] || {}).site === t.k);
+    const siteRow = (lbl, t) => { const pl = sitePlace(t); return `<div class="gx-f"><span class="kn">${lbl}</span> ${esc(t.name)}${pl ? ` <button type="button" class="t-go" data-go="${esc(pl)}">Open it</button>` : A.locations && A.locations.forPlace && gmMode() ? ` <button type="button" class="t-mini" data-gx="siteplace" data-id="${esc(s.id)}" data-k="${t.k}" title="Make it a place of the campaign: its page, its maps floor by floor, its people and clues; its inside built in the map editor">Its inside…</button>` : ""}${ed ? ` <button type="button" class="t-mini" data-gx="delsite" data-id="${esc(s.id)}" data-k="${t.k}" aria-label="Take away ${esc(t.name)}">×</button>` : ""}</div>`; };
     const wn = p ? warnings(p, s) : [], placeHere = p && places.some(id => (A.meta[id] || {}).planet === p.n), canLand = p && !/^Impossible/.test(p.land || "");
     const kinds = Object.entries(Gg.KINDS).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("");
-    return `<section class="gx-card gx-system"><h4>The ${esc(s.name)} system</h4><svg viewBox="0 0 ${W} ${H}" class="gx-sysmap"><rect width="${W}" height="${H}" class="gx-bg"/>${belts}${orbits}<circle cx="${W / 2}" cy="${H / 2}" r="9" fill="${esc(info.star.color)}" class="gx-sun"/></svg>
-      <p class="t-small">${info.planets.length ? info.planets.length + " world" + (info.planets.length > 1 ? "s" : "") : "No worlds"}${info.belts.length ? ", " + info.belts.length + " belt" + (info.belts.length > 1 ? "s" : "") : ""}. Click a world to see it.</p>
+    // (a companion the game master set: the worlds whose orbits would not last beside it, said, never taken away)
+    const unst = comp && comp.own ? info.planets.filter(p => comp.both ? p.a * (1 - (p.ecc || 0)) <= 3.5 * comp.a : p.a * (1 + (p.ecc || 0)) >= .25 * comp.a * (1 - (comp.ecc || 0))) : [];
+    return `<section class="gx-card gx-system"><h4>The ${esc(s.name)} system</h4>${comp ? `<p class="t-small">${esc(A.starSystem.companionSay(comp, s.name))}</p>` : ""}${info.star.companion2 ? `<p class="t-small">A third star, ${esc(info.star.companion2.name)}, goes round the pair ${Math.round(info.star.companion2.a).toLocaleString("en")} AU out.</p>` : ""}${unst.length ? `<p class="gx-warn t-small">Beside its companion these worlds' orbits would not last: ${esc(unst.map(p => p.name).join(", "))}. Allowed: it is your setting.</p>` : ""}
+      <div class="gx-f gx-wlist"><span class="kn">Its worlds</span> ${info.planets.map(x => `<button type="button" class="t-link${UI.planet === x.n ? " on" : ""}" data-gx="planet" data-n="${x.n}">${esc(x.name)}</button>`).join(" · ") || "none"}</div>
+      <p class="t-small">${info.planets.length ? info.planets.length + " world" + (info.planets.length > 1 ? "s" : "") : "No worlds"}${info.belts.length ? ", " + info.belts.length + " belt" + (info.belts.length > 1 ? "s" : "") : ""}. ${mapOpen ? "Click a world on the map, or its name here, to see it." : `<button type="button" class="t-link" data-gx="open" data-id="${esc(s.id)}">Open its map</button>`}</p>
       ${info.belts.map(b => `<div class="gx-f"><span class="kn">Belt</span> ${esc(b.name)} at ${b.a} AU${b.rich ? ", rich" : ""}${ed ? ` <button type="button" class="t-mini" data-gx="delbelt" data-id="${esc(s.id)}" data-k="${b.k}" aria-label="Take away the belt">×</button>` : ""}</div>`).join("")}
       ${info.sites.filter(t => t.on == null).map(t => siteRow("In orbit", t)).join("")}${here.length ? `<div class="gx-f"><span class="kn">Your places</span> ${here.map(id => `<button type="button" class="t-go" data-go="${esc(id)}">${esc(A.meta[id].name || id)}</button>`).join(" ")}</div>` : ""}
-      ${p ? (ed && UI.pedit === p.n ? worldForm(s, p) : ed && UI.phys === p.n ? physForm(s, p) : `<div class="gx-world">${A.pixelPlanet ? `<canvas class="gx-pxg" data-id="${esc(s.id)}" data-n="${p.n}" role="img" aria-label="${esc(p.name)}, turning"></canvas>` : ""}<h4>${esc(p.name)}: ${esc(p.kname || Gg.KINDS[p.kind] || "")}</h4>${row("Size", p.size + " times the Earth")}${row("Gravity", p.grav + " g")}${row("Warmth", p.temp + " °C at the surface, on average")}${row("Air", p.air)}${p.pres != null ? row("Pressure", p.pres + " atmospheres") : ""}${row("Climate", p.climate)}${row("Surface", p.geo)}${row("Liquids", p.water)}${row("Life", p.life || "None found")}${row("Minerals", p.minerals)}${row("Dangers", (p.hazards || []).join(", "))}${row("Landing", p.land)}${row("For people", p.hab)}${row("Moons", p.moons ? String(p.moons) : "")}${row("To be found", p.chance)}${profileHTML(p, info, s.id)}
+      ${mo ? moonHTML(s, p, mo) : p ? (ed && UI.pedit === p.n ? worldForm(s, p) : ed && UI.phys === p.n ? physForm(s, p) : `<div class="gx-world">${A.pixelPlanet ? `<canvas class="gx-pxg" data-id="${esc(s.id)}" data-n="${p.n}" role="img" aria-label="${esc(p.name)}, turning"></canvas>` : ""}<h4>${esc(p.name)}: ${esc(p.kname || Gg.KINDS[p.kind] || "")}</h4>${row("Size", p.size + " times the Earth")}${row("Gravity", p.grav + " g")}${row("Warmth", p.temp + " °C at the surface, on average")}${row("Air", p.air)}${p.pres != null ? row("Pressure", p.pres + " atmospheres") : ""}${row("Climate", p.climate)}${row("Surface", p.geo)}${row("Liquids", p.water)}${row("Life", p.life || "None found")}${row("Minerals", p.minerals)}${row("Dangers", (p.hazards || []).join(", "))}${row("Landing", p.land)}${row("For people", p.hab)}${row("Moons", p.moons ? String(p.moons) : "")}${row("To be found", p.chance)}${profileHTML(p, info, s.id)}
         ${p.owner ? row("Held by", (G().powers.find(x => x.id === p.owner) || {}).name || ((A.factionsData || {})[p.owner] || {}).n || p.owner) : ""}${p.gm ? `<p class="gx-gm"><span class="kn">Only you</span> ${esc(p.gm)}</p>` : ""}
         ${onP(p.n).map(t => siteRow("Here", t)).join("")}${places.filter(id => (A.meta[id] || {}).planet === p.n).map(id => `<div class="gx-f"><span class="kn">Your place</span> <button type="button" class="t-go" data-go="${esc(id)}">${esc(A.meta[id].name || id)}</button></div>`).join("")}
         ${wn.length ? `<ul class="gx-risks gx-wn">${wn.map(w => `<li>${esc(w)}</li>`).join("")}</ul><p class="t-small">Allowed: it is your setting. Atlas only says what would not hang together.</p>` : ""}
@@ -648,15 +1219,44 @@
       <form class="t-row" data-gx="addpw"><input class="t-in" name="name" placeholder="The name of a new power" maxlength="60"><button class="t-mini">+ Power</button></form>
       <div class="t-row"><button type="button" class="t-mini" data-gx="panel" data-p="">Close</button></div></section>`;
   }
+  /* ---- the galaxy's own card, when nothing is chosen; and its black hole's (the galaxy plan, sections 2 and 3) */
+  const nice = v => v >= 1e9 ? (Math.round(v / 1e8) / 10) + " billion" : v >= 1e6 ? (Math.round(v / 1e5) / 10) + " million" : Math.round(v).toLocaleString("en");
+  function galaxyHTML() {
+    if (!MG) galaxyModel(); if (!MG) return `<section class="gx-card"><p class="t-small">Click a star to open its system.</p></section>`;
+    const w = GMOD.whereIs(MG, FR.x, FR.y, FR.z), R = Math.hypot(FR.x, FR.y), Rk = R / GMOD.KPC, per = Rk > .3 ? GMOD.period(MG, Rk) : 0, v = Rk > .3 ? GMOD.vcirc(MG, Rk) : 0;
+    return `<section class="gx-card gx-gal"><h3>${esc(MG.name)}</h3><p class="t-small">${esc(MG.label)}, some ${nice(MG.Rmax * 2)} light years across.${MG.arms.length ? " Its arms: " + esc(MG.arms.map(a => a.name.replace(/^The /, "")).join(", ")) + (MG.spur ? ", and " + esc(MG.spur.name.replace(/^The /, "the ")) : "") + "." : ""}</p>
+      <div class="gx-f"><span class="kn">Our space</span> ${esc((A.galaxyParams || {}).name || "The campaign's stars")}, in ${esc(w.name)}, ${nice(R)} light years from the centre</div>
+      ${per ? `<div class="gx-f"><span class="kn">How it turns</span> ${Math.round(v)} km a second here: once round the centre in about ${Math.round(per)} million years. Stars further in go round sooner. In a lifetime, nothing you could see moves.</div>` : ""}
+      ${MG.bh ? `<div class="t-row"><button type="button" class="t-btn" data-gx="gohole">Its heart: ${esc(MG.bh.name)}</button></div>` : ""}
+      <p class="t-small kn">Click a star to open its system; drag to move; scroll to come closer. The galaxy and its faint stars are its picture; the bright points over them are the campaign's own systems.</p></section>`;
+  }
+  function holeHTML() {
+    const B = MG && GMOD.blackHole(MG); if (!B) return "";
+    const li = L => `<ul class="t-ul">${L.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+    // the closest known star's orbit round it, to scale: a long, thin ellipse with the black hole at one end
+    const a = 120, e = B.S2.e, b = a * Math.sqrt(1 - e * e), c = a * e;
+    const orbit = `<svg viewBox="-150 -40 300 80" class="gx-s2" role="img" aria-label="The orbit of the closest known star round it"><ellipse cx="${(-c).toFixed(1)}" cy="0" rx="${a}" ry="${b.toFixed(1)}" fill="none" stroke="#9fb0c9" stroke-dasharray="3 3"/><circle cx="0" cy="0" r="3.2" fill="#000" stroke="#ffd9a8"/><circle cx="${(-c - a).toFixed(1)}" cy="0" r="2.4" fill="#cad7ff"/><text x="0" y="-10" text-anchor="middle" font-size="9" fill="#b9c6dc">${esc(B.name)}</text><text x="${(-c - a + 6).toFixed(1)}" y="16" font-size="9" fill="#b9c6dc">a star: once round in ${B.S2.years} years</text></svg>`;
+    return `<section class="gx-card gx-hole"><h3>${esc(B.name)}</h3><p class="t-small">The black hole at the galaxy's centre.</p>
+      <div class="gx-f"><span class="kn">Mass</span> ${nice(B.mass)} Suns</div>
+      <div class="gx-f"><span class="kn">Where</span> The very centre of the galaxy, ${nice(Math.hypot(FR.x, FR.y))} light years from our space</div>
+      <div class="gx-f"><span class="kn">Its edge</span> The point of no return is ${nice(B.horizon_km * 2)} km across, some ${Math.round(B.horizonSuns)} times the Sun</div>
+      <div class="gx-f"><span class="kn">What it is doing</span> ${esc(B.state)}</div>
+      <h5>Round it</h5>${li(B.around)}${orbit}
+      <h5>The dangers</h5>${li(B.dangers)}
+      <p class="t-small kn">The stars of the galaxy do not go round it: they go round the weight of the whole galaxy, its stars, gas and dark matter together. Its own pull rules only its few light years.</p>
+      <div class="t-row"><button type="button" class="t-mini" data-gx="holex">Close</button></div></section>`;
+  }
   function side() {
     if (!host) return; const sd = host.querySelector(".gx-side"), s = UI.sel && findSys(UI.sel);
     const g = G(), rg = UI.selReg && g.regions.find(r => r.id === UI.selReg);
-    sd.innerHTML = (UI.panel === "sp" ? spHTML() : "") + shipHTML() + (s ? sysHTML(s) : rg ? regHTML(rg) : UI.selLane ? laneHTML(UI.selLane) : `<section class="gx-card"><p class="t-small">Click a star to see its system, plot a course there, or change what the players' charts show. Drag to move; scroll to come closer. Edit the galaxy adds and changes systems, regions, lanes, sectors, powers and their territories.</p></section>`);
+    // (with a system's own map open, its cards first and the ship's after)
+    const inSys = s && UI.sys === s.id && A.starSystem && A.starSystem.isOpen();
+    sd.innerHTML = (UI.panel === "sp" ? spHTML() : "") + (UI.hole ? holeHTML() : "") + (inSys ? sysHTML(s) + shipHTML() : shipHTML() + (s ? sysHTML(s) : rg ? regHTML(rg) : UI.selLane ? laneHTML(UI.selLane) : galaxyHTML()));
     { const pf = sd.querySelector("form.gx-phys"); if (pf) physPreview(pf); }
     // (the world in its card, turning, as pixel art: atlas-pixelplanet.js)
-    if (A.pixelPlanet) sd.querySelectorAll("canvas.gx-pxg").forEach(cv => { const s2 = findSys(cv.dataset.id), info = s2 && bodiesOf(s2), p = info && info.planets.find(x => x.n === +cv.dataset.n); if (p) A.pixelPlanet.spin(cv, p, 48, info.star.color); });
+    if (A.pixelPlanet) sd.querySelectorAll("canvas.gx-pxg").forEach(cv => { const s2 = findSys(cv.dataset.id), info = s2 && bodiesOf(s2), p = info && info.planets.find(x => x.n === +cv.dataset.n); if (!p) return; const m = cv.dataset.m != null && cv.dataset.m !== "" ? (p.moonList || []).find(x => x.n === +cv.dataset.m) : null; A.pixelPlanet.spin(cv, m ? Object.assign({}, m, { name: moonName(p, m) }) : p, 48, info.star.color); });
   }
-  function refresh() { A._galaxy = null; if (host) { base(); over(); side(); tools(); } }
+  function refresh() { A._galaxy = null; if (host) { base(); over(); side(); tools(); if (A.starSystem && A.starSystem.isOpen()) A.starSystem.refresh(); } }
 
   /* ---- what the game master does */
   const nowWhen = () => A.worldTime ? A.worldTime.at(A.worldTime.now()).short : new Date().toLocaleDateString();
@@ -664,10 +1264,28 @@
   function onClick(e) {
     const b = e.target.closest("[data-gx]"); if (!b || ["INPUT", "SELECT", "FORM", "TEXTAREA"].includes(b.tagName)) return;
     const k = b.dataset.gx, id = b.dataset.id;
+    // (with the side view open, the chart's own places close it; with the system's map open, + and − come closer on it
+    // and the chart's own places close it first)
+    if (SV && k !== "sideview" && ["galaxy", "fit", "ship", "pick", "part", "gosec", "goreg", "goarm", "gohole", "zin", "zout"].includes(k)) sideClose();
+    if (TL && !/^(timelapse|tlplay|tlback)$/.test(k) && ["galaxy", "fit", "ship", "pick", "part", "gosec", "goreg", "goarm", "gohole", "zin", "zout", "sideview"].includes(k)) tlClose();
+    if (A.starSystem && A.starSystem.isOpen()) { if (k === "zin" || k === "zout") { A.starSystem.zoom(k === "zin" ? 1.6 : .62); return; } if (["galaxy", "fit", "ship", "pick", "part", "gosec", "goreg", "goarm", "gohole"].includes(k)) leaveSystem(false); }
     switch (k) {
       case "zin": zoomAt(1.6); return;
       case "zout": zoomAt(.62); return;
-      case "fit": UI.z = 1; UI.cx = 500; UI.cy = 500; view(); return;
+      case "fit": fitChart(); return;
+      case "galaxy": fitGalaxy(); return;
+      // (the part of the galaxy in view: some ten thousand light years of it; a sector, a region, an arm, the heart)
+      case "part": flyTo(CAM.x, CAM.y, Wpx() / 9000); return;
+      case "gosec": { const c = G().sectors.find(x => x.id === id); if (c) { const p = gxOf(c); flyTo(p.x, p.y, sChart() * 2.4); } host.querySelector(".gx-found").hidden = true; return; }
+      case "goreg": { const c = G().regions.find(x => x.id === id); if (c) { const p = gxOf(c); flyTo(p.x, p.y, Math.min(sMax(), Wpx() * .35 / Math.max(.5, c.r * FR.k))); UI.selReg = id; UI.sel = null; side(); } host.querySelector(".gx-found").hidden = true; return; }
+      case "goarm": { const a = MG && MG.arms.find(x => x.k === +b.dataset.k); if (a) { const T = MG.T, Rk = T.arms.r0 * 1.9, u = Math.log(Rk / T.arms.r0) / Math.tan(T.arms.pitch * Math.PI / 180), th = a.th0 + u; flyTo(Math.cos(th) * Rk * GMOD.KPC, Math.sin(th) * Rk * GMOD.KPC, Wpx() / 26000); } host.querySelector(".gx-found").hidden = true; return; }
+      case "gohole": flyTo(0, 0, Wpx() / 3000); UI.hole = true; UI.sel = null; side(); host.querySelector(".gx-found").hidden = true; return;
+      case "holex": UI.hole = false; side(); return;
+      case "sideview": if (TL) tlClose(); sideOpen(); return;
+      case "siteplace": { const s = findSys(id), info = s && bodiesOf(s), t = info && info.sites.find(x => x.k === +b.dataset.k); if (!t || !A.locations || !A.locations.forPlace) return; const on = t.on != null ? info.planets.find(p => p.n === t.on) : null; A.locations.forPlace({ system: s.id, planet: t.on != null ? t.on : undefined, site: t.k, name: t.name, kind: t.kind, label: t.name, done: () => { A._galaxy = null; if (A.starSystem && A.starSystem.isOpen()) A.starSystem.refresh(); } }); void on; return; }
+      case "timelapse": tlOpen(); return;
+      case "tlplay": if (TL) { TL.play = !TL.play; TL.last = 0; b.textContent = TL.play ? "Pause" : "Play"; b.setAttribute("aria-pressed", TL.play); } return;
+      case "tlback": if (TL) TL.t = 0; return;
       case "ship": { const s = findSys(ship().at); if (s) { UI.sel = s.id; centreOn(s, 3); over(); side(); } return; }
       case "tools": UI.tools = !UI.tools; UI.tool = null; UI.adding = false; UI.first = null; if (!UI.tools) { UI.panel = null; UI.pedit = null; } tools(); side(); return;
       case "tool": { const t = b.dataset.t; if (t === "add") { UI.adding = !UI.adding; UI.tool = null; } else { UI.tool = UI.tool === t ? null : t; UI.adding = false; } UI.first = null; UI.moving = null; UI.movingReg = null; tools(); over(); host.querySelector(".gx-canvas").focus({ preventScroll: true }); return; }
@@ -689,7 +1307,7 @@
       case "survey": { const s = findSys(b.dataset.id), info = s && bodiesOf(s), p = info && info.planets.find(x => x.n === +b.dataset.n); if (!p || !A.tableUI) return; A.tableUI.api.show({ kind: "handout", id: "survey-" + s.id + "-" + p.n, h: surveySheet(s, p, scanOf(s.id, p.n)) }); return; }
       case "wxnext": UI.wxo = (UI.wxo || 0) + 1; break;
       case "physrand": { const f = b.closest("form"); if (f) physRandom(f); return; }
-      case "unphys": { const id = b.dataset.id, n = +b.dataset.n, D = doc(id), e = D.bodies && D.bodies.p && D.bodies.p[n]; if (e) { delete e.phys; setG(id, D); } UI.phys = null; break; }
+      case "unphys": { const id = b.dataset.id, n = +b.dataset.n, D = doc(id), e = D.bodies && D.bodies.p && D.bodies.p[n], own = D.bodies && (D.bodies.add || []).find(x => x.n === n); if (own && own.phys) { delete own.phys; setG(id, D); } else if (e) { delete e.phys; setG(id, D); } UI.phys = null; break; }
       case "ask": { const s = findSys(id); if (s && A.askChange) A.askChange(askSys(s)); return; }
       case "delworld": case "unworld": case "delsite": case "delbelt": {
         const n = +(b.dataset.n != null ? b.dataset.n : b.dataset.k), D = doc(id), B = D.bodies = D.bodies || {};
@@ -699,7 +1317,7 @@
         else { if ((B.addB || []).some(t => t.k === n)) B.addB = B.addB.filter(t => t.k !== n); else { B.b = B.b || {}; B.b[n] = 1; } }
         setG(id, D); refresh(); return;
       }
-      case "pick": { const s = findSys(id); if (s) { UI.sel = id; centreOn(s, 2.5); over(); side(); } return; }
+      case "pick": { const s = findSys(id); if (s) { UI.sel = id; UI.hole = false; centreOn(s, 2.5); over(); side(); } const fl = host.querySelector(".gx-found"); if (fl) fl.hidden = true; return; }
       case "plot": { const c = course(ship().at, id); UI.plan = Object.assign({ to: id }, c); over(); side(); return; }
       case "jump": {
         const p = UI.plan; if (!p || !p.ok || !p.path) return;
@@ -711,7 +1329,7 @@
         UI.plan = null; break;
       }
       case "refuel": { const sh = ship(); setShip({ fuel: sh.cap }, `Refuelled at ${(findSys(sh.at) || {}).name || sh.at}`); break; }
-      case "open": UI.sys = UI.sys === id ? null : id; UI.planet = null; break;
+      case "open": if (UI.sys === id && A.starSystem && A.starSystem.isOpen()) { leaveSystem(true); return; } if (A.starSystem) { enterSystem(id); return; } UI.sys = UI.sys === id ? null : id; UI.planet = null; break;
       // (a world's surface: made the first time, then opened in the world map)
       case "surface": { const sid = b.dataset.id, n = b.dataset.n, mo = b.dataset.m; b.disabled = true; const say = t => { b.textContent = t; };
         // (how far it has got, by the time it usually takes: the worker says nothing until it is done)
@@ -719,7 +1337,8 @@
         const w = A.ux ? A.ux.work({ what: "the surface of " + nm, uses: ["its physics"] }) : null, est = (A.worldGenSecs ? A.worldGenSecs("planet") : 180) * 1000, t0 = Date.now(), iv = w ? setInterval(() => w.progress(Math.min(.95, (Date.now() - t0) / est)), 1000) : null;
         const here = () => ((document.getElementById("app") || {}).dataset || {}).view === "galaxy";
         planetSurface(sid, n, say, mo).then(wid => { clearInterval(iv); b.disabled = false; b.textContent = "Open its surface"; const stay = here(); if (w) w.end(true, "its surface is ready", () => { if (A.openWorld) A.openWorld(wid); }); if (stay && A.openWorld) A.openWorld(wid); }).catch(e => { clearInterval(iv); if (w) w.end(false); b.disabled = false; b.textContent = "Open its surface"; const m = host && host.querySelector(".gx-note"); if (m) m.textContent = e.message; else alert(e.message); }); return; }
-      case "planet": UI.planet = +b.dataset.n; UI.pedit = null; break;
+      case "planet": UI.planet = +b.dataset.n; UI.moon = null; UI.pedit = null; if (A.starSystem) A.starSystem.redraw(); break;
+      case "moon": UI.moon = b.dataset.m === "" || b.dataset.m == null ? null : +b.dataset.m; if (A.starSystem) A.starSystem.redraw(); break;
       case "edit": UI.edit = UI.edit === id ? null : id; break;
       case "move": UI.moving = id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); return;
       case "unedit": setG(id, null); UI.edit = null; refresh(); return;
@@ -747,7 +1366,18 @@
     if (k === "save") {
       const s = findSys(id), fl = {};
       for (const q of ["colony", "station", "fuel", "mining", "research", "derelict", "anomaly"]) fl[q] = f.elements["f_" + q].checked ? 1 : 0;
-      setG(id, Object.assign(doc(id), { name: v("name") || s.name, cls: v("cls"), bin: f.elements.bin.checked, f: fl, desc: v("desc"), gm: v("gm"), t: Date.now() }));
+      const D = Object.assign(doc(id), { name: v("name") || s.name, cls: v("cls"), f: fl, desc: v("desc"), gm: v("gm"), t: Date.now() });
+      // (its stars, only if the game master changed them; where it stands, only if moved: a rounded figure written back
+      // would shift it)
+      const st1 = JSON.stringify([v("stars"), v("c_cls"), +num("c_a", 40), +num("c_e", .3), v("t_cls"), +num("t_a", 900)]);
+      if (st1 !== v("stars0")) {
+        const m = v("stars"), cp = { cls: v("c_cls"), mass: (Gg.STARS[v("c_cls")] || Gg.STARS.M)[2], a: Math.max(.005, num("c_a", 40)), e: Math.max(0, Math.min(.95, num("c_e", .3))), both: m === "pair" || m === "three" };
+        D.bin = m !== "none"; D.comp = m === "none" ? null : cp; delete D.compNat; D.comp2 = m === "three" ? { cls: v("t_cls"), mass: (Gg.STARS[v("t_cls")] || Gg.STARS.M)[2], a: Math.max(1, num("t_a", 900)), e: 0 } : null;
+      }
+      const p0 = JSON.parse(v("pos0") || "[0,0,0]"), p1 = [num("px", p0[0]), num("py", p0[1]), num("pz", p0[2])], g0 = G();
+      if (p1[0] !== p0[0] || p1[1] !== p0[1]) { D.x = Math.round((500 + p1[0] / g0.ly) * 1000) / 1000; D.y = Math.round((500 + p1[1] / g0.ly) * 1000) / 1000; }
+      if (p1[2] !== p0[2]) D.z = p1[2];
+      setG(id, D);
       // (who holds it: the territories' own document)
       const was = s.pw != null && G().powers[s.pw] ? G().powers[s.pw].id : "", now = v("owner");
       if (now !== was) setG("~terr", Object.assign(doc("~terr"), { [id]: now }));
@@ -769,13 +1399,14 @@
     } else if (k === "savephys") {
       // (the world worked out again: its changes kept, and only the names and notes the game master gave it beside them;
       // its other fields come from its physics now)
-      const n = +f.dataset.n, D = doc(id), B = D.bodies = D.bodies || {}, e = (B.p = B.p || {})[n] || {}, keep = {};
-      for (const q of ["name", "owner", "gm", "moonNames", "minerals", "chance"]) if (e[q] != null) keep[q] = e[q];
-      B.p[n] = Object.assign(keep, { phys: physOf(f), t: Date.now() });
+      const n = +f.dataset.n, D = doc(id), B = D.bodies = D.bodies || {}, own = (B.add || []).find(x => x.n === n);
+      if (own) { own.phys = physOf(f); own.t = Date.now(); }
+      else { const e = (B.p = B.p || {})[n] || {}, keep = {}; for (const q of ["name", "owner", "gm", "moonNames", "minerals", "chance"]) if (e[q] != null) keep[q] = e[q]; B.p[n] = Object.assign(keep, { phys: physOf(f), t: Date.now() }); }
       setG(id, D); UI.phys = null;
     } else if (k === "addworld") {
-      const s = findSys(id), D = doc(id), B = D.bodies = D.bodies || {}, info = bodiesOf(s), n = Math.max(99, ...info.planets.map(x => x.n)) + 1;
-      B.add = (B.add || []).concat(newWorld(s, v("kind"), Math.max(.01, num("a", 1)), n)); setG(id, D); UI.planet = n; UI.pedit = n;
+      const s = findSys(id), D = doc(id), B = D.bodies = D.bodies || {}, info = bodiesOf(s), n = Math.max(99, ...info.planets.map(x => x.n)) + 1, w = madeWorld(s, info, v("kind"), Math.max(.01, num("a", 1)), n);
+      B.add = (B.add || []).concat(w); setG(id, D); UI.planet = n; UI.pedit = w.rough ? n : null;
+      if (w.rough && A.tableUI) A.tableUI.api.note(`Its star would not make ${/^[aeiou]/i.test(Gg.KINDS[v("kind")] || "") ? "an" : "a"} ${(Gg.KINDS[v("kind")] || "world").toLowerCase()} there: it is kept as your setting has it. Its card says what does not hang together.`);
     } else if (k === "addsite" || k === "addbelt") {
       const s = findSys(id), D = doc(id), B = D.bodies = D.bodies || {}, info = bodiesOf(s);
       if (k === "addsite") { const kind = v("kind"), nk = Math.max(99, ...info.sites.map(x => x.k)) + 1; B.addS = (B.addS || []).concat({ k: nk, kind, name: v("name") || (SITEK.find(x => x[0] === kind) || [0, "A site"])[1], on: v("on") === "" ? null : +v("on") }); }
@@ -803,7 +1434,15 @@
     const regions = g.regions.filter(r => r.kind === "explored" || L.some(s => Math.hypot(r.x - s.x, r.y - s.y) <= r.r && chartOf(s.id) === "visited")).map(r => ({ kind: r.kind, x: r.x, y: r.y, r: r.r, name: r.name }));
     // (the worlds they have scanned, with only what they learned of each: seenRows)
     const scannedWorlds = list => { const out = []; for (const s of list) { if (chartOf(s.id) === "rumoured" || !(((S().get("charts", s.id) || {}).scans))) continue; for (const p of bodiesOf(s).planets) { const lv = scanOf(s.id, p.n); if (lv > 0) out.push({ sys: s.name, name: p.name, level: SCAN[lv], rows: seenRows(p, lv) }); } } return out; };
-    return { name: (A.galaxyParams || {}).name || "", systems: L.map(s => ({ id: s.id, name: chartOf(s.id) === "rumoured" ? s.name + "?" : s.name, x: s.x, y: s.y, color: (Gg.STARS[s.cls] || Gg.STARS.G)[0], state: chartOf(s.id) })), lanes, regions, ship: ids.has(sh.at) ? sh.at : null, worlds: scannedWorlds(L) };
+    // (each visited system's own map for the players' screen, and each charted one they have scanned in, where the
+    // worlds stand today: the worlds they have scanned in their pictures, as far as they scanned them; the rest outlines)
+    const sysmaps = {};
+    if (A.starSystem) for (const s of L) {
+      const cs = chartOf(s.id), scans = ((S().get("charts", s.id) || {}).scans) || {}; if (cs !== "visited" && !(cs === "charted" && Object.keys(scans).length)) continue;
+      const info = bodiesOf(s), P = A.starSystem.positions(s, info);
+      sysmaps[s.id] = { name: s.name, color: info.star.color, at: A.worldTime ? A.worldTime.at(A.worldTime.now()).short : "", belts: info.belts.map(b => b.a), worlds: info.planets.map(p => { const lv = scanOf(s.id, p.n), q = P.find(x => x.n === p.n) || { x: p.a, y: 0, e: 0 }, sz = p.radius || p.size || 1, w = { a: p.a, x: q.x, y: q.y, e: q.e, lv, r: sz > 6 ? 3 : sz > 1.6 ? 2 : 1 }; if (lv >= 1) { w.name = p.name; w.img = A.pixelPlanet ? A.pixelPlanet.url(p, 16, info.star.color) : ""; } if (lv >= 2) w.kind = p.kname; return w; }) };
+    }
+    return { name: (A.galaxyParams || {}).name || "", systems: L.map(s => ({ id: s.id, name: chartOf(s.id) === "rumoured" ? s.name + "?" : s.name, x: s.x, y: s.y, color: (Gg.STARS[s.cls] || Gg.STARS.G)[0], state: chartOf(s.id) })), lanes, regions, ship: ids.has(sh.at) ? sh.at : null, worlds: scannedWorlds(L), sysmaps };
   };
 
   // the view, mounted by the page's shell when the game master opens it (atlas-shell.js)
@@ -815,6 +1454,18 @@
           A.openWorld): places and changes made on it are kept as on any world. Which surfaces were opened is kept
           (collection "planetworlds"), so they come back with the page. */
   const surfId = (sid, n, m) => ("p-" + sid + "-" + n + (m != null && m !== "" ? "-m" + m : "")).replace(/[^\w-]/g, "-").slice(0, 40);
+  // a world's opened surface, for its globe (the galaxy plan, section 6: "paint the globe from the real map from then
+  // on, in the same style"): its heights and sea level, read once from the map the surface was made as
+  const HGT = new Map();
+  function heightOf(p) {
+    if (!p || !p.sid || !A.worlds) return null;
+    const id = p.pn != null ? surfId(p.sid, p.pn, p.n) : surfId(p.sid, p.n), w = A.worlds[id], T = w && w.terrain;
+    if (!T || !T.height || !T.cols || !T.rows) return null;
+    let h = HGT.get(id); if (h && h.src === T.height) return h;
+    let H; if (typeof T.height === "string") { const b = atob(T.height); H = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) H[i] = b.charCodeAt(i); } else H = Uint8Array.from(T.height);
+    h = { H, cols: T.cols, rows: T.rows, sea: T.sea == null ? 128 : T.sea, src: T.height }; HGT.set(id, h); return h;
+  }
+  if (A.pixelPlanet) A.pixelPlanet.heightOf = heightOf;
   // (since 4 Nov 2026 the recipe is the planetary layer's own: its environment worked out from its physics first, the
   // generator following it; engine/atlas-planet.js surfaceFlags. The older recipe below stays for a page without it)
   function surfaceFlags(p, seed, star) {
@@ -874,10 +1525,14 @@
   const currentKey = k => !!(A.planets && A.planets.ENV_V && String(k || "").includes(`"envv":${A.planets.ENV_V}`));
   A.planetSurfacesInit = st => st.watch("planetworlds", docs => { for (const [id, d] of Object.entries(docs || {})) { if (!d || !d.system || (A.worlds[id] && A.worlds[id].data)) continue; registerSurface(d.system, d.n, null, d.m); if (A.worldGenCache && d.key && currentKey(d.key)) A.worldGenCache(d.key).then(T => { if (T) registerSurface(d.system, d.n, T, d.m); }); } });
   // a system opened from elsewhere on the page (and a world in it, by its number): the star chart's own selection
-  A.galaxyOpen = (id, n) => { if (!host) return false; UI.sel = id; UI.sys = id; UI.selReg = null; UI.selLane = null; UI.planet = n == null ? null : +n; refresh(); return true; };
+  A.galaxyOpen = (id, n) => { if (!host || !findSys(id)) return false; enterSystem(id); UI.planet = n == null ? null : +n; side(); return true; };
   // (a system chosen from outside the chart: a place's trail back up to the stars)
   // (which system is chosen: a step for Back, atlas-nav.js; and the search: the systems by name, and their worlds')
   A.galaxySelected = () => UI.sel;
+  // (a system's worlds, belts and sites as the page has them: grown and as the game master changed them)
+  A.galaxyApi.bodies = id => { const s = findSys(id); return s ? bodiesOf(s) : null; };
+  // (for the tests: what the chart has just drawn, and where its camera is; and a way to set the camera)
+  A.galaxyDebug = { tl: () => TL ? { t: TL.t, n: TL.P.length, play: TL.play, text: TL.el.textContent } : null, away: () => DRAWN.filter(d => d[4]).length, side: () => SV ? { open: true, text: SV.el.textContent } : null, where: id => { const d = DRAWN.find(q => q[2] && q[2].id === id); return d ? [Math.round(d[0]), Math.round(d[1])] : null; }, drawn: () => DRAWN.length, labels: () => (DRAWN.length), cam: () => Object.assign({}, CAM), set: (x, y, s) => { fly = null; CAM.x = x; CAM.y = y; CAM.s = clampS(s); request(); }, fitGalaxy: () => fitGalaxy(0), fitChart: () => fitChart(0), frame: () => frame(), picDone: () => !!(PIC && PIC.done), model: () => MG, frameOf: () => FR };
   (A.searchers = A.searchers || []).push({ kind: "Among the stars", order: 22, mod: ["stars"], find: q => { const out = []; if (!A.galaxyParams) return out; for (const s of allSys()) { const x = A.nav && A.nav.hit(s.name, [s.desc, s.gm].join(" "), q, (Gg.STAR_NAME[s.cls] || "A star") + (s.f && s.f.colony ? " · a colony" : s.f && s.f.station ? " · a station" : "")); if (x) out.push(Object.assign(x, { go: () => { const v = document.getElementById("v-galaxy"); if (v) v.click(); setTimeout(() => A.galaxyOpen(s.id), 40); } })); if (out.length > 40) break; } return out; } });
   A.galaxyFocus = id => { if (!host) return; const s = findSys(id); if (!s) return; UI.sel = id; centreOn(s, 2.5); over(); side(); };
   if (A.tableUI) { const iv = setInterval(() => { const st = A.tableUI.api.store(); if (!st) return; clearInterval(iv); ST = st; A.planetSurfacesInit(st); for (const c of ["charts", "ship", "gedits"]) st.watch(c, () => { if (host && host.isConnected && host.offsetParent) { if (c === "gedits" || c === "charts") refresh(); else { over(); side(); } } }); }, 200); setTimeout(() => clearInterval(iv), 120000); }

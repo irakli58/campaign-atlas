@@ -58,7 +58,7 @@
         if (e.loc && X.whenWorld) X.whenWorld(W => W.select(e.loc));
       }
       else if (e.view === "table") { if (A.tableUI) A.tableUI.api.open(e.tab || "home"); }
-      else if (e.view === "galaxy") { X.setView("galaxy"); if (e.sys && A.galaxyOpen) setTimeout(() => A.galaxyOpen(e.sys), 30); }
+      else if (e.view === "galaxy") { X.setView("galaxy"); if (e.sys && A.galaxyOpen) setTimeout(() => A.galaxyOpen(e.sys), 30); else if (A.galaxyClose) A.galaxyClose(); }
       else X.setView(e.view);
     } catch (err) { console.warn("atlas: could not go back there", err); }
     restoring = Date.now(); paintBtns();

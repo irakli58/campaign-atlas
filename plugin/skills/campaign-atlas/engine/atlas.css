@@ -2437,6 +2437,88 @@ button.ho-b:hover { color: var(--ink); }
 .gx-b { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .04em; border: 1px solid #2b3a52; background: #0b1220; color: #cfe0ff; border-radius: 999px; padding: 4px 11px; cursor: pointer; }
 .gx-b[aria-pressed="true"] { background: #cfe0ff; color: #0b1220; }
 .gx-canvas { height: min(74vh, 700px); touch-action: none; cursor: grab; }
+/* the chart drawn on a canvas (the galaxy plan, approved 10 Nov 2026): the trail under the bar, a card on hover, the
+   overview in the corner, the layers, the chart's own search */
+.gx-canvas { position: relative; }
+.gx-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.gx-trail { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; min-height: 18px; }
+.gx-trail .trail { margin: 0; color: #b9c6dc; font-size: 12px; }
+.gx-trail .trail button { color: #b9c6dc; }
+.gx-trail .trail [aria-current] { color: #fff; text-decoration: none; }
+.gx-where { font-family: var(--f-mono); font-size: 11px; letter-spacing: .03em; color: #7d8aa0; }
+.gx-hover { position: absolute; z-index: 3; display: grid; gap: 1px; max-width: 230px; padding: 7px 10px; border-radius: 6px; border: 1px solid #2b3a52; background: rgba(9, 14, 26, .94); color: #dbe7ff; font-size: 13px; pointer-events: none; box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
+.gx-hover[hidden] { display: none; }
+.gx-hover b { font-size: 14.5px; }
+.gx-hover .kn { color: #8fa0bb; font-size: 12px; }
+.gx-mini { position: absolute; left: 10px; bottom: 44px; z-index: 2; width: 130px; height: 130px; border: 1px solid #2b3a52; border-radius: 6px; background: #000; cursor: pointer; opacity: .92; }
+.gx-mini[hidden] { display: none; }
+.gx-lay { position: relative; }
+.gx-lay > summary { list-style: none; }
+.gx-lay > summary::-webkit-details-marker { display: none; }
+.gx-layp { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; display: grid; gap: 5px; min-width: 250px; padding: 10px 12px; border: 1px solid #2b3a52; border-radius: 8px; background: rgba(9, 14, 26, .97); color: #cfe0ff; font-size: 13.5px; }
+.gx-layp label { display: flex; gap: 7px; align-items: center; }
+.gx-lanesel select { width: auto; margin-left: 4px; padding: 2px 6px; background: #0b1220; color: #cfe0ff; border-color: #2b3a52; }
+.gx-findw { position: relative; flex: 1 1 150px; min-width: 0; display: flex; }
+.gx-findw .gx-find { flex: 1; }
+.gx-found { position: absolute; top: calc(100% + 4px); left: 0; z-index: 6; width: min(360px, 90vw); max-height: 320px; overflow: auto; padding: 4px; border: 1px solid #2b3a52; border-radius: 8px; background: rgba(9, 14, 26, .97); }
+.gx-found[hidden] { display: none; }
+.gx-found button { display: block; width: 100%; text-align: left; border: 0; background: none; color: #dbe7ff; padding: 5px 8px; border-radius: 5px; cursor: pointer; font: inherit; }
+.gx-found button:hover, .gx-found button:focus-visible { background: rgba(207, 224, 255, .12); outline: none; }
+.gx-found b { display: block; font-size: 14px; }
+.gx-found span, .gx-found .kn { display: block; font-size: 12px; color: #8fa0bb; }
+.gx-s2 { width: 100%; height: auto; display: block; margin: 6px 0; background: #05070c; border-radius: 6px; }
+.gx-kstars { display: inline-flex; gap: 2px; align-items: center; }
+.gx-kstars i { width: 8px !important; height: 8px !important; border-radius: 50% !important; }
+/* the star system map, over the chart's picture (atlas-starsystem.js) */
+.ss-map { position: absolute; left: 0; right: 0; z-index: 5; display: flex; flex-direction: column; background: #04060b; outline: none; }
+.ss-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid #1e2a3d; background: rgba(6, 10, 18, .96); color: #dbe7ff; }
+.ss-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; min-width: 0; }
+.ss-title b { font-size: 15px; }
+.ss-title .kn { color: #8fa0bb; font-size: 12px; }
+.ss-sp { flex: 1 1 auto; }
+.ss-seg { display: inline-flex; gap: 2px; }
+.ss-lay { position: relative; }
+.ss-lay summary { list-style: none; }
+.ss-lay summary::-webkit-details-marker { display: none; }
+.ss-layp { position: absolute; right: 0; top: calc(100% + 4px); z-index: 7; display: grid; gap: 4px; width: max-content; max-width: 260px; padding: 8px 10px; border: 1px solid #2b3a52; border-radius: 8px; background: rgba(9, 14, 26, .97); color: #dbe7ff; font-size: 13px; }
+.ss-layp label { display: flex; gap: 6px; align-items: center; min-height: 26px; }
+.ss-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.ss-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.ss-cv:active { cursor: grabbing; }
+.ss-hits { position: absolute; inset: 0; pointer-events: none; }
+.ss-body { position: absolute; left: 0; top: 0; pointer-events: auto; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
+.ss-body:focus-visible { outline: 2px solid #cfe0ff; outline-offset: 1px; }
+.ss-tip { position: absolute; z-index: 3; display: grid; gap: 2px; max-width: 250px; padding: 7px 10px; border-radius: 6px; border: 1px solid #2b3a52; background: rgba(9, 14, 26, .95); color: #dbe7ff; font-size: 13px; pointer-events: none; box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
+.ss-tip[hidden] { display: none; }
+.ss-tip b { font-size: 14.5px; }
+.ss-tip .kn { color: #8fa0bb; font-size: 12px; }
+.ss-foot { position: absolute; left: 8px; right: 8px; bottom: 6px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; color: #b9c6dc; font-size: 12px; pointer-events: none; text-shadow: 0 1px 2px #000; }
+.ss-foot .kn { color: #8fa0bb; }
+.ss-scale { display: inline-flex; align-items: center; gap: 6px; }
+.ss-scale i { display: inline-block; height: 4px; border: 1px solid #cfe0ff; border-top: 0; }
+.gx-sidev { position: absolute; left: 0; right: 0; z-index: 5; display: flex; flex-direction: column; background: #04060b; outline: none; overflow: auto; }
+.gx-svb, .gx-tlb { display: grid; gap: 6px; padding: 10px 12px; color: #b9c6dc; justify-items: center; }
+.gx-tlb p { max-width: 900px; margin: 0; justify-self: stretch; }
+.gx-tlt { font-family: var(--f-mono); font-size: 12.5px; color: #cfe0ff; }
+.gx-svb canvas { display: block; max-width: 100%; height: auto; border: 1px solid #1e2a3d; border-radius: 6px; }
+.gx-svb p { margin: 0 0 6px; }
+.gx-depth { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gx-depth[hidden] { display: none; }
+.gx-depth input { flex: 1 1 120px; }
+/* (with the galaxy's tools out over a system's map: the editing edge round the map, its label under the map's bar) */
+.gx-canvas.ux-editing ~ .ss-map { outline: 3px solid var(--bone); outline-offset: -3px; }
+.gx-wrap.ss-open .gx-canvas > .ux-elabel { top: 44px; }
+.ss-sub { position: absolute; left: 10px; top: 8px; z-index: 2; color: #b9c6dc; font-size: 12.5px; pointer-events: none; text-shadow: 0 1px 2px #000; }
+@media (min-width: 901px) { .gx-wrap.ss-open .gx-side { max-height: calc(min(74vh, 700px) + 110px); overflow: auto; position: sticky; top: 8px; overscroll-behavior: contain; } }
+.gx-wlist .t-link.on { font-weight: 700; text-decoration: underline; }
+.gx-comp { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 4px 8px; }
+.gx-pos { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin: 4px 0; }
+.gx-pos > .kn { flex: 1 1 100%; font-size: 12px; }
+.gx-pos label { display: inline-flex; gap: 4px; align-items: center; }
+.gx-moon h4 { margin-top: 2px; }
+.gx-psys { width: 100%; height: auto; }
+@media (max-width: 700px) { .ss-title .kn { display: none; } .ss-bar { gap: 4px; } }
+
 .gx-canvas:active { cursor: grabbing; }
 .gx-svg { width: 100%; height: 100%; display: block; }
 .gx-bg { fill: #05070c; }

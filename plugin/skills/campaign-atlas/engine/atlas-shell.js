@@ -187,7 +187,8 @@
     syncPlaces(); index(); renderAll(false);
     const want = ev.detail && ev.detail.go;
     if (CITY && cityId) { const c = cityId; CITY.dispose(); CITY = null; cityId = null; mountCity(c, cc => { const s = byId[want] ? want : state.sel; if (byId[s] && cityOf(s) === c) cc.flyTo(s); }); }
-    if (byId[want]) go(want);
+    // (a place made from the world map or the stars: its page opened, where Build the interior is)
+    if (byId[want]) { const v = (($("#app") || {}).dataset || {}).view; if (v && v !== "gaz") setView("gaz"); go(want); }
   });
 
   /* ---- the world map (atlas-world.js): the level above the cities. It is drawn the first time it is shown and kept,
@@ -282,7 +283,10 @@
     const acts = p.acts.map(a => `<span class="tag">Act ${roman(a)}</span>`).join("");
     const bone = bonesAt(p.id).map(b => `<span class="tag bone keeper">${esc(keyWord)} ${b.k} · ${esc(b.name)}</span>`).join("");
     // where it stands on the world map, as a way there
-    const wl = A.worldData && A.worldMount ? (A.worldData.locations || []).find(L => L && L.id && inLoc(p.id, L)) : null;
+    // (a place made on another world, a planet's surface or a plane's layer: that world and its location in the trail;
+    // the editing plan of 10 Nov 2026)
+    const mw = (A.meta[p.id] || {}).world, ow = mw && mw !== "main" && A.worlds && A.worlds[mw] && A.worlds[mw].data ? A.worlds[mw] : null, owl = ow ? (ow.data.locations || []).find(L => L && L.id === (A.meta[p.id] || {}).location) : null;
+    const wl = !ow && A.worldData && A.worldMount ? (A.worldData.locations || []).find(L => L && L.id && inLoc(p.id, L)) : null;
     // where it stands, step by step up to the world or the stars, each step opening its map (the user's master plan, 26
     // Oct 2026: "all maps should connect logically", "the DM should be able to return to the parent map easily")
     const showLoc = wl && (state.mode === "gm" || wl.state !== "unknown"), pc = cityOf(p.id), hasCity = !!(pc && CITIES[pc] && A.cityMount);
@@ -292,6 +296,7 @@
     if (showLoc) crumbs.push(hasCity && (wl.city || wl.id) === pc ? `<button type="button" data-tcity="${esc(pc)}" title="Its city's map">${esc(wl.name)}</button>` : `<button type="button" data-world="${esc(wl.id)}" title="Show it on the world map">${esc(wl.name)}</button>`);
     if (hasCity && !(showLoc && (wl.city || wl.id) === pc) && (Object.keys(CITIES).length > 1 || A.worldData)) crumbs.push(`<button type="button" data-tcity="${esc(pc)}" title="Its city's map">${esc(cityLabel(pc))}</button>`);
     if (gxs) crumbs.push(`<button type="button" data-gxsys="${esc(sysId)}" title="The star chart">The stars</button>`, `<button type="button" data-gxsys="${esc(sysId)}" title="Its star system">${esc(gxs.name)}</button>`);
+    if (ow) { const pw = ow.data.planet, ps = pw && pw.system && !gxs && state.mode === "gm" && A.galaxyApi ? ((A.galaxyApi.G() || {}).systems || []).find(s => s.id === pw.system) : null; if (ps) crumbs.push(`<button type="button" data-gxsys="${esc(ps.id)}" title="The star chart">The stars</button>`, `<button type="button" data-gxsys="${esc(ps.id)}" title="Its star system">${esc(ps.name)}</button>`); crumbs.push(`<button type="button" data-wworld="${esc(mw)}" title="Its world map">${esc(ow.data.title || "Its world")}</button>`); if (owl) crumbs.push(`<button type="button" data-wworld="${esc(mw)}" title="Show it on its world map">${esc(owl.name)}</button>`); }
     const trail = crumbs.length ? `<nav class="trail" aria-label="Where it is">${crumbs.join('<span class="tr-sep" aria-hidden="true">›</span>')}<span class="tr-sep" aria-hidden="true">›</span><span aria-current="page">${esc(p.name)}</span></nav>` : "";
     const links = linksOf(p.id).map(id => `<button type="button" data-go="${esc(id)}"><span class="n">${pad(byId[id].n)}</span>${esc(byId[id].name)}</button>`).join("");
     const hooks = Object.values(M.enc || {}).map(e => `<li><details class="hk"><summary>${esc(e.t || "")}${e.roll && A.tableUI ? " " + A.tableUI.roll(e.roll) : ""}</summary><p>${esc(e.d || "")}</p>${e.stats && A.tableUI ? A.tableUI.stats(e.stats, e.count ? e.count + " of them" : "") : ""}</details></li>`);
@@ -682,6 +687,7 @@
     if (t.closest("#v-galaxy")) { setView("galaxy"); return; }
     if (t.closest("#v-table")) { setView("table"); return; }
     const wb = t.closest("[data-world]"); if (wb) { showWorld(wb.dataset.world || null); return; }
+    const ww = t.closest("[data-wworld]"); if (ww) { A.openWorld(ww.dataset.wworld); return; }
     // (a place's trail: its city's map, brought into view and flown to the place; its star system on the chart)
     const tc = t.closest("[data-tcity]"); if (tc) { const pid = state.sel; mountCity(tc.dataset.tcity, c => { if (byId[pid] && cityOf(pid) === tc.dataset.tcity) c.flyTo(pid); }); const at = document.querySelector(".atlas"); if (at) at.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const gs = t.closest("[data-gxsys]"); if (gs) { setView("galaxy"); if (A.galaxyFocus) A.galaxyFocus(gs.dataset.gxsys); return; }
