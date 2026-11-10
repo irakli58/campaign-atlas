@@ -65,16 +65,19 @@
   const hash = () => (location.hash || "").replace(/^#/, "");
   if (byId[hash()]) state.sel = hash(); else if (byId[store.get("sel")]) state.sel = store.get("sel");
 
+  // a place's own words (the players' safe ones for the players), for the index's filter and the search
+  const fold = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  function placeHas(p, q) {
+    const keeper = state.mode === "gm", M = p.M || {};
+    let hay = [p.name, p.dist, M.ext || ""].join(" ");
+    for (const F of M.floors || []) for (const r of F.R) if (r[5] && (keeper || !(r[7] && r[7].h) && !A.isGmFloor(F))) hay += " " + r[5];
+    if (keeper) hay += " " + [p.sub, M.ov || "", ...Object.values(M.npcs || {}).map(n => who(n).join(" ")), ...Object.values(M.clues || {}).map(c => c.t || ""), ...Object.values(M.enc || {}).map(e => e.t || "")].join(" ");
+    return fold(hay).includes(fold(q));
+  }
   function matches(p) {
     if (state.cat !== "all") { if (state.cat === "bones") { if (!bonesAt(p.id).length) return false; } else if (p.cat !== state.cat) return false; }
     if (state.act !== "all" && !p.acts.includes(+state.act)) return false;
-    if (state.q) {
-      const keeper = state.mode === "gm", M = p.M || {};
-      let hay = [p.name, p.dist, M.ext || ""].join(" ");
-      for (const F of M.floors || []) for (const r of F.R) if (r[5] && (keeper || !(r[7] && r[7].h) && !A.isGmFloor(F))) hay += " " + r[5];
-      if (keeper) hay += " " + [p.sub, M.ov || "", ...Object.values(M.npcs || {}).map(n => who(n).join(" ")), ...Object.values(M.clues || {}).map(c => c.t || ""), ...Object.values(M.enc || {}).map(e => e.t || "")].join(" ");
-      if (!hay.toLowerCase().includes(state.q.toLowerCase())) return false;
-    }
+    if (state.q && !placeHas(p, state.q)) return false;
     return true;
   }
 
@@ -85,7 +88,7 @@
   <header class="mast">
     <div><div class="kicker">${esc(kicker)}</div><h1>${esc(cfg.title)}${cfg.strap ? `: <em>${esc(cfg.strap)}</em>` : ""}</h1></div>
     <div class="tools">
-      <input id="q" class="search" type="search" placeholder="Search places, people, clues" aria-label="Search places, people and clues">
+      <span class="ux-qwrap"><input id="q" class="search" type="search" placeholder="Search everything (Ctrl+K)" aria-label="Search everything in the campaign" autocomplete="off"></span>
       ${ACTS.length ? `<select id="act" class="actsel" aria-label="Filter by act"><option value="all">All acts</option>${ACTS.map(a => `<option value="${a}">${esc(actTitle(a))}</option>`).join("")}</select>` : ""}
       <div class="mode" role="group" aria-label="View mode"><button id="m-keeper" type="button" aria-pressed="${state.mode === "gm"}">${esc(gm)}</button><button id="m-player" type="button" aria-pressed="${state.mode === "player"}">Player-safe</button></div>
       ${A.modules ? `<button type="button" class="featbtn keeper" data-mf-open title="What this campaign uses: switch parts of Atlas on and off" aria-label="What this campaign uses"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>` : ""}
@@ -93,8 +96,8 @@
   </header>
   ${A.music ? `<div class="musicbar">${A.music.html()}</div>` : ""}
   <nav class="views" aria-label="View">
-    <button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
-    ${A.worldMount && A.worldList && A.worldList().length ? `<button type="button" id="v-world" aria-pressed="false">World map</button>${A.worldList().length > 1 ? `<select id="v-worldsel" class="v-worldsel" aria-label="Which world" title="This campaign's worlds: its own, and the others it holds (a planet, a moon, a plane's layer)">${A.worldList().map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")}</select>` : ""}` : ""}
+    ${A.nav ? A.nav.btnsHTML() : ""}<button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
+    ${A.worldMount && A.worldList && A.worldList().length ? `<button type="button" id="v-world" aria-pressed="false">World map</button>${A.worldList().length > 1 ? `<select id="v-worldsel" class="v-worldsel" aria-label="Which world" title="This campaign's worlds: its own, and the others it holds (a planet, a moon, a plane's layer)">${A.nav ? A.nav.worldOptions("main") : A.worldList().map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")}</select>` : ""}` : ""}
     ${A.galaxyParams && A.galaxyMount ? `<button type="button" id="v-galaxy" class="keeper" aria-pressed="false">Star chart</button>` : ""}
     ${A.tableUI ? `<button type="button" id="v-table" class="keeper v-play" aria-pressed="false" title="Everything for game night: the players' screen, handouts, clocks, dice and more">${A.table.icon("play")}At the table</button>` : ""}
     ${(A.storyData || []).length ? `<button type="button" id="v-story" class="keeper" aria-pressed="false">The story</button>` : ""}
@@ -162,7 +165,8 @@
     if (!A.worldData && ids.length < 2) { bar.hidden = true; return; }
     bar.hidden = false;
     const nm = cityLabel;
-    bar.innerHTML = `${A.worldData && A.worldMount ? `<button type="button" class="cb-back" data-world="${esc(loc || "")}">← World map</button>` : ""}<span class="cb-here"><span class="kl">Now on the map</span>${esc(nm(cityId))}</span>${ids.length > 1 ? `<label class="cb-pick"><span class="kl">Another city</span><select id="cityPick" aria-label="Show another city on the map">${ids.map(id => `<option value="${esc(id)}"${id === cityId ? " selected" : ""}>${esc(nm(id))}</option>`).join("")}</select></label>` : ""}`;
+    const here = byId[state.sel] && cityOf(state.sel) === cityId ? byId[state.sel].name : "";
+    bar.innerHTML = `${A.nav ? `<span class="cb-here cb-trail">${A.nav.cityTrail(nm(cityId), loc, here)}</span>` : `${A.worldData && A.worldMount ? `<button type="button" class="cb-back" data-world="${esc(loc || "")}">← World map</button>` : ""}<span class="cb-here"><span class="kl">Now on the map</span>${esc(nm(cityId))}</span>`}${ids.length > 1 ? `<label class="cb-pick"><span class="kl">Another city</span><select id="cityPick" aria-label="Show another city on the map">${ids.map(id => `<option value="${esc(id)}"${id === cityId ? " selected" : ""}>${esc(nm(id))}</option>`).join("")}</select></label>` : ""}`;
   }
 
   /* ---- places the game master makes in a city (atlas-locations.js): taken into the index as they come, renamed,
@@ -199,8 +203,8 @@
     if (!$("#v-world")) { const b = document.createElement("button"); b.type = "button"; b.id = "v-world"; b.setAttribute("aria-pressed", "false"); b.textContent = "World map"; $("#v-gaz").insertAdjacentElement("afterend", b); }
     let sel = $("#v-worldsel");
     if (!sel && A.worldList().length > 1) { sel = document.createElement("select"); sel.id = "v-worldsel"; sel.className = "v-worldsel"; sel.setAttribute("aria-label", "Which world"); $("#v-world").insertAdjacentElement("afterend", sel); }
-    if (sel) for (const w of A.worldList()) if (![...sel.options].some(o => o.value === w.id)) sel.add(new Option(w.name, w.id));
-    if (id !== WSEL) { if (WORLD) { try { WORLD.dispose(); } catch (e) {} WORLD = null; } WSEL = id; }
+    if (sel && A.nav) sel.innerHTML = A.nav.worldOptions(id); else if (sel) for (const w of A.worldList()) if (![...sel.options].some(o => o.value === w.id)) sel.add(new Option(w.name, w.id));
+    if (id !== WSEL) { if (WORLD) { try { WORLD.dispose(); } catch (e) {} WORLD = null; } WAIT = null; WSEL = id; }
     if (sel) sel.value = id;
     setView("world"); return true;
   };
@@ -211,8 +215,9 @@
     placesAt: L => P.filter(p => inLoc(p.id, L)).map(p => ({ id: p.id, n: p.n, name: p.name, st: TR.ready ? stOf(p.id) : "", acts: p.acts })),
     peopleAt: (L, places) => {
       const out = [], had = new Set();
-      for (const q of places) for (const n of Object.values((byId[q.id].M || {}).npcs || {})) { const [nm, role] = who(n); if (nm && !had.has(nm)) { had.add(nm); out.push({ name: nm, role, pid: q.id }); } }
-      for (const cid of L.people || []) { const c = (A.castData || {})[cid]; if (c && !had.has(c.n)) { had.add(c.n); out.push({ name: c.n, role: c.role || "", pid: POSTED[cid] || null }); } }
+      const refOf = (pid, k, n) => A.story && A.story.personRef ? A.story.personRef(pid, k) : n.who ? "cast:" + n.who : "npc:" + pid + "/" + k;
+      for (const q of places) for (const [k, n] of Object.entries((byId[q.id].M || {}).npcs || {})) { const [nm, role] = who(n); if (nm && !had.has(nm)) { had.add(nm); out.push({ name: nm, role, pid: q.id, ref: refOf(q.id, k, n) }); } }
+      for (const cid of L.people || []) { const c = (A.castData || {})[cid]; if (c && !had.has(c.n)) { had.add(c.n); out.push({ name: c.n, role: c.role || "", pid: POSTED[cid] || null, ref: "cast:" + cid }); } }
       return out;
     },
     leadsInto: (L, places) => { const here = new Set(places.map(p => p.id)), out = []; for (const id of here) for (const w of INTO[id] || []) if (!here.has(w.from)) out.push({ fromId: w.from, from: byId[w.from].name, text: shortClue(w.text) }); return out; },
@@ -220,6 +225,9 @@
     cityName: id => cityLabel(id),
     enter: (cid, locId) => enterCity(cid),
     open: pid => { setView("gaz"); go(pid); },
+    // the head of the map: where this world stands (the stars, a plane), and the place chosen (atlas-nav.js)
+    title: (wid, selName) => A.nav ? A.nav.worldTitle(wid, selName) : null,
+    moved: () => { if (A.nav) A.nav.mark(); },
     db: DBP, store,
     // in the Atlas app the page can make a city itself (window.ATLAS_APP, set by the app); on claude.ai it cannot
     makeCity: window.ATLAS_APP && window.ATLAS_APP.makeCity ? (L, W) => window.ATLAS_APP.makeCity({ id: L.city || L.id, loc: L.id, name: L.name, kind: L.kind, look: W.look }) : null
@@ -231,9 +239,28 @@
     mountCity(cid);
     const at = document.querySelector(".atlas"); if (at) at.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  // (the first drawing of a world map takes a second or two: a sign goes up first so the page never seems to hang, and
+  // what was to be done on the map waits for it; the UX review of 5 Nov 2026, item 17)
+  let WAIT = null;
+  function mountWorld() {
+    const box = $("#worldv"); if (!box) return;
+    if (WORLD) { WORLD.wake(); WORLD.search(state.q); renderCityBar(); flushWorld(); return; }
+    if (WAIT && WAIT.on) return;
+    WAIT = Object.assign(WAIT || [], { on: true });
+    box.innerHTML = `<div class="wm-drawing" role="status"><span class="ux-dot" aria-hidden="true"></span>Drawing the land…</div>`;
+    let began = false;
+    const draw = () => { if (began) return; began = true;
+      try { WORLD = A.worldMount(box, Object.assign({}, WORLD_CTX, { world: WSEL })); WORLD.search(state.q); } catch (e) { console.error("atlas: the world map", e); box.innerHTML = `<p class="empty">The world map could not be drawn.</p>`; }
+      renderCityBar(); flushWorld();
+    };
+    // (after the sign is painted; a timer too, for a page in the background, where frames wait)
+    requestAnimationFrame(() => setTimeout(draw, 20)); setTimeout(draw, 150);
+  }
+  function flushWorld() { if (!WORLD || !WAIT) return; const q = WAIT; WAIT = null; for (const fn of q) { try { fn(WORLD); } catch (e) { console.warn(e); } } }
+  const whenWorld = fn => { if (WORLD && !WAIT) fn(WORLD); else (WAIT = WAIT || []).push(fn); };
   function showWorld(locId) {
     setView("world");
-    if (WORLD && locId) WORLD.select(locId);
+    if (locId) whenWorld(W => W.select(locId));
   }
 
   /* ---- the dossier */
@@ -280,6 +307,7 @@
       <div id="accSlot">${accTop(p.id)}</div>
       ${A.locations && A.customs && A.customs[p.id] ? A.locations.panel(p) : ""}
       ${M.ext ? `<section class="sec readaloud"><h3>First impressions · read aloud${A.narrateBtn ? `<span class="nar-h">${A.narrateBtn(M.ext, "first impressions")}${A.narrateSet()}</span>` : ""}</h3><p class="lead">${esc(M.ext)}</p></section>` : ""}
+      ${A.ux && state.mode === "gm" && (A.mapEdits && A.mapEdits[p.id] && !A.mapEdits[p.id].off || (A.customs && A.customs[p.id])) ? `<p class="keeper ux-handp">${A.ux.hand(A.customs && A.customs[p.id] ? "A place of your own: nothing Atlas makes again draws over it" : "Its map is yours, as you drew it: never redrawn")}</p>` : ""}
       ${p.M ? A.section(p.id) : `<section class="sec"><h3>Maps of the location</h3><p class="empty">This place has not been mapped yet.</p></section>`}
       ${M.ov ? `<section class="sec secret keeper"><h3>What's really going on</h3><p>${esc(M.ov)}</p></section>` : ""}
       <section class="sec keeper" id="peopleSlot"><h3>People here${FOLDALL}</h3>${peopleList(p)}</section>
@@ -298,6 +326,7 @@
   }
   function renderAll(flash) {
     app.dataset.mode = state.mode;
+    if (A.nav) renderCityBar();
     $("#m-keeper").setAttribute("aria-pressed", state.mode === "gm");
     $("#m-player").setAttribute("aria-pressed", state.mode === "player");
     renderBones(); renderCats(); renderList(); renderMap(); renderDossier(flash); paintStatusDots();
@@ -308,11 +337,12 @@
     // a place in another of the campaign's cities brings that city onto the map
     const pc = cityOf(id);
     if (pc && CITIES[pc] && pc !== cityId) mountCity(pc, c => c.flyTo(id)); else if (CITY) CITY.flyTo(id);
-    try { history.replaceState(null, "", "#" + id); } catch (e) {}
+    if (!A.nav) { try { history.replaceState(null, "", "#" + id); } catch (e) {} }
     renderAll(true);
     if (A.music) A.music.place(id);            // each place has its own theme: it changes with the place while music is on
     const d = $("#dossier");                   // chosen on the plan: stay with the plan. Otherwise bring the dossier's head into view if it has scrolled away
     if (!fromMap && d && (d.getBoundingClientRect().top < 0 || window.matchMedia("(max-width: 860px)").matches)) d.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (A.nav) A.nav.mark();
   }
 
   /* ---- the story: the council's bible, told in reading order in one column, as the Gazetteer's story view is */
@@ -371,7 +401,7 @@
     state.view = v; app.dataset.view = v;
     $("#v-gaz").setAttribute("aria-pressed", v === "gaz");
     if ($("#v-world")) $("#v-world").setAttribute("aria-pressed", v === "world");
-    if (v === "world") { if (!WORLD) WORLD = A.worldMount($("#worldv"), Object.assign({}, WORLD_CTX, { world: WSEL })); else WORLD.wake(); WORLD.search(state.q); renderCityBar(); }
+    if (v === "world") mountWorld();
     if ($("#v-galaxy")) $("#v-galaxy").setAttribute("aria-pressed", v === "galaxy");
     if (v === "galaxy") A.galaxyMount($("#galaxyv"));
     if ($("#v-story")) $("#v-story").setAttribute("aria-pressed", v === "story");
@@ -382,6 +412,8 @@
     if (v === "music") A.music.studio($("#studio"));   // the Music tab: music of the referee's own (the user asked for it, 14 Oct 2026)
     store.set("view", v);
     if (v === "gaz" && CITY && CITY.map && CITY.map.request) CITY.map.request();
+    if (A.nav) A.nav.mark();
+    if (A.ux) A.ux.seenHere();
   }
 
   /* ================================================================
@@ -603,8 +635,11 @@
   for (const [id, c] of Object.entries(A.castData || {})) if (c.ties && typeof c.ties === "object") for (const [to, text] of Object.entries(c.ties)) { const t = keyTo(to); if (t !== id) named(t, { name: c.n, cast: id, text }); }
   function personLink(to) {
     const t = keyTo(to), c = (A.castData || {})[t], name = c ? c.n : NAMEOF[t] || to, at = POSTED[t];
+    if (A.nav) return `<button type="button" class="t-link" data-uxpeek="person:${esc(c ? "cast:" + t : at && byId[at] ? personRefAt(at, t) : "")}"${c || (at && byId[at]) ? "" : " disabled"}>${esc(name)}</button>`;
     return at && byId[at] ? `<a href="#${esc(at)}">${esc(name)}</a>` : esc(name);
   }
+  // a person met at a place, as the investigation names them
+  function personRefAt(pid, key) { const M = (byId[pid] || {}).M || {}; for (const [k, n] of Object.entries(M.npcs || {})) if (keyOf(n) === key) return A.story && A.story.personRef ? A.story.personRef(pid, k) : n.who ? "cast:" + n.who : "npc:" + pid + "/" + k; return ""; }
   function tiesRows(n) {
     const own = tiesOf(n).map(t => `<li>${t.to ? `<b>${personLink(t.to)}</b>: ` : ""}${esc(t.text)}</li>`).join("");
     const by = (NAMED[keyOf(n)] || []).map(x => `<li><b>${x.cast ? personLink(x.cast) : byId[x.pid] ? `<a href="#${esc(x.pid)}">${esc(x.name)}</a>` : esc(x.name)}</b>: ${esc(x.text)}</li>`).join("");
@@ -624,7 +659,7 @@
   function peopleList(p) {
     const np = Object.entries((p.M || {}).npcs || {});
     if (!np.length) return `<p class="kn">Nobody is posted here.</p>`;
-    return `<ul class="ppl">${np.map(([k, n]) => { const [name, role] = who(n); return `<li><details class="npc" id="pp-${esc(p.id)}-${esc(k)}"><summary><span class="npn">${esc(name)}</span>${role ? `<span class="npr"> — ${esc(role)}</span>` : ""}</summary>${profile(p.id, k, n)}</details></li>`; }).join("")}</ul>`;
+    return `<ul class="ppl">${np.map(([k, n]) => { const [name, role] = who(n), ref = A.story && A.story.personRef ? A.story.personRef(p.id, k) : n.who ? "cast:" + n.who : "npc:" + p.id + "/" + k; return `<li><details class="npc" id="pp-${esc(p.id)}-${esc(k)}"><summary><span class="npn">${esc(name)}</span>${role ? `<span class="npr"> — ${esc(role)}</span>` : ""}${A.nav && state.mode === "gm" ? `<button type="button" class="t-mini ux-pkb" data-uxpeek="person:${esc(ref)}" title="Everything Atlas knows of them, without leaving this page">Their card</button>` : ""}</summary>${profile(p.id, k, n)}</details></li>`; }).join("")}</ul>`;
   }
   function syncCharNotes() {
     document.querySelectorAll("textarea[data-cnote]").forEach(t => {
@@ -673,7 +708,7 @@
     const t = e.target; if (!t.matches) return;
     if (t.matches("#v-worldsel")) { A.openWorld(t.value); return; }
     if (t.matches("#act")) { state.act = t.value; renderList(); renderMap(); paintStatusDots(); }
-    if (t.matches("#cityPick")) mountCity(t.value);
+    if (t.matches("#cityPick")) { mountCity(t.value); if (A.nav) A.nav.mark(); }
     if (t.matches("[data-found]")) { const k = TR.keys.find(x => x.id === t.dataset.found); if (!k) return; const on = t.checked; trWrite(db => db.collection("keys").doc(k.id).update(on ? { found: true } : { found: false, heldBy: [] })); }
     if (t.matches("#trshow")) { TR.show = t.value; renderTracker(); }
     if (t.matches("[data-clue]")) { const pl = t.dataset.clue, k = t.dataset.ck, cur = new Set(TR.clues[pl] || []); t.checked ? cur.add(k) : cur.delete(k); trWrite(db => db.collection("clues").doc(pl).set({ done: [...cur].sort() })); }
@@ -719,13 +754,15 @@
     if (WORLD) WORLD.sync();
   }
   window.addEventListener("hashchange", () => {
-    const h = hash();
+    if (A.nav && A.nav.busy()) return;
+    const h = hash(), hn = A.nav && A.nav.parseHash(h);
+    if (hn) { A.nav.restore(hn); return; }
     if (h === "world") showWorld(); else if (/^city\//.test(h) && CITIES[h.slice(5)]) enterCity(h.slice(5));
     else if (byId[h] && h !== state.sel) go(h);
   });
 
   /* ---- the table (atlas-table-gm.js): its context, before the first paint */
-  if (A.tableUI) A.tableUI.init({ P, byId, ROWS, INTO, who, castOf, state, TR, POSTED, md, inl, db: DBP, prefs: store, go, setView: v => setView(v),
+  if (A.tableUI) A.tableUI.init({ P, byId, ROWS, INTO, who, castOf, state, TR, POSTED, md, inl, db: DBP, prefs: store, go, setView: v => setView(v), whenWorld,
     stOf, accessInfo, clueDone, redraw: () => { if (byId[state.sel]) renderDossier(false); } });
   // the clues changed on the page (the investigation, the map editor): the lists are made again, the place drawn again
   document.addEventListener("atlas-story", () => { clearTimeout(index.t); index.t = setTimeout(() => { index(); if (byId[state.sel] && state.view === "gaz") renderDossier(false); renderTrackerAll(); }, 60); });
@@ -734,9 +771,18 @@
   renderAll(false); renderTracker();
   if (A.music) { A.music.bind(app); A.music.place(state.sel); }
   // the city on the plan: the chosen place's own (or the one shown last); #world and #city/<id> open those directly
-  if (A.cityData && A.cityMount) { const h = hash(), want = /^city\//.test(h) ? h.slice(5) : byId[state.sel] ? cityOf(state.sel) : store.get("city"); mountCity(CITIES[want] ? want : mainCity); }
+  if (A.cityData && A.cityMount) {
+    const h = hash(), want = /^city\//.test(h) ? h.slice(5) : byId[state.sel] ? cityOf(state.sel) : store.get("city"), box = $("#citybox");
+    // (the page first, the city a moment after: laying out a city and drawing it the first time takes a second or more)
+    let began = false; const draw = () => { if (began) return; began = true; mountCity(CITIES[want] ? want : mainCity); };
+    if (box && !box.firstChild) box.innerHTML = `<div class="wm-drawing cm-drawing" role="status"><span class="ux-dot" aria-hidden="true"></span>Surveying the streets, one by one…</div>`;
+    requestAnimationFrame(() => setTimeout(draw, 30)); setTimeout(draw, 250);
+  }
+  const h0 = A.nav ? A.nav.parseHash(hash()) : null;
   if (/^city\//.test(hash()) && CITIES[hash().slice(5)]) enterCity(hash().slice(5));
+  else if (h0 && !(h0.view === "world" && !$("#v-world"))) { if (h0.view === "world" && h0.wid && h0.wid !== "main" && A.openWorld) A.openWorld(h0.wid); else if (h0.view === "table" && A.tableUI) A.tableUI.api.open(h0.tab); else setView(h0.view); if (h0.loc) whenWorld(W => W.select(h0.loc)); if (h0.sys && A.galaxyOpen) setTimeout(() => A.galaxyOpen(h0.sys), 60); }
   else setView(hash() === "world" ? "world" : ["story", "music", "world", "table", "galaxy"].includes(store.get("view")) ? store.get("view") : "gaz");
+  if (A.nav) A.nav.init({ state, byId, P, go, setView: v => setView(v), who, castOf, POSTED, matches: (p, q) => placeHas(p, q), cityId: () => cityId, worldSel: () => WSEL, worldApi: () => WORLD, whenWorld });
 
   /* ---- connect the tracker to the artifact's database */
   (async function initTracker() {

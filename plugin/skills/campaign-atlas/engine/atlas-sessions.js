@@ -401,7 +401,7 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
     const P = parts(rec, segs), sums = [];
     UI.busy = rec; UI.stop = false; UI.err = ""; UI.prog = [0, P.length]; paint();
     for (let i = 0; i < P.length && !UI.stop; i++) {
-      let r = null; try { r = await api.askRaw(notePrompt(rec, P[i], i, P.length, sums[sums.length - 1] || ""), () => {}); } catch (e) { r = null; }
+      let r = null; try { r = await api.askRaw(notePrompt(rec, P[i], i, P.length, sums[sums.length - 1] || ""), () => {}, null, { kind: "reading", what: `session ${recOf(rec).session}'s words, part ${i + 1} of ${P.length}`, uses: ["what was said", "what is already remembered"] }); } catch (e) { r = null; }
       if (!r) { UI.err = "Claude is not reachable from this page. Write what to remember yourself (+ A note of your own), or try again where Claude is."; break; }
       const j = json(r); if (!j) { UI.err = `Part ${i + 1}: Claude's answer could not be read. Look again to try it once more.`; continue; }
       if (j.summary) sums.push(String(j.summary).slice(0, 1500));
@@ -589,14 +589,33 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
       <ol class="sm-words">${shown.map(([s, i]) => `<li class="${UI.focus != null && Math.abs(s[0] - UI.focus) < 2 ? "on" : ""}" data-i="${i}"><button type="button" class="t-link sm-at" data-sm="at" data-id="${esc(rec)}" data-t="${s[0]}">${hms(s[0])}</button> <b>${esc(speakerName(rec, s[2]))}</b> ${UI.edit === rec + ":" + i ? `<input class="t-in" data-sm="fix" data-id="${esc(rec)}" data-i="${i}" value="${esc(s[3])}">` : `<span>${esc(s[3])}</span> <button type="button" class="t-link sm-fixb" data-sm="fixopen" data-id="${esc(rec)}" data-i="${i}" title="Correct the words">✎</button>${s[4] != null ? ` <span class="kn" title="${esc("First written: " + s[4])}">(corrected)</span>` : ""}`}</li>`).join("")}</ol>
       ${from + 200 < list.length ? `<button type="button" class="t-mini" data-sm="later">Later (${list.length - from - 200} more)</button>` : ""}</section>`;
   }
+  // the notes waiting for the game master, on the card every suggestion of Claude's is on (the UX review of 5 Nov 2026,
+  // items 13 and 14): ticked where Claude is sure and it happened; each can be written over, or asked for again alone
+  function waitingCard(rec, ms) {
+    const wait = ms.filter(([, m]) => m.state === "proposed").sort((a, b) => a[1].t - b[1].t); if (!wait.length || !A.ux) return "";
+    const sure = m => m.conf >= .8 && (m.src === "canon" || m.src === "narration");
+    return A.ux.card({ id: "notes-" + rec, title: `What to remember from session ${recOf(rec).session}`, intro: "Ticked: what happened, and Claude is sure of it. Untick what is wrong, write over what is nearly right, or ask again for one note.",
+      made: ["what was said at the table", "what the campaign already remembers"], touches: ["the campaign's memory, which the copilot, the council and the history recall"], keeps: ["everything kept before", "what you leave unticked, still waiting here"],
+      parts: wait.map(([id, m]) => ({ id, label: `${word(KINDS, m.kind)} · ${cite(m)}${m.conf < .5 ? " · Claude is unsure" : ""}`, text: m.text, on: sure(m) })), keepAllLabel: "Keep them all",
+      onKeep: sel => { for (const p of sel) { const m = memOf(p.id); if (!m) continue; if (p.text && p.text !== m.text) S().set("memory", p.id, Object.assign({}, m, { text: String(p.text).slice(0, 400), by: "gm" })); keep(p.id, "kept"); } api.note(`Kept ${sel.length}. The rest wait here.`); paint(); },
+      onDrop: () => { for (const [id] of wait) keep(id, "no"); api.note("Not so: crossed out, kept below in case you change your mind."); paint(); },
+      onAgain: async (id, wish) => {
+        const m = memOf(id); if (!m) return null; const seg = segsOf(rec).filter(s => s[0] >= m.t - 150 && s[0] <= m.t + 150); if (!seg.length) return null;
+        const r = await api.askRaw(notePrompt(rec, seg, 0, 1, "") + `\n\nWrite again only this one note, better: "${m.text}" (${m.kind}).${wish ? " The game master says: " + wish : ""} Answer with the same JSON, with one note.`, () => {}, null, { kind: "writing", what: "one note again: " + m.text.slice(0, 40) + (m.text.length > 40 ? "…" : ""), uses: ["what was said around it"] });
+        const j = json(r), x = j && [].concat(j.notes || [])[0]; if (!x || !String(x.text || "").trim()) return null;
+        const nm = Object.assign({}, m, { text: String(x.text).trim().slice(0, 400), quote: String(x.quote || m.quote || "").trim().slice(0, 240), again: Date.now() }, KINDS.some(k => k[0] === x.kind) ? { kind: x.kind } : {});
+        S().set("memory", id, nm);
+        return { label: `${word(KINDS, nm.kind)} · ${cite(nm)} · asked again`, text: nm.text, on: true };
+      } });
+  }
   function notesHTML(rec) {
-    const ms = mems().filter(([, m]) => m.rec === rec), f = UI.filter, w = ms.filter(([, m]) => m.state === "proposed").length;
-    const shown = ms.filter(([, m]) => !f || m.state === f || m.kind === f).sort((a, b) => a[1].t - b[1].t);
+    const ms = mems().filter(([, m]) => m.rec === rec), f = UI.filter, w = ms.filter(([, m]) => m.state === "proposed").length, card = f ? "" : waitingCard(rec, ms);
+    const shown = ms.filter(([, m]) => (!f || m.state === f || m.kind === f) && !(card && m.state === "proposed")).sort((a, b) => a[1].t - b[1].t);
     return `<section class="t-card"><div class="tw-hh"><h3>What to remember</h3>${UI.busy === rec ? `<span class="kn">Reading part ${UI.prog ? UI.prog[0] + 1 : 1} of ${UI.prog ? UI.prog[1] : "?"}… <button type="button" class="t-link" data-sm="halt">stop</button></span>` : segsOf(rec).length ? `<button type="button" class="t-btn prim" data-sm="remember" data-id="${esc(rec)}">${ms.length ? "Read it again" : "Find what to remember"}</button>` : ""}</div>
       <p class="t-small">Claude reads the words a part at a time and writes down what the campaign should remember, each with where it was said. Nothing counts until you keep it; "Not so" stays here, crossed out, in case you change your mind.</p>
       ${UI.err ? `<p class="t-err">${esc(UI.err)}</p>` : ""}
       <div class="t-row"><select class="t-in tw-sel" data-sm="filter" aria-label="Show">${opt("", "Everything", f)}${STATES.map(([k, l]) => opt(k, l, f)).join("")}${KINDS.map(([k, l]) => opt(k, l, f)).join("")}</select>${w ? `<button type="button" class="t-mini" data-sm="keepsure" data-id="${esc(rec)}">Keep all that happened and Claude is sure of (${ms.filter(([, m]) => m.state === "proposed" && m.conf >= .8 && (m.src === "canon" || m.src === "narration")).length})</button>` : ""}<button type="button" class="t-mini" data-sm="own" data-id="${esc(rec)}">+ A note of your own</button></div>
-      ${shown.map(([id, m]) => memCard(id, m)).join("") || `<p class="kn">${ms.length ? "Nothing of that kind." : "Nothing yet."}</p>`}</section>`;
+      ${card}${shown.map(([id, m]) => memCard(id, m)).join("") || (card ? "" : `<p class="kn">${ms.length ? "Nothing of that kind." : "Nothing yet."}</p>`)}</section>`;
   }
   const GROUPS = [["Decisions and deeds", ["decision", "did"]], ["Conversations", ["talk"]], ["Clues", ["clue"]], ["Places", ["visit"]], ["Things", ["item"]], ["Fates and bonds", ["fate", "bond"]], ["The world changed", ["change"]], ["Promises and threats", ["promise", "threat"]], ["The players' theories", ["theory"]], ["Open questions", ["mystery"]], ["To come back later", ["later"]]];
   function sessionHTML(rec) {
@@ -780,6 +799,8 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
     }
   }
   const loaded = new Set();
+  // (the search: the sessions planned, and those recorded)
+  (A.searchers = A.searchers || []).push({ kind: "Sessions", order: 38, find: q => { const out = []; for (const s of A.sessionsData || []) { const x = A.nav && A.nav.hit("Session " + (s.n || "") + (s.title ? ": " + s.title : ""), [s.start, s.goal, s.notes].join(" "), q, "Tonight's sheet"); if (x) out.push(Object.assign(x, { go: () => api.open("tonight") })); } for (const [id, r] of recs()) { const x = A.nav && A.nav.hit(r.title || "A recorded session", [r.text, r.summary].join(" ").slice(0, 20000), q, "Recorded " + new Date(r.started).toLocaleDateString()); if (x) out.push(Object.assign(x, { go: () => api.open("recorded") })); } return out.slice(0, 20); } });
   TU.addTab({ key: "recorded", label: "Recorded sessions", icon: "mic", group: "play", after: "tonight", desc: "Record the table; its words; what the campaign remembers of every session",
     html, status: () => { if (R) return (R.paused ? "Paused" : "Recording") + " · " + hms(elapsed()); const w = mems().filter(([, m]) => m.state === "proposed").length, k = memList().length; return w ? `${w} to remember waiting for you` : k ? `${k} things remembered` : "Nothing recorded yet"; },
     init(store) {

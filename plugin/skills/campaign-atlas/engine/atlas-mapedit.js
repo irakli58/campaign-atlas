@@ -111,12 +111,17 @@
     dlg.querySelectorAll("[data-tool]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tool === E.tool));
     dlg.querySelector(".me-tip").textContent = (TOOLS.find(t => t[0] === E.tool) || [])[2] || "";
     dlg.querySelector('[data-me="save"]').textContent = E.dirty ? "Save" : "Saved";
+    { const m = dlg.querySelector(".me-uxs .ux-save"); if (m) { m.textContent = E.dirty ? "Not saved yet" : E.savedAt ? "Saved" : ""; m.classList.toggle("on", !!E.dirty); } const vb = dlg.querySelector('[data-me="vers"]'); if (vb) vb.hidden = !(VS() && VS().list(E.id).length); }
+    if (A.ux) A.ux.editing(dlg.querySelector("#meCanvas"), "the map · " + ((TOOLS.find(t => t[0] === E.tool) || [0, E.tool])[1] || "").toLowerCase(), dlg.querySelector(".me-body"));
     for (const p of PLUGS) if (p.top) p.top(api, dlg);
   }
   const num = (k, v, label, min) => `<label class="me-num"><span>${label}</span><input type="number" data-mv="${k}" value="${v}" min="${min == null ? 0 : min}" step="1"></label>`;
   function paintSide() {
     const side = $("#meSide"); if (!side) return;
     const F = cur(), sel = E.sel; let h = "";
+    if (E.aiPlan && A.ux) { const P0 = E.aiPlan; h += `<section>${A.ux.card({ id: "plan-" + P0.n, title: "The rooms of " + P0.floor + ", drawn from your picture", made: ["your picture of the floor plan"], touches: [P0.floor + ": " + P0.rooms + " room" + (P0.rooms === 1 ? "" : "s") + ", " + P0.doors + " door" + (P0.doors === 1 ? "" : "s") + (P0.stairs ? ", " + P0.stairs + " stair" + (P0.stairs === 1 ? "" : "s") : "")], keeps: ["the other floors", "the map as saved, until you Save"], keepLabel: "Keep them", dropLabel: "Throw them away",
+      onKeep: () => { E.aiPlan = null; paintSide(); }, onDrop: () => { E.aiPlan = null; undo(); },
+      onAgainAll: () => { E.aiPlan = null; undo(); const b = $('#meSide [data-me="ai"]'); return b ? aiDraw(b) : null; } })}</section>`; }
     for (const p of PLUGS) if (p.side) { const ph = p.side(api); if (ph) h += ph; }
     if (E.tool === "door") h +=`<section><h4>Which kind</h4><div class="me-kinds">${DOORS.map(([k, l]) => `<button type="button" data-dt="${k}" aria-pressed="${E.doorType === k}">${l}</button>`).join("")}</div><p class="me-help">Click on a wall line to put one there. A secret door is hidden from the players.</p></section>`;
     if (sel && sel.kind === "room" && F.R[sel.i]) {
@@ -158,7 +163,7 @@
         <p class="me-help">Or trace it yourself: draw rooms over it with Draw a room.</p>
         <button type="button" class="me-del" data-me="unpic">Take the picture away</button>` : `<p class="me-help">Lay a picture over this floor (a floor plan, a photo of your sketch, a real building's plan) and trace it, or let Claude draw its rooms.</p><label class="me-file"><input type="file" accept="image/*" data-me-pic> Choose a picture</label>`}</section>`;
     h += `<section><h4>When you are done</h4><p class="me-help">Save keeps your map in this campaign. Rooms you add need their words for the guide: write them here, or ask Claude to write them next time.</p>
-      <button type="button" data-me="copy">Copy it for Claude</button>${A.mapEdits[E.id] ? `<button type="button" class="me-del" data-me="revert">Back to how it was drawn</button>` : ""}</section>`;
+      ${A.mapEdits[E.id] && A.ux ? `<p>${A.ux.hand("This map is yours: nothing Atlas makes again draws over it")}</p>` : ""}<button type="button" data-me="copy">Copy it for Claude</button>${A.mapEdits[E.id] ? `<button type="button" class="me-del" data-me="revert">Back to how it was drawn</button>` : ""}</section>`;
     side.innerHTML = h;
   }
 
@@ -175,6 +180,7 @@
       dlg.innerHTML = `<div class="me-top"><b class="me-title"></b><div class="me-floors" role="group" aria-label="Floor"></div><span class="t-sp"></span>
           ${PLUGS.map(p => p.topHTML ? p.topHTML(api) : "").join("")}
           <button type="button" data-me="undo" title="Undo">${icon("undo")}</button><button type="button" data-me="redo" title="Redo">${icon("redo")}</button>
+          ${A.ux ? `<span class="me-uxs"><button type="button" data-me="vers" hidden title="The map as it was at each save before, to look at and keep again">Earlier versions</button><span class="ux-save" data-own aria-live="polite"></span>${A.ux.keysBtn("room")}</span>` : ""}
           <button type="button" data-me="close">Close</button><button type="button" class="prim" data-me="save">Save</button></div>
         <div class="me-body"><div class="me-tools" role="toolbar" aria-label="Tools">${TOOLS.map(([k, l]) => `<button type="button" data-tool="${k}" title="${esc(l)}">${icon(k)}<span>${esc(l)}</span></button>`).join("")}<span class="me-gap"></span><button type="button" data-me="zin" title="Closer">${icon("plus")}</button><button type="button" data-me="zout" title="Further">${icon("minus")}</button></div>
           <div class="me-canvas" id="meCanvas"></div><aside class="me-side" id="meSide"></aside>${PLUGS.map(p => p.bodyHTML ? p.bodyHTML(api) : "").join("")}</div>
@@ -197,7 +203,8 @@
     if (E.draft.order) ed.order = E.draft.order.filter(i => i < ed.floors.length);
     // what else the map was given on the page (a generated cave's overview, dangers and secret ways)
     for (const [k, v] of Object.entries(E.draft.more || {})) if (v != null) ed[k] = copy(v);
-    A.mapEdit(E.id, ed); S.set("mapedits", E.id, ed);
+    { const prev = A.mapEdits[E.id]; if (VS() && prev && !prev.off && prev.floors) VS().add(E.id, JSON.parse(JSON.stringify(prev)), "Saved before " + new Date().toLocaleString()); }
+    A.mapEdit(E.id, ed); S.set("mapedits", E.id, ed); E.savedAt = Date.now();
     for (const p of PLUGS) if (p.save) { try { await p.save(api, ed); } catch (e) { console.warn(e); } }
     let where = "Saved in this campaign's page.";
     if (window.ATLAS_APP && window.ATLAS_APP.saveMap) { try { await window.ATLAS_APP.saveMap(E.id, ed); where = "Saved into the campaign: it stays when the campaign is rebuilt."; } catch (e) { where = "Saved in the page, but not into the campaign's files: " + (e.message || e); } }
@@ -207,6 +214,13 @@
     S.set("mapedits", E.id, { off: true, t: Date.now() }); A.mapUnedit(E.id);
     if (window.ATLAS_APP && window.ATLAS_APP.saveMap) { try { await window.ATLAS_APP.saveMap(E.id, null); } catch (e) {} }
     E.dirty = false; close(true); if (X && X.redraw) X.redraw(); toast("The map is back to how it was drawn.");
+  }
+  const VS = () => S && A.ux ? A.ux.versions(S, "mapvers") : null;
+  // an earlier version laid into the editor as a change: Save keeps it, Undo goes back to what was there
+  function lookAt(v) {
+    const d = v && v.data; if (!d || !d.floors) return;
+    change(() => { E.draft.floors = JSON.parse(JSON.stringify(d.floors)); E.draft.rooms = JSON.parse(JSON.stringify(d.rooms || {})); E.draft.order = d.order ? d.order.slice() : null; E.fi = Math.min(E.fi, E.draft.floors.length - 1); E.sel = null; });
+    tip("The map as it was " + A.ux.when(v.t) + ". Save keeps it (what is saved now stays among the earlier versions); Undo goes back.");
   }
   function toast(t) { const n = document.getElementById("tDockNote"); if (n) { n.textContent = t; clearTimeout(toast.t); toast.t = setTimeout(() => { n.textContent = ""; }, 7000); } }
   function copyText() {
@@ -279,15 +293,20 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
     const blob = await (await fetch(U.src)).blob();
     btn.disabled = true; const was = btn.textContent; btn.textContent = "Claude is reading the plan…";
     let v = null, why = "";
+    const run = A.ux ? A.ux.aiBegin({ kind: "reading", what: "the floor plan of " + ((A.meta[E.id] || {}).name || E.id), uses: ["your picture"] }) : null;
     try {
       let sample = null; try { sample = window.claude && window.claude.use ? await window.claude.use("sample") : null; } catch (e) { sample = null; }
       if (sample) { const lim = await sample.limits().catch(() => null); if (lim && lim.images) v = await sample.json(prompt, { images: [blob] }); else why = "This page cannot send pictures to Claude yet: it needs to be published again with that allowed."; }
       if (!v && window.ATLAS_APP && window.ATLAS_APP.trace) v = await window.ATLAS_APP.trace(U.src, prompt);
     } catch (e) { why = e && e.code === "declined" ? "Not allowed." : "Claude could not read it: " + (e.message || e.code || e); }
+    if (run) A.ux.aiEnd(run, !!v);
     btn.disabled = false; btn.textContent = was;
     if (!v || !Array.isArray(v.rooms)) { $("#meDlg .me-tip").textContent = why || "Reading a picture needs Claude: on claude.ai, or in the Atlas app. You can trace it yourself: draw rooms over it."; return; }
     change(() => fromPlan(v, Wd, Ht));
-    $("#meDlg .me-tip").textContent = `Claude drew ${v.rooms.length} rooms from the picture. Check them against it, and fix anything with the tools; Undo puts the floor back.`;
+    // (what it drew is on the floor already, to be seen against the picture; the card says what, and keeps or takes it back)
+    E.aiPlan = { n: Date.now(), rooms: v.rooms.length, doors: (v.doors || []).length, stairs: (v.stairs || []).length, floor: (cur().n || "this floor") };
+    paintSide();
+    $("#meDlg .me-tip").textContent = `Claude drew ${v.rooms.length} rooms from the picture. Check them against it: keep them, ask again, or throw them away.`;
   }
   function fromPlan(v, Wd, Ht) {
     const F = cur(), ok = new Set(kinds()), okfx = new Set(fxs()), names = {}, int = (n, lo, hi) => Math.max(lo, Math.min(hi, Math.round(+n || 0)));
@@ -368,9 +387,31 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
   /* ---- the panel and the buttons */
   function bind(dlg) {
     const cv = dlg.querySelector("#meCanvas");
-    cv.addEventListener("pointerdown", e => { if (!e.target.closest(".me-svg, .me-3dc")) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} down(e); });
-    cv.addEventListener("pointermove", move);
-    cv.addEventListener("pointerup", up);
+    cv.addEventListener("pointerdown", e => { if (E.space && !e.target.closest(".me-3dc")) { e.preventDefault(); E.pan = { x: e.clientX, y: e.clientY, sl: cv.scrollLeft, st: cv.scrollTop }; try { cv.setPointerCapture(e.pointerId); } catch (x) {} return; } if (!e.target.closest(".me-svg, .me-3dc")) return; e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch (x) {} down(e); });
+    cv.addEventListener("pointermove", e => { if (E.pan) { cv.scrollLeft = E.pan.sl - (e.clientX - E.pan.x); cv.scrollTop = E.pan.st - (e.clientY - E.pan.y); return; } move(e); });
+    cv.addEventListener("pointerup", e => { if (E.pan) { E.pan = null; return; } up(e); });
+    // what can be done where the referee right-clicks (with the drawing tools; the cave's and the furnishing's own
+    // right-click stay theirs), or presses long on a touch screen
+    const onMenu = e => {
+      if (!A.ux || !["select", "room", "door", "stairs", "erase"].includes(E.tool) || !(e.target.closest && e.target.closest(".me-svg"))) return;
+      const p = pt(e), F = cur(), ri = roomAt(F, p.x, p.y), ed = edgeAt(p.x, p.y), di = ed.d < .25 ? doorAt(F, ed) : -1, si = stairAt(F, p.x, p.y), it = [];
+      const pick = sel => { E.tool = "select"; E.sel = sel; paint(); };
+      if (di >= 0) it.push({ label: "Change this door", run: () => pick({ kind: "door", i: di }) }, { label: "Take it away", danger: true, run: () => change(() => { F.D.splice(di, 1); E.sel = null; }) });
+      else if (si >= 0) it.push({ label: "Change this stair", run: () => pick({ kind: "stair", i: si }) }, { label: "Take it away", danger: true, run: () => change(() => { const sid = F.ST[si][0]; E.draft.floors.forEach(G => { G.ST = G.ST.filter(x => x[0] !== sid); }); E.sel = null; }) });
+      else if (ri >= 0) {
+        it.push({ label: "Name and change this room", run: () => { pick({ kind: "room", i: ri }); setTimeout(() => { const n = $('#meSide [data-rv="name"]'); if (n) { n.focus(); n.select(); } }, 30); } });
+        if (ed.d < .3 && ed.x >= 0 && ed.y >= 0 && ed.x <= F.w && ed.y <= F.h) it.push({ label: "A door on this wall", run: () => change(() => { F.D.push([ed.x, ed.y, ed.o, "d", 1]); E.sel = null; }) });
+        it.push({ label: "Take this room away", danger: true, run: () => change(() => { delete E.draft.rooms[F.R[ri][0]]; F.R.splice(ri, 1); E.sel = null; }) });
+      } else if (p.x >= 0 && p.y >= 0 && p.x < F.w && p.y < F.h) {
+        it.push({ label: "A room here", run: () => { const x = Math.floor(p.x), y = Math.floor(p.y); change(() => { F.R.push([nextRoom(), x, y, Math.max(1, Math.min(3, F.w - x)), Math.max(1, Math.min(3, F.h - y)), "New room", usualKind(F)]); E.sel = { kind: "room", i: F.R.length - 1 }; E.tool = "select"; }); setTimeout(() => { const n = $('#meSide [data-rv="name"]'); if (n) { n.focus(); n.select(); } }, 30); } });
+        if (ed.d < .3) it.push({ label: "A door on this wall", run: () => change(() => { F.D.push([ed.x, ed.y, ed.o, "d", 1]); E.sel = null; }) });
+      }
+      it.push("-", { label: "Undo", off: !E.hist.length, run: undo }, { label: "Redo", off: !E.fut.length, run: redo }, { label: "Save", off: !E.dirty, run: () => save() });
+      A.ux.menu(e, it, di >= 0 ? "A door" : si >= 0 ? "A stair" : ri >= 0 ? (F.R[ri][5] || "A room") : "Here");
+    };
+    cv.addEventListener("contextmenu", e => { if (["select", "room", "door", "stairs", "erase"].includes(E.tool) && e.target.closest(".me-svg")) { e.preventDefault(); onMenu(e); } });
+    if (A.ux) A.ux.longPress(cv, onMenu);
+    if (A.ux) A.ux.dirty("room-map", () => E.dirty && !!(dlg.open));
     cv.addEventListener("pointercancel", () => { E.drag = null; paintCanvas(); });
     dlg.addEventListener("cancel", e => { if (ask("cancel", e, api)) { e.preventDefault(); return; } if (E.dirty) { e.preventDefault(); close(); } });
     dlg.addEventListener("click", e => {
@@ -397,6 +438,7 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
         case "unpic": E.under = null; pref.set("u-" + E.id, null); paint(); break;
         case "ai": aiDraw(b); break;
         case "copy": copyText(); break;
+        case "vers": { if (!VS() || !A.ux) break; const rb = b.getBoundingClientRect(); A.ux.menu({ clientX: rb.left, clientY: rb.bottom + 4, target: b, preventDefault() {} }, VS().list(E.id).map(v => ({ label: "As it was " + A.ux.when(v.t), hint: (v.data.floors || []).length + " floor" + ((v.data.floors || []).length === 1 ? "" : "s"), run: () => lookAt(v) })), "Look at the map as it was"); break; }
         case "revert": if (b.dataset.sure) revert(); else { b.dataset.sure = 1; b.textContent = "Really go back to how it was drawn?"; } break;
       }
     });
@@ -440,10 +482,18 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
       }
     });
     dlg.addEventListener("input", e => { ask("input", e, api); });
+    dlg.addEventListener("keyup", e => { if (e.key === " ") { E.space = false; const c = dlg.querySelector("#meCanvas"); if (c) c.classList.remove("wm-space"); } });
     dlg.addEventListener("keydown", e => {
       if (e.target.matches("input, textarea, select")) return;
+      if (A.ux && A.ux.isHelpKey(e)) { e.preventDefault(); A.ux.keys("room", dlg.querySelector(".ux-keysb")); return; }
+      if (e.key === " " && !e.target.closest("button")) { e.preventDefault(); if (!E.space) { E.space = true; const c = dlg.querySelector("#meCanvas"); if (c) c.classList.add("wm-space"); } return; }
       if (ask("key", e, api)) return;
       const k = e.key.toLowerCase();
+      // Esc: the tool down first, then let go of what is chosen; only then does Esc close the editor (asking, if unsaved)
+      if (k === "escape" && (E.tool !== "select" || E.sel)) { e.preventDefault(); if (E.tool !== "select") E.tool = "select"; else E.sel = null; paint(); return; }
+      if ((k === "+" || k === "=") && !e.ctrlKey && !e.metaKey) { e.preventDefault(); E.zoom = Math.min(4, E.zoom * 1.25); paintCanvas(); return; }
+      if (k === "-" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); E.zoom = Math.max(.3, E.zoom / 1.25); paintCanvas(); return; }
+      { const nt = A.ux && A.ux.numKey(e, TOOLS.map(t => t[0])); if (nt) { e.preventDefault(); E.tool = nt; E.sel = nt === "select" ? E.sel : null; paint(); return; } }
       if ((e.ctrlKey || e.metaKey) && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
       if ((e.ctrlKey || e.metaKey) && k === "y") { e.preventDefault(); redo(); return; }
       if ((k === "delete" || k === "backspace") && E.sel) { e.preventDefault(); const m = { room: "delroom", stair: "delstair", door: "deldoor" }[E.sel.kind]; const b = dlg.querySelector(`[data-me="${m}"]`); if (b) b.click(); return; }

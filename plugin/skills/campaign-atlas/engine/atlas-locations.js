@@ -209,7 +209,7 @@
       ? base + `\nWrite two short things for it, in the voice of the campaign. Answer with JSON only: {"pd": "what the players see and hear as they arrive, read aloud, three or four sentences, no secrets", "kp": "for the game master only: its history, its purpose, one secret and one thing that could happen here, five or six sentences"}. Invent nothing about the campaign's own people or events; anything new you suggest is new, and should read as a suggestion.`
       : base + `\nSuggest how it looks from the street. Answer with JSON only: {"size": "small|medium|large|huge", "floors": 1-12, "roof": "pitched|hip|flat|dome|spire|tower", "wall": "#rrggbb", "roofc": "#rrggbb", "cond": "|worn|abandoned|ruined", "sign": "words on its sign, or empty", "chimney": true|false, "lights": true|false}.`;
     btn.disabled = true; msg.textContent = "Asking Claude…";
-    let v = null; try { const raw = await ask(prompt); const m = String(raw || "").match(/\{[\s\S]*\}/); v = m ? JSON.parse(m[0]) : null; } catch (e) { v = null; }
+    let v = null; try { const raw = await ask(prompt, null, null, { kind: "writing", what: kind === "aitext" ? "the words of " + (r.def.name || "your place") : "how " + (r.def.name || "your place") + " looks", uses: ["what you wrote of it", "the city round it"] }); const m = String(raw || "").match(/\{[\s\S]*\}/); v = m ? JSON.parse(m[0]) : null; } catch (e) { v = null; }
     btn.disabled = false;
     if (!v) { msg.textContent = "Claude could not answer just now. Write it yourself, or try again."; return; }
     const f = dlg.querySelector("form");

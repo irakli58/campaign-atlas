@@ -21,3 +21,15 @@ let n = 0;
   }
 })(src, dst);
 console.log(`copied ${n} files of the Atlas tool into ${dst}`);
+// the example campaigns the app offers (the UX review of 5 Nov 2026, item 20): the sources of the workspace's samples, when
+// this runs inside the workspace (its dev/samples), without their built pages; the app makes those on this computer
+const samples = path.resolve(__dirname, "..", "..", "dev", "samples"), exDst = path.resolve(__dirname, "..", "examples");
+if (fs.existsSync(samples)) {
+  let m = 0;
+  for (const id of ["realm", "kestrel"]) {
+    const a = path.join(samples, id); if (!fs.existsSync(path.join(a, "campaign.js"))) continue;
+    const b = path.join(exDst, id); fs.rmSync(b, { recursive: true, force: true });
+    (function copy(x, y) { fs.mkdirSync(y, { recursive: true }); for (const f of fs.readdirSync(x)) { if (skip.has(f) || f.startsWith(".")) continue; const s = path.join(x, f), d = path.join(y, f); if (fs.statSync(s).isDirectory()) copy(s, d); else { fs.copyFileSync(s, d); m++; } } })(a, b);
+  }
+  console.log(`copied ${m} files of the example campaigns into ${exDst}`);
+}

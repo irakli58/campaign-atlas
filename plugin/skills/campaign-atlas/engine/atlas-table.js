@@ -220,7 +220,7 @@
       if (db && !db.local) { try { localStorage.setItem(key + "-t-" + coll, JSON.stringify(all)); } catch (e) {} if (bc) bc.postMessage({ coll, all }); }
       peers.forEach(w => tell(w, { coll, all }));
     };
-    const write = (coll, id, data) => { if (!db) return Promise.resolve(); const ref = db.collection(coll).doc(id); return Promise.resolve(data == null ? ref.delete() : ref.set(data)).catch(e => console.warn("atlas: not saved", e)); };
+    const write = (coll, id, data) => { if (!db) return Promise.resolve(true); const ref = db.collection(coll).doc(id); return Promise.resolve(data == null ? ref.delete() : ref.set(data)).then(() => true, e => { console.warn("atlas: not saved", e); return false; }); };
     // a window that holds the real database passes on what a window without one writes
     if (bc) bc.addEventListener("message", e => { const m = e.data || {}; if (m.coll && !m.all && db && !db.local) write(m.coll, m.id, m.data); });
     if (W) W.addEventListener("message", e => {
@@ -253,7 +253,10 @@
         if (data == null) delete cache[coll][id]; else cache[coll][id] = data;
         emit(coll);
         if (W && W.opener && (!db || db.local)) { try { W.opener.postMessage({ atlasT: key, coll, id, data: data == null ? null : data }, "*"); } catch (e) {} }
-        return ready.then(() => write(coll, id, data));
+        const p = ready.then(() => write(coll, id, data));
+        // (the save mark of every editor and tool: atlas-ux.js)
+        if (A && A.ux && A.ux.track) A.ux.track(p);
+        return p;
       }
     };
     return store;

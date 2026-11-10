@@ -137,22 +137,51 @@
   // tools: the editor's row (UI.tools), and the tool in hand: region, lane, terr (painting territory), sector
   const UI = { sel: null, sys: null, planet: null, plan: null, z: 1, cx: 500, cy: 500, edit: null, adding: false, moving: null, filter: "", tools: false, tool: null, first: null, paint: "", selReg: null, selLane: null, panel: null, pedit: null, phys: null, movingReg: null };
   let host = null, svg = null, drag = null;
-  const HIST = [], REDO = [];   // the game master's changes to the galaxy this visit, to undo and do again
+  const HIST = [], REDO = [];   // the game master's changes to the galaxy, to undo and do again (kept after a reload: the last twenty)
+  let KH = null; const keepH = () => { if (!KH && A.ux) { KH = A.ux.keepHist("gx"); KH.load(HIST, REDO); } if (KH) KH.save(HIST, REDO); };
   function setG(id, data, how) {
     const cur = edits()[id];
-    if (how !== "hist") { HIST.push({ id, before: cur == null ? null : JSON.parse(JSON.stringify(cur)), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; }
+    if (how !== "hist") { HIST.push({ id, before: cur == null ? null : JSON.parse(JSON.stringify(cur)), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; keepH(); }
     S().set("gedits", id, data); A._galaxy = null;
   }
   const doc = id => JSON.parse(JSON.stringify(edits()[id] || {}));
   function mount(el) {
-    host = el; host.innerHTML = `<div class="gx-wrap"><div class="gx-map"><div class="gx-bar"><input type="search" class="gx-find" placeholder="Find a system" aria-label="Find a system"><button type="button" class="gx-b" data-gx="zin" aria-label="Closer">+</button><button type="button" class="gx-b" data-gx="zout" aria-label="Further">−</button><button type="button" class="gx-b" data-gx="fit">The whole galaxy</button><button type="button" class="gx-b" data-gx="ship">The ship</button><button type="button" class="gx-b" data-gx="tools" aria-pressed="false" title="Systems, regions, lanes, sectors, powers and territories">Edit the galaxy</button><div class="gx-tools" hidden></div></div><div class="gx-canvas" tabindex="0" aria-label="The star chart: drag to move, scroll to come closer"></div><div class="gx-key"></div></div><aside class="gx-side"></aside></div>`;
+    host = el; host.innerHTML = `<div class="gx-wrap"><div class="gx-map"><div class="gx-bar"><input type="search" class="gx-find" placeholder="Find a system" aria-label="Find a system"><button type="button" class="gx-b" data-gx="zin" aria-label="Closer">+</button><button type="button" class="gx-b" data-gx="zout" aria-label="Further">−</button><button type="button" class="gx-b" data-gx="fit">The whole galaxy</button><button type="button" class="gx-b" data-gx="ship">The ship</button><button type="button" class="gx-b" data-gx="tools" aria-pressed="false" title="Systems, regions, lanes, sectors, powers and territories">Edit the galaxy</button>${A.ux ? `<span class="gx-uxs">${A.ux.saveMark()}${A.ux.keysBtn("stars")}</span>` : ""}<div class="gx-tools" hidden></div></div><div class="gx-canvas" tabindex="0" aria-label="The star chart: drag to move, scroll to come closer"></div><div class="gx-key"></div></div><aside class="gx-side"></aside></div>`;
+    if (A.ux && !KH) { KH = A.ux.keepHist("gx"); KH.load(HIST, REDO); }
     svg = null; base(); over(); side(); tools();
     const cv = host.querySelector(".gx-canvas");
+    // what can be done where the game master right-clicks (or presses long): a star, or open space
+    const onMenu = e => {
+      if (!A.ux || (document.getElementById("app") || {}).dataset.mode !== "gm") return;
+      const r0 = cv.getBoundingClientRect(), wx = UI.cx - viewW() / 2 + (e.clientX - r0.left) / r0.width * viewW(), wy = UI.cy - viewH() / 2 + (e.clientY - r0.top) / r0.height * viewH();
+      let best = null, bd = (14 / Math.sqrt(UI.z)) ** 2; for (const q of allSys()) { const d = (q.x - wx) ** 2 + (q.y - wy) ** 2; if (d < bd) { bd = d; best = q; } }
+      const tool = (k, extra) => () => { if (!UI.tools) { UI.tools = true; } if (k === "add") { UI.adding = true; UI.tool = null; } else { UI.tool = k; UI.adding = false; } UI.first = null; if (extra) extra(); tools(); side(); };
+      const it = [];
+      if (best) {
+        it.push({ label: "Its system", run: () => { UI.sel = best.id; UI.sys = best.id; over(); side(); } });
+        it.push({ label: "Plot a course here", run: () => { UI.sel = best.id; over(); side(); setTimeout(() => { const b = host.querySelector('[data-gx="plot"]'); if (b) b.click(); }, 30); } });
+        it.push("-", { label: "Change it", run: () => { UI.tools = true; UI.sel = best.id; UI.edit = best.id; tools(); side(); } }, { label: "Move it", run: () => { UI.tools = true; UI.moving = best.id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); } }, { label: "A lane from it", run: tool("lane", () => { UI.first = best.id; }) });
+      } else {
+        it.push({ label: "A new system here", run: () => { UI.tools = true; const id = "C" + Date.now().toString(36); setG(id, { added: true, name: "A new system", cls: "G", x: Math.round(wx * 10) / 10, y: Math.round(wy * 10) / 10, f: {}, t: Date.now() }); UI.sel = id; UI.edit = id; refresh(); } }, { label: "A region here", run: tool("region") }, "-", { label: "The whole galaxy", run: () => { UI.z = 1; UI.cx = 500; UI.cy = 500; view(); } });
+      }
+      A.ux.menu(e, it, best ? best.name : "Open space");
+    };
+    cv.addEventListener("contextmenu", e => { e.preventDefault(); onMenu(e); });
+    if (A.ux) A.ux.longPress(cv, onMenu);
     cv.addEventListener("wheel", e => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.25 : .8, e); }, { passive: false });
     cv.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, cx: UI.cx, cy: UI.cy, moved: false, paint: UI.tool === "terr" ? {} : null }; cv.setPointerCapture(e.pointerId); if (drag.paint) paintAt(e); });
     cv.addEventListener("pointermove", e => { if (!drag) return; if (drag.paint) { drag.moved = true; paintAt(e); return; } const k = viewW() / cv.clientWidth, dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k; if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true; UI.cx = drag.cx - dx; UI.cy = drag.cy - dy; view(); });
     cv.addEventListener("pointerup", e => { const d = drag; drag = null; if (d && d.paint) { const T = Object.assign(doc("~terr"), d.paint); if (Object.keys(d.paint).length) { setG("~terr", T); refresh(); } return; } if (d && !d.moved) clickAt(e); });
-    host.addEventListener("keydown", e => { if (e.target.closest("input, textarea, select")) return; if ((e.ctrlKey || e.metaKey) && /^[zy]$/i.test(e.key)) { e.preventDefault(); undo(!(e.key.toLowerCase() === "y" || e.shiftKey)); } else if (e.key === "Escape" && (UI.tool || UI.adding || UI.moving || UI.movingReg)) { UI.tool = null; UI.adding = false; UI.moving = null; UI.movingReg = null; UI.first = null; tools(); over(); } });
+    host.addEventListener("keydown", e => {
+      if (e.target.closest("input, textarea, select")) return;
+      if (A.ux && A.ux.isHelpKey(e)) { e.preventDefault(); A.ux.keys("stars", host.querySelector(".ux-keysb")); return; }
+      if ((e.ctrlKey || e.metaKey) && /^[zy]$/i.test(e.key)) { e.preventDefault(); undo(!(e.key.toLowerCase() === "y" || e.shiftKey)); return; }
+      if (e.key === "Escape") { if (UI.tool || UI.adding || UI.moving || UI.movingReg) { UI.tool = null; UI.adding = false; UI.moving = null; UI.movingReg = null; UI.first = null; } else if (UI.sel || UI.selReg || UI.selLane) { UI.sel = null; UI.selReg = null; UI.selLane = null; } else if (UI.tools) { UI.tools = false; UI.panel = null; UI.pedit = null; } else return; e.preventDefault(); tools(); over(); side(); return; }
+      if ((e.key === "+" || e.key === "=") && !e.ctrlKey) { e.preventDefault(); zoomAt(1.6); return; }
+      if (e.key === "-" && !e.ctrlKey) { e.preventDefault(); zoomAt(.62); return; }
+      if (UI.tools && A.ux) { const t = A.ux.numKey(e, ["add", "region", "lane", "sector", "terr"]); if (t) { e.preventDefault(); const b = host.querySelector(`[data-gx="tool"][data-t="${t}"]`); if (b) b.click(); return; } }
+      if ((e.key === "Delete" || e.key === "Backspace") && UI.tools && UI.sel) { const b = host.querySelector('[data-gx="remove"]'); if (b) { e.preventDefault(); b.click(); } }
+    });
     host.querySelector(".gx-find").addEventListener("input", e => { UI.filter = e.target.value.trim().toLowerCase(); over(); });
     host.addEventListener("click", onClick); host.addEventListener("change", onChange); host.addEventListener("submit", onSubmit);
     // (the planet editor shows what its changes would do as they are made)
@@ -179,6 +208,7 @@
   const LANEK = [["lane", "A lane"], ["trade", "A trade route"], ["corridor", "A corridor (its own length)"]];
   function tools() {
     if (!host) return; const t = host.querySelector(".gx-tools"), g = G(), on = UI.tools;
+    if (A.ux) A.ux.editing(host.querySelector(".gx-canvas"), on ? "the galaxy · " + (UI.adding ? "adding a system" : ({ region: "adding a region", lane: "adding a lane", sector: "adding a sector", terr: "painting territory" }[UI.tool] || "choose what to change")) : null);
     t.hidden = !on; host.querySelector('[data-gx="tools"]').setAttribute("aria-pressed", on);
     if (!on) return;
     const tb = (k, l, title) => `<button type="button" class="gx-b" data-gx="tool" data-t="${k}" aria-pressed="${k === "add" ? UI.adding : UI.tool === k}" title="${esc(title)}">${l}</button>`;
@@ -187,7 +217,7 @@
       + tb("terr", "Paint territory", "Give stars to a power or a faction") + (UI.tool === "terr" ? `<select class="t-in gx-sel" data-gx="paint" aria-label="Whose territory">${[["", "No one"], ...g.powers.map(p => [p.id, p.name]), ...Object.entries(A.factionsData || {}).filter(([id]) => !g.powers.some(p => p.id === id)).map(([id, f]) => [id, (f.n || id) + " (a faction)"])].map(([v, l]) => `<option value="${esc(v)}"${v === UI.paint ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>` : "")
       + `<button type="button" class="gx-b" data-gx="panel" data-p="sp" aria-pressed="${UI.panel === "sp"}">Sectors and powers</button><button type="button" class="gx-b" data-gx="undo"${HIST.length ? "" : " disabled"} title="Ctrl+Z">Undo</button><button type="button" class="gx-b" data-gx="redo"${REDO.length ? "" : " disabled"} title="Ctrl+Y">Redo</button><button type="button" class="gx-b" data-gx="export" title="Your changes, for the campaign's table.js">Copy the changes</button><span class="gx-how">${how}</span>`;
   }
-  function undo(back) { const from = back ? HIST : REDO, to = back ? REDO : HIST, h = from.pop(); if (!h) return; to.push(h); setG(h.id, back ? h.before : h.after, "hist"); refresh(); if (A.tableUI) A.tableUI.api.note(back ? "Undone." : "Done again."); }
+  function undo(back) { const from = back ? HIST : REDO, to = back ? REDO : HIST, h = from.pop(); if (!h) return; to.push(h); setG(h.id, back ? h.before : h.after, "hist"); keepH(); refresh(); if (A.tableUI) A.tableUI.api.note(back ? "Undone." : "Done again."); }
   // painting territory: every star under the brush given to the power chosen (kept when the stroke ends: one change)
   function paintAt(e) {
     const cv = host.querySelector(".gx-canvas"), r = cv.getBoundingClientRect(), wx = UI.cx - viewW() / 2 + (e.clientX - r.left) / r.width * viewW(), wy = UI.cy - viewH() / 2 + (e.clientY - r.top) / r.height * viewH(), rad = 16 * viewW() / r.width;
@@ -683,7 +713,12 @@
       case "refuel": { const sh = ship(); setShip({ fuel: sh.cap }, `Refuelled at ${(findSys(sh.at) || {}).name || sh.at}`); break; }
       case "open": UI.sys = UI.sys === id ? null : id; UI.planet = null; break;
       // (a world's surface: made the first time, then opened in the world map)
-      case "surface": { const sid = b.dataset.id, n = b.dataset.n, mo = b.dataset.m; b.disabled = true; const say = t => { b.textContent = t; }; planetSurface(sid, n, say, mo).then(wid => { b.disabled = false; b.textContent = "Open its surface"; if (A.openWorld) A.openWorld(wid); }).catch(e => { b.disabled = false; b.textContent = "Open its surface"; const m = host && host.querySelector(".gx-note"); if (m) m.textContent = e.message; else alert(e.message); }); return; }
+      case "surface": { const sid = b.dataset.id, n = b.dataset.n, mo = b.dataset.m; b.disabled = true; const say = t => { b.textContent = t; };
+        // (how far it has got, by the time it usually takes: the worker says nothing until it is done)
+        const s0 = findSys(sid), i0 = s0 && bodiesOf(s0), p0 = i0 && i0.planets.find(x => x.n === +n), nm = p0 ? (mo != null && mo !== "" ? "a moon of " + p0.name : p0.name) : "the world";
+        const w = A.ux ? A.ux.work({ what: "the surface of " + nm, uses: ["its physics"] }) : null, est = (A.worldGenSecs ? A.worldGenSecs("planet") : 180) * 1000, t0 = Date.now(), iv = w ? setInterval(() => w.progress(Math.min(.95, (Date.now() - t0) / est)), 1000) : null;
+        const here = () => ((document.getElementById("app") || {}).dataset || {}).view === "galaxy";
+        planetSurface(sid, n, say, mo).then(wid => { clearInterval(iv); b.disabled = false; b.textContent = "Open its surface"; const stay = here(); if (w) w.end(true, "its surface is ready", () => { if (A.openWorld) A.openWorld(wid); }); if (stay && A.openWorld) A.openWorld(wid); }).catch(e => { clearInterval(iv); if (w) w.end(false); b.disabled = false; b.textContent = "Open its surface"; const m = host && host.querySelector(".gx-note"); if (m) m.textContent = e.message; else alert(e.message); }); return; }
       case "planet": UI.planet = +b.dataset.n; UI.pedit = null; break;
       case "edit": UI.edit = UI.edit === id ? null : id; break;
       case "move": UI.moving = id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); return;
@@ -841,6 +876,9 @@
   // a system opened from elsewhere on the page (and a world in it, by its number): the star chart's own selection
   A.galaxyOpen = (id, n) => { if (!host) return false; UI.sel = id; UI.sys = id; UI.selReg = null; UI.selLane = null; UI.planet = n == null ? null : +n; refresh(); return true; };
   // (a system chosen from outside the chart: a place's trail back up to the stars)
+  // (which system is chosen: a step for Back, atlas-nav.js; and the search: the systems by name, and their worlds')
+  A.galaxySelected = () => UI.sel;
+  (A.searchers = A.searchers || []).push({ kind: "Among the stars", order: 22, mod: ["stars"], find: q => { const out = []; if (!A.galaxyParams) return out; for (const s of allSys()) { const x = A.nav && A.nav.hit(s.name, [s.desc, s.gm].join(" "), q, (Gg.STAR_NAME[s.cls] || "A star") + (s.f && s.f.colony ? " · a colony" : s.f && s.f.station ? " · a station" : "")); if (x) out.push(Object.assign(x, { go: () => { const v = document.getElementById("v-galaxy"); if (v) v.click(); setTimeout(() => A.galaxyOpen(s.id), 40); } })); if (out.length > 40) break; } return out; } });
   A.galaxyFocus = id => { if (!host) return; const s = findSys(id); if (!s) return; UI.sel = id; centreOn(s, 2.5); over(); side(); };
   if (A.tableUI) { const iv = setInterval(() => { const st = A.tableUI.api.store(); if (!st) return; clearInterval(iv); ST = st; A.planetSurfacesInit(st); for (const c of ["charts", "ship", "gedits"]) st.watch(c, () => { if (host && host.isConnected && host.offsetParent) { if (c === "gedits" || c === "charts") refresh(); else { over(); side(); } } }); }, 200); setTimeout(() => clearInterval(iv), 120000); }
 })(ATLAS);

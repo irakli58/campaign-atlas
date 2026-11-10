@@ -155,6 +155,41 @@
     box.addEventListener("click", ev => { const el = ev.target.closest && ev.target.closest(".cperson[data-person]"); if (!el || ctl.ceUI || (document.getElementById("app") || {}).dataset.mode !== "gm") return; ev.preventDefault(); personCard(ctl, el, ev); });
   }
 
+  /* ---- the right-click menu on the city (the UX review of 5 Nov 2026, item 7): on a building, a person or open ground,
+          what can be done there; a long press does the same on a touch screen. A right-drag still moves the view. */
+  function menu(ctl) {
+    const cv = ctl.map && ctl.map.dbg && ctl.map.dbg.renderer.domElement; if (!cv || cv.dataset.uxmenu || !A.ux) return; cv.dataset.uxmenu = "1";
+    const box = cv.closest(".city, .atlas") || cv.parentElement;
+    let down = null;
+    cv.addEventListener("pointerdown", e => { if (e.button === 2) down = [e.clientX, e.clientY]; });
+    const show = e => {
+      if ((document.getElementById("app") || {}).dataset.mode !== "gm" || !ctl.map || !ctl.ce) return;
+      if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) { down = null; return; }
+      down = null;
+      const person = e.target.closest && e.target.closest(".cperson[data-person]");
+      const ib = person ? null : ctl.map.pickBuilding(e.clientX, e.clientY), b = ib != null ? ctl.ce.C.buildings[ib] : null, p = ctl.map.planAt(e.clientX, e.clientY);
+      const editor = () => { if (!ctl.ceUI) { const eb = box.querySelector("[data-editcity]"); if (eb) eb.click(); } return ctl.ceUI; };
+      const it = [];
+      if (person) {
+        const ref = person.dataset.person;
+        if (A.nav) it.push({ label: "Their card", run: () => A.nav.peek("person:" + ref) });
+        if (A.copilot && A.copilot.talkTo) it.push({ label: "Talk to them", run: () => A.copilot.talkTo(ref) });
+      } else if (b && !b.gone) {
+        it.push({ label: "Change this building", run: () => { const u = editor(); if (u) u.pick(b); } });
+        if (A.askChange) it.push({ label: "Ask for a change…", run: () => { const u = editor(); if (u) u.ask(b); } });
+        if (A.locations && A.locations.fromBuilding) it.push({ label: "Make it a place of your own", run: () => { if (ctl.ceUI) ctl.ceUI.close(); A.locations.fromBuilding(ctl, b); } });
+        it.push("-", { label: "Take it away", danger: true, run: () => { const u = editor(); if (u) u.remove(b); } });
+      } else if (p) {
+        it.push({ label: "Add a building here", run: () => { const u = editor(); if (u) u.addAt(p); } });
+        const al = box.querySelector(".cmap-add, [data-addloc], .add-loc"); if (al) it.push({ label: "Add a place of your own", run: () => al.click() });
+        it.push({ label: "Edit the city", run: () => editor() });
+      }
+      A.ux.menu(e, it, person ? person.title || "Someone" : b ? (KINDS.find(k => k[0] === b.type) || [0, "A building"])[1] : "Here");
+    };
+    cv.addEventListener("contextmenu", e => { if (!down && e.button !== 2) return; e.preventDefault(); show(e); });
+    A.ux.longPress(cv, show);
+  }
+
   /* ---- attaching to a city as it is built (atlas-city.js calls this before drawing it) */
   A.cityEditor = {
     attach(ctl, C) {
@@ -164,7 +199,7 @@
       const hook = () => { const st = store(); if (!st) return false; st.watch("cityedits", () => { if (!ctl.ce || ctl.ce.busy) return; const now = JSON.stringify(allSteps(id)); if (now !== ctl.ce.applied) redraw(ctl); }); for (const c of ["citypeople", "clock", "npcstate"]) st.watch(c, () => showPeople(ctl, ctl.ceUI && ctl.ceUI.selRef())); return true; };
       if (!hook()) { const iv = setInterval(() => { if (hook()) clearInterval(iv); }, 300); setTimeout(() => clearInterval(iv), 60000); }
       // (the people are shown once the city's map is up; and a building clicked offers to become a place)
-      const up = () => { if (!ctl.map || !ctl.map.people || !store()) return false; showPeople(ctl); peek(ctl); people(ctl); return true; };
+      const up = () => { if (!ctl.map || !ctl.map.people || !store()) return false; showPeople(ctl); peek(ctl); people(ctl); menu(ctl); return true; };
       if (!up()) { const iv = setInterval(() => { if (up()) clearInterval(iv); }, 400); setTimeout(() => clearInterval(iv), 60000); }
     },
     open, apply, KINDS
@@ -185,8 +220,13 @@
     const U = { tool: "select", sel: null, pts: [], redo: [], moving: false, note: "", selP: null, movingP: false };
     const st = store(); if (!st) return;
     ctl.placing = true;
+    // (redo kept after a reload; undo takes back the city's own steps, which are kept anyway: the UX review, item 6)
+    const KH = A.ux ? A.ux.keepHist("ce-" + id) : null; if (KH) KH.load([], U.redo);
+    const keepH = () => { if (KH) KH.save([], U.redo); };
+    // (the city as it was before this visit's changes, kept to bring back: item 11)
+    const VS = A.ux ? A.ux.versions(st, "cityvers") : null; let vsnap = false;
     const save = steps => { ctl.ce.busy = true; st.set("cityedits", id, { steps, t: Date.now() }); ctl.ce.busy = false; redraw(ctl); };
-    const push = s => { U.redo = []; save(stepsOf(id).concat([s])); };
+    const push = s => { if (VS && !vsnap) { vsnap = true; const cur = stepsOf(id); if (cur.length) VS.add(id, cur, "Before the changes of " + new Date().toLocaleDateString()); } U.redo = []; keepH(); save(stepsOf(id).concat([s])); };
     const savePeople = list => { st.set("citypeople", id, { list, t: Date.now() }); showPeople(ctl, U.selP); render(); };
     const facs = () => A.lives ? A.lives.ids().map(f => [f, (A.lives.fac(f) || {}).n || f]) : [];
     const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(cur) ? " selected" : ""}>${esc(l)}</option>`).join("");
@@ -195,7 +235,8 @@
     function render() {
       const C = ctl.ce.C, b = U.sel, n = stepsOf(id).length;
       bar.hidden = false;
-      bar.innerHTML = `<div class="ce-row">${TOOLS.map(([k, l]) => `<button type="button" data-ce="tool" data-t="${k}" aria-pressed="${U.tool === k}">${l}</button>`).join("")}<span class="ce-sp"></span><button type="button" data-ce="undo"${n ? "" : " disabled"}>Undo</button><button type="button" data-ce="redo"${U.redo.length ? "" : " disabled"}>Redo</button><button type="button" data-ce="export"${n ? "" : " disabled"}>Copy the changes</button><button type="button" data-ce="done" class="ce-done">Done</button></div>
+      if (A.ux) A.ux.editing(host, "the city · " + ((TOOLS.find(t => t[0] === U.tool) || [0, ""])[1]).replace(/^\+ /, "adding a ").toLowerCase());
+      bar.innerHTML = `<div class="ce-row">${TOOLS.map(([k, l]) => `<button type="button" data-ce="tool" data-t="${k}" aria-pressed="${U.tool === k}">${l}</button>`).join("")}<span class="ce-sp"></span><button type="button" data-ce="undo"${n ? "" : " disabled"}>Undo</button><button type="button" data-ce="redo"${U.redo.length ? "" : " disabled"}>Redo</button><button type="button" data-ce="export"${n ? "" : " disabled"}>Copy the changes</button>${VS && VS.list(id).length ? `<button type="button" data-ce="vers">Earlier versions</button>` : ""}${A.ux ? `<span class="ce-uxs">${A.ux.saveMark()}${A.ux.keysBtn("city")}</span>` : ""}<button type="button" data-ce="done" class="ce-done">Done</button></div>
         <div class="ce-how">${U.moving ? "Click where the building should stand." : esc(HOW[U.tool])}${U.pts.length ? ` <button type="button" data-ce="finish">Finish</button> <button type="button" data-ce="back">Take back a point</button>` : ""}${U.note ? ` <span class="ce-note">${esc(U.note)}</span>` : ""}</div>
         ${["road", "wall"].includes(U.tool) || (U.tool === "add") || ["park", "plaza", "district"].includes(U.tool) ? `<div class="ce-opts">${U.tool === "road" ? `<label>Kind <select data-ce="o" data-k="cls">${opt(ROADS, U.cls == null ? 1 : U.cls)}</select></label>` : ""}${U.tool === "add" ? `<label>Kind <select data-ce="o" data-k="kind">${opt(KINDS, U.kind || "terrace")}</select></label><label>Floors <input type="number" min="1" max="12" data-ce="o" data-k="floors" value="${U.floors || 2}"></label><label>Roof <select data-ce="o" data-k="roof">${opt([["pitched", "Pitched"], ["flat", "Flat"]], U.roof || "pitched")}</select></label>` : ""}${U.tool !== "add" ? `<label>Name <input data-ce="o" data-k="name" maxlength="60" value="${esc(U.name || "")}" placeholder="optional"></label>` : ""}${U.tool === "district" && facs().length ? `<label>Held by <select data-ce="o" data-k="owner">${opt([["", "No one"], ...facs()], U.owner || "")}</select></label>` : ""}</div>` : ""}
         ${U.tool === "person" ? `<div class="ce-opts">${cast().length ? `<label>Who <select data-ce="o" data-k="who">${opt([["", "Choose someone…"], ...cast()], U.who || "")}</select></label><label>Doing <input data-ce="o" data-k="pnote" maxlength="80" value="${esc(U.pnote || "")}" placeholder="optional: what they are doing here"></label>` : `<span class="ce-note">The campaign has no people yet.</span>`}</div>` : ""}
@@ -251,12 +292,22 @@
     let down = null;
     const pd = ev => { down = { x: ev.clientX, y: ev.clientY }; }, pu = ev => { if (!down) return; const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y); down = null; if (moved < 6 && ev.target.closest("canvas")) onClick(ev); };
     host.addEventListener("pointerdown", pd); host.addEventListener("pointerup", pu);
-    const key = ev => { if (ev.target.closest && ev.target.closest("input, select, textarea")) return; if (ev.key === "Enter" && U.pts.length) { ev.preventDefault(); finish(); } else if (ev.key === "Escape") { U.pts = []; U.moving = false; ctl.map.guide(null); render(); } else if ((ev.ctrlKey || ev.metaKey) && /^[zy]$/i.test(ev.key)) { ev.preventDefault(); undo(!(ev.key.toLowerCase() === "y" || ev.shiftKey)); } };
+    const key = ev => {
+      if (ev.target.closest && ev.target.closest("input, select, textarea")) return;
+      if (A.ux && A.ux.isHelpKey(ev)) { ev.preventDefault(); A.ux.keys("city", bar.querySelector(".ux-keysb")); return; }
+      if (ev.key === "Enter" && U.pts.length) { ev.preventDefault(); finish(); return; }
+      if (ev.key === "Backspace" && U.pts.length) { ev.preventDefault(); U.pts.pop(); ctl.map.guide(U.pts, ["park", "plaza", "district"].includes(U.tool)); render(); return; }
+      // Esc: the points or the move first, then what is chosen, then the tool, then the editor itself
+      if (ev.key === "Escape") { ev.preventDefault(); if (U.pts.length || U.moving || U.movingP) { U.pts = []; U.moving = false; U.movingP = false; ctl.map.guide(null); } else if (U.sel || U.selP) { U.sel = null; U.selP = null; ctl.map.mark(null); showPeople(ctl); } else if (U.tool !== "select") U.tool = "select"; else { close(); return; } render(); return; }
+      if ((ev.ctrlKey || ev.metaKey) && /^[zy]$/i.test(ev.key)) { ev.preventDefault(); undo(!(ev.key.toLowerCase() === "y" || ev.shiftKey)); return; }
+      if ((ev.key === "Delete" || ev.key === "Backspace") && (U.sel || U.selP)) { ev.preventDefault(); if (U.sel) { push({ op: "remove", at: at(U.sel) }); U.sel = null; ctl.map.mark(null); } else { const rf = U.selP; U.selP = null; savePeople(peopleOf(id).filter(q => q.ref !== rf)); } return; }
+      const tk = A.ux && A.ux.numKey(ev, TOOLS.map(t => t[0])); if (tk) { ev.preventDefault(); U.tool = tk; U.pts = []; U.moving = false; U.note = ""; ctl.map.guide(null); if (tk !== "select") { U.sel = null; ctl.map.mark(null); } render(); }
+    };
     box.addEventListener("keydown", key);
     function undo(back) {
       const steps = stepsOf(id);
-      if (back) { if (!steps.length) return; U.redo.push(steps[steps.length - 1]); U.sel = null; ctl.map.mark(null); save(steps.slice(0, -1)); }
-      else { if (!U.redo.length) return; const s = U.redo.pop(); save(steps.concat([s])); }
+      if (back) { if (!steps.length) return; U.redo.push(steps[steps.length - 1]); U.sel = null; ctl.map.mark(null); keepH(); save(steps.slice(0, -1)); }
+      else { if (!U.redo.length) return; const s = U.redo.pop(); keepH(); save(steps.concat([s])); }
     }
     function exportJS() {
       const js = `// The city as the game master changed it on the page (${new Date().toISOString().slice(0, 10)}). Put it in campaign.js;\n// the page's own changes are laid after it.\nATLAS.cityChanges(${JSON.stringify(id)}, ${JSON.stringify(allSteps(id), null, 1)});\n`;
@@ -271,6 +322,7 @@
       else if (k === "back") { U.pts.pop(); ctl.map.guide(U.pts, ["park", "plaza", "district"].includes(U.tool)); render(); }
       else if (k === "undo") undo(true); else if (k === "redo") undo(false);
       else if (k === "export") exportJS();
+      else if (k === "vers" && VS && A.ux) { const rb = b.getBoundingClientRect(); A.ux.menu({ clientX: rb.left, clientY: rb.bottom + 4, target: b, preventDefault() {} }, VS.list(id).map(v => ({ label: "As it was " + A.ux.when(v.t), hint: (v.data || []).length + " changes", run: () => { VS.add(id, stepsOf(id), "Before a version was brought back, " + new Date().toLocaleDateString()); vsnap = true; U.redo = []; keepH(); U.sel = null; ctl.map.mark(null); save(v.data || []); U.note = "The city is as it was " + A.ux.when(v.t) + ". Earlier versions also holds how it was just now."; render(); } })), "Bring back the city as it was"); }
       else if (k === "copy") { const ta = bar.querySelector(".ce-export textarea"); ta.select(); (navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.reject()).then(() => { b.textContent = "Copied"; }, () => { try { document.execCommand("copy"); b.textContent = "Copied"; } catch (e) {} }); }
       else if (k === "closex") { const d = bar.querySelector(".ce-export"); if (d) d.remove(); }
       else if (k === "done") close();
@@ -295,8 +347,12 @@
     box.addEventListener("click", onPerson, true);
     // (after each redraw the chosen building is found again where the step put it)
     const after = () => { if (U.sel) { const last = stepsOf(id).slice(-1)[0]; const C = ctl.ce.C, p = last && (last.to || (last.op === "move" || last.op === "change" ? last.at : null)); U.sel = p ? houseAt(C, p) : null; } if (ctl.map) ctl.map.mark(U.sel); render(); };
-    function close() { box.removeEventListener("click", onPerson, true); showPeople(ctl); host.removeEventListener("pointerdown", pd); host.removeEventListener("pointerup", pu); box.removeEventListener("keydown", key); bar.removeEventListener("click", onBar); bar.removeEventListener("change", onChange); bar.hidden = true; bar.innerHTML = ""; if (ctl.map) { ctl.map.mark(null); ctl.map.guide(null); } ctl.placing = false; ctl.ceUI = null; box.querySelector("[data-editcity]").setAttribute("aria-pressed", "false"); }
-    ctl.ceUI = { close, after, selRef: () => U.selP };
+    function close() { if (A.ux) A.ux.editing(host, null); box.removeEventListener("click", onPerson, true); showPeople(ctl); host.removeEventListener("pointerdown", pd); host.removeEventListener("pointerup", pu); box.removeEventListener("keydown", key); bar.removeEventListener("click", onBar); bar.removeEventListener("change", onChange); bar.hidden = true; bar.innerHTML = ""; if (ctl.map) { ctl.map.mark(null); ctl.map.guide(null); } ctl.placing = false; ctl.ceUI = null; box.querySelector("[data-editcity]").setAttribute("aria-pressed", "false"); }
+    ctl.ceUI = { close, after, selRef: () => U.selP,
+      pick: b => { U.tool = "select"; U.selP = null; U.sel = b; ctl.map.mark(b); render(); },
+      ask: b => { U.tool = "select"; U.sel = b; ctl.map.mark(b); render(); if (A.askChange) A.askChange(askTarget(b)); },
+      remove: b => { push({ op: "remove", at: at(b) }); U.sel = null; ctl.map.mark(null); },
+      addAt: p => { U.tool = "add"; push({ op: "add", x: r1(p[0]), y: r1(p[1]), ang: 0, kind: U.kind || "terrace", floors: +U.floors || 2, roof: U.roof || "pitched" }); } };
     box.querySelector("[data-editcity]").setAttribute("aria-pressed", "true");
     render();
   }

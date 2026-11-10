@@ -7,7 +7,7 @@
    is connected (lib/deps.js). The app listens on this computer only. */
 "use strict";
 if (+process.versions.node.split(".")[0] < 18) { console.error("\n  Campaign Atlas needs Node.js 18 or newer; this is " + process.version + ". Get the LTS version from https://nodejs.org/\n"); process.exit(1); }
-const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto"), { spawn } = require("child_process");
+const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto"), { spawn, execFile } = require("child_process");
 const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch"), Ask = require("./lib/ask");
 const PlayersLan = require("./lib/players-lan"), RecorderLan = require("./lib/recorder-lan");
 
@@ -96,6 +96,22 @@ function file(res, f, type) {
   fs.readFile(f, (err, buf) => err ? fail(res, 404, "not found") : send(res, 200, buf, type || TYPES[path.extname(f).toLowerCase()] || "application/octet-stream"));
 }
 // only folders the app made, by their own names
+// the example campaigns that ship with the app (examples/<id>/: the sources of the workspace's samples), set up as a
+// campaign of the workspace the first time one is opened, and its page made (the UX review of 5 Nov 2026, item 20)
+const EXAMPLES = { realm: { title: "The Wyrmwater Reach", says: "A fantasy realm: a world map, two 3D cities, factions, rumours and the planes" }, kestrel: { title: "The Quiet on Deck Nine", says: "A mystery on a space station: clues, people's days, handouts and 400 stars" } };
+const EXDIR = path.join(ROOT, "examples");
+function copyDir(a, b) { fs.mkdirSync(b, { recursive: true }); for (const f of fs.readdirSync(a)) { if (f === "dist" || f.startsWith(".")) continue; const s = path.join(a, f), d = path.join(b, f); if (fs.statSync(s).isDirectory()) copyDir(s, d); else fs.copyFileSync(s, d); } }
+const exampleBusy = {};
+async function example(id) {
+  if (!EXAMPLES[id] || !fs.existsSync(path.join(EXDIR, id, "campaign.js"))) throw new Error("No such example.");
+  const slug = "example-" + id, dir = path.join(CAMPS, slug);
+  if (!fs.existsSync(path.join(dir, "campaign.js"))) copyDir(path.join(EXDIR, id), dir);
+  if (!fs.existsSync(path.join(dir, "dist", "preview.html"))) {
+    if (!exampleBusy[id]) exampleBusy[id] = new Promise((ok, no) => execFile(process.execPath, [ATLAS_JS, "build", dir], { windowsHide: true, timeout: 600000 }, (err, out, errOut) => { delete exampleBusy[id]; err ? no(new Error("The example could not be made: " + String(errOut || err.message).split("\n").slice(-3).join(" "))) : ok(); }));
+    await exampleBusy[id];
+  }
+  return { slug, url: "/play/" + slug + "/" };
+}
 const campDir = slug => /^[a-z0-9][a-z0-9-]{0,80}$/.test(slug || "") && fs.existsSync(path.join(CAMPS, slug, "campaign.js")) ? path.join(CAMPS, slug) : null;
 function openFolder(dir) {
   const [cmd, args] = process.platform === "win32" ? ["explorer.exe", [dir]] : process.platform === "darwin" ? ["open", [dir]] : ["xdg-open", [dir]];
@@ -289,6 +305,8 @@ async function route(req, res) {
       if (m === "POST" && mm[2] === "launch") return send(res, 200, { job: await jobs.launch(slug, (await body(req, 1 << 12)).tool) });
     }
     if (m === "POST" && p === "/api/open-workspace") { openFolder(WORK); return send(res, 200, { ok: true }); }
+    if (m === "GET" && p === "/api/examples") return send(res, 200, { examples: Object.entries(EXAMPLES).filter(([id]) => fs.existsSync(path.join(EXDIR, id, "campaign.js"))).map(([id, e]) => Object.assign({ id, ready: fs.existsSync(path.join(CAMPS, "example-" + id, "dist", "preview.html")) }, e)) });
+    if (m === "POST" && p === "/api/example") return send(res, 200, await example(String((await body(req, 1 << 10)).id || "")));
     return fail(res, 404, "not found");
   } catch (e) { return fail(res, 400, e.message || String(e)); }
 }

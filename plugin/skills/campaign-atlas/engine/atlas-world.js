@@ -788,7 +788,9 @@
     const filt = Object.assign({ kinds: {}, know: "all", only3d: false, routes: {} }, (() => { try { return JSON.parse(ctx.store.get("world-filter") || "{}"); } catch (e) { return {}; } })());
     // tool: loc, route (the places and their ways), brush (the land), river, realm, label; selFeat: a river, name or realm
     const S = { sel: null, selRoute: null, selFeat: null, hover: null, edit: false, tool: null, first: null, q: "", hits: null, journey: null, drag: null, note: "", brush: "land", size: 30, draft: null, cur: null, fdrag: null };
-    const HIST = [], REDO = [];   // what the referee changed, to undo and do again (this visit to the page)
+    const HIST = [], REDO = [];   // what the referee changed, to undo and do again (kept after a reload: the last twenty)
+    const KH = A.ux ? A.ux.keepHist("wm-" + WID) : null; if (KH) KH.load(HIST, REDO);
+    let SPACE = false, MEAS = null, VSNAP = false;   // Space held (the map moves whatever the tool), a measure begun, this visit's version kept
     const ways = new Map();      // route id -> its way, worked out once for where its ends stand
     let PG = null;               // the grid routes are found on
     box.innerHTML = `<div class="wm wm-${WD.look}">
@@ -803,7 +805,7 @@
         <button type="button" class="wm-btn" data-w="coasts" aria-pressed="false" hidden title="What kind each coast is and why it formed there: fjords, rias, deltas, barrier islands, cliffs, reefs">Coasts</button>
         <button type="button" class="wm-btn" data-w="roadnet" aria-pressed="false" hidden title="The roads, sea lanes, river routes, towns, villages and borders grown over the ages from the land and its trade (on trial: atlas.js roads)">Road network (trial)</button>
         <span class="wm-dev" hidden><label><span class="kn">Development</span> <input type="range" min="1" max="5" step="1" value="3" aria-label="How developed the land's roads are: 1 tribal, 2 early, 3 medieval, 4 industrialising, 5 modern"></label> <span class="wm-devn"></span> <button type="button" class="wm-btn" data-w="devreset" hidden title="Back to the network as it was made">Default</button></span>
-        <button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false">Edit map</button>
+        ${A.ux ? `<span class="keeper wm-uxs">${A.ux.saveMark()}${A.ux.keysBtn("world")}</span>` : ""}<button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false" title="Edit the map (E)">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
         <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
@@ -1296,6 +1298,7 @@
       return `<button type="button" class="wm-x" data-w="close" aria-label="Close">×</button>
         <div class="eyebrow"><span>${esc((KINDS[L.kind] || [0, L.kind])[1])}</span>${L.region ? `<span>${esc(L.region)}</span>` : ""}${realm && (keeper || !realm.hidden) && realm.name !== L.region ? `<button type="button" class="wm-rlink" data-wfeat="${esc(realm.id)}">${esc(realm.name || "A realm")}</button>` : ""}${here ? `<span class="wm-here">The party is here</span>` : ""}</div>
         <h3>${esc(L.name)}</h3>
+        ${keeper && A.ux && (L.added || L.edited) ? `<p>${A.ux.hand(L.added ? "Your own place: never redrawn" : "Changed by you: kept when the map is made again")}</p>` : ""}
         ${L.owner && keeper ? `<p class="kn">Held by ${esc(facName(L.owner))}</p>` : ""}
         ${keeper ? `<div class="wm-stseg" role="group" aria-label="What the party knows">${STATES.map(([v, l]) => `<button type="button" data-wstate="${v}" aria-pressed="${L.state === v}" title="${esc(l)}"><span class="sd st-w-${v}"></span>${esc(l.split(" ")[0])}</button>`).join("")}</div>` : L.state !== "known" ? `<p class="kn">${esc(stName)}</p>` : ""}
         ${acts.length ? `<div class="meta">${acts.map(a => `<span class="tag">Act ${a}</span>`).join("")}</div>` : ""}
@@ -1305,7 +1308,7 @@
         ${L.unplaced && keeper ? `<p class="warn">This place has no position on the map yet: it waits at the foot of the map. Drag it where it belongs (Edit map).</p>` : ""}
         ${enter}
         ${places.length ? `<h4>Places here</h4><ul class="wm-pl">${places.map(p => `<li><button type="button" data-wopen="${esc(p.id)}">${p.st ? `<span class="sd st-${esc(p.st)}"></span>` : ""}<span class="n">${String(p.n).padStart(2, "0")}</span>${esc(p.name)}</button></li>`).join("")}</ul>` : ""}
-        ${people.length ? `<h4 class="keeper">People met here</h4><ul class="wm-pp keeper">${people.slice(0, 40).map(p => `<li>${p.pid ? `<button type="button" data-wopen="${esc(p.pid)}">${esc(p.name)}</button>` : esc(p.name)}${p.role ? `<span class="kn"> — ${esc(p.role)}</span>` : ""}</li>`).join("")}</ul>` : ""}
+        ${people.length ? `<h4 class="keeper">People met here</h4><ul class="wm-pp keeper">${people.slice(0, 40).map(p => `<li>${p.ref && A.nav ? `<button type="button" data-uxpeek="person:${esc(p.ref)}" title="Their card">${esc(p.name)}</button>` : p.pid ? `<button type="button" data-wopen="${esc(p.pid)}">${esc(p.name)}</button>` : esc(p.name)}${p.role ? `<span class="kn"> — ${esc(p.role)}</span>` : ""}${p.ref && A.nav && p.pid ? ` <button type="button" class="t-link" data-wopen="${esc(p.pid)}">at their place</button>` : ""}</li>`).join("")}</ul>` : ""}
         ${leads.length ? `<h4 class="keeper">What leads here</h4><ul class="wm-ld keeper">${leads.slice(0, 30).map(l => `<li><span class="kn">From</span> <button type="button" data-wopen="${esc(l.fromId)}">${esc(l.from)}</button>: ${esc(l.text)}</li>`).join("")}</ul>` : ""}
         ${ev.length ? `<h4 class="keeper">Scenes here</h4><ul class="hks keeper">${ev.map(e => `<li><details class="hk"><summary>${esc(e.t || "A scene")}</summary><p>${esc(e.d || "")}</p></details></li>`).join("")}</ul>` : ""}
         <h4>Routes from here</h4>${routes.length ? `<ul class="wm-rl2">${routes.map(r => routeRow(r, L.id)).join("")}</ul>` : `<p class="kn">No routes${keeper ? " yet (Edit map, then + Route)" : ""}.</p>`}
@@ -1389,6 +1392,8 @@
         <label class="wm-f3"><input type="checkbox" data-f3${filt.only3d ? " checked" : ""}> Only places with a 3D map</label>`;
       const eb = $(".wm-editbar");
       root.dataset.tool = S.edit && gm() && S.tool || "";
+      { const tt = ctx.title && ctx.title(WID, S.sel && WD.byId[S.sel] ? WD.byId[S.sel].name : ""), te = $(".wm-title"); if (tt && te && te.__t !== tt) { te.__t = tt; te.innerHTML = tt; } }
+      if (A.ux) A.ux.editing(stage, S.edit && gm() ? ({ loc: "+ Place", route: "+ Route", brush: "Shape the land", river: "+ River", realm: WD.look === "stars" ? "+ Territory" : "+ Realm", label: "+ Name" }[S.tool] || "the map") : null);
       const tb = (w, l, on, title) => `<button type="button" class="wm-btn" data-w="${w}" aria-pressed="${!!on}"${title ? ` title="${esc(title)}"` : ""}>${l}</button>`, landy = WD.look !== "stars" && !drawn();
       eb.innerHTML = S.edit && gm() ? tb("addloc", "+ Place", S.tool === "loc") + tb("addroute", "+ Route", S.tool === "route")
         + (landy ? tb("brush", "Shape the land", S.tool === "brush", "Paint land, sea, mountains, forests, deserts and swamps") + tb("river", "+ River", S.tool === "river") : "")
@@ -1396,6 +1401,7 @@
         + `<button type="button" class="wm-btn" data-w="undo"${HIST.length ? "" : " disabled"} title="Undo (Ctrl+Z)">Undo</button><button type="button" class="wm-btn" data-w="redo"${REDO.length ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo</button>`
         + (A.worldGenSrc && WD.look !== "stars" && !DRAW ? tb("newworld", "Make a new world", false, "Generate a whole new land: how big, its shape (from your own drawing if you like), its climate") : "")
         + tb("export", "Copy as world.js")
+        + (vers() && vers().list(WID).length ? tb("vers", "Earlier versions", S.panelV, "The map as it was before each visit's changes, to look at and bring back") : "")
         + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
       $('[data-w="edit"]').setAttribute("aria-pressed", S.edit);
       const dw = $('[data-w="drawn"]'); if (dw) { dw.setAttribute("aria-pressed", !!drawn()); dw.hidden = WD.look === "stars" || !DRAW.trace; }
@@ -1457,7 +1463,7 @@
       const clim = Object.entries(A.worldBiomes ? A.worldBiomes.CLIMATES : { varied: [0, 0, 0, "Varied"] }).map(([k, v]) => [k, v[3]]);
       let pic = null;
       dlg.innerHTML = `<form method="dialog" class="ke wm-newworld"><h3>Make a new world</h3>
-        <p class="kn">A whole new land, made the way the Earth makes one: plates raise its mountains, rivers carve them, the winds bring its rain. Your places are set on it again; Undo brings back the old land.</p>
+        <p class="kn">A whole new land, made the way the Earth makes one: plates raise its mountains, rivers carve them, the winds bring its rain. Your places are set on it again; Undo brings back the old land.</p>${A.ux ? `<p>${A.ux.hand("Your own places and names are yours: they are set on the new land, not made again")}</p>` : ""}
         <label>How big <span class="wm-lsl"><span class="kn">Small</span><input type="range" name="sizeR" min="0" max="${sizes.length - 1}" step="1" value="${Math.max(0, sizes.findIndex(s2 => s2[0] === (g.size || "planet")))}" aria-label="How big the world is"><span class="kn">A whole planet</span></span><span class="kn wm-sval"></span><input type="hidden" name="size" value="${esc(g.size || "planet")}"></label>
         <label>Its shape <select name="land">${opt(lands, g.paint ? "paint" : g.sketch ? "sketch" : ["coast", "inland"].includes(g.land) ? g.land : "masses")}</select></label>
         <div class="wm-nw-pic" hidden><label>Your drawing <input type="file" name="pic" accept="image/*"></label><p class="kn">A drawing on paper or a coloured map: the land you outlined (or did not colour blue) becomes the land, and the mountains you drew (peaks, hatching, or brown and grey) become ranges. A photo of a sketch works.</p><p class="kn wm-nw-read"></p></div>
@@ -1607,21 +1613,41 @@
     const localAll = () => { try { return JSON.parse(ctx.store.get("world-edits") || "{}") || {}; } catch (e) { return {}; } };
     const docNow = doc => { const v = doc === "party" ? OV.party : doc === "style" ? OV.style : doc === "shape" ? OV.shape : doc === "gen" ? OV.gen : doc.startsWith("l-") ? OV.loc[doc.slice(2)] : doc.startsWith("r-") ? OV.route[doc.slice(2)] : doc.startsWith("f-") ? OV.feat[doc.slice(2)] : null; return v == null ? null : JSON.parse(JSON.stringify(v)); };
     // undo and redo: every change but where the party is (that is play, not the map) can be taken back, and done again
+    // (the map as it stands in the referee's changes: every document of them, for a version)
+    function ovAll() { const o = {}; if (OV.style) o.style = OV.style; if (OV.shape) o.shape = OV.shape; if (OV.gen) o.gen = OV.gen; for (const [k, v] of Object.entries(OV.loc || {})) o["l-" + k] = v; for (const [k, v] of Object.entries(OV.route || {})) o["r-" + k] = v; for (const [k, v] of Object.entries(OV.feat || {})) o["f-" + k] = v; return JSON.parse(JSON.stringify(o)); }
+    const vers = () => { const st = A.tableUI && A.tableUI.api && A.tableUI.api.store(); return st && A.ux ? A.ux.versions(st, "worldvers") : null; };
     function save(doc, data, how) {
-      if (doc !== "party" && how !== "hist") { HIST.push({ doc, before: docNow(doc), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; }
+      if (doc !== "party" && how !== "hist" && !VSNAP && vers()) { VSNAP = true; const o = ovAll(); if (Object.keys(o).length && JSON.stringify(o).length < 600000) vers().add(WID, o, "Before the changes of " + new Date().toLocaleDateString()); }
+      if (doc !== "party" && how !== "hist") { HIST.push({ doc, before: docNow(doc), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; if (KH) KH.save(HIST, REDO); }
+      return put(doc, data);
+    }
+    function put(doc, data) {
       // the change shows at once; the database follows
       const all = DB ? null : localAll();
       if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc === "shape") OV.shape = data; else if (doc === "gen") OV.gen = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; } else if (doc.startsWith("f-")) { if (data) OV.feat[doc.slice(2)] = data; else delete OV.feat[doc.slice(2)]; }
       rebuild();
-      if (DB) { const ref = DB.collection(WCOLL).doc(doc); return Promise.resolve(data ? ref.set(data) : ref.delete()).catch(e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); }); }
+      const track = p => A.ux ? A.ux.track(p) : p;
+      if (DB) { const ref = DB.collection(WCOLL).doc(doc); return track(Promise.resolve(data ? ref.set(data) : ref.delete()).then(() => true, e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); return false; })); }
       if (data) all[doc] = data; else delete all[doc];
       ctx.store.set("world-edits", JSON.stringify(all));
-      return Promise.resolve();
+      return track(Promise.resolve(true));
     }
     function undo(back) {
-      const from = back ? HIST : REDO, to = back ? REDO : HIST, h = from.pop(); if (!h) return;
-      to.push(h); save(h.doc, back ? h.before : h.after, "hist");
+      const from = back ? HIST : REDO, to = back ? REDO : HIST, h = from.pop(); if (!h) { note(back ? "Nothing to undo." : "Nothing to do again."); return; }
+      to.push(h);
+      if (h.batch) { const L = back ? h.batch.slice().reverse() : h.batch; for (const x of L) put(x.doc, back ? x.before : x.after); } else put(h.doc, back ? h.before : h.after);
+      if (KH) KH.save(HIST, REDO);
       note(back ? "Undone." : "Done again.");
+    }
+    // a version brought back: every document of the referee's changes as it was then, as one change (Undo takes it back)
+    function bringBack(v) {
+      const was = v && v.data; if (!was) return; const now = ovAll(), batch = [];
+      for (const doc of new Set([...Object.keys(now), ...Object.keys(was)])) if (JSON.stringify(now[doc] || null) !== JSON.stringify(was[doc] || null)) batch.push({ doc, before: now[doc] || null, after: was[doc] || null });
+      if (!batch.length) { note("The map is already as it was then."); return; }
+      VSNAP = true; vers().add(WID, now, "Before a version was brought back, " + new Date().toLocaleDateString());
+      HIST.push({ batch }); REDO.length = 0; if (KH) KH.save(HIST, REDO);
+      for (const x of batch) put(x.doc, x.after);
+      note("The map is as it was " + (A.ux ? A.ux.when(v.t) : "then") + ". Undo takes it back.");
     }
     const ownOf = (kind, id) => Object.assign({}, (kind === "l" ? OV.loc : kind === "f" ? OV.feat : OV.route)[id] || {});
     // the land's strokes the page added: a stroke more
@@ -1640,6 +1666,7 @@
       drawMarkers(); drawRoutes(); renderPanel();
       if (S.sel && flyTo) { const L = WD.byId[S.sel]; fly(L.at, Math.max(V.k, V.k0 * 2.2)); }
       else if (S.sel) reveal(WD.byId[S.sel].at);
+      renderBars(); if (ctx.moved) ctx.moved();
     }
     // a chosen place (or route) the panel would hide slides into the open part of the map
     function reveal(at) {
@@ -1848,6 +1875,7 @@
       stage.focus({ preventScroll: true });
       const p = local(e); ptr.set(e.pointerId, p); moved = false; if (ptr.size === 1) downAt = e.target;
       const m = e.target.closest(".wl");
+      if (ptr.size === 1 && SPACE) { gest = { p0: p, t0: [V.tx, V.ty], space: true }; try { stage.setPointerCapture(e.pointerId); } catch (_) {} return; }
       if (ptr.size === 1) {
         gest = { p0: p, t0: [V.tx, V.ty], loc: S.edit && gm() && !S.tool && m ? m.dataset.loc : null };
         // the brush paints from the first touch; a river, a realm or a name is picked up to be moved, or by a corner
@@ -1893,6 +1921,8 @@
       if (ptr.size === 1 && gest && gest.pinch) { const [q] = [...ptr.values()]; gest = { p0: q, t0: [V.tx, V.ty] }; return; }
       if (ptr.size) return;
       const g = gest; gest = null;
+      if (g && g.space) return;
+      if (A.ux && A.ux.justPressed(stage)) return;
       if (g && g.brush) { const s = S.stroke; S.stroke = null; if (s && s.p.length) addStroke(s); else drawFx(); return; }
       if (g && g.feat && moved && S.fdrag) { const d = S.fdrag; S.fdrag = null; S.selFeat = d.id; save("f-" + d.id, Object.assign(ownOf("f", d.id), d.patch)); return; }
       if (g && g.loc && moved) { const L = WD.byId[g.loc]; S.drag = null; save("l-" + L.id, Object.assign(ownOf("l", L.id), { at: [r1(L.at[0]), r1(L.at[1])] }, L.added ? { name: L.name, kind: L.kind, state: L.state } : {})); return; }
@@ -1902,6 +1932,7 @@
     // a click: the element pressed (the stage holds the pointer while it is down, so the release cannot say)
     function click(target, p) {
       const m = target && target.closest ? target.closest(".wl") : null, r = target && target.closest ? target.closest("[data-route]") : null;
+      if (MEAS) { const w = world(p[0], p[1]), d = Math.hypot(w[0] - MEAS[0], w[1] - MEAS[1]); MEAS = null; note(WD.scale ? "As the crow flies: " + distText(WD, d * WD.scale.per) + "." : "As the crow flies: " + Math.round(d) + " map units (this map has no scale)."); return; }
       if (S.tool === "loc") { S.tool = null; renderBars(); locForm(null, world(p[0], p[1])); return; }
       if (S.tool === "brush") return;
       if (S.tool === "label") { S.tool = null; renderBars(); featForm("label", null, null, world(p[0], p[1]).map(r1)); return; }
@@ -1947,9 +1978,18 @@
       tip.style.transform = `translate(${Math.round(Math.max(4, x))}px, ${Math.round(y)}px)`;
     }
     function onWheel(e) { if (e.target.closest(".wm-panel, .wm-results, .wm-journey")) return; e.preventDefault(); const p = local(e); zoomAt(Math.exp(-(e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) * .0016), p[0], p[1]); }
+    const clickW = w => { const b = root.querySelector(`[data-w="${w}"]`); if (b) b.click(); return !!b; };
+    const editOn = () => { if (!S.edit) clickW("edit"); };
     function onKey(e) {
       if (e.target.closest && e.target.closest("input, textarea, select, .wm-panel")) return;
+      if (e.key === " " && gm()) { e.preventDefault(); if (!SPACE) { SPACE = true; stage.classList.add("wm-space"); } return; }
+      if (A.ux && A.ux.isHelpKey(e)) { e.preventDefault(); A.ux.keys("world", root.querySelector(".ux-keysb")); return; }
       if ((e.ctrlKey || e.metaKey) && S.edit && gm() && /^[zy]$/i.test(e.key)) { e.preventDefault(); undo(!(e.key.toLowerCase() === "y" || e.shiftKey)); return; }
+      if (gm() && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "e" || e.key === "E")) { e.preventDefault(); clickW("edit"); return; }
+      if (gm() && S.edit && A.ux) { const t = A.ux.numKey(e, ["addloc", "addroute", "brush", "river", "realm", "label"]); if (t) { e.preventDefault(); clickW(t); return; } }
+      if (gm() && S.edit && !S.draft && (e.key === "Delete" || e.key === "Backspace") && (S.sel || S.selRoute || S.selFeat)) { e.preventDefault(); const b = panel.querySelector('[data-w="delloc"], [data-w="delroute"], [data-w="delfeat"]'); if (b) { const sure = b.classList.contains("sure"); b.click(); if (!sure) note("Press Delete again to take it away."); } return; }
+      if (e.key === "Escape" && !S.tool && !S.sel && !S.selRoute && !S.selFeat && !MEAS && S.edit) { clickW("edit"); return; }
+      if (e.key === "Escape" && MEAS) { MEAS = null; note(""); drawFx(); return; }
       if (S.draft && e.key === "Enter") { e.preventDefault(); finishDraft(); return; }
       if (S.draft && e.key === "Backspace") { e.preventDefault(); S.draft.pts.pop(); renderBars(); drawFx(); return; }
       const step = 60;
@@ -1994,6 +2034,7 @@
         case "addloc": S.tool = S.tool === "loc" ? null : "loc"; S.first = null; renderBars(); break;
         case "addroute": S.tool = S.tool === "route" ? null : "route"; S.first = null; renderBars(); break;
         case "export": exportJS(); break;
+        case "vers": { const V0 = vers(); if (!V0 || !A.ux) break; const L0 = V0.list(WID); A.ux.menu({ clientX: b.getBoundingClientRect().left, clientY: b.getBoundingClientRect().bottom + 4, target: b, preventDefault() {} }, L0.map(v => ({ label: "As it was " + A.ux.when(v.t), hint: v.label, run: () => bringBack(v) })), "Bring back the map as it was"); break; }
         case "newworld": newWorldDlg(); break;
         case "currents": CUR.on = !CUR.on; try { ctx.store.set("world-currents", CUR.on ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
         case "coasts": COA.on = !COA.on; try { ctx.store.set("world-coasts", COA.on ? "1" : "0"); } catch (_) {} drawCoasts(); renderBars(); break;
@@ -2043,6 +2084,32 @@
     stage.addEventListener("wheel", onWheel, { passive: false });
     stage.addEventListener("dblclick", e => { if (e.target.closest(".wm-panel, .wm-ctl")) return; if (S.draft) { finishDraft(); return; } if (S.tool === "brush") return; const p = local(e); zoomAt(1.8, p[0], p[1]); });
     stage.addEventListener("keydown", onKey);
+    stage.addEventListener("keyup", e => { if (e.key === " ") { SPACE = false; stage.classList.remove("wm-space"); } });
+    stage.addEventListener("blur", () => { SPACE = false; stage.classList.remove("wm-space"); });
+    // what can be done where the referee right-clicks: on a place, a route, a river or name, or the open map
+    function onMenu(e) {
+      if (!A.ux || !gm() || (e.target.closest && e.target.closest(".wm-panel, .wm-ctl, .wm-results, .wm-journey"))) return;
+      const p = local(e), w = world(p[0], p[1]), t = e.target, m = t.closest && t.closest(".wl"), rt = !m && t.closest && t.closest("[data-route]"), fe = !m && !rt && t.closest && t.closest("[data-feat]");
+      const L = m && WD.byId[m.dataset.loc], R = rt && WD.rById[rt.dataset.route], P = WD.party, it = [];
+      const inEdit = fn => () => { editOn(); fn(); };
+      if (L) {
+        it.push({ label: "What is here", run: () => select(L.id) });
+        if (ctx.hasCity(L.city || L.id) || (SETTLED.includes(L.kind) && A.worldCity.can(WD))) it.push({ label: "Enter its 3D map", run: () => { select(L.id); setTimeout(() => clickW("enter"), 30); } });
+        it.push({ label: "The party is here", run: () => setParty({ at: L.id, plan: [], trail: P.at && P.at !== L.id ? [...P.trail, P.at] : P.trail }) });
+        if (P.at && P.at !== L.id) it.push({ label: "Plan the party's way here", run: () => { select(L.id); S.journey = plan(L.id); drawJourney(); renderPanel(); } });
+        it.push("-", { label: "Edit its details", run: inEdit(() => { select(L.id); locForm(L); }) }, { label: "Duplicate it", run: inEdit(() => { select(L.id); setTimeout(() => clickW("duploc"), 30); }) }, { label: "Delete it", danger: true, run: inEdit(() => { select(L.id); setTimeout(() => { const b = panel.querySelector('[data-w="delloc"]'); if (b) { b.click(); note("Click Really? in the panel to take it away."); } }, 40); }) });
+      } else if (R) {
+        it.push({ label: "Show the route", run: () => selectRoute(R.id) }, "-", { label: "Edit the route", run: inEdit(() => { selectRoute(R.id); routeForm(R); }) }, { label: "Delete it", danger: true, run: inEdit(() => { selectRoute(R.id); setTimeout(() => { const b = panel.querySelector('[data-w="delroute"]'); if (b) { b.click(); note("Click Really? in the panel to take it away."); } }, 40); }) });
+      } else if (fe) {
+        const id = fe.dataset.feat;
+        it.push({ label: "Show it", run: () => selectFeat(id) }, "-", { label: "Edit its details", run: inEdit(() => { selectFeat(id); const [k, f0] = featOf(id); if (f0) featForm(k, f0); }) });
+      } else {
+        it.push({ label: "Add a place here", run: inEdit(() => locForm(null, w)) }, { label: "Write a name here", run: inEdit(() => featForm("label", null, null, w.map(r1))) }, { label: "Measure from here", run: () => { MEAS = w; note("Click where to measure to. Esc stops."); } }, "-", { label: "Bring it into the middle", run: () => fly(w, V.k) }, { label: "The whole world", run: () => home() });
+      }
+      A.ux.menu(e, it, L ? L.name : R ? (R.name || "A route") : fe ? "On the map" : "Here");
+    }
+    stage.addEventListener("contextmenu", onMenu);
+    if (A.ux) A.ux.longPress(stage, onMenu);
     root.addEventListener("click", onClick);
     root.addEventListener("change", onChange);
     // (the brush's size follows the slider as it moves: the circle on the map grows and shrinks with it)
@@ -2099,7 +2166,7 @@
     }
     wake();
     return {
-      wake, search,
+      wake, search, selected: () => S.sel,
       // choose a place from outside (the way back from a city): the world stays as it was left when that place is
       // already the chosen one; otherwise it is chosen and brought into view at the same zoom
       select(id) { wake(); if (!WD.byId[id] || S.sel === id) return; select(id); const L = WD.byId[id], x = L.at[0] * V.k + V.tx, y = L.at[1] * V.k + V.ty; if (x < 30 || y < 30 || x > V.sw - 30 || y > V.sh - 30) fly(L.at, V.k); else reveal(L.at); },

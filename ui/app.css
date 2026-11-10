@@ -176,6 +176,14 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 .pill.stopped, .pill.capped, .pill.waiting { color: var(--warn); }
 .pill.failed { color: var(--accent); }
 .empty { color: var(--muted); font-style: italic; }
+/* who does the work, in one line, with Change (the story comes first) */
+.who-line { margin: 4px 0 6px; }
+.linkish { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+/* the examples that ship with the app, under the library */
+.examples { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.examples > h3 { margin: 0 0 4px; }
+.examples .hint { margin: 0 0 12px; }
+.card.ex .meta { margin: 4px 0 12px; }
 
 /* one campaign */
 .jhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 12px 24px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 18px; }

@@ -292,6 +292,19 @@
     const u = Object.assign({}, e, { undone: Date.now() }); LIVE.log[logId] = u; ST.set(DBN.log, logId, u);
     return true;
   };
+  // done again: the change undone last, as it was made (the UX review of 5 Nov 2026: redo where there was only undo)
+  const reapply = (e, note) => {
+    if (e.coll === "cluebook") { const [pl, id] = e.key.split("/"); St.putClue(pl, id, e.after, { note, src: "dm" }); }
+    else if (e.coll === "trapbook" || e.coll === "riddlebook") { const [pl, id] = e.key.split("/"); St.putDev(e.coll, pl, id, e.after, { note, src: "dm" }); }
+    else St.put(e.coll, e.key, e.after, { note, src: "dm" });
+  };
+  St.redo = () => {
+    const x = Object.entries(LIVE.log).filter(([, e]) => e.undone && !e.redone).sort((a, b) => b[1].undone - a[1].undone)[0]; if (!x) return false;
+    const [id, e] = x; reapply(e, "redo");
+    const u = Object.assign({}, e, { redone: Date.now() }); LIVE.log[id] = u; ST.set(DBN.log, id, u); return true;
+  };
+  // the last change the game master made (or did again), taken back
+  St.undoLast = () => { const x = Object.entries(LIVE.log).filter(([, e]) => !e.undone && e.note !== "undo").sort((a, b) => b[1].t - a[1].t)[0]; return x ? St.undo(x[0]) : false; };
   St.undoBatch = batch => { const ids = Object.keys(LIVE.log).filter(k => LIVE.log[k].batch === batch && !LIVE.log[k].undone).sort((a, b) => LIVE.log[b].t - LIVE.log[a].t); ids.forEach(St.undo); return ids.length; };
   St.history = filter => Object.entries(LIVE.log).map(([id, e]) => Object.assign({ id }, e)).filter(e => !filter || filter(e)).sort((a, b) => b.t - a.t);
 

@@ -14,7 +14,7 @@
   "use strict";
   const esc = A.esc;
   let dlg = null, T = null, P = null;
-  const ask = () => A.tableUI && A.tableUI.api && A.tableUI.api.askRaw;
+  const ask = () => A.tableUI && A.tableUI.api && A.tableUI.api.askRaw;   // (prompt, onText, signal, what it does: atlas-ux.js)
   function draw(state) {
     const opList = Object.entries(T.ops).map(([, o]) => esc(o.label.toLowerCase())).join(", ");
     dlg.innerHTML = `<form class="loc-form ask-form" method="dialog">
@@ -22,7 +22,11 @@
       <p class="t-small">Say what should change. Only ${esc(T.name)} is changed, and only after you have seen what it replaces. What it can do here: ${opList}.</p>
       <label class="ask-q">What should change?<textarea class="t-in" name="q" rows="3" maxlength="600" placeholder="${esc(T.example || "")}">${esc(state.q || "")}</textarea></label>
       <div class="ask-go"><button type="button" class="t-btn prim" data-ask="ask"${state.busy ? " disabled" : ""}>${state.busy ? "Asking Claude…" : P ? "Ask again" : "Ask"}</button><span class="ask-msg">${esc(state.msg || "")}</span></div>
-      ${P ? `<section class="ask-plan"><h4>${esc(P.plan.change)}</h4>${P.why ? `<p class="t-small">${esc(P.why)}</p>` : ""}
+      ${P && A.ux ? A.ux.card({ id: "ask-" + P.n, title: P.plan.change, intro: P.why, made: ["what you asked", T.name + " as it is now"], touches: P.plan.replaces.length ? P.plan.replaces : ["nothing: it only adds"], keeps: P.plan.keeps,
+          parts: (P.plan.detail || []).filter(Boolean).length ? [{ id: "d", html: (P.plan.detail || []).filter(Boolean).map(d => `<blockquote class="ask-text">${esc(d)}</blockquote>`).join("") }] : [],
+          keepLabel: "Make the change", onKeep: () => { const p = P; P = null; dlg.close(); Promise.resolve().then(() => p.op.apply(p.values)).catch(err => console.warn("the change could not be made", err)); },
+          onAgainAll: () => run(state.q || ""), onDrop: () => { P = null; draw({ q: state.q }); } }) : ""}
+      ${P && !A.ux ? `<section class="ask-plan"><h4>${esc(P.plan.change)}</h4>${P.why ? `<p class="t-small">${esc(P.why)}</p>` : ""}
         ${(P.plan.detail || []).filter(Boolean).map(d => `<blockquote class="ask-text">${esc(d)}</blockquote>`).join("")}
         ${P.plan.replaces.length ? `<div class="ask-l ask-rep"><span class="kl">This replaces</span><ul>${P.plan.replaces.map(r => `<li>${esc(r)}</li>`).join("")}</ul></div>` : `<div class="ask-l"><span class="kl">This replaces</span><p class="t-small">Nothing: it only adds.</p></div>`}
         ${P.plan.keeps.length ? `<div class="ask-l ask-keep"><span class="kl">This keeps</span><ul>${P.plan.keeps.map(r => `<li>${esc(r)}</li>`).join("")}</ul></div>` : ""}
@@ -36,18 +40,22 @@
     if (a === "drop") { P = null; draw({ q }); return; }
     if (a === "do" && P) { const p = P; P = null; dlg.close(); try { await p.op.apply(p.values); } catch (err) { console.warn("the change could not be made", err); } return; }
     if (a !== "ask") return;
+    return run(q);
+  }
+  let NP = 0;
+  async function run(q) {
     if (!q.trim()) { draw({ q, msg: "Say what should change first." }); return; }
     const f = ask(); if (!f) { draw({ q, msg: "This needs Claude: on claude.ai, or in the Atlas app. The tools themselves do every one of these changes by hand." }); return; }
     P = null; draw({ q, busy: true });
     const cfg = A.config || {}, ops = Object.entries(T.ops).map(([id, o]) => `- "${id}": ${o.label}. Values: ${o.values}`).join("\n");
     const prompt = `A tabletop roleplaying campaign: "${cfg.title || ""}" (${[cfg.system, cfg.setting].filter(Boolean).join(", ")}). The game master has chosen ${T.what}: "${T.name}". As it is now:\n${T.now}\n\nThey ask: "${q.trim()}"\n\nChoose the ONE change below that does what they ask, and give its values. Change nothing else; if none of them does what they ask, choose "none".\n${ops}\n\nAnswer with JSON only: {"op": "<one of the ids above, or none>", "values": { ... }, "why": "one short sentence for the game master"}. Invent nothing about the campaign's own people or events.`;
-    let v = null; try { const raw = await f(prompt); const m = String(raw || "").match(/\{[\s\S]*\}/); v = m ? JSON.parse(m[0]) : null; } catch (err) { v = null; }
+    let v = null; try { const raw = await f(prompt, null, null, { kind: "suggesting", what: "a change to " + T.name, uses: ["what you asked", T.name + " as it is now"] }); const m = String(raw || "").match(/\{[\s\S]*\}/); v = m ? JSON.parse(m[0]) : null; } catch (err) { v = null; }
     if (!v) { draw({ q, msg: "Claude could not answer just now. Try again, or use the tools by hand." }); return; }
     const op = T.ops[v.op];
     if (!op) { draw({ q, msg: v.why ? `None of the changes here does that: ${v.why}` : "None of the changes here does that. Try saying it another way, or use the tools by hand." }); return; }
     const values = op.read(v.values || {});
     if (!values) { draw({ q, msg: "Claude's answer did not make a change that can be made here. Try again." }); return; }
-    P = { op, values, plan: op.plan(values), why: String(v.why || "").slice(0, 300) };
+    P = { op, values, plan: op.plan(values), why: String(v.why || "").slice(0, 300), n: ++NP };
     draw({ q });
   }
   A.askChange = function (target) {

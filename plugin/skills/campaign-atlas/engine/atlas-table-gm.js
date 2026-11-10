@@ -254,14 +254,19 @@
   /* ================================================================ the AI, where the page can reach one */
   // what comes back is shown as plain text: emphasis marks and headings are taken off
   const unmd = t => String(t || "").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/(^|[\s("'])\*([^*\n]+)\*/g, "$1$2").replace(/^#{1,6}\s*/gm, "");
-  async function askAI(prompt, onText, signal) {
-    const r = await askRaw(prompt, t => onText(unmd(t)), signal); return r == null ? r : unmd(r);
+  async function askAI(prompt, onText, signal, meta) {
+    const r = await askRaw(prompt, t => onText(unmd(t)), signal, meta); return r == null ? r : unmd(r);
   }
-  async function askRaw(prompt, onText, signal) {
-    let sample = null; try { sample = window.claude && window.claude.use ? await window.claude.use("sample") : null; } catch (e) { sample = null; }
-    if (sample) { const r = await sample(prompt, { onText: e => onText(e.text), signal, cache: false }); return r.text; }
-    if (window.ATLAS_APP && window.ATLAS_APP.ask) { const t = await window.ATLAS_APP.ask(prompt); onText(t); return t; }
-    return null;
+  // (meta: what it is doing, in words, and from what: { kind: reading | writing | suggesting | answering | checking,
+  // what, uses: [...] }, for the line at the top of the page and the tray: atlas-ux.js)
+  async function askRaw(prompt, onText, signal, meta) {
+    const run = A.ux ? A.ux.aiBegin(meta, signal) : null, sig = run ? run.signal : signal; let ok = false;
+    try {
+      let sample = null; try { sample = window.claude && window.claude.use ? await window.claude.use("sample") : null; } catch (e) { sample = null; }
+      if (sample) { const job = sample(prompt, { onText: e => onText(e.text), signal: sig, cache: false }), r = run ? await Promise.race([job, run.stopped]) : await job; ok = true; return r.text; }
+      if (window.ATLAS_APP && window.ATLAS_APP.ask) { const job = window.ATLAS_APP.ask(prompt), t = run ? await Promise.race([job, run.stopped]) : await job; onText(t); ok = true; return t; }
+      return null;
+    } finally { if (run) A.ux.aiEnd(run, ok); }
   }
   // the campaign's own words, cut into passages, to look up what a question is about
   let CORPUS = null;
@@ -435,7 +440,20 @@
   const DMOD = { dice: ["fights"], person: ["makeup"], ask: ["copilot"], screen: ["players"], talk: ["copilot"], time: ["living"] };
   const modOn = r => !r || !A.modules || A.modules.on(r[0], r[1]);
   const shownTab = k => modOn(KMOD[k]), shownDock = k => modOn(DMOD[k]);
-  const navBtn = ([k, l, ic, , desc]) => `<button type="button" role="tab" data-t="tab" data-tab="${k}" aria-selected="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>`;
+  const pins = () => { try { return (JSON.parse(pref.get("pins") || "[]") || []).filter(k => TABS.some(t => t[0] === k) && shownTab(k)); } catch (e) { return []; } };
+  const navBtn = ([k, l, ic, , desc]) => `<span class="tvn-it"><button type="button" role="tab" data-t="tab" data-tab="${k}" aria-selected="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>${k === "home" ? "" : `<button type="button" class="tvn-pin" data-t="pin" data-tab="${k}" aria-pressed="${pins().includes(k)}" title="${pins().includes(k) ? "Unpin: back among all the tools" : "Pin it: your pinned tools come first"}" aria-label="${pins().includes(k) ? "Unpin" : "Pin"} ${esc(l)}">${pins().includes(k) ? "★" : "☆"}</button>`}</span>`;
+  // the list of tools: Start here, the pinned (the UX review of 5 Nov 2026, item 15), then all of them by group, folded
+  // when some are pinned (open when the tool shown is among them)
+  function navHTML() {
+    const P0 = pins(), groups = Object.entries(GROUPS).map(([g, gl]) => `<div class="tvn-g">${esc(gl)}</div>${TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0])).map(navBtn).join("")}`).join("");
+    if (!P0.length) return navBtn(TABS[0]) + groups + `<p class="tvn-hint kn">☆ pins a tool: your pinned ones come first.</p>`;
+    return navBtn(TABS[0]) + `<div class="tvn-g">Pinned</div>${P0.map(k => navBtn(TABS.find(t => t[0] === k))).join("")}<details class="tvn-more"${P0.includes(UI.tab) || UI.tab === "home" ? "" : " open"}><summary>All the tools</summary>${groups}</details>`;
+  }
+  function pickHTML() {
+    const P0 = pins();
+    return `${[TABS[0]].map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}${P0.length ? `<optgroup label="Pinned">${P0.map(k => TABS.find(t => t[0] === k)).map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}</optgroup>` : ""}${Object.entries(GROUPS).map(([g, gl]) => `<optgroup label="${esc(gl)}">${TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0])).map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}</optgroup>`).join("")}`;
+  }
+  function renavigate() { const box = $("#tablev"); if (!box || !box.dataset.done) return; const nav = box.querySelector(".tv-nav"), pk = box.querySelector("[data-t='tabpick']"); if (nav) nav.innerHTML = navHTML(); if (pk) { pk.innerHTML = pickHTML(); pk.value = UI.tab; } }
   function view() {
     const box = $("#tablev"); if (!box) return;
     dismissIntro();
@@ -444,13 +462,16 @@
       box.innerHTML = `<div class="tv">
         <div class="tv-head"><div><div class="st-kicker">${esc(gmName())} only</div><h2 class="tv-h">At the table</h2><p class="tv-lead">Everything for game night: what your players see, tonight's sheet, the villains' clocks, fights and dice, people and places made up on the spot.</p></div>
           <div class="tv-acts"><button type="button" class="t-btn prim" data-t="openscreen">${T.icon("open")}Open the players' screen</button><button type="button" class="t-btn" data-t="tablet" aria-pressed="${app().dataset.tablet === "1"}" title="Bigger buttons, and the tools along the bottom: for a tablet beside you at the table">${app().dataset.tablet === "1" ? "Table-side view: on" : "Table-side view"}</button></div></div>
-        <label class="tv-pick"><span class="kl">Tool</span><select class="t-in" data-t="tabpick" aria-label="Which of the table's tools">${[TABS[0]].map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}${Object.entries(GROUPS).map(([g, gl]) => `<optgroup label="${esc(gl)}">${TABS.filter(t => t[3] === g && shownTab(t[0])).map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}</optgroup>`).join("")}</select></label>
-        <div class="tv-wrap"><nav class="tv-nav" role="tablist" aria-label="At the table">${navBtn(TABS[0])}${Object.entries(GROUPS).map(([g, gl]) => `<div class="tvn-g">${esc(gl)}</div>${TABS.filter(t => t[3] === g && shownTab(t[0])).map(navBtn).join("")}`).join("")}</nav>
+        <label class="tv-pick"><span class="kl">Tool</span><select class="t-in" data-t="tabpick" aria-label="Which of the table's tools">${pickHTML()}</select></label>
+        <div class="tv-wrap"><nav class="tv-nav" role="tablist" aria-label="At the table">${navHTML()}</nav>
         <div class="tv-main"><div class="tv-body" id="tvBody" role="tabpanel"></div><p class="tv-note" id="tvNote" aria-live="polite"></p></div></div></div>`;
     }
-    box.querySelectorAll(".tv-nav [data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === UI.tab));
+    box.querySelectorAll(".tv-nav [data-t='tab'][data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === UI.tab));
     { const pk = box.querySelector("[data-t='tabpick']"); if (pk && pk.value !== UI.tab) pk.value = UI.tab; }
+    { const mo = box.querySelector(".tvn-more"); if (mo && !mo.open && mo.querySelector(`[data-tab="${UI.tab}"]`)) mo.open = true; }
     renderTab();
+    if (A.nav) A.nav.mark();
+    if (A.ux) A.ux.seenHere();
   }
   const app = () => document.getElementById("app");
   function note(t) { const n = $("#tvNote") && visible() ? $("#tvNote") : $("#tDockNote"); if (n) { n.textContent = t; clearTimeout(note.t); note.t = setTimeout(() => { n.textContent = ""; }, 6000); } }
@@ -492,6 +513,7 @@
     const card = k => { const t = TABS.find(x => x[0] === k); return `<button type="button" class="th-card" data-t="tab" data-tab="${k}">${T.icon(t[2])}<span class="th-n">${esc(t[1])}</span><span class="th-d">${esc(t[4])}</span><span class="th-s${k === "safety" && !lines().lines.length && !lines().veils.length ? " warn" : ""}">${esc(statusOf(k))}</span></button>`; };
     const go = (tab, words) => `<button type="button" class="t-link" data-t="tab" data-tab="${tab}">${words}</button>`;
     return `<div class="th">
+      ${A.nav ? A.nav.checklistHTML() : ""}
       <div class="th-hero">
         <article class="th-big">${T.icon("screen", "big")}<div><h3>The players' screen</h3><p>A second window, for a television or another screen. Your players see only what you send it: a map a room at a time, a handout, a face, the world map.</p>
           <p class="t-scrstat${open ? " on" : ""}">${esc(screenStatus())}</p>
@@ -508,7 +530,7 @@
         <li><b>At the table.</b> Open the players' screen on the television. As the players explore, show each place's map a room at a time and give them its handouts: both are on every place's page, in the <i>At the table</i> row under its name. Tick the ${go("clocks", "clocks")} when the villains move.</li>
         <li><b>Whenever you need it.</b> The toolbar at the bottom right of every page: dice, a person made up on the spot, ideas when they're stuck, a question to the campaign, and the players' screen.</li>
         <li><b>After the game.</b> Write a few lines of notes under ${go("tonight", "Tonight")}. Next time, "Previously on…" is made from them.</li>
-      </ol></section></div>`;
+      </ol>${A.nav && A.ux && A.ux.ls.get("checklist-off") === "1" ? `<p><button type="button" class="t-link" data-ckon>Show the checklist for the first session again</button></p>` : ""}</section></div>`;
   }
 
   /* ---- Tonight */
@@ -558,7 +580,7 @@
     const prompt = `Write the "Previously on..." for the next session of the tabletop roleplaying campaign "${title}"${cfg().system ? " (" + cfg().system + ")" : ""}, to be read aloud by the game master to the players. Address the players' characters as "you", in the past tense; vivid but short, 110 to 170 words, in plain prose with no headings or lists. Tell only what the characters saw, did and learned; never reveal a secret they have not found. End on the question still open${s && s.cliff ? " (the session was meant to end on: " + s.cliff + ")" : ""}.\n\nThe game master's notes on the last session:\n${notes || "(none)"}\n\nWhat the party has found so far:\n${foundList.slice(-24).map(x => "- " + x).join("\n") || "(nothing recorded)"}`;
     if (box) box.innerHTML = `<p class="kn">Writing…</p>`;
     let text = null;
-    try { text = await askAI(prompt, t => { if (box) box.innerHTML = `<div class="t-readout"><p>${esc(t)}</p></div>`; }); } catch (e) { text = null; if (e && e.code === "rate_limited") note("Too many requests just now: try again in a minute."); }
+    try { text = await askAI(prompt, t => { if (box) box.innerHTML = `<div class="t-readout"><p>${esc(t)}</p></div>`; }, null, { kind: "writing", what: "the “Previously on…” for session " + n, uses: ["the session notes", "the clues found"] }); } catch (e) { text = null; if (e && e.code === "rate_limited") note("Too many requests just now: try again in a minute."); }
     if (!text) {
       const said = notes.split(/\n+/).map(l => l.trim().replace(/^[-*•]\s*/, "")).filter(Boolean).map(l => /[.!?]$/.test(l) ? l : l + ".");
       text = `Previously, on ${title}… ${said.join(" ")}${foundList.length ? ` By now you know this: ${foundList.slice(-6).join("; ")}.` : ""}${s && s.cliff ? ` And still: ${s.cliff}` : ""}`.replace(/\s+/g, " ").trim();
@@ -924,7 +946,7 @@
     paint();
     if (!hits.length) return;
     const c = cfg(), prompt = `You are the memory of the tabletop roleplaying campaign "${c.title}"${c.system ? " (" + c.system + ")" : ""}, helping its game master during play. Answer the question from the passages below, which are the campaign's own words. If they do not answer it, say so in one sentence, then offer what would fit the story, clearly marked as a suggestion. Be brief and concrete: at most five sentences, plain prose, no headings. Use the names the campaign uses.\n\nQuestion: ${q}\n\nPassages:\n${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n")}`;
-    try { item.a = "…"; paint(); const t = await askAI(prompt, x => { item.a = x; paint(); }); item.a = t || ""; } catch (e) { item.a = ""; if (e && e.code === "rate_limited") note("Too many questions at once: wait a moment."); }
+    try { item.a = "…"; paint(); const t = await askAI(prompt, x => { item.a = x; paint(); }, null, { kind: "answering", what: "“" + (q.length > 50 ? q.slice(0, 48) + "…" : q) + "”", uses: [hits.length + " passages of the campaign"] }); item.a = t || ""; } catch (e) { item.a = ""; if (e && e.code === "rate_limited") note("Too many questions at once: wait a moment."); }
     paint();
   }
 
@@ -943,6 +965,7 @@
   async function act(t, b, e) {
     const d = b.dataset;
     switch (d.t) {
+      case "pin": { const L = pins(), k = d.tab, on = L.includes(k), nl = on ? L.filter(x => x !== k) : L.concat(k); pref.set("pins", JSON.stringify(nl)); renavigate(); note(on ? "Unpinned: it is back among all the tools." : "Pinned: it comes first in the list."); break; }
       case "tab": dockClose(); UI.tab = d.tab; pref.set("tab", d.tab); if (X.state.view !== "table") X.setView("table"); else view(); window.scrollTo({ top: ($("#tablev") || document.body).offsetTop - 8, behavior: "smooth" }); break;
       case "tablet": { const on = app().dataset.tablet !== "1"; app().dataset.tablet = on ? "1" : ""; pref.set("tablet", on ? "1" : ""); b.setAttribute("aria-pressed", on); b.textContent = on ? "Table-side view: on" : "Table-side view"; break; }
       case "openscreen": openScreen(); break;
@@ -1094,7 +1117,7 @@
   A.tableUI = {
     stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab, addDock, addCard,
     // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
-    api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s) => askRaw(p, f || (() => {}), s), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
+    api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s, m) => askRaw(p, f || (() => {}), s, m), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, tabs: () => TABS.filter(t => shownTab(t[0])).map(t => ({ key: t[0], label: t[1], desc: t[4] })), open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
     init(ctx) {
       X = ctx; S = T.makeStore(ctx.db, cfg().storageKey); found = T.foundIn(S);
       if (A.story && A.story.connect) A.story.connect(S);

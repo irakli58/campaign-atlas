@@ -181,10 +181,16 @@
       el.textContent = c.connected ? "connected" + (c.name && p === "claude" ? " · " + c.name : "") : "not connected";
       el.className = "cs" + (c.connected ? " ok" : "");
     }
-    // the last choice made, if there was one
-    const last = store.get("provider"), pick = last && form.querySelector(`input[name=provider][value="${last}"]`);
-    if (pick && !form.dataset.picked) { pick.checked = true; form.dataset.picked = 1; }
+    // who does the work: the last choice made, else the first that is ready (the user's own Claude, their own ChatGPT, a
+    // key connected); said in one line with Change, and the choices shown only when asked for or when nothing is ready
+    // (the UX review of 5 Nov 2026, item 21: the story first)
+    const ready = p => isOwn(p) ? !!(S.tools[toolOf(p)] || {}).found : !!(S.connectors[p] || {}).connected;
+    if (!form.dataset.picked) {
+      const last = store.get("provider"), first = ["own-claude", "own-codex", "claude", "openai"].find(ready), want = last && ready(last) ? last : first || last || "own-claude", pick = form.querySelector(`input[name=provider][value="${want}"]`);
+      if (pick) pick.checked = true; form.dataset.picked = 1;
+    }
     if (!isOwn(prov())) $("#paid").open = true;
+    paintWho(ready);
     // the sizes
     const sz = $(".sizes");
     if (!sz.children.length) {
@@ -205,6 +211,13 @@
     words();
   }
 
+  function paintWho(ready) {
+    const line = $("#who-line"), pickBox = $("#who-pick"), p = prov(), on = ready(p), open = form.dataset.whoOpen === "1" || !on;
+    if (!line || !pickBox) return;
+    line.hidden = open; pickBox.hidden = !open;
+    if (!open) line.innerHTML = `Made with <b>${esc(PROV[p] || p)}</b>${isOwn(p) ? ` (${esc(S.tools[toolOf(p)].label)} is ready)` : " (connected)"}. <button type="button" class="linkish" id="who-change">Change</button>`;
+  }
+  document.addEventListener("click", e => { if (e.target.closest && e.target.closest("#who-change")) { form.dataset.whoOpen = "1"; paintWho(p => isOwn(p) ? !!(S.tools[toolOf(p)] || {}).found : !!(S.connectors[p] || {}).connected); } });
   function paintChoices() {
     const p = prov(), own = isOwn(p), models = own ? {} : S.models[p] || {}, sel = form.model;
     $("#f-model").hidden = own || Object.keys(models).length < 2;
@@ -358,8 +371,27 @@
   });
 
   /* ---------------------------------------------------------------- the library */
+  // the examples that ship with the app, to look round before making a campaign of one's own
+  let EX = null;
+  function paintExamples() {
+    const box = $("#examples"); if (!box) return;
+    if (!EX) { api("/api/examples").then(d => { EX = d.examples || []; paintExamples(); }).catch(() => { EX = []; }); return; }
+    if (!EX.length) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = `<h3>${S.campaigns.length ? "The examples" : "Or look round an example first"}</h3><p class="hint">Finished campaigns made with Atlas, to see what you will be making and to try the tools on. The first time, its page is made on this computer: about half a minute.</p>
+      <div class="list">${EX.map(e => `<div class="card ex"><h3>${esc(e.title)}</h3><p class="meta">${esc(e.says)}</p><button type="button" class="btn ghost" data-ex="${esc(e.id)}">${e.ready ? "Open it" : "Look round it"}</button></div>`).join("")}</div>`;
+  }
+  document.addEventListener("click", async e => {
+    const b = e.target.closest && e.target.closest("[data-ex]"); if (!b) return;
+    const w = window.open("about:blank", "_blank");
+    b.disabled = true; const was = b.textContent; b.textContent = "Getting it ready…";
+    try { const r = await api("/api/example", { id: b.dataset.ex }); if (w) w.location = r.url; else location.href = r.url; const x = EX && EX.find(q => q.id === b.dataset.ex); if (x) x.ready = true; b.textContent = "Open it"; }
+    catch (x) { if (w) w.close(); b.textContent = was; alert(x.message); }
+    b.disabled = false;
+  });
   function paintList() {
     const L = $("#list");
+    paintExamples();
     if (!S.campaigns.length) { L.innerHTML = `<p class="empty">No campaigns yet. Start one under <a href="#new">New campaign</a>.</p>`; return; }
     L.innerHTML = S.campaigns.map(j => {
       const c = j.progress && j.progress.counts;

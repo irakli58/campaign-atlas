@@ -158,6 +158,8 @@
     api.note("The rumour is out."); setTimeout(paint, 60);
   });
 
+  // (the search: each rumour by its truth and by what is said)
+  (A.searchers = A.searchers || []).push({ kind: "Rumours", order: 36, mod: ["living"], find: q => all().map(R => { const t = String(R.title || R.said || R.truth || "A rumour"), x = A.nav && A.nav.hit(t.length > 70 ? t.slice(0, 68) + "…" : t, [R.truth, R.said].join(" "), q, "The rumour mill"); return x ? Object.assign(x, { go: () => api.open("rumours") }) : null; }).filter(Boolean).slice(0, 30) });
   TU.addTab({ key: "rumours", label: "The rumour mill", icon: "rumour", group: "play", after: "time", desc: "What happens travels the roads as rumours and changes as it goes; you keep the truth",
     html, status: () => { const p = partyAt(), n = p ? heardAt(p, nowM()).length : 0; return n ? `${n} going round where the party is` : `${all().length} rumour${all().length === 1 ? "" : "s"}`; },
     init(store) {

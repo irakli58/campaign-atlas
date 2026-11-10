@@ -150,7 +150,7 @@
       if (g.pool.length) {
         const { prompt, codes } = St.connectPrompt(ref, g);
         let raw = null;
-        try { raw = await api.askRaw(prompt); } catch (e) { if (e && e.code === "rate_limited") throw new Error("Claude is busy just now: try again in a minute."); console.warn("auto-connect", e); raw = null; }
+        try { raw = await api.askRaw(prompt, null, null, { kind: "reading", what: "what joins " + St.name(ref) + " to the story", uses: [g.pool.length + " things of the campaign around it"] }); } catch (e) { if (e && e.code === "rate_limited") throw new Error("Claude is busy just now: try again in a minute."); console.warn("auto-connect", e); raw = null; }
         if (raw) { res = St.readConnect(raw, codes); if (res) by = "claude"; }
       }
       if (!res) res = St.localConnect(g);
@@ -175,14 +175,14 @@
     if (!n && !R.ideas.length) return `<section class="ic-rev"><h5>${T.icon("spark")} Auto-Connect to Story</h5><p>Nothing in the campaign as it stands connects to this clue: no person, place or event it names or shares a room with. That is not a fault; it may be new.</p>
       <div class="t-row"><button type="button" class="t-btn" data-ica="newitem" data-r="${esc(R.ref)}">Make a new story element for it</button><button type="button" class="t-btn" data-ica="follow" data-r="${esc(R.ref)}">Suggest next clues</button><button type="button" class="t-mini" data-ica="revx">Close</button></div></section>`;
     const relOpts = (i, cur) => `<select class="t-in" data-icrev="rel" data-i="${i}">${St.RELS.map(r => `<option${r[0] === cur ? " selected" : ""}>${esc(r[0])}</option>`).join("")}${St.RELS.some(r => r[0] === cur) ? "" : `<option selected>${esc(cur)}</option>`}</select>`;
-    return `<section class="ic-rev"><h5>${T.icon("spark")} Auto-Connect to Story</h5><p class="kn">${esc(head)} Tick what is right, change what is nearly right; nothing is kept until you save.${R.dropped ? ` ${R.dropped} suggestion${R.dropped > 1 ? "s" : ""} named things not in the campaign, and ${R.dropped > 1 ? "were" : "was"} left out.` : ""}</p>
+    return `<section class="ic-rev ux-card">${A.ux ? A.ux.cardTop({ who: R.by === "claude" ? "Claude suggests" : "Atlas suggests", title: "What joins " + St.name(R.ref) + " to the story", made: [R.by === "claude" ? R.pool + " things of the campaign around it, read by Claude" : "names, places and rooms it shares with the campaign"], touches: ["the investigation: only what you tick"], keeps: ["every connection you made, and what the campaign's files say"] }) : `<h5>${T.icon("spark")} Auto-Connect to Story</h5>`}<p class="kn">${esc(head)} Tick what is right, change what is nearly right; nothing is kept until you keep it.${R.dropped ? ` ${R.dropped} suggestion${R.dropped > 1 ? "s" : ""} named things not in the campaign, and ${R.dropped > 1 ? "were" : "was"} left out.` : ""}</p>
       ${R.list.length ? `<h6>Connections</h6><ul class="ic-rl">${R.list.map((s, i) => `<li class="${s.clash ? "clash" : ""}"><label class="ic-ck"><input type="checkbox" data-icrev="on" data-i="${i}"${s.on ? " checked" : ""}></label><div>${relOpts(i, s.rel)} ${go(s.to)} ${confChip(s.conf)}<span class="${s.cert === "fact" ? "ic-fact" : "ic-hyp"}">${s.cert === "fact" ? "the campaign says so" : "hypothesis"}</span>
           <textarea class="t-in" rows="2" data-icrev="why" data-i="${i}" maxlength="400">${esc(s.why)}</textarea>${s.basis ? `<p class="kn ic-basis">Rests on: ${esc(s.basis)}</p>` : ""}${s.clash ? `<p class="ic-warn">You joined these already as "${esc(s.clash)}". Saving this adds a second connection beside yours; yours stays as it is.</p>` : ""}</div></li>`).join("")}</ul>` : ""}
       ${R.people.length ? `<h6>Who might know of it</h6><ul class="ic-rl">${R.people.map((p, i) => `<li><label class="ic-ck"><input type="checkbox" data-icrev="pon" data-i="${i}"${p.on ? " checked" : ""}></label><div>${go(p.who)} <span class="ic-rel">${esc(p.kind)}</span> ${confChip(p.conf)}<p class="kn">${esc(p.why)}</p></div></li>`).join("")}</ul><p class="t-small">"May already know" and "may have witnessed" become what they know (you can say how, later); the rest become connections. Nobody learns anything unless you tick it.</p>` : ""}
       ${R.contra.length ? `<h6>What does not fit</h6><ul class="ic-rl">${R.contra.map((c, i) => `<li class="clash"><label class="ic-ck"><input type="checkbox" data-icrev="con" data-i="${i}"${c.on ? " checked" : ""}></label><div>Against ${go(c.with)}: ${esc(c.issue)}<p class="kn">Ticked, it is kept as a "contradicts" connection and a warning for you to settle. Nothing is changed.</p></div></li>`).join("")}</ul>` : ""}
       ${R.questions.length ? `<h6>Questions it raises</h6><ul class="ic-rl">${R.questions.map((q, i) => `<li><label class="ic-ck"><input type="checkbox" data-icrev="qon" data-i="${i}"${q.on ? " checked" : ""}></label><div>${esc(q.text)}</div></li>`).join("")}</ul>` : ""}
       ${R.ideas.length ? `<h6>Ideas, not in the campaign</h6><ul class="ic-ideas">${R.ideas.map((t, i) => `<li>${esc(t)} <button type="button" class="t-mini" data-ica="idea" data-i="${i}" data-r="${esc(R.ref)}">Make it a story element</button></li>`).join("")}</ul>` : ""}
-      <div class="t-row"><button type="button" class="t-btn prim" data-ica="revsave">Save what is ticked</button><button type="button" class="t-btn" data-ica="revall" title="Every connection that is at least possible and does not clash with yours, every contradiction and question">Accept all that are likely</button><button type="button" class="t-mini" data-ica="revx">Close</button></div></section>`;
+      <div class="t-row ux-cact"><button type="button" class="t-btn prim" data-ica="revsave">Keep the ticked</button><button type="button" class="t-btn" data-ica="revall" title="Every connection that is at least possible and does not clash with yours, every contradiction and question">Keep all that are likely</button><button type="button" class="t-btn" data-ica="revagain" data-r="${esc(R.ref)}">Ask again</button><button type="button" class="t-btn" data-ica="revx">Throw it away</button></div></section>`;
   }
   function saveReview(all) {
     const R = UI.review; if (!R) return; const batch = St.uid("B"), note = "Auto-Connect: " + St.name(R.ref); let n = 0;
@@ -202,7 +202,7 @@
     UI.busy = { ref, what: "follow" }; UI.follow = null; UI.err = ""; api.render();
     try {
       const { prompt, codes } = St.followPrompt(ref); let raw = null;
-      try { raw = await api.askRaw(prompt); } catch (e) { if (e && e.code === "rate_limited") throw new Error("Claude is busy just now: try again in a minute."); raw = null; }
+      try { raw = await api.askRaw(prompt, null, null, { kind: "suggesting", what: "the clues that could come after " + St.name(ref), uses: ["the clue", "the campaign around it"] }); } catch (e) { if (e && e.code === "rate_limited") throw new Error("Claude is busy just now: try again in a minute."); raw = null; }
       UI.follow = raw ? { ref, list: St.readFollow(raw, codes) || [] } : { ref, none: true };
     } catch (e) { UI.err = e.message || String(e); UI.errRef = ref; }
     UI.busy = null; api.render();
@@ -210,9 +210,9 @@
   function followHTML(F, pl) {
     if (F.none) return `<section class="ic-rev"><h5>Next clues</h5><p class="kn">Suggesting new clues needs Claude, which this page cannot reach (on claude.ai it asks your permission; in the Atlas app it uses your own). You can make one yourself with "A new clue".</p><button type="button" class="t-mini" data-ica="folx">Close</button></section>`;
     const places = (A.order || []).filter(q => A.maps[q] && !A.maps[q].alias).map(q => [q, A.meta[q].name || q]);
-    return `<section class="ic-rev"><h5>Next clues: ideas, not yet in the campaign</h5><p class="kn">Each is added only when you add it, as a clue without a marker, joined to this one. Place it on its map afterwards.</p>
+    return `<section class="ic-rev ux-card">${A.ux ? A.ux.cardTop({ title: "The clues that could come next", made: ["the clue, and the campaign around it"], touches: ["the investigation: each clue you keep, as a clue without a marker, joined to this one"], keeps: ["every clue already here"] }) : `<h5>Next clues: ideas, not yet in the campaign</h5>`}<p class="kn">Each is added only when you keep it. Place it on its map afterwards.</p>
       ${F.list.length ? `<ul class="ic-rl">${F.list.map((d, i) => `<li><div>${glyph(d.k)} <b>${esc(d.t)}</b> <span class="ic-rel">${d.route === "alternative" ? "another way to the same truth" : "what comes next"}</span><p>${esc(d.pd)}</p>${d.kp ? `<p class="kn">Only you: ${esc(d.kp)}</p>` : ""}${d.why ? `<p class="kn ic-basis">${esc(d.why)}</p>` : ""}
-        <div class="t-row"><select class="t-in" data-icfol="pl" data-i="${i}">${opt(places, d.place ? d.place.slice(6) : pl)}</select><button type="button" class="t-btn" data-ica="foladd" data-i="${i}">Add this clue</button></div></div></li>`).join("")}</ul>` : `<p class="kn">No suggestion came back.</p>`}<button type="button" class="t-mini" data-ica="folx">Close</button></section>`;
+        <div class="t-row"><select class="t-in" data-icfol="pl" data-i="${i}">${opt(places, d.place ? d.place.slice(6) : pl)}</select><button type="button" class="t-btn" data-ica="foladd" data-i="${i}">Keep this clue</button></div></div></li>`).join("")}</ul>` : `<p class="kn">No suggestion came back.</p>`}<div class="t-row ux-cact"><button type="button" class="t-btn" data-ica="folagain" data-r="${esc(F.ref)}">Ask again</button><button type="button" class="t-btn" data-ica="folx">Throw them away</button></div></section>`;
   }
 
   /* ---- people: what each knows, how they came by it, what they will say */
@@ -251,7 +251,7 @@
   }
   async function speak(who, q, ev) {
     UI.busy = { what: "speak", ref: who }; UI.speak = { who, q, ev }; api.render();
-    let raw = null; try { raw = await api.askRaw(St.speakPrompt(who, q, ev)); } catch (e) { raw = null; }
+    let raw = null; try { raw = await api.askRaw(St.speakPrompt(who, q, ev), null, null, { kind: "answering", what: "as " + St.name(who), uses: ["what they know", "what they would say"] }); } catch (e) { raw = null; }
     if (raw) { const i = raw.search(/\n\s*GM:/i); UI.speak = { who, q, ev, reply: (i >= 0 ? raw.slice(0, i) : raw).trim(), gm: i >= 0 ? raw.slice(i).replace(/^\s*GM:\s*/i, "").trim() : "" }; }
     else UI.speak = { who, q, ev, none: true };
     UI.busy = null; api.render();
@@ -329,6 +329,8 @@
       case "new": { const ref = newClue(UI.f.pl); if (ref) { UI.view = "clues"; UI.sel = ref; flash("A new clue, without a marker yet: name it, then place it on the map."); } break; }
       case "auto": return autoConnect(r);
       case "follow": return followUp(r);
+      case "revagain": return autoConnect(r);
+      case "folagain": return followUp(r);
       case "map": return showOnMap(r);
       case "dup": { const x = clueOf(r); if (!x) break; const ref = newClue(x.pl, Object.assign({}, x.c, { t: (x.c.t || x.id) + " (copy)" })); UI.sel = ref; flash("A copy, without a marker yet."); break; }
       case "arch": { const x = clueOf(r); if (!x) break; const rec = Object.assign({}, x.c); if (rec.arch) delete rec.arch; else rec.arch = 1; St.putClue(x.pl, x.id, rec, { note: rec.arch ? "archived" : "brought back" }); flash(rec.arch ? "Archived: off the map and the lists, kept here." : "Brought back."); break; }
@@ -519,5 +521,12 @@
       }
     });
   }
+  // the keys of the investigation, as of every editor: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), "?"
+  document.addEventListener("keydown", e => {
+    const X = api.ctx(); if (!X || X.state.view !== "table" || api.tab() !== "clues" || !A.ux || !A.ux.keyFree(e)) return;
+    if (A.ux.isHelpKey(e)) { e.preventDefault(); A.ux.keys("clues"); return; }
+    if (A.ux.isUndo(e)) { e.preventDefault(); flash(St.undoLast() ? "Undone." : "Nothing to undo."); api.render(); return; }
+    if (A.ux.isRedo(e)) { e.preventDefault(); flash(St.redo() ? "Done again." : "Nothing to do again."); api.render(); }
+  });
   A.clueUI = { open: ref => openRef(ref), autoConnect, placeNext: null };
 })(ATLAS);

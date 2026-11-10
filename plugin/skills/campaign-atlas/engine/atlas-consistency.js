@@ -171,7 +171,7 @@
   async function askClaude() {
     const mat = material(), c = A.config || {};
     const prompt = `You check the tabletop roleplaying campaign "${c.title || ""}" for contradictions: two statements in the material below that cannot both be true (a passage between places the maps or descriptions deny, a person in two places at once, an event before its cause, someone dead who later acts, a building destroyed that later stands, a fact told two ways). Lies, mistakes and mysteries the material itself presents as such are NOT contradictions. Find at most eight, the most certain first.\n\nReply only with lines of JSON, one per contradiction: {"area": "story"|"people"|"maps"|"time", "title": "a short title", "why": "why they cannot both be true", "a": "the first statement, copied word for word from the material (at most 25 words)", "b": "the second, word for word (at most 25 words)", "fix": "the smallest change that would mend it"}\n\nMATERIAL:\n${mat}`;
-    const raw = await api.askRaw(prompt);
+    const raw = await api.askRaw(prompt, null, null, { kind: "checking", what: "the campaign for what does not fit", uses: ["the story", "the places", "the people", "the session notes"] });
     if (raw == null) return null;
     const flat = mat.replace(/\s+/g, " ").toLowerCase(), has = q => q && q.length > 8 && flat.includes(String(q).replace(/\s+/g, " ").toLowerCase().replace(/^["“]|["”]$/g, "").replace(/…$/, "").trim());
     const got = String(raw).split("\n").map(l => { try { return JSON.parse(l.trim().replace(/,$/, "")); } catch (e) { return null; } }).filter(x => x && x.title && x.a && x.b);
@@ -183,7 +183,7 @@
   async function suggestFix(f) {
     const hits = api.lookup([f.title, f.why, ...(f.refs || []).map(r => St.name(r))].join(" "), 8);
     const prompt = `In the tabletop roleplaying campaign "${(A.config || {}).title || ""}", this does not fit:\n${f.title}\nWhy: ${f.why}\nEvidence:\n${(f.evidence || []).map(e => "- " + e.text).join("\n")}\n\nSuggest the smallest change that makes it consistent while keeping the story, its mysteries and what the players have already seen: say exactly what to change and where, in two to four sentences. If it could be intentional (a lie, a misunderstanding), say how to make that clear instead. Plain prose.\n\nThe campaign's own words:\n${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n")}`;
-    return api.askRaw(prompt);
+    return api.askRaw(prompt, null, null, { kind: "suggesting", what: "a way to mend “" + String(f.title || "").slice(0, 40) + "”", uses: ["its evidence", "the passages around it"] });
   }
 
   /* ---- the page: a tab of At the table */

@@ -98,7 +98,7 @@ A change is one of {"faction": id, "party": "war|hostile|wary|neutral|friendly|a
   }
   async function askCouncil(did) {
     UI.busy = did; UI.err = ""; paint();
-    let r = null; try { r = await api.askRaw(prompt(deedOf(did) || {}), () => {}); } catch (e) { r = null; }
+    let r = null; try { r = await api.askRaw(prompt(deedOf(did) || {}), () => {}, null, { kind: "suggesting", what: "what comes of “" + ((deedOf(did) || {}).title || "the deed") + "”", uses: ["the deed", "the factions and people it touches"] }); } catch (e) { r = null; }
     UI.busy = "";
     if (!r) { UI.err = "Claude is not reachable from this page. Write what comes of it yourself: it works the same."; paint(); return; }
     let got = []; try { const t = String(r), a = t.indexOf("["), b = t.lastIndexOf("]"); got = JSON.parse(t.slice(a, b + 1)); } catch (e) { got = []; }
@@ -183,6 +183,7 @@ A change is one of {"faction": id, "party": "war|hostile|wary|neutral|friendly|a
     return `<section class="t-card dd-deed"><div class="tw-hh"><h3>${esc(d.title)}</h3><span class="kn">${esc(at(d.m).short)}${d.place ? " · " + esc(placeName(d.place)) : ""}</span></div>
       <p class="t-small">${esc((HOW.find(h => h[0] === d.how) || HOW[0])[1])}${d.what ? ". " + esc(d.what) : ""}</p>
       <p class="t-small kn">${done ? `${done} came of it` : "Nothing has come of it yet"}${prop ? ` · ${prop} proposed, waiting for you` : ""} <button type="button" class="t-link" data-dd="fold" data-d="${esc(did)}">${open ? "fold" : "open"}</button></p>
+      ${open && prop && A.ux ? `<div class="ux-card ux-cardin">${A.ux.cardTop({ title: prop + " consequence" + (prop > 1 ? "s" : "") + " waiting for you", made: ["the deed", "the factions, people and places it touches"], touches: ["the world, only for each you let happen: factions, people's lives, events to come"], keeps: ["everything, until you let one happen; each can be taken back after"] })}</div>` : ""}
       ${open ? cons.map(c => UI.edit && UI.edit.did === did && UI.edit.cid === c.id ? editHTML() : conHTML(did, c)).join("") + (UI.edit && UI.edit.did === did && !UI.edit.cid ? editHTML() : "")
         + `<div class="t-row dd-acts">${UI.busy === did ? `<span class="kn">The council is weighing it…</span>` : `<button type="button" class="t-btn" data-dd="ask" data-d="${esc(did)}">${cons.length ? "Ask the council for more" : "Ask the council what comes of it"}</button>`}<button type="button" class="t-mini" data-dd="own" data-d="${esc(did)}">Write one of your own</button><button type="button" class="t-mini" data-dd="del" data-d="${esc(did)}">Remove the deed</button></div>` : ""}</section>`;
   }

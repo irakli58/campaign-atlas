@@ -2668,3 +2668,180 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
   .fw-card { overflow-x: auto; }
   .fa-web2 { min-width: 560px; }
 }
+
+/* ================================================================ the UX review of 5 Nov 2026 (all 22 items approved):
+   engine/atlas-ux.js (the editing edge, the save mark, the keys, the menu, the hand mark, what Claude is doing and the
+   tray, the card for what it suggests) and engine/atlas-nav.js (search, back, the trail, the person's card, the
+   checklist). In Atlas's own colours and type. */
+/* the edge round a map being edited, and what is in hand */
+.ux-editing { outline: 3px solid var(--bone); outline-offset: -3px; }
+.ux-elabel { position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 40; pointer-events: none; background: var(--bone); color: var(--panel); font: 600 11px/1.2 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; padding: 5px 10px 6px; border-radius: 0 0 5px 5px; white-space: nowrap; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; }
+.wm-space, .wm-space * { cursor: grab !important; }
+/* the save mark */
+.ux-save { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; color: var(--muted); min-width: 4.5em; display: inline-block; }
+.ux-save:empty { min-width: 0; }
+.ux-save.on { color: var(--bone); }
+.ux-save.bad { color: var(--accent); font-weight: 600; }
+.wm-uxs, .ce-uxs, .me-uxs, .gx-uxs { display: inline-flex; align-items: center; gap: 8px; }
+/* the "?" of the keys */
+.ux-keysb { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--rule); background: var(--panel); color: var(--muted); font: 600 13px/1 var(--f-mono); cursor: pointer; padding: 0; flex: none; }
+.ux-keysb:hover, .ux-keysb:focus-visible { color: var(--ink); border-color: var(--ink); }
+/* a small panel by a button or the pointer: the keys, the menu, the tray */
+.ux-pop { position: fixed; z-index: 2147483000; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 10px 30px rgba(0, 0, 0, .28); padding: 8px; max-width: min(420px, calc(100vw - 16px)); max-height: calc(100vh - 24px); overflow: auto; font-size: 14px; }
+.ux-pop h4 { margin: 2px 4px 8px; font-family: var(--f-display); font-size: 17px; font-weight: 400; }
+.ux-keys table { border-collapse: collapse; }
+.ux-keys th, .ux-keys td { text-align: left; vertical-align: top; padding: 4px 6px; border-top: 1px solid var(--rule); }
+.ux-keys th { white-space: nowrap; }
+.ux-keys kbd { font: 12px var(--f-mono); background: var(--bg); border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px; padding: 1px 5px; }
+.ux-keys p { margin: 8px 4px 2px; font-size: 13px; }
+.ux-menu { padding: 4px; min-width: 210px; }
+.ux-menu .ux-mt { font: 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 5px 8px 6px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ux-menu [role="menu"] { display: grid; }
+.ux-menu button { text-align: left; border: 0; background: none; padding: 7px 10px; border-radius: 4px; cursor: pointer; font: inherit; color: inherit; }
+.ux-menu button:hover, .ux-menu button:focus-visible { background: var(--accent-soft); outline: none; }
+.ux-menu button[disabled] { opacity: .45; cursor: default; }
+.ux-menu button .kn { font-size: 12px; margin-left: 6px; }
+.ux-menu .ux-danger { color: var(--accent); }
+.ux-menu hr { border: 0; border-top: 1px solid var(--rule); margin: 4px 6px; }
+/* the hand mark */
+.ux-hand { display: inline-flex; align-items: center; gap: 5px; font: 11.5px/1.3 var(--f-mono); letter-spacing: .03em; color: var(--bone); background: var(--bone-soft); border-radius: 3px; padding: 3px 7px; }
+.ux-hand svg { flex: none; }
+/* what Claude (or Atlas) is doing now, and what it made while you were elsewhere */
+.ux-ai { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2147482000; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; max-width: min(760px, calc(100vw - 24px)); background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 999px; box-shadow: 0 6px 20px rgba(0, 0, 0, .22); padding: 6px 8px 6px 14px; font-size: 14px; }
+.ux-ai[hidden] { display: none; }
+.ux-ai b { font-weight: 600; }
+.ux-ai .ux-k { font: 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.ux-ai .ux-w { overflow-wrap: anywhere; }
+.ux-ai .ux-u { color: var(--muted); font-size: 13px; }
+.ux-ai .ux-sep { width: 1px; height: 18px; background: var(--rule); }
+.ux-ab { border: 1px solid var(--rule); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 4px 11px; cursor: pointer; font-size: 13px; }
+.ux-ab:hover { border-color: var(--accent); }
+.ux-tray { border-color: var(--bone); }
+.ux-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); display: inline-block; animation: ux-pulse 1.2s ease-in-out infinite; flex: none; }
+@keyframes ux-pulse { 0%, 100% { opacity: .35; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .ux-dot { animation: none; } }
+.ux-pg { display: inline-block; width: 90px; height: 6px; background: var(--rule); border-radius: 3px; overflow: hidden; vertical-align: middle; }
+.ux-pg i { display: block; height: 100%; background: var(--bone); }
+.ux-trayp ul { list-style: none; margin: 0; padding: 0; }
+.ux-trayp li { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 6px 4px; border-top: 1px solid var(--rule); }
+.ux-trayp li .kn { display: block; font-size: 12.5px; }
+/* the card for what Claude suggests */
+.ux-card { border: 1px solid var(--rule); border-left: 3px solid var(--bone); border-radius: 6px; background: var(--panel); padding: 12px 14px; margin: 10px 0; }
+.ux-card.busy { opacity: .75; }
+.ux-ch { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.ux-ck { font: 10.5px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--bone); }
+.ux-card h4 { margin: 0; font-family: var(--f-display); font-size: 18px; font-weight: 400; }
+.ux-cm { display: grid; gap: 4px; margin: 8px 0; font-size: 14px; }
+.ux-cm > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px; }
+.ux-cm dt { font: 10.5px/1.9 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.ux-cm dd { margin: 0; }
+.ux-parts { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.ux-part { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); }
+.ux-part:not(:has(.ux-tk)) { grid-template-columns: minmax(0, 1fr) auto; }
+.ux-part.on { border-color: var(--bone); }
+.ux-part.busy { opacity: .7; }
+.ux-pb p { margin: 2px 0; }
+.ux-pl { display: block; margin-bottom: 2px; }
+.ux-pb textarea { width: 100%; }
+.ux-tk input { width: 18px; height: 18px; margin-top: 2px; }
+.ux-again { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ux-again input { flex: 1 1 200px; }
+.ux-err { color: var(--accent); }
+.ux-cact { margin-top: 8px; }
+.ux-cact button[disabled] { opacity: .5; cursor: default; }
+/* back and forward, beside the views */
+.ux-navb { display: inline-flex; gap: 2px; margin-right: 4px; }
+.views .ux-navb button { padding: 4px 11px; font-size: 16px; line-height: 1; letter-spacing: 0; min-width: 34px; }
+.views .ux-navb button[disabled] { opacity: .35; cursor: default; }
+/* the search: the list under the box */
+.ux-qwrap { position: relative; display: inline-block; max-width: 100%; }
+.ux-sr { position: absolute; top: calc(100% + 4px); right: 0; z-index: 300; width: min(440px, calc(100vw - 24px)); max-height: min(70vh, 560px); overflow: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); padding: 4px; text-align: left; }
+.ux-sr[hidden] { display: none; }
+.ux-srg + .ux-srg { border-top: 1px solid var(--rule); margin-top: 2px; }
+.ux-srh { font: 10.5px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 7px 8px 3px; }
+.ux-srh .kn { font-size: 10.5px; margin-left: 4px; }
+.ux-sri { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 4px; cursor: pointer; color: var(--ink); font: inherit; }
+.ux-sri b { display: block; font-weight: 600; font-size: 15px; }
+.ux-sri span { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ux-sri:hover, .ux-sri:focus-visible { background: var(--accent-soft); outline: none; }
+.ux-srm { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 3px 8px 6px; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.ux-sr0 { margin: 8px; color: var(--muted); font-size: 14px; }
+/* the trail at the head of a map */
+.wm-title .ux-trail, .cb-trail .ux-trail { display: inline-flex; margin: 0; font-size: 12.5px; vertical-align: middle; }
+.wm-title .ux-trail [aria-current] { color: var(--ink); font-family: var(--f-sc); font-size: 17px; letter-spacing: .03em; }
+.cb-trail .ux-trail [aria-current] { color: var(--ink); font-family: var(--f-display); font-size: 19px; }
+.ux-trail button:disabled { text-decoration: none; cursor: default; }
+/* the world map drawn the first time */
+.wm-drawing { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: clamp(440px, 72vh, 860px); border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); font-family: var(--f-display); font-size: 19px; color: var(--muted); }
+/* a person's (or a faction's, or a place's) card, beside whatever is open */
+.ux-peek { position: fixed; top: 0; right: 0; bottom: 0; z-index: 2147481000; width: min(400px, 100vw); overflow: auto; background: var(--panel); color: var(--ink); border-left: 1px solid var(--rule); box-shadow: -10px 0 30px rgba(0, 0, 0, .22); padding: 18px 18px 24px; }
+.ux-peek[hidden] { display: none; }
+.ux-pkx { position: absolute; top: 8px; right: 10px; width: 34px; height: 34px; border: 1px solid var(--rule); border-radius: 50%; background: var(--bg); color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer; }
+.ux-pkh h3 { margin: 4px 40px 2px 0; font-family: var(--f-display); font-size: 26px; font-weight: 400; display: flex; align-items: center; gap: 8px; }
+.ux-pkh .kn { margin: 0 0 8px; }
+.ux-pkd { margin: 8px 0; display: grid; gap: 6px; }
+.ux-pkd .pf { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px; }
+.ux-pkd dt { font: 10.5px/1.9 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.ux-pkd dd { margin: 0; }
+.ux-pkd ul { margin: 0; padding-left: 18px; }
+.ux-sec { border-top: 1px dashed var(--rule); padding-top: 8px; background: var(--secret); border-radius: 4px; padding: 8px; }
+.ux-sec:not(:has(.pf)) { display: none; }
+.ux-said li { margin-bottom: 4px; }
+.ux-pka { margin-top: 12px; }
+.ux-has { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
+.ux-pkb { margin-left: 10px; font-size: 12px; padding: 1px 7px; vertical-align: 2px; }
+/* the checklist for the first session, on Start here */
+.th-check { border: 1px solid var(--bone); border-radius: 6px; background: var(--bone-soft); padding: 12px 14px; margin: 0 0 16px; }
+.th-ckh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.th-ckh h3 { margin: 0; font-family: var(--f-display); font-size: 21px; font-weight: 400; }
+.th-check ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.th-check li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 6px; align-items: start; }
+.th-ckm { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--bone); display: grid; place-items: center; font-size: 13px; color: var(--panel); margin-top: 2px; }
+.th-check li.done .th-ckm { background: var(--ok); border-color: var(--ok); }
+.th-ckb { text-align: left; border: 0; background: none; padding: 0; cursor: pointer; color: var(--ink); font: inherit; }
+.th-ckb b { display: block; font-weight: 600; }
+.th-ckb span { display: block; font-size: 13.5px; color: var(--muted); }
+.th-check li.done .th-ckb b { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--muted); }
+.th-ckb:hover b, .th-ckb:focus-visible b { color: var(--accent); }
+/* the table's tools: pinned first, the rest folded under All the tools */
+.tvn-it { position: relative; display: block; }
+.tvn-it > [data-t="tab"] { width: 100%; padding-right: 30px; }
+.tv-nav .tvn-pin { position: absolute; top: 6px; right: 4px; display: block; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); font-size: 15px; line-height: 26px; text-align: center; cursor: pointer; opacity: 0; }
+.tvn-it:hover .tvn-pin, .tv-nav .tvn-pin:focus-visible, .tv-nav .tvn-pin[aria-pressed="true"] { opacity: 1; }
+.tv-nav .tvn-pin[aria-pressed="true"] { color: var(--bone); }
+.tvn-it > [aria-selected="true"] ~ .tvn-pin { color: var(--bg); }
+.tvn-more > summary { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 12px 9px 4px; border-top: 1px solid var(--rule); margin-top: 6px; cursor: pointer; }
+.tvn-hint { font-size: 12.5px; padding: 8px 9px 2px; margin: 0; }
+@media (hover: none) { .tv-nav .tvn-pin { opacity: 1; } }
+/* the card's head inside a tool's own review (the council, a dimension, the consequences, Auto-Connect, the next clues) */
+.ux-cardin { margin: 8px 0 10px; }
+.ic-rev.ux-card { border-left-width: 3px; }
+.ux-handp { margin: 0 0 8px; }
+/* factions in folds: the name, how they stand, what they are doing; the rest on a click */
+.fa-fold > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.fa-fold > summary::-webkit-details-marker { display: none; }
+.fa-fold > summary::before { content: "▸"; color: var(--muted); font-size: 12px; transition: transform .15s; }
+.fa-fold[open] > summary::before { transform: rotate(90deg); }
+.fa-fold > summary h3 { margin: 0; }
+.fa-sum { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; flex: 1 1 260px; }
+.fa-st { font: 10.5px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--rule); border-radius: 3px; padding: 1px 6px; }
+.fa-st-friendly, .fa-st-allied, .fa-st-trusting { color: var(--ok); border-color: var(--ok); }
+.fa-st-hostile, .fa-st-war { color: var(--accent); border-color: var(--accent); }
+.fa-st-wary, .fa-st-afraid { color: var(--bone); border-color: var(--bone); }
+.fa-pk { margin-left: auto; }
+.fa-fold[open] > summary { margin-bottom: 8px; }
+.fa-pn { color: var(--ink); text-decoration: none; }
+.fa-pn:hover b, .fa-pn:focus-visible b { color: var(--accent); }
+@media (max-width: 560px) {
+  .ux-ai { top: auto; bottom: 74px; border-radius: 10px; }
+  .ux-peek { top: auto; height: 82vh; width: 100vw; border-left: 0; border-top: 1px solid var(--rule); border-radius: 12px 12px 0 0; }
+  .ux-pkd .pf, .ux-cm > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .ux-sr { position: fixed; top: auto; left: 8px; right: 8px; width: auto; max-height: 60vh; }
+  .ux-qwrap { display: block; }
+  .ux-elabel { font-size: 10.5px; }
+  .views .ux-navb button { min-width: 38px; min-height: 34px; }
+  /* (the card and the panels sit outside the page's box: its phone sizes given here too) */
+  .ux-peek .t-link, .ux-pop .t-link { display: inline-block; padding: 7px 0; min-height: 32px; }
+  .ux-peek .t-mini, .ux-pop .t-mini, .ux-card .t-mini { min-height: 32px; min-width: 32px; }
+  .ux-peek .t-btn, .ux-card .t-btn { min-height: 38px; }
+}

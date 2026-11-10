@@ -30,31 +30,7 @@
   <section id="v-new" class="view" hidden>
     <form id="newform" autocomplete="off">
       <div class="step">
-        <h2><span class="num">1</span> Who does the work</h2>
-        <div class="who two" role="radiogroup" aria-label="Who does the work">
-          <label class="card pick"><input type="radio" name="provider" value="own-claude" checked>
-            <span class="ct">Claude</span><span class="cs" id="st-own-claude"></span>
-            <span class="cd">With your own Claude subscription (Pro or Max), through Claude Code. Nothing extra to pay.</span></label>
-          <label class="card pick"><input type="radio" name="provider" value="own-codex">
-            <span class="ct">ChatGPT</span><span class="cs" id="st-own-codex"></span>
-            <span class="cd">With your own ChatGPT subscription (Plus or Pro), through Codex. Nothing extra to pay.</span></label>
-        </div>
-        <details class="paid" id="paid">
-          <summary>No subscription? Pay per use with an API key instead</summary>
-          <div class="who two" role="radiogroup" aria-label="Pay per use">
-            <label class="card pick"><input type="radio" name="provider" value="claude">
-              <span class="ct">Claude, pay per use</span><span class="cs" id="st-claude"></span>
-              <span class="cd">With an API key from your Claude Console account. You pay Anthropic for what it uses.</span></label>
-            <label class="card pick"><input type="radio" name="provider" value="openai">
-              <span class="ct">OpenAI, pay per use</span><span class="cs" id="st-openai"></span>
-              <span class="cd">With an API key from your OpenAI account. You pay OpenAI for what it uses.</span></label>
-          </div>
-        </details>
-        <div id="connect-here"></div>
-      </div>
-
-      <div class="step">
-        <h2><span class="num">2</span> Your story</h2>
+        <h2><span class="num">1</span> Your story</h2>
         <label class="field"><span>Title</span><input name="title" required maxlength="120" placeholder="Write your campaign's name here"></label>
         <label class="field"><span>The story <small id="words"></small></span>
           <textarea name="story" required rows="14" placeholder="Paste the whole story here: the plot, the people, the places, as much or as little as you have. The council will fill out the rest."></textarea></label>
@@ -62,7 +38,7 @@
       </div>
 
       <div class="step">
-        <h2><span class="num">3</span> Your choices</h2>
+        <h2><span class="num">2</span> Your choices</h2>
         <div class="field buildings">
           <span>The world it is set in</span>
           <div class="bopts" role="radiogroup" aria-label="The world it is set in">
@@ -179,6 +155,33 @@
           <small class="hint">The work stops if it reaches this. You can raise it and carry on.</small></label>
       </div>
 
+      <div class="step">
+        <h2><span class="num">3</span> Who does the work</h2>
+        <p class="who-line" id="who-line" hidden></p>
+        <div id="who-pick">
+        <div class="who two" role="radiogroup" aria-label="Who does the work">
+          <label class="card pick"><input type="radio" name="provider" value="own-claude" checked>
+            <span class="ct">Claude</span><span class="cs" id="st-own-claude"></span>
+            <span class="cd">With your own Claude subscription (Pro or Max), through Claude Code. Nothing extra to pay.</span></label>
+          <label class="card pick"><input type="radio" name="provider" value="own-codex">
+            <span class="ct">ChatGPT</span><span class="cs" id="st-own-codex"></span>
+            <span class="cd">With your own ChatGPT subscription (Plus or Pro), through Codex. Nothing extra to pay.</span></label>
+        </div>
+        <details class="paid" id="paid">
+          <summary>No subscription? Pay per use with an API key instead</summary>
+          <div class="who two" role="radiogroup" aria-label="Pay per use">
+            <label class="card pick"><input type="radio" name="provider" value="claude">
+              <span class="ct">Claude, pay per use</span><span class="cs" id="st-claude"></span>
+              <span class="cd">With an API key from your Claude Console account. You pay Anthropic for what it uses.</span></label>
+            <label class="card pick"><input type="radio" name="provider" value="openai">
+              <span class="ct">OpenAI, pay per use</span><span class="cs" id="st-openai"></span>
+              <span class="cd">With an API key from your OpenAI account. You pay OpenAI for what it uses.</span></label>
+          </div>
+        </details>
+        <div id="connect-here"></div>
+        </div>
+      </div>
+
       <div class="go">
         <button class="btn big" type="submit" id="gobtn">Make my campaign</button>
         <span class="hint" id="gohint"></span>
@@ -190,6 +193,7 @@
   <!-- the library -->
   <section id="v-campaigns" class="view" hidden>
     <div id="list" class="list"></div>
+    <div id="examples" class="examples" hidden></div>
   </section>
 
   <!-- one campaign, being made or made -->

@@ -274,6 +274,8 @@
   function paint() { if (api.tab() === "history") { api.render(); keepScroll(); } }
 
   const loaded = new Set();
+  // (the search: what has happened, by its words)
+  (A.searchers = A.searchers || []).push({ kind: "Events and history", order: 34, mod: ["living"], find: q => all().map(h => { const x = A.nav && A.nav.hit(h.title, [h.what, h.cause, h.whoText, [].concat(h.outcome || []).join(" ")].join(" "), q, h.m != null ? at(h.m).short : ""); return x ? Object.assign(x, { go: () => api.open("history") }) : null; }).filter(Boolean).slice(0, 40) });
   TU.addTab({ key: "history", label: "The world's history", icon: "history", group: "play", after: "factions", desc: "Everything that has happened, who knows of it; the world saved and gone back to",
     html, status: () => { const n = all().length; return n ? `${n} thing${n > 1 ? "s" : ""} so far` : "Nothing yet"; },
     init(store) {

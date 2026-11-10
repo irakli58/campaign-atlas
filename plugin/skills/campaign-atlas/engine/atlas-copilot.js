@@ -93,7 +93,7 @@
     const turn = { q, a: "…", gm: "", t: Date.now(), tone: UI.tone };
     const live = Object.assign({}, d, { turns: turns.concat([turn]) });
     let raw = null;
-    try { raw = await api.askRaw(talkPrompt(ref, q, Object.assign({}, d, { turns }), prev && prev.a), t => { const s = split(t); turn.a = s.a || "…"; paintTalk(live); }); } catch (e) { raw = null; UI.err = e && e.code === "rate_limited" ? "Too many at once: wait a moment." : ""; }
+    try { raw = await api.askRaw(talkPrompt(ref, q, Object.assign({}, d, { turns }), prev && prev.a), t => { const s = split(t); turn.a = s.a || "…"; paintTalk(live); }, null, { kind: "answering", what: "as " + (St.name ? St.name(ref) : "them"), uses: ["who they are", "what they know", "what was said before"] }); } catch (e) { raw = null; UI.err = e && e.code === "rate_limited" ? "Too many at once: wait a moment." : ""; }
     if (raw) { Object.assign(turn, split(raw)); saveTalk(ref, live); UI.q = ""; }
     else { turn.a = ""; turn.none = true; UI.err = UI.err || "Claude is not reachable from this page: here is what they would share, as recorded."; }
     UI.busy = false; paint(live);
@@ -196,7 +196,7 @@ ${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n") || "(nothing
   }
   async function improvise(again) {
     UI.busy = true; UI.err = ""; const I = UI.imp, prev = again ? I.out : ""; I.out = ""; paint();
-    let r = null; try { r = await api.askRaw(impPrompt(prev), t => { I.out = t; document.querySelectorAll(".cp-out .cp-a").forEach(x => { x.value = t; }); }); } catch (e) { r = null; }
+    let r = null; try { r = await api.askRaw(impPrompt(prev), t => { I.out = t; document.querySelectorAll(".cp-out .cp-a").forEach(x => { x.value = t; }); }, null, { kind: "writing", what: "an idea for the scene", uses: ["where the party is", "what has happened lately"] }); } catch (e) { r = null; }
     I.out = r ? String(r).replace(/\*\*([^*]+)\*\*/g, "$1").trim() : ""; if (!r) UI.err = "Claude is not reachable from this page: here is what the campaign says.";
     UI.busy = false; paint();
   }
