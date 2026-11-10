@@ -124,7 +124,7 @@
   let dlg = null, draft = null, cityCtl = null, where = null;
   // (a place made somewhere other than a city, the editing plan of 10 Nov 2026: at a location of the world map or a
   // planet's surface, or at a station or site of a star system; its kind from what stands there)
-  const FROMW = { inn: "tavern", manor: "mansion", capital: "mansion", castle: "castle", keep: "castle", fort: "castle", tower: "tower", lighthouse: "tower", temple: "temple", monastery: "temple", shrine: "shrine", cave: "cave", lair: "cave", dungeon: "cave", mine: "mine", mining: "mine", camp: "hideout", base: "bunker", station: "station", outpost: "station", orbital: "station", ship: "station", wreck: "station", derelict: "station", colony: "station", research: "laboratory", farm: "house", village: "house", hamlet: "house", settlement: "house", town: "shop", city: "shop", port: "warehouse", airport: "warehouse" };
+  const FROMW = { inn: "tavern", manor: "mansion", capital: "mansion", castle: "castle", keep: "castle", fort: "castle", tower: "tower", lighthouse: "tower", temple: "temple", monastery: "temple", shrine: "shrine", cave: "cave", lair: "cave", dungeon: "cave", mine: "mine", mining: "mine", camp: "hideout", base: "bunker", station: "station", outpost: "station", orbital: "station", ship: "station", wreck: "station", derelict: "station", colony: "station", research: "laboratory", farm: "house", village: "house", hamlet: "house", settlement: "house", town: "shop", city: "shop", port: "warehouse", airport: "warehouse", lostship: "station", freighter: "station", ambush: "station", abandoned: "station", military: "bunker", hidden: "bunker", refuel: "station", gate: "station", alien: "other", beacon: "other", signal: "other", transmission: "other" };
   const opts = (list, cur) => list.map(([k, n]) => `<option value="${esc(k)}"${k === cur ? " selected" : ""}>${esc(n)}</option>`).join("");
   function districtsOf(ctl) { const D = (ctl && ctl.D) || {}; return Object.keys(D.districts || {}); }
   function form(def, isNew) {
@@ -204,7 +204,7 @@
     if (a === "make" && where) {
       // a place of the campaign at a world's location, a planet's, or a star system's site: its inside drawn from its
       // kind as a city's is, kept, and its page opened (where "Build the interior" is)
-      const id = newId(r.def.name), w = where, def = Object.assign(r.def, { location: w.location || undefined, world: w.world || undefined, system: w.system || undefined, planet: w.planet != null ? w.planet : undefined, site: w.site != null ? w.site : undefined, from: w.label || undefined });
+      const id = newId(r.def.name), w = where, def = Object.assign(r.def, { location: w.location || undefined, world: w.world || undefined, system: w.system || undefined, planet: w.planet != null ? w.planet : undefined, site: w.site != null ? w.site : undefined, thing: w.thing || undefined, from: w.label || undefined });
       def.map = def.type === "cave" ? caveInside(def, r.start === "blank") : interior(def.type, def.ext, { blank: r.start === "blank", cellar: r.cellar });
       if (def.type === "cave" && def.map.ov && !def.kp) def.kp = def.map.ov;
       dlg.close(); draft = null; where = null;

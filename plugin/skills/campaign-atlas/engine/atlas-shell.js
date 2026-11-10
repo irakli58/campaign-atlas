@@ -296,6 +296,8 @@
     if (showLoc) crumbs.push(hasCity && (wl.city || wl.id) === pc ? `<button type="button" data-tcity="${esc(pc)}" title="Its city's map">${esc(wl.name)}</button>` : `<button type="button" data-world="${esc(wl.id)}" title="Show it on the world map">${esc(wl.name)}</button>`);
     if (hasCity && !(showLoc && (wl.city || wl.id) === pc) && (Object.keys(CITIES).length > 1 || A.worldData)) crumbs.push(`<button type="button" data-tcity="${esc(pc)}" title="Its city's map">${esc(cityLabel(pc))}</button>`);
     if (gxs) crumbs.push(`<button type="button" data-gxsys="${esc(sysId)}" title="The star chart">The stars</button>`, `<button type="button" data-gxsys="${esc(sysId)}" title="Its star system">${esc(gxs.name)}</button>`);
+    // (a place that is the inside of a thing between the stars: the stars, then the thing)
+    const thId = (A.meta[p.id] || {}).thing; if (thId && state.mode === "gm" && A.galaxyThing) { const T0 = ((A.galaxyApi && A.galaxyApi.G() || {}).things || []).find(t => t.id === thId); if (T0) crumbs.push(`<button type="button" data-gxthing="${esc(thId)}" title="The star chart">The stars</button>`, `<button type="button" data-gxthing="${esc(thId)}" title="Where it is among the stars">${esc(T0.name)}</button>`); }
     if (ow) { const pw = ow.data.planet, ps = pw && pw.system && !gxs && state.mode === "gm" && A.galaxyApi ? ((A.galaxyApi.G() || {}).systems || []).find(s => s.id === pw.system) : null; if (ps) crumbs.push(`<button type="button" data-gxsys="${esc(ps.id)}" title="The star chart">The stars</button>`, `<button type="button" data-gxsys="${esc(ps.id)}" title="Its star system">${esc(ps.name)}</button>`); crumbs.push(`<button type="button" data-wworld="${esc(mw)}" title="Its world map">${esc(ow.data.title || "Its world")}</button>`); if (owl) crumbs.push(`<button type="button" data-wworld="${esc(mw)}" title="Show it on its world map">${esc(owl.name)}</button>`); }
     const trail = crumbs.length ? `<nav class="trail" aria-label="Where it is">${crumbs.join('<span class="tr-sep" aria-hidden="true">›</span>')}<span class="tr-sep" aria-hidden="true">›</span><span aria-current="page">${esc(p.name)}</span></nav>` : "";
     const links = linksOf(p.id).map(id => `<button type="button" data-go="${esc(id)}"><span class="n">${pad(byId[id].n)}</span>${esc(byId[id].name)}</button>`).join("");
@@ -688,6 +690,7 @@
     if (t.closest("#v-table")) { setView("table"); return; }
     const wb = t.closest("[data-world]"); if (wb) { showWorld(wb.dataset.world || null); return; }
     const ww = t.closest("[data-wworld]"); if (ww) { A.openWorld(ww.dataset.wworld); return; }
+    const wt = t.closest("[data-gxthing]"); if (wt) { setView("galaxy"); setTimeout(() => { if (A.galaxyThing) A.galaxyThing(wt.dataset.gxthing); }, 60); return; }
     // (a place's trail: its city's map, brought into view and flown to the place; its star system on the chart)
     const tc = t.closest("[data-tcity]"); if (tc) { const pid = state.sel; mountCity(tc.dataset.tcity, c => { if (byId[pid] && cityOf(pid) === tc.dataset.tcity) c.flyTo(pid); }); const at = document.querySelector(".atlas"); if (at) at.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const gs = t.closest("[data-gxsys]"); if (gs) { setView("galaxy"); if (A.galaxyFocus) A.galaxyFocus(gs.dataset.gxsys); return; }

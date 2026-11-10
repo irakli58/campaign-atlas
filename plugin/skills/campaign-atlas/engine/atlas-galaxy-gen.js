@@ -35,8 +35,9 @@
 
   /* ---- the galaxy: where every system stands, and what the lanes, sectors, regions and powers are */
   function grow(P) {
-    // (model 2, grown from the real galaxy, for new campaigns; every galaxy made before keeps model 1 below, untouched)
-    if (P && +P.model === 2 && A.galaxyModel) return grow2(P);
+    // (model 2, grown from the real galaxy, for new campaigns; every galaxy made before keeps model 1 below, untouched;
+    // a single system, a small cluster or an empty canvas are model 2's: the editing plan of 10 Nov 2026)
+    if (P && (+P.model === 2 || ["system", "cluster", "blank"].includes(P.kind)) && A.galaxyModel) return grow2(P);
     const p = Object.assign({ seed: "atlas", systems: 300, shape: "spiral", arms: 3, span: 100, name: "" }, P || {});
     const N = Math.max(20, Math.min(5000, +p.systems || 300)), r = rng(p.seed + "|stars"), W = 1000, R = 470;
     const S = [];
@@ -72,8 +73,8 @@
       if (!best) { for (const a of small) for (const b of rest) { const d = d2(a, b); if (!best || d < best[2]) best = [a, b, d]; } }
       addLane(best[0], best[1]); parent[find(best[0].i)] = find(best[1].i);
     }
-    // the sectors: centres spread over the galaxy, each system in the nearest
-    const nSec = Math.max(4, Math.min(24, Math.round(N / 45))), rs = rng(p.seed + "|sectors"), secs = [];
+    // the sectors: centres spread over the galaxy, each system in the nearest (a small cluster is one sector)
+    const small = p.kind === "cluster", nSec = small ? 1 : Math.max(4, Math.min(24, Math.round(N / 45))), rs = rng(p.seed + "|sectors"), secs = [];
     for (let k = 0; k < nSec; k++) { const s = S[Math.floor(rs() * N)]; if (!secs.some(c => Math.hypot(c.x - s.x, c.y - s.y) < 90)) secs.push({ id: "sec" + k, x: s.x, y: s.y, name: `The ${word(rs)} ${pick(rs, SECTORS)}` }); }
     for (const s of S) { let b = 0, bd = Infinity; secs.forEach((c, k) => { const d = (c.x - s.x) ** 2 + (c.y - s.y) ** 2; if (d < bd) { bd = d; b = k; } }); s.sec = b; }
     // what is in each system: people, fuel, a station, something strange
@@ -94,8 +95,9 @@
     const homeS = S.filter(s => s.f.colony && s.f.fuel).sort((a, b) => (Math.hypot(a.x - 500, a.y - 500) + pref(a)) - (Math.hypot(b.x - 500, b.y - 500) + pref(b)))[0] || S[0];
     homeS.f.colony = 1; homeS.f.station = 1; homeS.f.fuel = 1;
     const rr = rng(p.seed + "|regions"), regions = [{ kind: "explored", x: homeS.x, y: homeS.y, r: 120 + rr() * 60, name: "Charted space" }];
-    for (let k = 0; k < Math.max(2, Math.round(N / 120)); k++) { const s = S[Math.floor(rr() * N)]; if (Math.hypot(s.x - homeS.x, s.y - homeS.y) < 90) continue; regions.push({ kind: "danger", x: s.x, y: s.y, r: 30 + rr() * 45, name: pick(rr, ["The %s Nebula", "The %s Maelstrom", "%s's Graveyard", "The %s Storm", "The Pirate %s"]).replace("%s", word(rr)) }); }
-    for (let k = 0; k < Math.max(1, Math.round(N / 300)); k++) { const s = S.filter(t => (t.f.anomaly || t.f.research) && Math.hypot(t.x - homeS.x, t.y - homeS.y) > 110)[k] || S[Math.floor(rr() * N)]; if (Math.hypot(s.x - homeS.x, s.y - homeS.y) < 110) continue; regions.push({ kind: "restricted", x: s.x, y: s.y, r: 18 + rr() * 20, name: `The ${s.name} Exclusion` }); }
+    // (a small cluster gets none: its dangers are the game master's to place)
+    for (let k = 0; k < (small ? 0 : Math.max(2, Math.round(N / 120))); k++) { const s = S[Math.floor(rr() * N)]; if (Math.hypot(s.x - homeS.x, s.y - homeS.y) < 90) continue; regions.push({ kind: "danger", x: s.x, y: s.y, r: 30 + rr() * 45, name: pick(rr, ["The %s Nebula", "The %s Maelstrom", "%s's Graveyard", "The %s Storm", "The Pirate %s"]).replace("%s", word(rr)) }); }
+    for (let k = 0; k < (small ? 0 : Math.max(1, Math.round(N / 300))); k++) { const s = S.filter(t => (t.f.anomaly || t.f.research) && Math.hypot(t.x - homeS.x, t.y - homeS.y) > 110)[k] || S[Math.floor(rr() * N)]; if (Math.hypot(s.x - homeS.x, s.y - homeS.y) < 110) continue; regions.push({ kind: "restricted", x: s.x, y: s.y, r: 18 + rr() * 20, name: `The ${s.name} Exclusion` }); }
     // powers: a few polities grown out from their capitals along the lanes (the council may give its own factions instead)
     const adj = S.map(() => []); for (const [a, b] of lanes.values()) { adj[a].push(b); adj[b].push(a); }
     const rp = rng(p.seed + "|powers"), caps = [homeS].concat(S.filter(s => s.f.colony && s !== homeS).sort(() => rp() - .5).slice(0, Math.max(2, Math.min(7, Math.round(N / 90)))));
@@ -124,8 +126,19 @@
     const p = Object.assign({ seed: "atlas", systems: 300, name: "", scope: "neighbourhood", galaxyType: "barred" }, P || {}, { model: 2 });
     const M = GM.galaxyOf({ type: p.galaxyType, seed: p.seed, milkyWay: !!p.milkyWay });
     p.scope = SCOPES[p.scope] != null ? p.scope : "neighbourhood"; p.galaxyType = M.type;
-    if (!(+p.span > 0)) p.span = p.scope === "galaxy" ? Math.round(M.Rmax * 2.1 / 1000) * 1000 : SCOPES[p.scope];
-    const N = Math.max(20, Math.min(5000, +p.systems || 300)), W = 1000, span = +p.span, ly = span / W, R2 = span / 2, r = rng(p.seed + "|stars2");
+    // (the kinds of space map, the editing plan of 10 Nov 2026: a whole galaxy, a small cluster of a few systems, a
+    // single system, or an empty canvas; a cluster spread as far as the real density of stars near the Sun puts that
+    // many systems, about 0.004 a cubic light year counting every star and brown dwarf)
+    const kind = ["system", "cluster", "blank"].includes(p.kind) ? p.kind : "galaxy"; if (kind !== "galaxy") p.scope = "neighbourhood";
+    const nK = kind === "cluster" ? Math.max(2, Math.min(60, +p.systems || 5)) : 0;
+    if (!(+p.span > 0)) p.span = kind === "cluster" ? Math.max(6, Math.ceil(Math.cbrt(nK / .0168)) * 2) : kind === "system" ? 20 : kind === "blank" ? 60 : p.scope === "galaxy" ? Math.round(M.Rmax * 2.1 / 1000) * 1000 : SCOPES[p.scope];
+    const N = kind === "cluster" ? nK : kind === "system" ? 1 : kind === "blank" ? 0 : Math.max(20, Math.min(5000, +p.systems || 300)), W = 1000, span = +p.span, ly = span / W, R2 = span / 2, r = rng(p.seed + "|stars2");
+    if (kind === "system" || kind === "blank") {
+      const at0 = p.at && Number.isFinite(+p.at.x) ? { x: +p.at.x, y: +p.at.y, z: +p.at.z || 0 } : { x: M.sun.x, y: M.sun.y, z: M.sun.z }; p.at = at0;
+      // one star at the middle, of the kind asked (like the Sun unless told), and nothing else until the game master adds it
+      const S1 = kind === "blank" ? [] : (() => { const cls = STARS[p.star] ? p.star : "G", m = STARS[cls][2]; return [{ i: 0, id: "S0", x: 500, y: 500, z: 0, cls, bin: false, name: p.systemName || nameOf(r), f: {}, m2: { cls, mass: m, m0: m, age: 4600, feh: 0, pop: "thin" }, sec: 0 }]; })();
+      return { p, N: S1.length, W, ly, systems: S1, lanes: [], sectors: S1.length ? [{ id: "sec0", x: 500, y: 500, name: `The ${word(r)} ${pick(r, SECTORS)}` }] : [], regions: [], powers: [], home: S1.length ? 0 : -1, adj: S1.map(() => []), model: 2, frame: { x: at0.x, y: at0.y, z: at0.z, k: ly } };
+    }
     const at = p.scope === "galaxy" ? { x: 0, y: 0, z: 0 } : p.at && Number.isFinite(+p.at.x) ? { x: +p.at.x, y: +p.at.y, z: +p.at.z || 0 } : { x: M.sun.x, y: M.sun.y, z: M.sun.z };
     if (p.scope !== "galaxy") p.at = at;
     const big = p.scope === "arm" || p.scope === "galaxy", T = M.T;
@@ -138,7 +151,7 @@
     dmax *= 1.25;
     const H = { young: .05, thin: T.hz || .3, thick: (T.thick || {}).hz || .9, bulge: T.bar ? T.bar.c * .6 : T.bulge ? T.bulge.a * .7 : .5, halo: 4 };
     const S = [];
-    for (let i = 0, tries = 0; i < N && tries < N * 4000; tries++) {
+    for (let i = 0, tries = 0; i < N && tries < Math.max(N, 20) * 4000; tries++) {
       let gx, gy, gz, pop;
       if (big) {
         gx = at.x + (r() * 2 - 1) * R2; gy = at.y + (r() * 2 - 1) * R2;
@@ -252,6 +265,8 @@
     while (open.length) {
       let bi = 0; for (let k = 1; k < open.length; k++) if (best[open[k]] < best[open[bi]]) bi = k;
       const i = open.splice(bi, 1)[0]; if (done[i]) continue; done[i] = 1; if (i === to) break;
+      // (a schematic jump map: only its routes, each its own length; where the stars are drawn is only a layout)
+      if (G.p && G.p.layout === "schematic") { for (const j of G.adj[i] || []) { if (done[j] || j === i || !ok(j)) continue; relax(i, j, (lly && lly.get(Math.min(i, j) + "-" + Math.max(i, j))) || dist(G, i, j)); } continue; }
       const s = G.systems[i], cx = Math.floor(s.x / cell), cy = Math.floor(s.y / cell);
       for (let a = -c; a <= c; a++) for (let b = -c; b <= c; b++) for (const j of grid.get((cx + a) + "," + (cy + b)) || []) {
         if (done[j] || j === i || !ok(j)) continue;

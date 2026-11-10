@@ -83,7 +83,7 @@
   A.customSize = ext => { ext = ext || {}; const s = CSIZES[ext.size] || CSIZES.medium; return [+ext.w > 0 ? +ext.w : s[0], +ext.d > 0 ? +ext.d : s[1]]; };
   // (a place made at a world's location, a planet's, or a star system's site: where it stands, so it is listed there and
   // its trail goes back up; the editing plan of 10 Nov 2026)
-  const customMeta = def => ({ name: def.name || "A new place", category: def.cat || "custom", region: def.district || def.from || "", district: def.district || "", tagline: def.typeName || "", tier: def.tier || 3, custom: true, city: def.city || undefined, at: def.at, ang: +def.ang || 0, ext: def.ext || {}, kind: def.type || "", status: def.status || "", offmap: !Array.isArray(def.at), location: def.location || undefined, world: def.world || undefined, system: def.system || undefined, planet: def.planet != null ? def.planet : undefined, site: def.site != null ? def.site : undefined });
+  const customMeta = def => ({ name: def.name || "A new place", category: def.cat || "custom", region: def.district || def.from || "", district: def.district || "", tagline: def.typeName || "", tier: def.tier || 3, custom: true, city: def.city || undefined, at: def.at, ang: +def.ang || 0, ext: def.ext || {}, kind: def.type || "", status: def.status || "", offmap: !Array.isArray(def.at), location: def.location || undefined, world: def.world || undefined, system: def.system || undefined, planet: def.planet != null ? def.planet : undefined, site: def.site != null ? def.site : undefined, thing: def.thing || undefined });
   A.customPlace = (id, def) => {
     if (!def || def.off) {
       // taken away: the place goes; its interior (a map edit) and its connections are left where they are, not deleted

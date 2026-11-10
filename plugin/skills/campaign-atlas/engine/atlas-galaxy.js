@@ -20,14 +20,15 @@
   /* ---- the players' drawing: only what the game master's page sent (charted systems, their lanes, the ship) */
   A.galaxyDraw = function (d, o) {
     if (o && o.sys && d && d.sysmaps && d.sysmaps[o.sys]) return sysDraw(d.sysmaps[o.sys]);
-    if (!d || !(d.systems || []).length) return `<div class="gx-empty">No star charts yet.</div>`;
+    if (!d || (!(d.systems || []).length && !(d.things || []).length)) return `<div class="gx-empty">No star charts yet.</div>`;
     const S = d.systems, by = {}; for (const s of S) by[s.id] = s;
-    const xs = S.map(s => s.x), ys = S.map(s => s.y), pad = 40, x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad, w = Math.max(160, Math.max(...xs) - x0 + pad), h = Math.max(120, Math.max(...ys) - y0 + pad);
+    const PT = S.concat(d.things || []), xs = PT.map(s => s.x), ys = PT.map(s => s.y), pad = 40, x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad, w = Math.max(160, Math.max(...xs) - x0 + pad), h = Math.max(120, Math.max(...ys) - y0 + pad);
     return `<svg class="gx-svg gx-players" viewBox="${x0} ${y0} ${w} ${h}" role="img" aria-label="${esc(d.name || "The star chart")}"><rect x="${x0}" y="${y0}" width="${w}" height="${h}" class="gx-bg"/>
       ${(d.regions || []).map(g => `<circle cx="${g.x}" cy="${g.y}" r="${g.r}" class="gx-reg gx-${esc(g.kind)}"><title>${esc(g.name || "")}</title></circle>`).join("")}
       ${(d.lanes || []).map(([a, b]) => by[a] && by[b] ? `<line x1="${by[a].x}" y1="${by[a].y}" x2="${by[b].x}" y2="${by[b].y}" class="gx-lane"/>` : "").join("")}
       ${S.map(s => `<g class="gx-sys${s.state === "visited" ? " v" : ""}"><circle cx="${s.x}" cy="${s.y}" r="${s.state === "rumoured" ? 2.4 : 3.6}" fill="${s.state === "rumoured" ? "none" : esc(s.color || "#fff")}" stroke="${esc(s.color || "#fff")}"/><text x="${s.x + 6}" y="${s.y + 3}" style="font-size:${Math.max(7, w / 70)}px">${esc(s.name)}</text></g>`).join("")}
-      ${d.ship && by[d.ship] ? `<g class="gx-ship"><circle cx="${by[d.ship].x}" cy="${by[d.ship].y}" r="${Math.max(6, w / 60)}"/></g>` : ""}</svg>${(d.worlds || []).length ? `
+      ${(d.things || []).map(t => t.r ? `<g class="gx-pthing"><circle cx="${t.x}" cy="${t.y}" r="${Math.max(2, t.r / Math.max(1e-6, d.ly || .1))}" fill="rgba(190,150,220,.12)" stroke="rgba(200,214,240,.4)" stroke-dasharray="3 4"/><text x="${t.x}" y="${t.y}" text-anchor="middle" style="font-size:${Math.max(7, w / 75)}px">${esc(t.name)}</text></g>` : `<g class="gx-pthing"><rect x="${t.x - 2.6}" y="${t.y - 2.6}" width="5.2" height="5.2" transform="rotate(45 ${t.x} ${t.y})" fill="${t.signal ? "#ff6b6b" : "#e8dcc0"}"/><text x="${t.x + 6}" y="${t.y + 3}" style="font-size:${Math.max(7, w / 72)}px">${esc(t.name)}</text></g>`).join("")}
+      ${d.ship && by[d.ship] ? (() => { const n = d.shipNear && (d.things || []).find(t => t.id === d.shipNear), p = n || by[d.ship]; return `<g class="gx-ship"><circle cx="${p.x}" cy="${p.y}" r="${Math.max(6, w / 60)}"/></g>`; })() : ""}</svg>${(d.things || []).some(t => t.signal) ? `<div class="gx-psig"><h4>Signals received</h4>${d.things.filter(t => t.signal).map(t => `<p><b>${esc(t.name)}</b>: “${esc(t.signal)}”</p>`).join("")}</div>` : ""}${(d.worlds || []).length ? `
       <details class="gx-pworlds"><summary>The worlds you have scanned (${d.worlds.length})</summary>${d.worlds.map(x => `<section><h4>${esc(x.name)} <span>${esc(x.sys)} · ${esc(x.level)}</span></h4><table class="gx-pt">${(x.rows || []).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table></section>`).join("")}</details>` : ""}`;
   };
 
@@ -105,6 +106,8 @@
     // regions, sectors, powers: renamed, moved, taken away, and the game master's own
     const ed = (list, key, pre) => { const X = E[key] || {}; list.forEach((x, k) => { x.id = x.id || pre + k; const o = (X.edit || {})[x.id]; if (o) Object.assign(x, o); }); for (const a of X.add || []) if (a && a.id) list.push(Object.assign({}, a, (X.edit || {})[a.id] || {}, { own: true })); return list.filter(x => !x.gone); };
     g.regions = ed(g.regions, "~regions", "r");
+    // (things between the stars, all the game master's own: atlas-space.js)
+    g.things = ed([], "~things", "t");
     // (a sector added, moved or taken away: every system belongs again to the nearest centre)
     const SX = E["~sectors"] || {}; g.sectors = ed(g.sectors, "~sectors", "sec");
     if ((SX.add || []).length || Object.values(SX.edit || {}).some(o => o && (o.x != null || o.gone)) || N0 !== g.N) for (const s of g.systems) { let b = -1, bd = Infinity; g.sectors.forEach((c, k) => { const d = (c.x - s.x) ** 2 + (c.y - s.y) ** 2; if (d < bd) { bd = d; b = k; } }); s.sec = b >= 0 ? b : null; }
@@ -133,7 +136,10 @@
   const chartOf = id => { const c = (S() && S().get("charts", id)) || null, s = findSys(id); if (c && c.state) return c.state; if (s && s.state0) return s.state0; if (s && G().regions.some(g => g.kind === "explored" && Math.hypot(g.x - s.x, g.y - s.y) <= g.r)) return "charted"; return "unknown"; };
   const known = st => st === "charted" || st === "visited" || st === "rumoured";
   const defShip = () => Object.assign({ name: "The ship", cap: 40, burn: 1, range: 12, speed: 3, cargo: 0, cargoCap: 100, crew: "", equipment: [], upgrades: [], condition: "Sound" }, (A.galaxyOver || {}).ship || {});
-  const ship = () => { const s = (S() && S().get("ship", "now")) || {}, d = defShip(), g = G(); return Object.assign({}, d, { at: g.systems[g.home].id, fuel: d.fuel != null ? d.fuel : d.cap }, s); };
+  // (an empty canvas has no home yet: the ship is nowhere until a system is added and it is moved there)
+  const ship = () => { const s = (S() && S().get("ship", "now")) || {}, d = defShip(), g = G(), h = g.systems[g.home] || g.systems.find(x => !x.gone); return Object.assign({}, d, { at: h ? h.id : null, fuel: d.fuel != null ? d.fuel : d.cap }, s); };
+  // (a schematic jump map: where its stars are drawn is only a layout; its routes' own lengths are what count)
+  const schematic = () => ((G().p || {}).layout === "schematic");
   const fuelRule = () => { const k = (S() && (S().get("ship", "rule") || {}).fuel) || (A.galaxyOver || {}).fuel || "normal"; return FUEL.find(f => f[0] === k) || FUEL[2]; };
   const idx = id => { const s = findSys(id); return s ? s.i : -1; };
   const ly = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) * G().ly;
@@ -156,6 +162,8 @@
       if (!known(chartOf(q.id))) risks.push(`${q.name} is not on their charts`);
       if (!lane) risks.push(`The jump from ${p.name} to ${q.name} is off the lanes`);
       if (q.f.anomaly) risks.push(`Something strange at ${q.name}`);
+      // (a nebula the game master set to blind sensors)
+      for (const t of allThings()) if (t.kind === "nebula" && t.blinds && lyTo(t, q) <= (t.r || 1)) risks.push(`${q.name} lies in ${t.name}: its sensors blinded there`);
     }
     if (rule[2] && fuel < sh.cap * .15 && !fails) risks.push(`They arrive with ${Math.max(0, Math.round(fuel))} of ${sh.cap} fuel`);
     return { ok: !fails || !rule[2], why: rule[2] ? fails : null, path: path.map(i => sys(i).id), ly: total, days, fuel: rule[2] ? need : 0, left: rule[2] ? fuel : sh.fuel, stops, risks: [...new Set(risks)], legs };
@@ -173,7 +181,9 @@
     if (how !== "hist") { HIST.push({ id, before: cur == null ? null : JSON.parse(JSON.stringify(cur)), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; keepH(); }
     S().set("gedits", id, data); A._galaxy = null;
   }
-  const doc = id => JSON.parse(JSON.stringify(edits()[id] || {}));
+  // (a change made on the page starts from the campaign's own, ATLAS.galaxyEdit({ edits }) in table.js, so nothing the
+  // council placed there is lost when the game master changes it)
+  const doc = id => JSON.parse(JSON.stringify(edits()[id] || ((A.galaxyOver || {}).edits || {})[id] || {}));
   /* ---- the chart drawn (the galaxy plan of 5 Nov 2026, approved 10 Nov: sections 5 to 7). One camera, in light years
           of the real galaxy (atlas-galaxy-model.js), from the whole galaxy down to one system:
           - far out: the galaxy's picture (atlas-galaxy-art.js), its arms and heart named, the campaign's space marked;
@@ -291,16 +301,21 @@
       ctx.fillStyle = "rgba(170,235,185,.95)"; ctx.fillText((A.galaxyParams || {}).name || "Our space", C0[0], C0[1] - rr - 6);
     }
     // 4. the campaign's own space, once it is big enough on the screen to show
-    DRAWN = [];
+    DRAWN = []; THLBL = [];
     if (cw > 36) {
-      const near = cw > 220, L = allSys();
-      if (LAY.grid) grid(W, H);
+      const near = cw > 220, L = allSys(), SCH = schematic();
+      if (LAY.grid && !SCH) grid(W, H);
+      // (an empty canvas: how to begin)
+      if (!L.length) { ctx.font = "13px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(200,214,240,.75)"; const [cx0, cy0] = scr(FR.x, FR.y); ctx.fillText("Empty space, yours to fill.", cx0, cy0 - 10); ctx.fillStyle = "rgba(160,178,210,.7)"; ctx.fillText("Right-click anywhere (or press long) to add a star system, a station, a wreck, a beacon…", cx0, cy0 + 10); }
       if (LAY.regions) for (const r of g.regions) { const p = gxOf(r), [x, y] = scr(p.x, p.y), rp = r.r * FR.k * CAM.s; if (x + rp < 0 || y + rp < 0 || x - rp > W || y - rp > H) continue; const c = { danger: "239,68,68", restricted: "245,158,11", explored: "59,130,246", unexplored: "109,122,144" }[r.kind] || "109,122,144"; ctx.fillStyle = `rgba(${c},${r.kind === "unexplored" ? .3 : .06})`; ctx.strokeStyle = `rgba(${c},${UI.selReg === r.id ? .95 : .6})`; ctx.lineWidth = UI.selReg === r.id ? 2.2 : 1; ctx.setLineDash(UI.selReg === r.id ? [] : [4, 4]); ctx.beginPath(); ctx.arc(x, y, rp, 0, 6.2832); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); if (rp > 34) { ctx.font = "11px " + "sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = `rgba(${c},.85)`; ctx.fillText(r.name, x, y - rp - 4); } }
       territories(W, H);
       // lanes: the chosen system's and the course, or the whole network
-      const lanes = LAY.lanes === "all" ? g.lanes : LAY.lanes === "near" && UI.sel ? g.lanes.filter(([a, b]) => { const s = findSys(UI.sel); return s && (a === s.i || b === s.i); }) : [];
+      // (a jump map is its routes: all of them always shown)
+      const lanes = LAY.lanes === "all" || SCH ? g.lanes : LAY.lanes === "near" && UI.sel ? g.lanes.filter(([a, b]) => { const s = findSys(UI.sel); return s && (a === s.i || b === s.i); }) : [];
       const tradeOnly = LAY.trade ? g.lanes.filter(([a, b]) => { const k = g.laneKind.get(lk(a, b)); return k === "trade" || k === "corridor"; }) : [];
-      for (const [a, b] of new Set([...lanes, ...tradeOnly])) { const p = sys(a), q = sys(b); if (!p || !q || p.gone || q.gone) continue; const P = gxOf(p), Q = gxOf(q), [ax, ay] = scr(P.x, P.y), [bx, by] = scr(Q.x, Q.y), k = g.laneKind.get(lk(a, b)) || (g.laneLy.has(lk(a, b)) ? "corridor" : ""); ctx.strokeStyle = UI.selLane === lk(a, b) ? "#fff" : k === "trade" ? "rgba(224,184,74,.85)" : k === "corridor" ? "rgba(180,140,255,.85)" : "rgba(80,120,180,.75)"; ctx.lineWidth = UI.selLane === lk(a, b) ? 2.4 : k ? 1.5 : 1; ctx.setLineDash(k === "corridor" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); }
+      for (const [a, b] of new Set([...lanes, ...tradeOnly])) { const p = sys(a), q = sys(b); if (!p || !q || p.gone || q.gone) continue; const P = gxOf(p), Q = gxOf(q), [ax, ay] = scr(P.x, P.y), [bx, by] = scr(Q.x, Q.y), k = g.laneKind.get(lk(a, b)) || (g.laneLy.has(lk(a, b)) ? "corridor" : ""); ctx.strokeStyle = UI.selLane === lk(a, b) ? "#fff" : k === "trade" ? "rgba(224,184,74,.85)" : k === "corridor" ? "rgba(180,140,255,.85)" : "rgba(80,120,180,.75)"; ctx.lineWidth = UI.selLane === lk(a, b) ? 2.4 : k ? 1.5 : 1; ctx.setLineDash(k === "corridor" ? [5, 3] : []); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+        // (on a jump map, each route's own length and days at the ship's speed, written on it)
+        if (SCH && Math.hypot(bx - ax, by - ay) > 70) { const L0 = g.laneLy.get(lk(a, b)) || Gg.dist(g, a, b), dd = L0 / Math.max(.01, ship().speed || 1); THLBL.push([(ax + bx) / 2, (ay + by) / 2, `${ly1(L0)} ly · ${dd < 1 ? Math.round(dd * 24) + " h" : ly1(dd) + " d"}`, true, "lane"]); } }
       ctx.setLineDash([]);
       // the party's way so far: the systems they visited, in order
       if (LAY.journey) { const v = Object.entries((S() && S().get("charts")) || {}).filter(([, c]) => c && c.state === "visited" && c.t).sort((a, b) => a[1].t - b[1].t).map(([id]) => findSys(id)).filter(Boolean); if (v.length > 1) { ctx.strokeStyle = "rgba(143,209,158,.55)"; ctx.lineWidth = 1.6; ctx.setLineDash([2, 4]); ctx.beginPath(); v.forEach((s, i) => { const p = gxOf(s), [x, y] = scr(p.x, p.y); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.setLineDash([]); } }
@@ -331,13 +346,15 @@
       // the crowded: a count where many were gathered under one (until the view comes closer)
       ctx.font = "10px sans-serif"; ctx.textAlign = "left";
       for (const c of cells.values()) if (c.n >= 4) { ctx.fillStyle = "rgba(160,180,220,.18)"; ctx.beginPath(); ctx.arc(c.x, c.y, 6 + Math.min(10, c.n), 0, 6.2832); ctx.fill(); if (c.n >= 6) { ctx.fillStyle = "rgba(190,205,235,.8)"; ctx.fillText(String(c.n), c.x + 7, c.y + 11); } }
+      // things between the stars
+      drawThings(W, H, cw);
       // the ship, its reach; what is chosen; what the search found
-      const sh = ship(), at = findSys(sh.at);
+      const sh = ship(), at = shipPos();
       if (at) { const p = gxOf(at), [x, y] = scr(p.x, p.y); ctx.strokeStyle = "#8fd19e"; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(x, y, 8, 0, 6.2832); ctx.stroke(); if (LAY.reach) { const rr = sh.range / G().ly * FR.k * CAM.s; if (rr > 12 && rr < W * 3) { ctx.fillStyle = "rgba(143,209,158,.035)"; ctx.strokeStyle = "rgba(143,209,158,.55)"; ctx.lineWidth = 1; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(x, y, rr, 0, 6.2832); ctx.fill(); ctx.stroke(); ctx.setLineDash([]); } } }
       const sel = UI.sel && findSys(UI.sel); if (sel) { const p = gxOf(sel), [x, y] = scr(p.x, p.y); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 11, 0, 6.2832); ctx.stroke(); }
       if (UI.filter) for (const s of L.filter(s => s.name.toLowerCase().includes(UI.filter)).slice(0, 40)) { const p = gxOf(s), [x, y] = scr(p.x, p.y); ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, 9, 0, 6.2832); ctx.stroke(); }
       if (paintPts.length) { ctx.fillStyle = "rgba(255,209,102,.5)"; for (const [x, y] of paintPts) { ctx.beginPath(); ctx.arc(x, y, 5, 0, 6.2832); ctx.fill(); } }
-      labels(sp);
+      labels(sp); thingLabels();
       // the sectors' names, faint, while the chart is whole on the screen
       if (cw > 200 && cw < 2600) { ctx.font = "600 13px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(109,134,173,.32)"; for (const c of g.sectors) { const p = gxOf(c), [x, y] = scr(p.x, p.y); ctx.fillText(c.name.toUpperCase(), x, y); } }
     }
@@ -347,7 +364,7 @@
   }
   // names: a steady size, never over each other nor over a star, the most important placed first, more the closer
   function labels(sp) {
-    const thr = sp > 70 ? -1 : sp > 38 ? 4 : sp > 20 ? 14 : sp > 11 ? 29 : 44, placed = [], rows = DRAWN.slice().sort((a, b) => rank(b[2]) - rank(a[2]));
+    const thr = sp > 70 ? -1 : sp > 38 ? 4 : sp > 20 ? 14 : sp > 11 ? 29 : 44, placed = LBLBOX = [], rows = DRAWN.slice().sort((a, b) => rank(b[2]) - rank(a[2]));
     ctx.font = "12px " + (getComputedStyle(cvs).fontFamily || "sans-serif"); ctx.textAlign = "left"; let n = 0;
     for (const [x, y, s, rr, away] of rows) {
       if (rank(s) <= thr || away) continue;
@@ -360,6 +377,7 @@
   }
   // a scale: a round number of light years
   function scale(W, H) {
+    if (schematic() && chartPx() > 36) { ctx.font = "11px sans-serif"; ctx.textAlign = "right"; ctx.fillStyle = "rgba(200,214,240,.85)"; ctx.fillText("A jump map: where the stars are drawn is only a layout; each route's own length counts", W - 16, H - 46); return; }
     const want = 110 / CAM.s, p10 = Math.pow(10, Math.floor(Math.log10(want))), step = [1, 2, 5, 10].map(m => m * p10).filter(v => v <= want).pop() || p10, px = step * CAM.s;
     ctx.strokeStyle = "rgba(200,214,240,.75)"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(W - 16 - px, H - 46); ctx.lineTo(W - 16, H - 46); ctx.moveTo(W - 16 - px, H - 50); ctx.lineTo(W - 16 - px, H - 42); ctx.moveTo(W - 16, H - 50); ctx.lineTo(W - 16, H - 42); ctx.stroke();
     ctx.font = "11px sans-serif"; ctx.textAlign = "right"; ctx.fillStyle = "rgba(200,214,240,.85)"; ctx.fillText(`${ly1(step)} light year${step === 1 ? "" : "s"}`, W - 16, H - 54);
@@ -388,7 +406,7 @@
       const s = UI.sel && findSys(UI.sel), g = G(); if (s && s.sec != null && g.sectors[s.sec]) parts.push(`<span>${esc(g.sectors[s.sec].name)}</span>`);
       if (s) parts.push(`<button type="button" data-gx="pick" data-id="${esc(s.id)}" aria-current="page">${esc(s.name)}</button>`);
     }
-    const h = `<nav class="trail ux-trail" aria-label="Where this is">${parts.join('<span class="tr-sep" aria-hidden="true">›</span>')}</nav><span class="gx-where">${esc(viewLy > 9999 ? ly1(viewLy) + " light years across" : ly1(viewLy) + " light years across")}${MG ? ` · the centre ${ly1(Math.hypot(CAM.x, CAM.y))} light years away` : ""}</span>`;
+    const h = `<nav class="trail ux-trail" aria-label="Where this is">${parts.join('<span class="tr-sep" aria-hidden="true">›</span>')}</nav><span class="gx-where">${esc(schematic() && chartPx() > 60 ? "a jump map: its routes' own lengths count" : ly1(viewLy) + " light years across")}${MG && !(schematic() && chartPx() > 60) ? ` · the centre ${ly1(Math.hypot(CAM.x, CAM.y))} light years away` : ""}</span>`;
     if (el.__h !== h) { el.__h = h; el.innerHTML = h; }
   }
   // the card on hover: a star's name, its kind, what is there, how far from the ship
@@ -417,11 +435,22 @@
       const [wx, wy] = chartAt(e), best = pickAt(e);
       const tool = (k, extra) => () => { if (!UI.tools) { UI.tools = true; } if (k === "add") { UI.adding = true; UI.tool = null; } else { UI.tool = k; UI.adding = false; } UI.first = null; if (extra) extra(); tools(); side(); };
       const it = [];
+      const th = pickThing(e);
+      if (th && !best) {
+        const pl = A.order.find(id => (A.meta[id] || {}).thing === th.id);
+        it.push({ label: "Its card", run: () => { UI.thing = th.id; UI.sel = null; side(); request(); } }, { label: "Move it", run: () => { UI.tools = true; UI.movingThing = th.id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should be."); } });
+        if (!SP.isArea(th.kind)) it.push({ label: "Plot a course here", run: () => { UI.thing = th.id; UI.plan = Object.assign({ to: th.id }, courseToThing(ship().at, th)); side(); request(); } });
+        it.push(th.hidden && !th.found ? { label: "Show it to the players", run: () => { setThing(th.id, { found: true, ready: false, foundHow: "shown by the game master", foundAt: nowMin() }); refresh(); } } : th.hidden ? { label: "Hide it again", run: () => { setThing(th.id, { found: false, ready: false }); refresh(); } } : null);
+        if (!SP.isArea(th.kind)) it.push(pl ? { label: "Open it", hint: "its page and its inside", run: () => { const g0 = document.createElement("button"); g0.dataset.go = pl; host.appendChild(g0); g0.click(); g0.remove(); } } : { label: "Its inside…", run: () => thingPlace(th) });
+        it.push("-", { label: "Take it away", danger: true, run: () => { setThing(th.id, null); if (UI.thing === th.id) UI.thing = null; refresh(); } });
+        A.ux.menu(e, it.filter(Boolean), th.name); return;
+      }
       if (best) {
         it.push({ label: "Its system", run: () => enterSystem(best.id) });
         it.push({ label: "Plot a course here", run: () => { UI.sel = best.id; over(); side(); setTimeout(() => { const b = host.querySelector('[data-gx="plot"]'); if (b) b.click(); }, 30); } });
         it.push("-", { label: "Change it", run: () => { UI.tools = true; UI.sel = best.id; UI.edit = best.id; tools(); side(); } }, { label: "Move it", run: () => { UI.tools = true; UI.moving = best.id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); } }, { label: "Duplicate it", run: () => dupSystem(best.id) }, { label: best.mark ? "Unmark it" : "Mark it", hint: "important", run: () => markSystem(best.id) }, { label: "A lane from it", run: tool("lane", () => { UI.first = best.id; }) });
       } else {
+        if (SP) it.push({ label: "Something here…", hint: "a wreck, a beacon, a station, a gate, a nebula", run: () => KIND_MENU(e, wx, wy) });
         it.push({ label: "A star system here…", run: () => A.ux.menu(e, [{ label: "As the galaxy would have one here", hint: "its star from the real mix, its worlds from its star", run: () => addSystemAt(wx, wy, "random") }, { label: "By hand", hint: "a star of your choosing, no worlds yet", run: () => addSystemAt(wx, wy, "hand") }], "A star system here") }, { label: "A region here", run: tool("region") }, "-", { label: "Our space", run: () => fitChart() }, { label: "The whole galaxy", run: () => fitGalaxy() });
       }
       A.ux.menu(e, it, best ? best.name : "Open space");
@@ -477,6 +506,8 @@
     host.addEventListener("input", e => { if (e.target.dataset && e.target.dataset.gxl === "depth") { LAY.depth = +e.target.value; keepLay(); depthSay(); request(); if (SV) sideDraw(); return; } const f = e.target.closest && e.target.closest("form.gx-phys"); if (f) physPreview(f); });
     depthSay();
     request();
+    // (a campaign of a single star system opens straight into its map; "← The galaxy" shows the space round it)
+    { const g0 = G(), h0 = g0.systems[g0.home]; if ((g0.p || {}).kind === "system" && h0 && A.starSystem) setTimeout(() => { if (host && host.isConnected && !A.starSystem.isOpen()) enterSystem(h0.id); }, 250); }
   }
   // what the chart's own search finds: systems by name, sectors, regions, the galaxy's arms and its heart
   function findList() {
@@ -484,6 +515,7 @@
     const g = G(), out = [];
     // (the systems by name; "marked" lists the ones the game master marked as important)
     for (const s of allSys()) if (s.name.toLowerCase().includes(q) || (s.mark && "marked".startsWith(q))) out.push([`<b>${esc(s.name)}</b><span>${esc(Gg.STAR_NAME[s.cls] || ART.NAME[s.cls] || "")}${s.sec != null && g.sectors[s.sec] ? " · " + esc(g.sectors[s.sec].name) : ""}${s.mark ? " · marked" : ""}</span>`, `data-gx="pick" data-id="${esc(s.id)}"`]);
+    for (const t of allThings()) if (String(t.name).toLowerCase().includes(q)) out.push([`<b>${esc(t.name)}</b><span>${esc(SP.label(t.kind))}${t.hidden && !t.found ? " · hidden" : ""}</span>`, `data-gx="tpick" data-id="${esc(t.id)}"`]);
     for (const c of g.sectors) if (c.name.toLowerCase().includes(q)) out.push([`<b>${esc(c.name)}</b><span>A sector</span>`, `data-gx="gosec" data-id="${esc(c.id)}"`]);
     for (const r of g.regions) if (String(r.name || "").toLowerCase().includes(q)) out.push([`<b>${esc(r.name)}</b><span>A region</span>`, `data-gx="goreg" data-id="${esc(r.id)}"`]);
     if (MG) { for (const a of MG.arms) if (a.name.toLowerCase().includes(q)) out.push([`<b>${esc(a.name)}</b><span>An arm of the galaxy</span>`, `data-gx="goarm" data-k="${a.k}"`]); if (MG.bh && (MG.bh.name.toLowerCase().includes(q) || /black hole|centre|center|heart/.test(q))) out.push([`<b>${esc(MG.bh.name)}</b><span>The black hole at the centre</span>`, `data-gx="gohole"`]); }
@@ -640,6 +672,141 @@
   }
   function markSystem(id) { const s = findSys(id); if (!s) return; setG(id, Object.assign(doc(id), { mark: !s.mark, t: Date.now() })); refresh(); }
 
+  /* ---- things between the stars (atlas-space.js; the editing plan of 10 Nov 2026, stage 2): kept in "~things", drawn
+          on the chart, chosen, changed in their card, found by the ship's sensors or their signal, a sweep, a clue, an
+          event or the game master; a course can be plotted to one, and one can have an inside */
+  const SP = A.space;
+  const allThings = () => (G().things || []).filter(t => !t.gone);
+  const thingById = id => allThings().find(t => t.id === id) || null;
+  const nowMin = () => A.worldTime ? A.worldTime.now() : 0;
+  const thingAt = t => SP ? SP.where(t, nowMin()) : { x: t.x, y: t.y };
+  function setThing(id, patch, how) { const X = doc("~things"); X.add = X.add || []; const i = X.add.findIndex(t => t.id === id); if (i < 0) return; if (patch === null) X.add.splice(i, 1); else X.add[i] = Object.assign({}, X.add[i], patch); setG("~things", X, how); }
+  function addThing(kind, wx, wy) {
+    if (!SP) return; const id = "t" + Date.now().toString(36), X = doc("~things"), t = Object.assign(SP.fresh(kind), { id, x: r1c(wx), y: r1c(wy), t: Date.now() });
+    X.add = (X.add || []).concat(t); UI.tools = true; setG("~things", X); UI.thing = id; UI.sel = null; UI.selReg = null; UI.selLane = null; refresh();
+    if (A.tableUI) A.tableUI.api.note(`${SP.label(kind)} here. ${t.hidden ? "It is hidden from the players until they find it: its card says how they can." : "The players can see it on their charts."}`);
+  }
+  // the ship's own place: its system, or a thing it went to
+  const shipPos = () => { const sh = ship(), th = sh.near && thingById(sh.near); if (th) { const p = thingAt(th); return { x: p.x, y: p.y, z: th.z || 0 }; } const s = findSys(sh.at); return s ? { x: s.x, y: s.y, z: s.z || 0 } : null; };
+  const lyTo = (t, p) => { const q = thingAt(t); return Math.hypot(Math.hypot(q.x - p.x, q.y - p.y) * G().ly, (t.z || 0) - (p.z || 0)); };
+  // (how far the sensors reach: by how good they are; a fifth as far inside a nebula that blinds them)
+  const reachLy = () => { const r0 = SP ? SP.REACH[ship().sensors || "good"] || 2.5 : 2.5, sp = shipPos(); return sp && allThings().some(t => t.kind === "nebula" && t.blinds && lyTo(t, sp) <= (t.r || 1)) ? r0 * .2 : r0; };
+  // which hidden things are found now, told to the game master (and shown to the players, for those that are to be
+  // shown by themselves); called when the ship moves, the sensors sweep, the table's clues or events change
+  let thBusy = false;
+  function checkThings(o) {
+    if (!SP || thBusy || !S() || !G().things || !G().things.length) return []; thBusy = true; const out = [];
+    try {
+      const sp = shipPos(), reach = reachLy(), foundClue = ref => { const [pl, id] = String(ref).split("|"); return !!(A.story && A.story.found && pl && id && A.story.found(pl, id)); }, eventDone = id => { const e = S().get("events", id); return !!(e && e.state === "done"); };
+      for (const t of allThings()) {
+        if (!t.hidden || t.found || t.ready) continue;
+        const why = SP.met(t, { dist: sp ? lyTo(t, sp) : null, reach, swept: o && o.swept, foundClue, eventDone }); if (!why) continue;
+        if (t.reveal === "auto") setThing(t.id, { found: true, foundHow: why, foundAt: nowMin() }, "hist"); else setThing(t.id, { ready: true, readyHow: why }, "hist");
+        out.push([t, why]);
+      }
+    } finally { thBusy = false; }
+    for (const [t, why] of out) if (A.tableUI) A.tableUI.api.note(t.reveal === "auto" ? `The players have found ${t.name}: ${why}.` : `${t.name} can be found now: ${why}. Show it to the players from its card when you choose.`);
+    if (out.length) { A._galaxy = null; if (host) { request(); side(); } }
+    return out;
+  }
+  // a course to a thing: to the system nearest it (or straight from the ship's, if near enough), then the last jump
+  // (a course refused says why, in the thing's own card)
+  function courseToThing(fromId, t) { return Object.assign(courseToThing0(fromId, t), { thing: t.id }); }
+  function courseToThing0(fromId, t) {
+    const sh = ship(), rule = fuelRule(), reach = sh.range * ({ Sound: 1, Worn: .9, Damaged: .7, Crippled: .45 }[sh.condition] || 1), from = findSys(fromId);
+    const near = allSys().map(s => [s, lyTo(t, s)]).sort((a, b) => a[1] - b[1])[0]; if (!near || !from) return { ok: false, why: "No star system to set out from." };
+    let c, last;
+    if (lyTo(t, shipPos() || from) <= reach) { c = { ok: true, path: [from.id], ly: 0, days: 0, fuel: 0, left: sh.fuel, stops: [], risks: [], legs: [] }; last = from; }
+    else { c = course(fromId, near[0].id); last = near[0]; if (!c.path) return c; }
+    const dl = lyTo(t, last); if (dl > reach) return { ok: false, why: `${t.name} lies ${round1(dl)} light years from ${last.name}, the nearest system: beyond the ship's reach of ${round1(reach)} light years a jump.` };
+    const f = dl * sh.burn * rule[2];
+    c.legs = (c.legs || []).concat({ from: last.name, to: t.name, ly: dl, lane: false }); c.ly += dl; c.days += dl / Math.max(.1, sh.speed);
+    if (rule[2]) { c.fuel += f; c.left -= f; if (c.left < -1e-9) { c.ok = false; c.why = `The fuel runs out on the way to ${t.name}.`; } }
+    c.risks = [...new Set((c.risks || []).concat(`The last jump, to ${t.name}, is off the lanes`, t.attitude === "hostile" ? `${t.name} is hostile` : null).filter(Boolean))];
+    return Object.assign(c, { thing: t.id, near: last.id, to: last.id });
+  }
+  // an area drawn: a nebula's soft clouds, an asteroid field's rocks, a debris field's shards
+  function drawArea(t, x, y, rp) {
+    const r = Gg.rng(t.id), sel = UI.thing === t.id;
+    if (t.kind === "nebula") { ctx.globalCompositeOperation = "lighter"; for (let k = 0; k < 6; k++) { const a = r() * 6.2832, d = r() * rp * .55, bx = x + Math.cos(a) * d, by = y + Math.sin(a) * d, br = rp * (.45 + r() * .45), g0 = ctx.createRadialGradient(bx, by, 0, bx, by, br), hue = r() < .5 ? "214,120,170" : "120,150,230"; g0.addColorStop(0, `rgba(${hue},.20)`); g0.addColorStop(1, `rgba(${hue},0)`); ctx.fillStyle = g0; ctx.beginPath(); ctx.arc(bx, by, br, 0, 6.2832); ctx.fill(); } ctx.globalCompositeOperation = "source-over"; }
+    else { const n = t.kind === "asteroids" ? 140 : 70; for (let k = 0; k < n; k++) { const a = r() * 6.2832, d = Math.sqrt(r()) * rp, s0 = r() < .15 ? 2 : 1; ctx.fillStyle = t.kind === "asteroids" ? "rgba(176,160,136,.75)" : "rgba(170,176,190,.7)"; ctx.fillRect(x + Math.cos(a) * d, y + Math.sin(a) * d, s0, t.kind === "debris" ? 1 : s0); } }
+    ctx.strokeStyle = sel ? "#fff" : "rgba(200,214,240,.28)"; ctx.setLineDash([3, 5]); ctx.lineWidth = sel ? 1.4 : 1; ctx.beginPath(); ctx.arc(x, y, rp, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+    if (rp > 26) { ctx.font = "11px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "rgba(210,220,240,.8)"; ctx.fillText(t.name, x, y - rp - 4); }
+  }
+  let THINGS = [];
+  function drawThings(W, H, cw) {
+    THINGS = []; if (!SP) return;
+    for (const t of allThings()) {
+      const P = gxOf(thingAt(t)), [x, y] = scr(P.x, P.y);
+      if (SP.isArea(t.kind)) { const rp = Math.max(7, (t.r || 1) * CAM.s); if (x + rp < 0 || y + rp < 0 || x - rp > W || y - rp > H) continue; drawArea(t, x, y, rp); THINGS.push([x, y, t, Math.min(rp, 30)]); continue; }
+      if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+      const ic = A.starSystem && A.starSystem.icon ? A.starSystem.icon(SP.icon(t.kind)) : null, faint = t.hidden && !t.found;
+      ctx.globalAlpha = faint ? .55 : 1; ctx.imageSmoothingEnabled = false; if (ic) ctx.drawImage(ic, x - 9, y - 9, 18, 18); else { ctx.fillStyle = "#ffd166"; ctx.fillRect(x - 3, y - 3, 6, 6); }
+      ctx.globalAlpha = 1;
+      if (faint) { ctx.strokeStyle = t.ready ? "#ffd166" : "rgba(200,214,240,.55)"; ctx.lineWidth = t.ready ? 1.6 : 1; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.arc(x, y, 13, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); }
+      if (t.signal && t.signal.on && t.signal.range && (!t.hidden || t.found || UI.thing === t.id)) { const rr = t.signal.range * CAM.s; if (rr > 16 && rr < W * 2) { ctx.strokeStyle = "rgba(255,107,107,.35)"; ctx.setLineDash([1, 4]); ctx.beginPath(); ctx.arc(x, y, rr, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); } }
+      if (UI.thing === t.id) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 15, 0, 6.2832); ctx.stroke(); }
+      if (cw > 260 || UI.thing === t.id) THLBL.push([x, y, t.name, faint]);
+      THINGS.push([x, y, t, 11]);
+    }
+  }
+  // their names, after the stars' own: each where it fits, never over a star's name or a star (THLBL from drawThings,
+  // LBLBOX from labels)
+  let THLBL = [], LBLBOX = [];
+  function thingLabels() {
+    ctx.font = "11px sans-serif"; ctx.textAlign = "left";
+    for (const [x, y, name, faint, lane] of THLBL) {
+      const w = ctx.measureText(name).width + 4, h = 14, C = lane ? [[x - w / 2, y - 7], [x - w / 2, y + 5], [x - w / 2, y - 19]] : [[x + 13, y - 7], [x - 13 - w, y - 7], [x - w / 2, y + 12], [x - w / 2, y - 26]];
+      const box = C.map(([bx, by]) => [bx, by, w, h]).find(b => !LBLBOX.some(p => b[0] < p[0] + p[2] && b[0] + b[2] > p[0] && b[1] < p[1] + p[3] && b[1] + b[3] > p[1]) && !DRAWN.some(d => d[0] > b[0] - 4 && d[0] < b[0] + b[2] + 4 && d[1] > b[1] - 4 && d[1] < b[1] + b[3] + 4));
+      if (!box) continue; LBLBOX.push(box);
+      ctx.fillStyle = "rgba(3,5,10,.55)"; ctx.fillRect(box[0], box[1], box[2], box[3]); ctx.fillStyle = faint ? "#9fb0c9" : "#e8dcc0"; ctx.fillText(name, box[0] + 2, box[1] + 11);
+    }
+  }
+  function pickThing(e) { const r = cvs.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top; let best = null, bd = Infinity; for (const [x, y, t, rr] of THINGS) { const d = Math.hypot(x - px, y - py); if (d <= Math.max(10, rr) && d < bd) { bd = d; best = t; } } return best; }
+  const KIND_MENU = (ev, wx, wy) => A.ux.menu(ev, SP.GROUPS.map(g0 => ({ label: g0 + "…", run: () => A.ux.menu(ev, Object.entries(SP.KINDS).filter(([, k]) => k[1] === g0).map(([k, v]) => ({ label: v[0], run: () => addThing(k, wx, wy) })), g0) })), "Something here");
+  function thingHTML(t) {
+    const gm = gmMode(), K = SP.KINDS[t.kind] || SP.KINDS.poi, area = SP.isArea(t.kind), pl = A.order.find(id => (A.meta[id] || {}).thing === t.id), sp = shipPos(), d = sp ? lyTo(t, sp) : null;
+    const sel = (n, list, v) => `<select class="t-in" name="${n}">${list.map(([a, b]) => `<option value="${esc(a)}"${String(a) === String(v == null ? "" : v) ? " selected" : ""}>${esc(b)}</option>`).join("")}</select>`;
+    const state = !t.hidden ? `<div class="gx-f"><span class="kn">The players</span> can see it on their charts</div>` : t.found ? `<div class="gx-f"><span class="kn">The players</span> have found it${t.foundHow ? ": " + esc(t.foundHow) : ""}</div>` : t.ready ? `<div class="gx-f gx-warn"><span class="kn">Ready to be found</span> ${esc(t.readyHow || "")}</div>` : `<div class="gx-f"><span class="kn">The players</span> know nothing of it yet</div>`;
+    const head = `<section class="gx-card gx-thing"><h3>${esc(t.name)}</h3><div class="gx-f">${esc(K[0])}${t.attitude && t.attitude !== "unknown" ? " · " + esc(((SP.ATTITUDE.find(a => a[0] === t.attitude) || [0, ""])[1]).toLowerCase()) : ""}${d != null ? ` · ${round1(d)} light years from the ship` : ""}</div>${t.desc ? `<p>${esc(t.desc)}</p>` : ""}${t.signal && t.signal.on && t.signal.message ? `<p class="t-small"><span class="kn">Its signal</span> “${esc(t.signal.message)}”</p>` : ""}${gm && t.gm ? `<p class="gx-gm"><span class="kn">Only you</span> ${esc(t.gm)}</p>` : ""}${state}
+      <div class="t-row">${t.hidden && !t.found ? `<button type="button" class="t-btn${t.ready ? " prim" : ""}" data-gx="treveal" data-id="${esc(t.id)}">Show it to the players</button>` : t.hidden ? `<button type="button" class="t-mini" data-gx="thide" data-id="${esc(t.id)}">Hide it again</button>` : ""}${!area ? `<button type="button" class="t-mini" data-gx="tplot" data-id="${esc(t.id)}">Plot a course here</button>` : ""}${pl ? `<button type="button" class="t-go" data-go="${esc(pl)}">Open it</button>` : A.locations && A.locations.forPlace && !area && gm ? `<button type="button" class="t-mini" data-gx="tplace" data-id="${esc(t.id)}" title="A place of the campaign: its page, its maps deck by deck, its people and clues; its inside built in the map editor">Its inside…</button>` : ""}</div></section>`;
+    if (!gm) return head;
+    const sig = t.signal || {}, drift = t.drift || {}, owners = [["", "No one"], ...G().powers.map(x => [x.id, x.name]), ...Object.entries(A.factionsData || {}).filter(([id]) => !G().powers.some(x => x.id === id)).map(([id, f]) => [id, f.n || id])];
+    const kinds = SP.GROUPS.map(g0 => `<optgroup label="${esc(g0)}">${Object.entries(SP.KINDS).filter(([, k]) => k[1] === g0).map(([k, v]) => `<option value="${k}"${k === t.kind ? " selected" : ""}>${esc(v[0])}</option>`).join("")}</optgroup>`).join("");
+    const clues = A.story && A.story.allClues ? A.story.allClues().map(c => [c.pl + "|" + c.id, (c.c.t || c.id) + " (" + ((A.meta[c.pl] || {}).name || c.pl) + ")"]) : [], evs = A.worldTime && A.worldTime.events ? A.worldTime.events().map(e => [e.id, e.title || e.id]) : [];
+    return head + `<section class="gx-card"><h4>Change ${esc(t.name)}</h4><form data-gx="savething" data-id="${esc(t.id)}">
+      <label class="tw-l"><span>Name</span><input class="t-in" name="name" maxlength="80" value="${esc(t.name)}"></label>
+      <label class="tw-l"><span>What it is</span><select class="t-in" name="kind">${kinds}</select></label>
+      <label class="tw-l"><span>What the players see of it</span><textarea class="t-in" name="desc" rows="2">${esc(t.desc || "")}</textarea></label>
+      <label class="tw-l"><span>Only you: what it really is, its story</span><textarea class="t-in" name="gm" rows="3">${esc(t.gm || "")}</textarea></label>
+      ${area ? `<label class="tw-l"><span>How far it reaches (light years)</span><input class="t-in" type="number" step="any" min="0.05" name="r" value="${t.r || 1}"></label>${t.kind === "nebula" ? `<label class="t-fogck"><input type="checkbox" name="blinds"${t.blinds ? " checked" : ""}> It blinds sensors, and courses through it are warned of</label>` : ""}` : `
+      <div class="gx-comp"><label class="tw-l"><span>Its condition</span><input class="t-in" name="condition" maxlength="120" value="${esc(t.condition || "")}" placeholder="adrift, its hull breached"></label><label class="tw-l"><span>To the party it is</span>${sel("attitude", SP.ATTITUDE, t.attitude)}</label><label class="tw-l"><span>It belongs to</span>${sel("owner", owners, t.owner || "")}</label></div>
+      <label class="tw-l"><span>Crew and passengers</span><textarea class="t-in" name="crew" rows="2">${esc(t.crew || "")}</textarea></label>
+      <label class="tw-l"><span>Cargo and equipment</span><textarea class="t-in" name="cargo" rows="2">${esc(t.cargo || "")}</textarea></label>
+      <details class="gx-how"${sig.on ? " open" : ""}><summary class="t-small">Its signal</summary><label class="t-fogck"><input type="checkbox" name="sig_on"${sig.on ? " checked" : ""}> It broadcasts</label><label class="tw-l"><span>Its message</span><textarea class="t-in" name="sig_msg" rows="2">${esc(sig.message || "")}</textarea></label><div class="gx-comp"><label class="tw-l"><span>How far it carries (light years)</span><input class="t-in" type="number" step="any" min="0" name="sig_r" value="${sig.range != null ? sig.range : 2}"></label><label class="tw-l"><span>Where it really comes from (only you)</span><input class="t-in" name="sig_src" maxlength="160" value="${esc(sig.source || "")}"></label></div></details>
+      <details class="gx-how"${drift.speed ? " open" : ""}><summary class="t-small">Drifting</summary><div class="gx-comp"><label class="tw-l"><span>Light years a day (0: it keeps its place)</span><input class="t-in" type="number" step="any" min="0" name="dr_s" value="${drift.speed || 0}"></label><label class="tw-l"><span>Towards (degrees: 0 east, 90 south)</span><input class="t-in" type="number" step="any" name="dr_d" value="${drift.dir || 0}"></label></div></details>`}
+      <h5>Found</h5><label class="t-fogck"><input type="checkbox" name="hidden"${t.hidden ? " checked" : ""}> Hidden until the players find it</label>
+      <div class="tj-keys">${SP.CONDS.map(([k, l]) => `<label class="t-fogck"><input type="checkbox" name="c_${k}"${(t.conds || []).includes(k) ? " checked" : ""}> ${esc(l)}</label>`).join("")}</div>
+      ${clues.length ? `<label class="tw-l"><span>The clue that leads to it</span>${sel("clue", [["", "None"], ...clues], t.clue || "")}</label>` : ""}${evs.length ? `<label class="tw-l"><span>The event that reveals it</span>${sel("event", [["", "None"], ...evs], t.event || "")}</label>` : ""}
+      <label class="tw-l"><span>When one of these happens</span>${sel("reveal", [["tell", "Tell me, and I show it to the players"], ["auto", "Show it to the players by itself"]], t.reveal || "tell")}</label>
+      <div class="t-row"><button class="t-btn prim">Keep it</button><button type="button" class="t-mini" data-gx="tmove" data-id="${esc(t.id)}">Move it</button>${A.tableUI && A.tableUI.api && A.tableUI.api.askRaw ? `<button type="button" class="t-mini" data-gx="tfill" data-id="${esc(t.id)}" title="Claude writes what it is, its story, its crew and cargo and its message; nothing is kept until you keep it">Fill it in with Claude</button>` : ""}<span class="t-sp"></span><button type="button" class="t-mini t-danger" data-gx="tdel" data-id="${esc(t.id)}">Take it away</button></div><p class="t-small kn gx-tfill" aria-live="polite"></p></form></section>`;
+  }
+  // Claude fills the card (what it is, its story, its crew, cargo and message): into the form only, kept when the game
+  // master keeps it
+  async function fillThing(t, f, btn) {
+    const msg = f.querySelector(".gx-tfill"), ask = A.tableUI && A.tableUI.api && A.tableUI.api.askRaw; if (!ask) return;
+    const cfg = A.config || {}, near = allSys().map(s => [s, lyTo(t, s)]).sort((a, b) => a[1] - b[1]).slice(0, 2).map(([s, d]) => `${s.name} (${round1(d)} ly)`).join(", ");
+    const prompt = `A tabletop roleplaying campaign among the stars: "${cfg.title || ""}" (${[cfg.system, cfg.setting].filter(Boolean).join(", ")}). Out in space, near ${near || "no star"}, the game master has placed ${SP.label(t.kind).toLowerCase()} called "${f.elements.name.value}".${f.elements.gm.value ? " Their notes: " + f.elements.gm.value : ""}\nWrite it for them, in the voice of the campaign. Answer with JSON only: {"desc": "what the players see of it, two or three sentences, no secrets", "gm": "for the game master only: what it really is, its story, one secret and one thing that could happen there, four or five sentences", "condition": "a few words", "crew": "who is or was aboard, a sentence", "cargo": "what it carries, a sentence", "message": "its signal's words, if it broadcasts, else empty"}. Invent nothing about the campaign's own people or events; anything new reads as a suggestion.`;
+    btn.disabled = true; msg.textContent = "Asking Claude…"; let v = null;
+    try { const raw = await ask(prompt, null, null, { kind: "writing", what: "what " + (f.elements.name.value || "it") + " is", uses: ["its kind", "your notes", "the stars near it"] }); const m = String(raw || "").match(/\{[\s\S]*\}/); v = m ? JSON.parse(m[0]) : null; } catch (e) { v = null; }
+    btn.disabled = false; if (!v) { msg.textContent = "Claude could not answer just now. Write it yourself, or try again."; return; }
+    const put = (n, x) => { if (x && f.elements[n]) f.elements[n].value = String(x).slice(0, 3000); };
+    put("desc", v.desc); put("gm", v.gm); put("condition", v.condition); put("crew", v.crew); put("cargo", v.cargo); if (v.message && f.elements.sig_msg) { put("sig_msg", v.message); }
+    msg.textContent = "Suggested: change anything, then Keep it. Nothing is kept until you do.";
+  }
+  function thingPlace(t) { if (A.locations && A.locations.forPlace) A.locations.forPlace({ thing: t.id, kind: t.kind, name: t.name, pd: t.desc || "", kp: t.gm || "", label: t.name, done: () => refresh() }); }
+  A.galaxyThing = id => { if (!host) return false; const t = thingById(id); if (!t) return false; if (A.starSystem && A.starSystem.isOpen()) leaveSystem(false); UI.thing = id; UI.sel = null; const p = gxOf(thingAt(t)); flyTo(p.x, p.y, Math.max(CAM.s, sChart() * 4), 400); side(); return true; };
+
   // (Back in the page's own history to the chart without a system: the system's map closed)
   A.galaxyClose = () => { if (UI.sys || (A.starSystem && A.starSystem.isOpen())) leaveSystem(false); if (SV) sideClose(); if (TL) tlClose(); };
 
@@ -763,6 +930,7 @@
     const r1 = v => Math.round(v * 10) / 10, nid = p => p + Date.now().toString(36) + Math.floor(Math.random() * 90 + 10);
     if (UI.adding) { UI.adding = false; addSystemAt(wx, wy, "random"); return; }
     if (UI.moving) { const id = UI.moving; setG(id, Object.assign(doc(id), { x: r1(wx), y: r1(wy) })); UI.moving = null; refresh(); return; }
+    if (UI.movingThing) { const id = UI.movingThing, t = thingById(id); UI.movingThing = null; if (t) setThing(id, Object.assign({ x: r1(wx), y: r1(wy) }, t.drift ? { drift: Object.assign({}, t.drift, { t0: nowMin() }) } : {})); refresh(); return; }
     if (UI.movingReg) { const R = doc("~regions"), id = UI.movingReg, own = (R.add || []).find(q => q.id === id); if (own) Object.assign(own, { x: r1(wx), y: r1(wy) }); else { R.edit = R.edit || {}; R.edit[id] = Object.assign(R.edit[id] || {}, { x: r1(wx), y: r1(wy) }); } setG("~regions", R); UI.movingReg = null; refresh(); return; }
     if (UI.tool === "region") { const id = nid("rg"), R = doc("~regions"); R.add = (R.add || []).concat({ id, kind: "danger", x: r1(wx), y: r1(wy), r: 30, name: "A new region" }); setG("~regions", R); UI.tool = null; UI.selReg = id; UI.sel = null; UI.selLane = null; refresh(); return; }
     if (UI.tool === "sector") { const id = nid("sc"), X = doc("~sectors"); X.add = (X.add || []).concat({ id, x: r1(wx), y: r1(wy), name: "The New Sector" }); setG("~sectors", X); UI.tool = null; UI.panel = "sp"; refresh(); return; }
@@ -775,6 +943,10 @@
       setG("~lanes", L); UI.first = null; UI.tool = null; UI.sel = null; UI.selLane = lk(findSys(a).i, findSys(b).i); UI.selReg = null; refresh(); return;
     }
     if (UI.tool === "terr") return;
+    // a thing between the stars, nearer than any star: its card
+    const th = pickThing(e);
+    if (th && (!best || (() => { const r = cvs.getBoundingClientRect(), w = DRAWN.find(d => d[2] === best); return !w || Math.hypot(w[0] - (e.clientX - r.left), w[1] - (e.clientY - r.top)) > 6; })())) { UI.thing = th.id; UI.sel = null; UI.selReg = null; UI.selLane = null; UI.hole = false; side(); request(); return; }
+    if (UI.thing) UI.thing = null;
     // a star: with the tools out it is chosen to be changed; otherwise the chart flies into its system (the user's choice)
     if (best) { if (UI.tools) { UI.sel = best.id; UI.selReg = null; UI.selLane = null; UI.sys = null; UI.planet = null; UI.plan = null; UI.hole = false; over(); side(); } else enterSystem(best.id); return; }
     // the black hole at the centre: its own card
@@ -793,11 +965,13 @@
   /* ---- the side: the ship, the system chosen, its worlds, a course */
   function shipHTML() {
     const sh = ship(), at = findSys(sh.at), rule = fuelRule(), pct = Math.max(0, Math.min(100, sh.fuel / sh.cap * 100));
-    return `<section class="gx-card"><h3>${esc(sh.name)}</h3><div class="gx-f"><span class="kn">At</span> <button type="button" class="t-link" data-gx="pick" data-id="${esc(sh.at)}">${esc(at ? at.name : sh.at)}</button></div>
+    const nearT = sh.near && thingById(sh.near);
+    return `<section class="gx-card"><h3>${esc(sh.name)}</h3><div class="gx-f"><span class="kn">At</span> ${nearT ? `<button type="button" class="t-link" data-gx="tpick" data-id="${esc(nearT.id)}">${esc(nearT.name)}</button>, out from ` : ""}<button type="button" class="t-link" data-gx="pick" data-id="${esc(sh.at || "")}">${esc(at ? at.name : sh.at || "nowhere yet")}</button></div>
       ${rule[2] ? `<div class="gx-fuel" title="${Math.round(sh.fuel)} of ${sh.cap}"><i style="width:${pct.toFixed(1)}%"></i></div><div class="gx-f"><span class="kn">Fuel</span> ${Math.round(sh.fuel)} of ${sh.cap}${at && at.f.fuel && sh.fuel < sh.cap ? ` <button type="button" class="t-mini" data-gx="refuel">Refuel here</button>` : ""}</div>` : ""}
       <div class="gx-f"><span class="kn">Reach</span> ${round1(sh.range)} light years a jump · <span class="kn">Speed</span> ${round1(sh.speed)} light years a day</div>
       <div class="gx-f"><span class="kn">Condition</span> <select class="t-in gx-sel" data-gx="cond">${COND.map(c => `<option${c === sh.condition ? " selected" : ""}>${c}</option>`).join("")}</select> <span class="kn">Cargo</span> ${sh.cargo} of ${sh.cargoCap}</div>
       <div class="gx-f"><span class="kn">Sensors</span> <select class="t-in gx-sel" data-gx="sens">${SENS.map(([k, l]) => `<option value="${k}"${k === (sh.sensors || "good") ? " selected" : ""}>${l}</option>`).join("")}</select> <span class="kn">how fast they learn a world by scanning it</span></div>
+      ${SP && sh.at ? `<div class="t-row"><button type="button" class="t-mini" data-gx="sweep" title="Anything hidden that a sweep can find, within reach of its sensors">Sweep with the sensors</button><span class="kn">${round1(reachLy() * 1.5)} light years round the ship, an hour</span></div>` : ""}
       ${sh.crew ? `<div class="gx-f"><span class="kn">Crew</span> ${esc(sh.crew)}</div>` : ""}${(sh.equipment || []).length ? `<div class="gx-f"><span class="kn">Equipment</span> ${esc(sh.equipment.join(", "))}</div>` : ""}${(sh.upgrades || []).length ? `<div class="gx-f"><span class="kn">Upgrades</span> ${esc(sh.upgrades.join(", "))}</div>` : ""}
       <div class="gx-f"><span class="kn">Fuel</span> <select class="t-in gx-sel" data-gx="rule">${FUEL.map(([k, l]) => `<option value="${k}"${k === rule[0] ? " selected" : ""}>${l}</option>`).join("")}</select></div>
       ${(sh.log || []).length ? `<details class="fa-more"><summary>Its log (${sh.log.length})</summary><ol class="tw-hist" reversed>${sh.log.slice().reverse().slice(0, 30).map(l => `<li><span class="kn">${esc(l.when || "")}</span> ${esc(l.what)}</li>`).join("")}</ol></details>` : ""}</section>`;
@@ -820,7 +994,8 @@
   }
   function planHTML() {
     const p = UI.plan; if (!p.path) return `<section class="gx-card gx-plan"><h4>The course</h4><p class="gx-warn">${esc(p.why)}</p></section>`;
-    return `<section class="gx-card gx-plan"><h4>The course</h4><div class="gx-f">${p.path.length - 1} jump${p.path.length > 2 ? "s" : ""} · ${round1(p.ly)} light years · ${round1(p.days)} days${p.fuel ? ` · ${Math.ceil(p.fuel)} fuel` : ""}</div>
+    const nj = (p.legs || []).length || p.path.length - 1;
+    return `<section class="gx-card gx-plan"><h4>The course${p.thing && thingById(p.thing) ? " to " + esc(thingById(p.thing).name) : ""}</h4><div class="gx-f">${nj} jump${nj > 1 ? "s" : ""} · ${round1(p.ly)} light years · ${round1(p.days)} days${p.fuel ? ` · ${Math.ceil(p.fuel)} fuel` : ""}</div>
       ${p.stops.length ? `<div class="gx-f"><span class="kn">Fuel on the way</span> ${esc(p.stops.join(", "))}</div>` : p.fuel ? `<div class="gx-f"><span class="kn">Fuel on the way</span> none</div>` : ""}
       ${p.risks.length ? `<ul class="gx-risks">${p.risks.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : `<p class="t-small">No dangers on the charts.</p>`}
       ${p.why ? `<p class="gx-warn">${esc(p.why)}</p>` : ""}
@@ -1206,7 +1381,7 @@
     const kind = g.laneKind.get(key) || (g.laneLy.has(key) ? "corridor" : "lane"), d = ly(p, q);
     return `<section class="gx-card"><h3>${esc(p.name)} to ${esc(q.name)}</h3><form data-gx="savelane" data-a="${esc(p.id)}" data-b="${esc(q.id)}">
       <label class="tw-l"><span>What it is</span><select class="t-in" name="kind">${LANEK.map(([k, l]) => `<option value="${k}"${k === kind ? " selected" : ""}>${l}</option>`).join("")}</select></label>
-      <label class="tw-l"><span>Its length in light years (a corridor only; the stars stand ${Math.round(d * 10) / 10} apart)</span><input class="t-in" type="number" name="ly" min="0.1" step="any" value="${g.laneLy.has(key) ? g.laneLy.get(key) : ""}" placeholder="${Math.round(d * 10) / 10}"></label>
+      <label class="tw-l"><span>${schematic() ? "Its length in light years: on a jump map, what its fuel and days follow" : `Its length in light years (a corridor only; the stars stand ${Math.round(d * 10) / 10} apart)`}</span><input class="t-in" type="number" name="ly" min="0.1" step="any" value="${g.laneLy.has(key) ? g.laneLy.get(key) : ""}" placeholder="${Math.round(d * 10) / 10}"></label>
       <p class="t-small">Lanes are safer: courses prefer them. A corridor counts its own length for the fuel and the days, and a ship takes it even when the stars stand further apart than it can jump.</p>
       <div class="t-row"><button class="t-btn prim">Keep it</button><span class="t-sp"></span><button type="button" class="t-mini t-danger" data-gx="cutlane" data-a="${esc(p.id)}" data-b="${esc(q.id)}">Cut it</button></div></form></section>`;
   }
@@ -1251,12 +1426,13 @@
     const g = G(), rg = UI.selReg && g.regions.find(r => r.id === UI.selReg);
     // (with a system's own map open, its cards first and the ship's after)
     const inSys = s && UI.sys === s.id && A.starSystem && A.starSystem.isOpen();
-    sd.innerHTML = (UI.panel === "sp" ? spHTML() : "") + (UI.hole ? holeHTML() : "") + (inSys ? sysHTML(s) + shipHTML() : shipHTML() + (s ? sysHTML(s) : rg ? regHTML(rg) : UI.selLane ? laneHTML(UI.selLane) : galaxyHTML()));
+    const th = !inSys && UI.thing && thingById(UI.thing);
+    sd.innerHTML = (UI.panel === "sp" ? spHTML() : "") + (UI.hole ? holeHTML() : "") + (inSys ? sysHTML(s) + shipHTML() : (th ? thingHTML(th) + (UI.plan && UI.plan.thing === th.id ? planHTML() : "") + shipHTML() : shipHTML() + (s ? sysHTML(s) : rg ? regHTML(rg) : UI.selLane ? laneHTML(UI.selLane) : galaxyHTML())));
     { const pf = sd.querySelector("form.gx-phys"); if (pf) physPreview(pf); }
     // (the world in its card, turning, as pixel art: atlas-pixelplanet.js)
     if (A.pixelPlanet) sd.querySelectorAll("canvas.gx-pxg").forEach(cv => { const s2 = findSys(cv.dataset.id), info = s2 && bodiesOf(s2), p = info && info.planets.find(x => x.n === +cv.dataset.n); if (!p) return; const m = cv.dataset.m != null && cv.dataset.m !== "" ? (p.moonList || []).find(x => x.n === +cv.dataset.m) : null; A.pixelPlanet.spin(cv, m ? Object.assign({}, m, { name: moonName(p, m) }) : p, 48, info.star.color); });
   }
-  function refresh() { A._galaxy = null; if (host) { base(); over(); side(); tools(); if (A.starSystem && A.starSystem.isOpen()) A.starSystem.refresh(); } }
+  function refresh() { A._galaxy = null; if (host) { base(); over(); side(); tools(); if (A.starSystem && A.starSystem.isOpen()) A.starSystem.refresh(); setTimeout(() => checkThings(), 0); } }
 
   /* ---- what the game master does */
   const nowWhen = () => A.worldTime ? A.worldTime.at(A.worldTime.now()).short : new Date().toLocaleDateString();
@@ -1282,6 +1458,16 @@
       case "gohole": flyTo(0, 0, Wpx() / 3000); UI.hole = true; UI.sel = null; side(); host.querySelector(".gx-found").hidden = true; return;
       case "holex": UI.hole = false; side(); return;
       case "sideview": if (TL) tlClose(); sideOpen(); return;
+      // (things between the stars)
+      case "tpick": { const t = thingById(id); if (t) A.galaxyThing(id); const fl = host.querySelector(".gx-found"); if (fl) fl.hidden = true; return; }
+      case "treveal": setThing(id, { found: true, ready: false, foundHow: (thingById(id) || {}).readyHow || "shown by the game master", foundAt: nowMin() }); refresh(); return;
+      case "thide": setThing(id, { found: false, ready: false }); refresh(); return;
+      case "tplot": { const t = thingById(id); if (!t) return; UI.thing = id; UI.plan = Object.assign({}, courseToThing(ship().at, t)); side(); request(); return; }
+      case "tplace": { const t = thingById(id); if (t) thingPlace(t); return; }
+      case "tmove": UI.tools = true; UI.movingThing = id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should be."); return;
+      case "tdel": if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Take it away? Click again"; return; } setThing(id, null); UI.thing = null; refresh(); return;
+      case "tfill": { const t = thingById(id), f = b.closest("form"); if (t && f) fillThing(t, f, b); return; }
+      case "sweep": { const out = checkThings({ swept: true }); if (!out.length && A.tableUI) A.tableUI.api.note(`The sensors sweep ${round1(reachLy() * 1.5)} light years round the ship: nothing new.`); if (A.worldTime) A.worldTime.advance(60); return; }
       case "siteplace": { const s = findSys(id), info = s && bodiesOf(s), t = info && info.sites.find(x => x.k === +b.dataset.k); if (!t || !A.locations || !A.locations.forPlace) return; const on = t.on != null ? info.planets.find(p => p.n === t.on) : null; A.locations.forPlace({ system: s.id, planet: t.on != null ? t.on : undefined, site: t.k, name: t.name, kind: t.kind, label: t.name, done: () => { A._galaxy = null; if (A.starSystem && A.starSystem.isOpen()) A.starSystem.refresh(); } }); void on; return; }
       case "timelapse": tlOpen(); return;
       case "tlplay": if (TL) { TL.play = !TL.play; TL.last = 0; b.textContent = TL.play ? "Pause" : "Play"; b.setAttribute("aria-pressed", TL.play); } return;
@@ -1322,10 +1508,13 @@
       case "jump": {
         const p = UI.plan; if (!p || !p.ok || !p.path) return;
         if (p.risks.length && !b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Sure? " + p.risks.length + " danger" + (p.risks.length > 1 ? "s" : "") + " on the way: click again"; return; }
-        const dest = findSys(p.to); setShip({ at: p.to, fuel: Math.max(0, p.left) }, `To ${dest.name}: ${round1(p.ly)} ly in ${round1(p.days)} days${p.fuel ? ", " + Math.ceil(p.fuel) + " fuel" : ""}`);
+        // (a course to a thing between the stars: the ship there, beside the system it jumped from)
+        const dest = findSys(p.to), tg = p.thing && thingById(p.thing); setShip({ at: p.to, near: tg ? tg.id : null, fuel: Math.max(0, p.left) }, `To ${tg ? tg.name : dest.name}: ${round1(p.ly)} ly in ${round1(p.days)} days${p.fuel ? ", " + Math.ceil(p.fuel) + " fuel" : ""}`);
+        if (tg) { if (A.worldTime && p.days > 0) A.worldTime.advance(Math.round(p.days * 1440)); if (A.tableUI) A.tableUI.api.note(`The ship arrives at ${tg.name}.`); UI.plan = null; checkThings(); break; }
         for (const sid of p.path.slice(1)) S().set("charts", sid, Object.assign({}, S().get("charts", sid) || {}, { state: "visited", how: (S().get("charts", sid) || {}).how || "explored", t: Date.now() }));
         if (A.worldTime && p.days > 0) A.worldTime.advance(Math.round(p.days * 1440));
         if (A.tableUI) A.tableUI.api.note(`The ship arrives at ${dest.name}.`);
+        setTimeout(() => checkThings(), 50);
         UI.plan = null; break;
       }
       case "refuel": { const sh = ship(); setShip({ fuel: sh.cap }, `Refuelled at ${(findSys(sh.at) || {}).name || sh.at}`); break; }
@@ -1386,8 +1575,20 @@
       const R = doc("~regions"), body = { name: v("name") || "A region", kind: v("kind"), r: Math.max(.5, num("r", 3)) / G().ly }, own = (R.add || []).find(a => a.id === id);
       if (own) Object.assign(own, body); else { R.edit = R.edit || {}; R.edit[id] = Object.assign(R.edit[id] || {}, body); }
       setG("~regions", R);
+    } else if (k === "savething") {
+      // (a thing's card kept: what it is, its signal, its drift from where it is now, how it is found)
+      const t = thingById(id); if (!t) return; const ck = n => !!(f.elements[n] && f.elements[n].checked), area = SP.isArea(v("kind"));
+      const patch = { name: v("name") || t.name, kind: v("kind") || t.kind, desc: v("desc"), gm: v("gm"), hidden: ck("hidden"), conds: SP.CONDS.map(c => c[0]).filter(k2 => ck("c_" + k2)), reveal: v("reveal") || "tell", clue: v("clue") || "", event: v("event") || "", t: Date.now() };
+      if (area) { patch.r = Math.max(.05, num("r", t.r || 1)); patch.blinds = ck("blinds"); }
+      else {
+        Object.assign(patch, { condition: v("condition"), attitude: v("attitude") || "unknown", owner: v("owner") || "", crew: v("crew"), cargo: v("cargo"), signal: { on: ck("sig_on"), message: v("sig_msg"), range: Math.max(0, num("sig_r", 2)), source: v("sig_src") } });
+        const sp0 = Math.max(0, num("dr_s", 0)), dir = num("dr_d", 0), was = t.drift || {};
+        if (sp0 !== (+was.speed || 0) || dir !== (+was.dir || 0)) { const here = thingAt(t); patch.x = Math.round(here.x * 100) / 100; patch.y = Math.round(here.y * 100) / 100; patch.drift = sp0 > 0 ? { speed: sp0, dir, t0: nowMin(), perLy: G().ly } : null; }
+      }
+      if (!patch.hidden) { patch.found = true; patch.ready = false; } else if (!t.hidden) { patch.found = false; patch.ready = false; }
+      setThing(id, patch); setTimeout(() => checkThings(), 30);
     } else if (k === "savelane") {
-      const L = doc("~lanes"), a = f.dataset.a, c = f.dataset.b, same = x => (x[0] === a && x[1] === c) || (x[0] === c && x[1] === a), kind = v("kind"), lyv = kind === "corridor" ? num("ly", 0) : 0;
+      const L = doc("~lanes"), a = f.dataset.a, c = f.dataset.b, same = x => (x[0] === a && x[1] === c) || (x[0] === c && x[1] === a), kind = v("kind"), lyv = kind === "corridor" || schematic() ? num("ly", 0) : 0;
       L.add = (L.add || []).filter(x => !same(x)).concat([[a, c, kind, lyv > 0 ? lyv : (kind === "corridor" ? Math.round(ly(findSys(a), findSys(c)) * 5) / 10 : 0)]]); L.cut = (L.cut || []).filter(x => !same(x));
       setG("~lanes", L);
     } else if (k === "saveworld") {
@@ -1442,7 +1643,9 @@
       const info = bodiesOf(s), P = A.starSystem.positions(s, info);
       sysmaps[s.id] = { name: s.name, color: info.star.color, at: A.worldTime ? A.worldTime.at(A.worldTime.now()).short : "", belts: info.belts.map(b => b.a), worlds: info.planets.map(p => { const lv = scanOf(s.id, p.n), q = P.find(x => x.n === p.n) || { x: p.a, y: 0, e: 0 }, sz = p.radius || p.size || 1, w = { a: p.a, x: q.x, y: q.y, e: q.e, lv, r: sz > 6 ? 3 : sz > 1.6 ? 2 : 1 }; if (lv >= 1) { w.name = p.name; w.img = A.pixelPlanet ? A.pixelPlanet.url(p, 16, info.star.color) : ""; } if (lv >= 2) w.kind = p.kname; return w; }) };
     }
-    return { name: (A.galaxyParams || {}).name || "", systems: L.map(s => ({ id: s.id, name: chartOf(s.id) === "rumoured" ? s.name + "?" : s.name, x: s.x, y: s.y, color: (Gg.STARS[s.cls] || Gg.STARS.G)[0], state: chartOf(s.id) })), lanes, regions, ship: ids.has(sh.at) ? sh.at : null, worlds: scannedWorlds(L), sysmaps };
+    // (the things between the stars they have found, or that were never hidden: never the rest, nor anyone's secrets)
+    const things = SP ? allThings().map(t => SP.forPlayers(t, nowMin())).filter(Boolean) : [];
+    return { name: (A.galaxyParams || {}).name || "", systems: L.map(s => ({ id: s.id, name: chartOf(s.id) === "rumoured" ? s.name + "?" : s.name, x: s.x, y: s.y, color: (Gg.STARS[s.cls] || Gg.STARS.G)[0], state: chartOf(s.id) })), lanes, regions, ship: ids.has(sh.at) ? sh.at : null, shipNear: sh.near && things.some(t => t.id === sh.near) ? sh.near : null, worlds: scannedWorlds(L), sysmaps, things, ly: G().ly, jump: (G().p || {}).layout === "schematic" };
   };
 
   // the view, mounted by the page's shell when the game master opens it (atlas-shell.js)
@@ -1535,5 +1738,5 @@
   A.galaxyDebug = { tl: () => TL ? { t: TL.t, n: TL.P.length, play: TL.play, text: TL.el.textContent } : null, away: () => DRAWN.filter(d => d[4]).length, side: () => SV ? { open: true, text: SV.el.textContent } : null, where: id => { const d = DRAWN.find(q => q[2] && q[2].id === id); return d ? [Math.round(d[0]), Math.round(d[1])] : null; }, drawn: () => DRAWN.length, labels: () => (DRAWN.length), cam: () => Object.assign({}, CAM), set: (x, y, s) => { fly = null; CAM.x = x; CAM.y = y; CAM.s = clampS(s); request(); }, fitGalaxy: () => fitGalaxy(0), fitChart: () => fitChart(0), frame: () => frame(), picDone: () => !!(PIC && PIC.done), model: () => MG, frameOf: () => FR };
   (A.searchers = A.searchers || []).push({ kind: "Among the stars", order: 22, mod: ["stars"], find: q => { const out = []; if (!A.galaxyParams) return out; for (const s of allSys()) { const x = A.nav && A.nav.hit(s.name, [s.desc, s.gm].join(" "), q, (Gg.STAR_NAME[s.cls] || "A star") + (s.f && s.f.colony ? " · a colony" : s.f && s.f.station ? " · a station" : "")); if (x) out.push(Object.assign(x, { go: () => { const v = document.getElementById("v-galaxy"); if (v) v.click(); setTimeout(() => A.galaxyOpen(s.id), 40); } })); if (out.length > 40) break; } return out; } });
   A.galaxyFocus = id => { if (!host) return; const s = findSys(id); if (!s) return; UI.sel = id; centreOn(s, 2.5); over(); side(); };
-  if (A.tableUI) { const iv = setInterval(() => { const st = A.tableUI.api.store(); if (!st) return; clearInterval(iv); ST = st; A.planetSurfacesInit(st); for (const c of ["charts", "ship", "gedits"]) st.watch(c, () => { if (host && host.isConnected && host.offsetParent) { if (c === "gedits" || c === "charts") refresh(); else { over(); side(); } } }); }, 200); setTimeout(() => clearInterval(iv), 120000); }
+  if (A.tableUI) { const iv = setInterval(() => { const st = A.tableUI.api.store(); if (!st) return; clearInterval(iv); ST = st; A.planetSurfacesInit(st); setInterval(() => { if (host && host.isConnected && host.offsetParent) checkThings(); }, 20000); for (const c of ["charts", "ship", "gedits"]) st.watch(c, () => { if (host && host.isConnected && host.offsetParent) { if (c === "gedits" || c === "charts") refresh(); else { over(); side(); } } }); }, 200); setTimeout(() => clearInterval(iv), 120000); }
 })(ATLAS);

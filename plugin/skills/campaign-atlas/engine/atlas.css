@@ -2507,7 +2507,9 @@ button.ho-b:hover { color: var(--ink); }
 .gx-depth input { flex: 1 1 120px; }
 /* (with the galaxy's tools out over a system's map: the editing edge round the map, its label under the map's bar) */
 .gx-canvas.ux-editing ~ .ss-map { outline: 3px solid var(--bone); outline-offset: -3px; }
-.gx-wrap.ss-open .gx-canvas > .ux-elabel { top: 44px; }
+/* (on the chart its bar lies over the picture's top: the editing label at its foot instead) */
+.gx-canvas > .ux-elabel { top: auto; bottom: 0; border-radius: 5px 5px 0 0; }
+.gx-wrap.ss-open .gx-canvas > .ux-elabel { top: 44px; bottom: auto; border-radius: 0 0 5px 5px; }
 .ss-sub { position: absolute; left: 10px; top: 8px; z-index: 2; color: #b9c6dc; font-size: 12.5px; pointer-events: none; text-shadow: 0 1px 2px #000; }
 @media (min-width: 901px) { .gx-wrap.ss-open .gx-side { max-height: calc(min(74vh, 700px) + 110px); overflow: auto; position: sticky; top: 8px; overscroll-behavior: contain; } }
 .gx-wlist .t-link.on { font-weight: 700; text-decoration: underline; }

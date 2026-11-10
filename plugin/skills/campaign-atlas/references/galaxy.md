@@ -15,8 +15,17 @@ The user asked (26 Oct 2026, the master plan, parts 11 and 12) for galaxies of h
 ## 1. Growing it
 
 ```
-node scripts/atlas.js galaxy <campaign> --systems 400 --seed verge --shape spiral --arms 3 --span 100 --name "The Kestrel Verge"
+node scripts/atlas.js galaxy <campaign> --systems 400 --seed verge --type barred --scope neighbourhood --name "The Kestrel Verge"
+node scripts/atlas.js galaxy <campaign> --kind system --star K --system-name "Tamsin's Rest"      (one star system)
+node scripts/atlas.js galaxy <campaign> --kind cluster --systems 5 [--layout schematic]          (a few systems; a jump map)
+node scripts/atlas.js galaxy <campaign> --kind blank                                             (an empty canvas)
 ```
+
+**Model 2, the default since 10 Nov 2026** (the galaxy plan, the workspace's reviews/2026-11-05-galaxy-plan.md; `engine/atlas-galaxy-model.js`, `grow2` in `atlas-galaxy-gen.js`): the systems are grown from a real kind of galaxy (`--type` barred, spiral, flocculent, lenticular, elliptical, dwarf, ring; `--milky-way` for the Milky Way's own names), spread over a neighbourhood (100 light years, the default), a sector (1,000), an arm (10,000) or the whole galaxy (`--scope`). Each star from the real mix (mostly red dwarfs, a brown dwarf for every four or five stars unless `--no-browns`, a few like the Sun, rare blue giants; white dwarfs, giants, neutron stars and black holes by their ages), at its own height above or below the plane, with real companions by the odds for its mass; its worlds made round it as it is. `--model 1 --shape spiral --arms 3 --span 100` is the older maker; every galaxy made before keeps it, unchanged (`dev/galaxy-fingerprint.js`).
+
+**Kinds of space map** (the editing plan of 10 Nov 2026): `--kind system` one star system (the chart opens straight into its map; `--star` its kind, like the Sun unless told); `--kind cluster --systems N` (2 to 60) a few nearby systems, spread as far as the real density of stars puts that many; `--kind blank` an empty canvas the game master fills on the page (right-click: a star system, or something between the stars). `--layout schematic` makes any of them a jump map: where the stars are drawn is only a layout, courses run only along its routes, and each route's own length (set in its card) is what the fuel and days follow. In the Atlas app the user chooses these as "Its space" and "Its map of space".
+
+**Things between the stars** (on the page, `engine/atlas-space.js`): wrecks, derelicts, lost ships, distress beacons, signals, stations, outposts, hidden bases, pirate hideouts, jump gates, wormholes, anomalies, alien structures, refuelling points; nebulae, asteroid and debris fields. The council may place them in table.js as `ATLAS.galaxyEdit({ edits: { "~things": { add: [{ id: "t-marigold", kind: "derelict", name: "The Marigold", x: 512, y: 488, desc: "...", gm: "...", hidden: true, conds: ["range", "scan"], signal: { on: true, message: "...", range: 2 } }] } } })` (x and y in chart units, 0 to 1000, the chart's middle at 500); the game master changes them on the page.
 
 It writes `galaxy.js`, which holds only these settings: every page grows the same galaxy from them, so nothing is stored system by system. `--systems` 20 to 5000; `--shape` spiral (with `--arms`), cluster, ring or elliptical; `--span` the light years across. It prints what grew: the sectors, lanes, powers, colonies, stations and fuel, and the home system (a settled, fuelled system near the middle, with charted space round it). `--replace` grows another (the council's names would then fall on other systems). Never edit `galaxy.js` by hand beyond its settings.
 

@@ -129,9 +129,13 @@
     ruin: [".......", "#.#....", "#.#.#..", "###.#.#", "#.###.#", "#######", "......."],
     other: ["...#...", "...#...", ".#####.", "...#...", "...#...", ".......", "......."],
     place: ["..###..", ".#####.", ".##.##.", ".#####.", "..###..", "...#...", "...#..."],
-    ship: ["...#...", "..###..", "..#.#..", ".#####.", "##.#.##", "#..#..#", "...#..."] };
-  const ICOL = { station: "#9fd3ff", orbital: "#9fd3ff", colony: "#8fe39a", settlement: "#e8d48a", mining: "#e0b26a", research: "#c9a7ff", derelict: "#b8a894", anomaly: "#ff7ad9", ruin: "#c8b08a", other: "#dddddd", place: "#ffd166", ship: "#7fe0c0" };
-  const IKIND = { station: "a station", orbital: "an orbital facility", colony: "a colony", settlement: "a settlement", mining: "a mining installation", research: "a research facility", derelict: "a derelict ship", anomaly: "an anomaly", ruin: "ruins", other: "something else", place: "one of your places", ship: "the party's ship" };
+    ship: ["...#...", "..###..", "..#.#..", ".#####.", "##.#.##", "#..#..#", "...#..."],
+    // (things between the stars, atlas-space.js)
+    beacon: ["...#...", "..#.#..", ".#.#.#.", "...#...", "...#...", "..###..", ".#####."], signal: ["..#.#..", ".#...#.", "#..#..#", "#.###.#", "#..#..#", ".#...#.", "..#.#.."],
+    gate: [".#####.", "#.....#", "#..#..#", "#.###.#", "#..#..#", "#.....#", ".#####."], wormhole: [".####..", "#....#.", "#.##..#", "#.#.#.#", "#..##.#", ".#....#", "..####."],
+    alien: ["...#...", "..###..", "..#.#..", ".##.##.", ".#...#.", "##.#.##", "#######"], fuel: ["...#...", "..###..", ".#####.", ".#####.", "#######", ".#####.", "..###.."], pirate: [".#####.", "#######", "#.#.#.#", "#######", ".#####.", ".#.#.#.", "......."] };
+  const ICOL = { station: "#9fd3ff", orbital: "#9fd3ff", colony: "#8fe39a", settlement: "#e8d48a", mining: "#e0b26a", research: "#c9a7ff", derelict: "#b8a894", anomaly: "#ff7ad9", ruin: "#c8b08a", other: "#dddddd", place: "#ffd166", ship: "#7fe0c0", beacon: "#ff6b6b", signal: "#ffd166", gate: "#b89be6", wormhole: "#c7a2ff", alien: "#8fe3d0", fuel: "#e0c26a", pirate: "#ef4444" };
+  const IKIND = { station: "a station", orbital: "an orbital facility", colony: "a colony", settlement: "a settlement", mining: "a mining installation", research: "a research facility", derelict: "a derelict ship", anomaly: "an anomaly", ruin: "ruins", other: "something else", place: "one of your places", ship: "the party's ship", beacon: "a distress beacon", signal: "a signal", gate: "a jump gate", wormhole: "a wormhole", alien: "an alien structure", fuel: "a refuelling point", pirate: "pirates" };
   const ICONS = new Map();
   function iconSprite(kind) {
     let cv = ICONS.get(kind); if (cv) return cv;
@@ -583,7 +587,7 @@
     open, close: () => close(false), isOpen: () => !!M, current: () => M ? M.s.id : null,
     // (the system changed on the page: a world, a site or a belt added, changed or taken away; the system itself gone)
     refresh: () => { if (!M) return; const s2 = M.api.fresh ? M.api.fresh(M.s.id) : M.s; if (!s2) { close(true); return; } M.s = s2; M.info = M.api.info ? M.api.info(s2) : M.info; M.scene = sceneOf(M.s, M.info, M.api); layout(); request(); },
-    redraw: () => request(), zoom: f => { if (M) zoom(f); }, companion, companionSay, habZone, orbitOf: orbit, posAt, today,
+    redraw: () => request(), zoom: f => { if (M) zoom(f); }, companion, companionSay, habZone, orbitOf: orbit, posAt, today, icon: k => iconSprite(k), rock,
     // (for the tests and the players' copy: where each world of a system stands on a day, in AU from its star)
     positions: (s, info, t) => sceneOf(s, info, null).worlds.map(w => { const [x, y] = posAt(w.o, t == null ? today() : t); return { n: w.p.n, x: r2(x * 1000) / 1000, y: r2(y * 1000) / 1000, a: w.o.a, e: w.o.e, P: w.o.P }; }),
     debug: () => M ? { mode: M.mode, z: M.z, hits: (M.hits || []).length, bodies: (M.hits || []).map(h => h.k), at: Object.fromEntries((M.hits || []).map(h => [h.k, [Math.round(h.x), Math.round(h.y)]])), names: (M.names || []).map(n => ({ k: n.k, text: n.text, r: n.r.map(Math.round) })), motion: M.motion, hold: M.hold, t: M.t, scale: (M.el.querySelector(".ss-scale") || {}).textContent || "", foot: (M.el.querySelector(".ss-foot") || {}).textContent || "", comp: M.scene.comp, aIn: M.scene.aIn, aOut: M.scene.aOut } : null
