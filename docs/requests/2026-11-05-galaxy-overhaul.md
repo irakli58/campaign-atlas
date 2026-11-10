@@ -278,3 +278,14 @@ Do not implement major changes until I approve your plan.
 The ultimate goal is for Atlas to have a beautiful, scientifically grounded, immersive, and highly navigable galaxy map.
 I want to be able to zoom out and admire the entire spiral galaxy, see its central black hole and realistic stellar distribution, zoom into individual regions, and smoothly navigate all the way down to a specific star system and its planets.
 The galaxy should feel enormous and scientifically believable, but exploring it should feel effortless rather than overwhelming.
+
+---
+
+## The user's decision (10 Nov 2026, after reading the plan, reviews/2026-11-05-galaxy-plan.md)
+
+> i approve everything
+
+All of the plan, stages A to G, and the plan's recommendation on each of its five questions: existing campaigns keep
+every star where it is, set inside the real galaxy; clicking a star flies into its system, with a card on hover; brown
+dwarfs included in new galaxies; a new campaign's stars spread over a neighbourhood of 100 light years by default, the
+wider spreads offered. Checkpoint before building: the branch before-galaxy.

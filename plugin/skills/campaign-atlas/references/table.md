@@ -470,3 +470,58 @@ ATLAS.configure({ features: { preset: "fantasy", caves: "off" } }); // a preset,
 
 The test is dev/modules-test.js in the workspace (every preset built and opened, everything switched off and on with the saved data compared). It must end "all well".
 
+
+## 25. The same everywhere: finding your way, the editors, what Claude does
+
+The user's UX review of 5 Nov 2026 (all 22 recommendations approved the same day; the workspace's
+reviews/2026-11-05-ux-review.md). Two engine files hold what every part of Atlas shares, so that each behaves the same:
+
+**engine/atlas-nav.js (finding your way; the game master's page only, never the players' screen):**
+- **One search for everything** (`A.nav.find(q)`): places, the investigation's cards (people, clues, rooms, secrets,
+  events, plans, quests, factions), the world maps' places on every world, the worlds, handouts, the story's chapters,
+  the table's tools by name. Other files add their own kinds: `(A.searchers = A.searchers || []).push({ kind, order, mod,
+  find: q => [{ t, s, go, score }] })`; `A.nav.hit(title, text, q, sub)` scores a match. Already added: events and
+  history, rumours, the planes and their layers, the star systems, the sessions. A new kind of thing gets its searcher.
+- **Back goes back:** `A.nav.mark()` after any move (the shell calls it in `setView` and `go`, the table in `view()`, the
+  world map in `select`); `A.nav.snapshot()` / `A.nav.restore(e)`; the page's address carries it
+  (`#place`, `#world/<world>/<place>`, `#table/<tool>`, `#stars/<system>`, `#story`, `#music`).
+- **The trail:** `A.nav.worldTitle(world, chosen)` (the world map's head; a planet among its stars, a layer in its
+  dimension), `A.nav.cityTrail(...)`, `A.nav.worldOptions(current)` (the chooser grouped).
+- **Recently visited** (`A.nav.visit`, the last eight, in this browser) under the empty search box; Ctrl+K.
+- **A card for a person, a faction, a place** beside whatever is open: any element with
+  `data-uxpeek="person:cast:<id>"` (or `person:npc:<place>/<key>`, `faction:<id>`, `place:<id>`) opens it;
+  `A.nav.peek(what)`. A new list of people gives each name that attribute.
+- **The first session's checklist** on Start here (`A.nav.checklistHTML()`), ticking itself from what was seen
+  (`A.nav.seen(key)`).
+
+**engine/atlas-ux.js (the pieces each editor and each of Claude's tools use):**
+- `A.ux.editing(el, label, host)`: the edge round a map being edited, and what is in hand. Every editor shows it.
+- The save mark: every write through the table's store says "Saving…", then "Saved" or "Not saved", in each
+  `.ux-save` (`A.ux.saveMark()`); an editor's own writes go through `A.ux.track(promise)`. An editor that keeps changes
+  until Save says so in its own mark and with `A.ux.dirty(name, fn)` (a warning on leaving).
+- The keys: `A.ux.KEYS[editor]`, the card "?" shows (`A.ux.keys(name)`, `A.ux.keysBtn(name)`); `A.ux.isUndo`,
+  `isRedo`, `numKey(e, tools)`, `isHelpKey`, `keyFree`. Every editor: Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z, Esc (the tool,
+  then the choice, then editing), Delete, the number keys for the tools in their order, Space and drag, "?".
+- `A.ux.menu(event, items, title)`: the right-click menu (items `{ label, run, danger, off, hint }` or "-");
+  `A.ux.longPress(el, fn)` gives it on a touch screen; `A.ux.justPressed(el)` keeps the release from being a click.
+- `A.ux.keepHist(name)`: undo kept after a reload (the last twenty each way, in this browser).
+- `A.ux.hand(words)`: the mark on what the game master made or changed, which nothing Atlas makes again draws over.
+- `A.ux.versions(store, coll)`: earlier versions beside a map in the page's database (the last five):
+  "worldvers", "cityvers", "mapvers".
+- **What Claude is doing:** every request through `api.askRaw(prompt, onText, signal, meta)` shows on the line at the
+  top with Stop; `meta = { kind: reading | writing | suggesting | answering | checking, what, uses: [...] }`. A request
+  that bypasses askRaw calls `A.ux.aiBegin(meta)` / `A.ux.aiEnd(run, ok)` itself. What finishes while the game master
+  is elsewhere waits in the tray. Long work of Atlas's own: `A.ux.work(meta)` → `{ progress(f), end(ok, words, go) }`.
+- **The card for what Claude suggests:** `A.ux.card({ id, title, intro, made, touches, keeps, parts: [{ id, label,
+  html | text, on }], strict, keepLabel, onKeep(selected), onDrop, onAgain(partId, wish) → new part, onAgainAll })`:
+  keep all or the ticked, edit first, ask again for one part or all, throw away. A tool whose own review is richer
+  (Auto-Connect, the next clues, the council, a dimension, the consequences) keeps its review under `A.ux.cardTop(spec)`
+  and the same button words: Keep it / Keep the ticked, Edit before keeping, Ask again, Throw it away. A harmless
+  answer (a line of Talk, Ask the campaign) needs no card.
+
+Also: the table's tools can be pinned (☆; pinned first, the rest folded under All the tools); each faction is folded
+to its name, its stance toward the party and what it is doing; the world map and a campaign's 3D city show a sign while
+they are first drawn, and the city is drawn after the page (measured with the workspace's dev/load-profile.js).
+
+The tests are the workspace's dev/ux-test.js (every item, in the realm and Kestrel) and dev/ux-phone.js (the new
+pieces at a phone's width). Both must end "all well". A new editor or tool of Claude's uses these pieces.

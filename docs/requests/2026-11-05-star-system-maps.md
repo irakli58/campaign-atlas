@@ -67,3 +67,14 @@ Do not create duplicate planet images, planet data, or star system generators.
 All existing planets, moons, settlements, and manually edited content must remain intact.
 First explain how you would connect the existing 32-bit planet visuals to the interactive star system map, identify any missing functionality, and present your implementation plan for my approval.
 The goal is to make exploration seamless: I should be able to click a star in the galaxy, enter its star system, visually recognize every generated planet, click one, and explore it—all without feeling like I'm switching between unrelated tools.
+
+---
+
+## The user's decision (10 Nov 2026, after reading the plan, reviews/2026-11-05-galaxy-plan.md)
+
+> i approve everything
+
+All of the plan, stages A to G, and the plan's recommendation on each of its five questions: existing campaigns keep
+every star where it is, set inside the real galaxy; clicking a star flies into its system, with a card on hover; brown
+dwarfs included in new galaxies; a new campaign's stars spread over a neighbourhood of 100 light years by default, the
+wider spreads offered. Checkpoint before building: the branch before-galaxy.
