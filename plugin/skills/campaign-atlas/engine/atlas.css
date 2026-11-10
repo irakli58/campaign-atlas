@@ -2510,6 +2510,26 @@ button.ho-b:hover { color: var(--ink); }
 /* (on the chart its bar lies over the picture's top: the editing label at its foot instead) */
 .gx-canvas > .ux-elabel { top: auto; bottom: 0; border-radius: 5px 5px 0 0; }
 .gx-wrap.ss-open .gx-canvas > .ux-elabel { top: 44px; bottom: auto; border-radius: 0 0 5px 5px; }
+/* the library's window (atlas-library.js), and a world's look */
+.lib-dlg { width: min(920px, 96vw); max-height: 88vh; padding: 0; border: 1px solid #2b3a52; border-radius: 10px; background: #0a0f1a; color: #dbe7ff; }
+.lib-dlg::backdrop { background: rgba(0, 0, 0, .55); }
+.lib-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #1e2a3d; position: sticky; top: 0; background: #0a0f1a; z-index: 1; }
+.lib-head h3 { margin: 0; font-size: 17px; }
+.lib-dlg > p { margin: 8px 14px 0; color: #9fb0c9; }
+.lib-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 14px 0; }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; padding: 12px 14px 16px; overflow: auto; max-height: calc(88vh - 140px); }
+.lib-tile { display: grid; justify-items: center; gap: 3px; padding: 8px 6px; border: 1px solid #1e2a3d; border-radius: 8px; background: #05070c; color: #dbe7ff; cursor: pointer; font: inherit; text-align: center; }
+.lib-tile:hover, .lib-tile:focus-visible { border-color: #8fb3e6; outline: none; }
+.lib-tile canvas { width: 64px; height: 64px; image-rendering: pixelated; }
+.lib-tile b { font-size: 13px; }
+.lib-tile .kn { font-size: 11.5px; color: #8fa0bb; }
+.lib-fit { color: #8fd19e; min-height: 1em; }
+.gx-look .lk-prev { display: block; margin: 6px auto; width: 112px; height: 112px; image-rendering: pixelated; background: #04060b; border-radius: 6px; }
+.gx-look .lk-cols { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 4px 0; }
+.gx-look .lk-c { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.gx-look .lk-c input { width: 34px; height: 26px; padding: 0; border: 0; background: none; }
+.gx-look .lk-r input { width: 100%; }
+.gx-look .lk-ring { border: 1px solid #1e2a3d; border-radius: 6px; padding: 4px 8px; margin: 6px 0; }
 .ss-sub { position: absolute; left: 10px; top: 8px; z-index: 2; color: #b9c6dc; font-size: 12.5px; pointer-events: none; text-shadow: 0 1px 2px #000; }
 @media (min-width: 901px) { .gx-wrap.ss-open .gx-side { max-height: calc(min(74vh, 700px) + 110px); overflow: auto; position: sticky; top: 8px; overscroll-behavior: contain; } }
 .gx-wlist .t-link.on { font-weight: 700; text-decoration: underline; }

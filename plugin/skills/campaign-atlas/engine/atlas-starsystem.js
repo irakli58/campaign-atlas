@@ -73,8 +73,8 @@
 
   /* ---- pixel art: the star by its kind; a small moon's rock; the icons of what people put there */
   const STARPIX = new Map();
-  function starSprite(cls, N, flares, phase) {
-    const key = cls + "|" + N + "|" + (flares ? phase % 4 : 0); let cv = STARPIX.get(key); if (cv) return cv;
+  function starSprite(cls, N, flares, phase, special) {
+    const key = cls + "|" + N + "|" + (flares ? phase % 4 : 0) + "|" + (special || ""); let cv = STARPIX.get(key); if (cv) return cv;
     const base = hex((STAR[cls] || STAR.G)[0]), M = N + 4, img = new ImageData(M, M), seed = hstr(cls), R = N / 2, c = M / 2;
     const n2 = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), f = t => t * t * (3 - 2 * t), u = f(x - xi), v = f(y - yi), h = (a, b) => hstr(a * 7919 + b * 104729 + seed) / 4294967296; return h(xi, yi) * (1 - u) * (1 - v) + h(xi + 1, yi) * u * (1 - v) + h(xi, yi + 1) * (1 - u) * v + h(xi + 1, yi + 1) * u * v; };
     const put = (i, j, col, a) => { if (i < 0 || j < 0 || i >= M || j >= M) return; const o = (j * M + i) * 4; img.data[o] = col[0]; img.data[o + 1] = col[1]; img.data[o + 2] = col[2]; img.data[o + 3] = a == null ? 255 : a; };
@@ -94,6 +94,8 @@
       const limb = (giant ? .45 : .62) + (giant ? .55 : .38) * mu, hot = brown ? .05 : clamp(mu * .55, 0, .5);
       let col = base.map(v => clamp((v + (255 - v) * hot) * limb * ((giant ? .78 : brown ? .82 : .92) + cells * (giant ? .35 : brown ? .3 : .12)), 0, 255));
       if (brown) col = col.map(v => v * .8);
+      // (a spotted star: great dark spots across its face)
+      if (special === "spots" && n2(x * 3 + 7, y * 3 + 2) > .72) col = col.map(v => v * .55);
       put(i, j, col);
     }
     // a red dwarf's flares: bright knots at its edge
@@ -151,7 +153,7 @@
   // a world's picture, lit from its star's side (atlas-pixelplanet.js), kept for each side it is lit from
   const PIX = new Map();
   function worldSprite(p, N, star, ang) {
-    const b = ((Math.round(ang / (TAU / 24)) % 24) + 24) % 24, key = [p.name, p.kind, p.n, p.pn, N, b, star, p.ocean, p.liquid, A.pixelPlanet.heightOf && A.pixelPlanet.heightOf(p) ? 1 : 0].join("|");
+    const b = ((Math.round(ang / (TAU / 24)) % 24) + 24) % 24, key = [p.name, p.kind, p.n, p.pn, N, b, star, p.ocean, p.liquid, A.pixelPlanet.heightOf && A.pixelPlanet.heightOf(p) ? 1 : 0, p.look ? JSON.stringify(p.look) : ""].join("|");
     let cv = PIX.get(key); if (cv) return cv;
     const a = b * TAU / 24, L = [Math.cos(a) * .9, Math.sin(a) * .9, .42];
     cv = A.pixelPlanet.canvasOf(p, N, .6 + (p.n || 0) * .9, star, L);
@@ -221,7 +223,7 @@
   /* ---- where things are drawn: the exploration view squeezes distance (a logarithm, so the inner worlds have room);
           true scale is the distance itself. Both radial, so an orbit keeps its shape about its star */
   function layout() {
-    const S = M.scene, W = M.cv.clientWidth, H = M.cv.clientHeight, cls = S.st.cls || "G", D = (STAR[cls] || STAR.G)[1];
+    const S = M.scene, W = M.cv.clientWidth, H = M.cv.clientHeight, cls = S.st.cls || "G", D = (STAR[cls] || STAR.G)[1] * (SPX[S.st.special] || 1);
     const pair = S.comp && S.comp.both ? (STAR[S.comp.cls] || STAR.M)[1] : 0;
     const R0 = (pair ? D / 2 + pair + 10 : D / 2) + 14, room = Math.max(60, Math.min(W, H) / 2 - 34);
     let dmax = S.aOut; if (S.comp && !S.comp.both) dmax = Math.max(dmax, S.comp.a * (1 + (S.comp.ecc || 0))); if (S.comp2) dmax = Math.max(dmax, S.comp2.a * (1 + (S.comp2.ecc || 0)));
@@ -238,11 +240,14 @@
   const grow = () => clamp(Math.pow(M.z, .35), 1, 3.2);
   function worldPx(p) {
     if (M.mode === "true") return Math.max(2.4, (p.radius || p.size || 1) * EARTH_AU * M.L.Kt * M.z * 2);
-    return clamp(16 + 10 * Math.log2(1 + (p.radius || p.size || 1)), 15, 62) * grow();
+    // (its look's size on the map: the picture only, never its radius)
+    return clamp(16 + 10 * Math.log2(1 + (p.radius || p.size || 1)), 15, 62) * grow() * clamp(+((p.look || {}).size) || 1, .4, 2.5);
   }
-  function starPx(cls) {
-    if (M.mode === "true") return Math.max(5, ((STAR[cls] || STAR.G)[2]) * SUN_AU * M.L.Kt * M.z * 2);
-    return (STAR[cls] || STAR.G)[1] * clamp(Math.pow(M.z, .2), 1, 1.8);
+  // (a giant or supergiant from the library is drawn larger; at true scale every star its own radius)
+  const SPX = { giant: 1.5, super: 2.3, wolfrayet: 1.2 };
+  function starPx(cls, special, radius) {
+    if (M.mode === "true") return Math.max(5, (radius || (STAR[cls] || STAR.G)[2]) * SUN_AU * M.L.Kt * M.z * 2);
+    return (STAR[cls] || STAR.G)[1] * (SPX[special] || 1) * clamp(Math.pow(M.z, .2), 1, 1.8);
   }
 
   /* ---- a frame */
@@ -287,18 +292,23 @@
     }
     const HIT = [], LBL = [];
     // the stars: alone, as a close pair round their middle, or with a companion far out
-    const drawStar = (cls, x, y, flares, name, key) => {
-      const D = starPx(cls), col = hex((STAR[cls] || STAR.G)[0]), hole = cls === "X";
-      const gR = D * (cls === "D" || cls === "N" ? 3.4 : hole ? 2.2 : 1.7), g = ctx.createRadialGradient(x, y, D * .3, x, y, gR);
-      g.addColorStop(0, rgb(hole ? [255, 190, 130] : col, hole ? .25 : .5)); g.addColorStop(1, rgb(col, 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, gR, 0, TAU); ctx.fill();
-      if (hole) {
-        // the disc of what falls in, tilted; its far side bent up over the top by the hole's pull
+    const drawStar = (cls, x, y, flares, name, key, special, radius) => {
+      const D = starPx(cls, special, radius), col = hex((STAR[cls] || STAR.G)[0]), hole = cls === "X";
+      const gR = D * (cls === "D" || cls === "N" ? 3.4 : hole ? 2.2 : special === "wolfrayet" ? 3 : 1.7), g = ctx.createRadialGradient(x, y, D * .3, x, y, gR);
+      g.addColorStop(0, rgb(hole ? [255, 190, 130] : special === "magnetar" ? [200, 160, 255] : col, hole ? (special === "quiet" ? .08 : .25) : .5)); g.addColorStop(1, rgb(col, 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, gR, 0, TAU); ctx.fill();
+      // (a Wolf-Rayet star's blown-off shell; a young star's dusty disc)
+      if (special === "wolfrayet") { ctx.strokeStyle = "rgba(200,170,255,.35)"; ctx.lineWidth = D * .25; ctx.beginPath(); ctx.arc(x, y, D * 2.4, 0, TAU); ctx.stroke(); }
+      if (special === "ttauri") { ctx.save(); ctx.translate(x, y); ctx.strokeStyle = "rgba(190,150,110,.55)"; ctx.lineWidth = D * .35; ctx.beginPath(); ctx.ellipse(0, 0, D * 2.2, D * .55, -.3, 0, TAU); ctx.stroke(); ctx.restore(); }
+      if (hole && special !== "quiet") {
+        // the disc of what falls in, tilted; its far side bent up over the top by the hole's pull; an active one's jets
         ctx.save(); ctx.translate(x, y); ctx.strokeStyle = "rgba(255,200,140,.75)"; ctx.lineWidth = Math.max(1.5, D * .12); ctx.beginPath(); ctx.ellipse(0, 0, D * 1.25, D * .32, 0, 0, Math.PI); ctx.stroke();
-        ctx.strokeStyle = "rgba(255,220,170,.55)"; ctx.beginPath(); ctx.ellipse(0, -D * .05, D * .78, D * .62, 0, Math.PI, TAU); ctx.stroke(); ctx.restore();
+        ctx.strokeStyle = "rgba(255,220,170,.55)"; ctx.beginPath(); ctx.ellipse(0, -D * .05, D * .78, D * .62, 0, Math.PI, TAU); ctx.stroke();
+        if (special === "active") { const jg = ctx.createLinearGradient(0, -D * 5, 0, D * 5); jg.addColorStop(0, "rgba(170,200,255,0)"); jg.addColorStop(.5, "rgba(200,220,255,.8)"); jg.addColorStop(1, "rgba(170,200,255,0)"); ctx.strokeStyle = jg; ctx.lineWidth = Math.max(1.5, D * .1); ctx.beginPath(); ctx.moveTo(0, -D * 5); ctx.lineTo(0, D * 5); ctx.stroke(); }
+        ctx.restore();
       }
-      if (cls === "N") { const a = (M.motion ? t * 40 : .7); ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.fillStyle = "rgba(190,210,255,.28)"; for (const sgn of [1, -1]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(sgn * D * 5, -D * .9); ctx.lineTo(sgn * D * 5, D * .9); ctx.fill(); } ctx.restore(); }
+      if (cls === "N") { const fast = special === "pulsar", a = (M.motion ? t * (fast ? 400 : 40) : .7); ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.fillStyle = special === "magnetar" ? "rgba(200,160,255,.3)" : "rgba(190,210,255,.28)"; for (const sgn of [1, -1]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(sgn * D * (fast ? 7 : 5), -D * .9); ctx.lineTo(sgn * D * (fast ? 7 : 5), D * .9); ctx.fill(); } if (special === "magnetar") { ctx.strokeStyle = "rgba(210,180,255,.45)"; ctx.lineWidth = 1; for (const k of [1, 1.6, 2.3]) { ctx.beginPath(); ctx.ellipse(0, 0, D * k * 1.4, D * k * .7, Math.PI / 2, 0, TAU); ctx.stroke(); } } ctx.restore(); }
       if (cls === "D") { ctx.strokeStyle = "rgba(235,240,255,.55)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - D * 1.8, y); ctx.lineTo(x + D * 1.8, y); ctx.moveTo(x, y - D * 1.8); ctx.lineTo(x, y + D * 1.8); ctx.stroke(); }
-      const N = clamp(Math.round(D / 2.2), 5, 30), spr = starSprite(cls, N, flares, M.motion ? Math.floor(t * 3) : 0), sz = D * (N + 4) / N;
+      const N = clamp(Math.round(D / 2.2), 5, 30), spr = starSprite(cls, N, flares, M.motion ? Math.floor(t * 3) : 0, special), sz = D * (N + 4) / N;
       ctx.drawImage(spr, x - sz / 2, y - sz / 2, sz, sz);
       HIT.push({ k: key, x, y, r: Math.max(D / 2, 9), label: name, kind: "star", cls });
       LBL.push({ k: key, x, y, r: D / 2, text: name, pri: 0, cls: "star" });
@@ -309,8 +319,8 @@
       const ph = TAU * t / S.comp.P + S.comp.M0, q = S.comp.mass / (S.M1 + S.comp.mass), sep = M.mode === "true" ? Math.max(starPx(S1) / 2 + starPx(S.comp.cls) / 2 + 3, S.comp.a * M.L.Kt * M.z) : (M.L.D / 2 + M.L.pair / 2 + 8) * grow();
       const ux = Math.cos(ph), uy = Math.sin(ph); starAt = [cx - ux * sep * q, cy - uy * sep * q];
       drawStar(S.comp.cls, cx + ux * sep * (1 - q), cy + uy * sep * (1 - q), false, "Its companion", "c");
-      drawStar(S1, starAt[0], starAt[1], S.st.flares, M.s.name, "star");
-    } else drawStar(S1, cx, cy, S.st.flares, M.s.name, "star");
+      drawStar(S1, starAt[0], starAt[1], S.st.flares, M.s.name, "star", S.st.special, S.st.radius);
+    } else drawStar(S1, cx, cy, S.st.flares, M.s.name, "star", S.st.special, S.st.radius);
     // a companion far out (or a third star round a close pair): its orbit, and itself, or an arrow to it beyond the edge
     const farStar = (O, cls, key, label) => {
       const [x, y] = posAt(O, t), [sx, sy] = at(x, y);
@@ -587,7 +597,7 @@
     open, close: () => close(false), isOpen: () => !!M, current: () => M ? M.s.id : null,
     // (the system changed on the page: a world, a site or a belt added, changed or taken away; the system itself gone)
     refresh: () => { if (!M) return; const s2 = M.api.fresh ? M.api.fresh(M.s.id) : M.s; if (!s2) { close(true); return; } M.s = s2; M.info = M.api.info ? M.api.info(s2) : M.info; M.scene = sceneOf(M.s, M.info, M.api); layout(); request(); },
-    redraw: () => request(), zoom: f => { if (M) zoom(f); }, companion, companionSay, habZone, orbitOf: orbit, posAt, today, icon: k => iconSprite(k), rock,
+    redraw: () => request(), zoom: f => { if (M) zoom(f); }, companion, companionSay, habZone, orbitOf: orbit, posAt, today, icon: k => iconSprite(k), rock, starIcon: (cls, special, N) => starSprite(cls, N || 14, false, 0, special),
     // (for the tests and the players' copy: where each world of a system stands on a day, in AU from its star)
     positions: (s, info, t) => sceneOf(s, info, null).worlds.map(w => { const [x, y] = posAt(w.o, t == null ? today() : t); return { n: w.p.n, x: r2(x * 1000) / 1000, y: r2(y * 1000) / 1000, a: w.o.a, e: w.o.e, P: w.o.P }; }),
     debug: () => M ? { mode: M.mode, z: M.z, hits: (M.hits || []).length, bodies: (M.hits || []).map(h => h.k), at: Object.fromEntries((M.hits || []).map(h => [h.k, [Math.round(h.x), Math.round(h.y)]])), names: (M.names || []).map(n => ({ k: n.k, text: n.text, r: n.r.map(Math.round) })), motion: M.motion, hold: M.hold, t: M.t, scale: (M.el.querySelector(".ss-scale") || {}).textContent || "", foot: (M.el.querySelector(".ss-foot") || {}).textContent || "", comp: M.scene.comp, aIn: M.scene.aIn, aOut: M.scene.aOut } : null

@@ -27,17 +27,43 @@
   const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + .5) / 16 - .5);
   const giantOf = p => /gas|ice|mini/.test(p.env || "") || ["gas", "icegiant", "hotjupiter", "mini"].includes(p.kind);
 
+  /* ---- a world's own look (the editing plan of 10 Nov 2026): its picture changed by the game master, its colours,
+          seas, clouds, ice, craters, a giant's bands and storm, its rings, its hue, how it is turned; never its physics.
+          p.look = { ground, sea, plant, ice, sky, cloudCol, bands: [..], ocean, ice, clouds (0..1), craters (a factor),
+          storm, bandsN, rings: { on, width, tint, tilt }, hue (degrees), sat, bright, rot (degrees), size } */
+  function withLook(p) {
+    const L = p.look; if (!L) return p;
+    const q = Object.assign({}, p, { palette: Object.assign({}, p.palette || {}) }), P = q.palette;
+    // (colours only: a look's "ice" is how much of it is ice, not the ice's colour)
+    for (const k of ["ground", "sea", "plant", "sky"]) if (typeof L[k] === "string" && /^#[0-9a-f]{6}$/i.test(L[k])) P[k] = L[k];
+    if (typeof L.iceCol === "string" && /^#[0-9a-f]{6}$/i.test(L.iceCol)) P.ice = L.iceCol;
+    if (L.cloudCol) P.clouds = L.cloudCol; if (L.bands && L.bands.length) P.bands = L.bands.slice();
+    if (L.ice != null) q.ice = +L.ice;
+    // (seas painted on a dry world are its picture's only: its physics keep it dry)
+    if (L.ocean != null) { q.ocean = +L.ocean; if (+L.ocean > 0 && (!q.liquid || q.liquid === "none")) { q.liquid = "water"; if (!P.sea) P.sea = "#2f5f8a"; } }
+    return q;
+  }
+  // a colour's hue turned, its saturation and brightness scaled
+  function hsb(c, dh, s, b) {
+    let [r, g, bl] = c.map(v => clamp(v, 0, 255) / 255); const mx = Math.max(r, g, bl), mn = Math.min(r, g, bl), l = (mx + mn) / 2, d = mx - mn; let h = 0, sat = 0;
+    if (d > 1e-6) { sat = l > .5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? ((g - bl) / d + (g < bl ? 6 : 0)) : mx === g ? (bl - r) / d + 2 : (r - g) / d + 4; h /= 6; }
+    h = ((h + dh / 360) % 1 + 1) % 1; sat = clamp(sat * s, 0, 1); const L2 = clamp(l * b, 0, 1);
+    if (sat < 1e-6) return [L2 * 255, L2 * 255, L2 * 255];
+    const q = L2 < .5 ? L2 * (1 + sat) : L2 + sat - L2 * sat, pp = 2 * L2 - q, f = t => { t = (t % 1 + 1) % 1; return t < 1 / 6 ? pp + (q - pp) * 6 * t : t < .5 ? q : t < 2 / 3 ? pp + (q - pp) * (2 / 3 - t) * 6 : pp; };
+    return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+  }
+
   /* ---- the world's surface, once: an equirectangular map of colours, what glows, and its clouds */
   const TW = 128, TH = 64;
-  function texture(p) {
-    const P = p.palette || {}, seed = hstr(p.name || p.kind || "world"), N1 = noise3(seed), N2 = noise3(seed + 7), N3 = noise3(seed + 13), r = rng(seed);
+  function texture(p0) {
+    const p = withLook(p0), LK = p0.look || {}, P = p.palette || {}, seed = hstr(p.name || p.kind || "world"), N1 = noise3(seed), N2 = noise3(seed + 7), N3 = noise3(seed + 13), r = rng(seed);
     const col = new Float32Array(TW * TH * 3), glow = new Float32Array(TW * TH * 3), lights = new Float32Array(TW * TH), cloud = new Float32Array(TW * TH), elev = new Float32Array(TW * TH);
     const sph = (i, j) => { const lon = (i + .5) / TW * Math.PI * 2, lat = Math.PI / 2 - (j + .5) / TH * Math.PI; return [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon), lat]; };
     const put = (k, c) => { col[k * 3] = c[0]; col[k * 3 + 1] = c[1]; col[k * 3 + 2] = c[2]; };
     if (giantOf(p)) {
       // a giant: its bands, wavering where the jets shear them; its great storm
-      const B = (P.bands || ["#d8c0a0", "#b08860", "#e6d6bc", "#9a7a5a"]).map(hex), nb = clamp(Math.round(4 + 8 * (24 / Math.max(6, p.day || 10))), 4, 14);
-      const storm = /great/.test((p.winds || {}).storms || "") ? [r() * Math.PI * 2, (r() - .5) * .9] : null;
+      const B = (P.bands || ["#d8c0a0", "#b08860", "#e6d6bc", "#9a7a5a"]).map(hex), nb = LK.bandsN ? clamp(Math.round(+LK.bandsN), 2, 20) : clamp(Math.round(4 + 8 * (24 / Math.max(6, p.day || 10))), 4, 14);
+      const storm = (LK.storm != null ? LK.storm : /great/.test((p.winds || {}).storms || "")) ? [r() * Math.PI * 2, (r() - .5) * .9] : null;
       for (let j = 0; j < TH; j++) for (let i = 0; i < TW; i++) {
         const k = j * TW + i, [x, y, z, lat] = sph(i, j), turb = fbm(N1, x * 3, y * 9, z * 3, 3) - .5, b = (lat / Math.PI + .5) * nb + turb * 1.6;
         const bi = ((Math.floor(b) % B.length) + B.length) % B.length, bf = b - Math.floor(b);
@@ -59,7 +85,7 @@
     else for (let j = 0; j < TH; j++) for (let i = 0; i < TW; i++) { const [x, y, z] = sph(i, j); elev[j * TW + i] = fbm(N1, x * 2.1 + 3, y * 2.1, z * 2.1, 4) * .75 + fbm(N2, x * 6, y * 6, z * 6, 3) * .25; }
     let seaLv = -1; if (real) { if (oc > 0 || real.sea > 0) seaLv = sea && oc > 0 ? real.sea / 255 : -1; } else if (oc > 0) { const s = Float32Array.from(elev).sort(); seaLv = s[Math.min(s.length - 1, Math.floor(oc * s.length))]; if (oc >= .97) seaLv = 2; }
     // craters where nothing wears them away (as the surface map has them): many small, few great
-    const craters = [], nC = airless || (p.pressure < .1 && p.tectonics === "stagnant") ? (airless ? 26 : 12) : p.tectonics === "frozen" ? 18 : 0;
+    const craters = [], nC = Math.round((airless || (p.pressure < .1 && p.tectonics === "stagnant") ? (airless ? 26 : 12) : p.tectonics === "frozen" ? 18 : 0) * (LK.craters != null ? clamp(+LK.craters, 0, 4) : 1));
     for (let c = 0; c < nC; c++) { const u = r() * 2 - 1, a = r() * Math.PI * 2, s = Math.sqrt(1 - u * u); craters.push([s * Math.cos(a), u, s * Math.sin(a), .04 + Math.pow(r(), 3) * .22]); }
     const capLat = (p.ice || 0) > .02 && liquid !== "subsurface" && liquid !== "ice" ? Math.PI / 2 * (1 - clamp(.12 + p.ice * .7, 0, .95)) : (liquid === "ice" || liquid === "subsurface" ? -1 : Math.PI / 2 * (airless || liquid === "none" ? 1.2 : .86));
     for (let j = 0; j < TH; j++) for (let i = 0; i < TW; i++) {
@@ -87,22 +113,27 @@
       // a people of its own: their cities' lights, seen on the night side
       if (/people/.test(p.life || "") && e >= seaLv && fbm(N3, x * 14, y * 14, z * 14, 2) > .7) lights[k] = 1;
       put(k, c);
-      // clouds where it has weather
-      if ((p.pressure || 0) > .05 && (liquid === "water" || liquid === "methane" || (p.pressure || 0) > 1)) { const cl = fbm(N2, x * 2.6 + 9, y * 4, z * 2.6, 4); cloud[k] = clamp((cl - (liquid === "water" ? .52 : .58)) * 4, 0, .85); }
+      // clouds where it has weather (or as many as its look asks for, its picture's only)
+      const CL = LK.clouds != null ? +LK.clouds : null;
+      if (CL != null ? CL > 0 : (p.pressure || 0) > .05 && (liquid === "water" || liquid === "methane" || (p.pressure || 0) > 1)) { const cl = fbm(N2, x * 2.6 + 9, y * 4, z * 2.6, 4); cloud[k] = clamp((cl - (liquid === "water" ? .52 : .58) + (CL != null ? (CL - .5) * .6 : 0)) * 4, 0, .85); }
     }
     return { col, glow, lights, cloud, giant: false, haze: liquid === "methane" ? [217, 154, 78] : null };
   }
   const TEX = new Map();
-  const texOf = p => { const key = [p.name, p.kind, p.ocean, p.liquid, p.ice, p.pressure, JSON.stringify(p.palette || {}), A.pixelPlanet.heightOf && A.pixelPlanet.heightOf(p) ? "real" : ""].join("|"); let t = TEX.get(key); if (!t) { t = texture(p); TEX.set(key, t); if (TEX.size > 80) TEX.delete(TEX.keys().next().value); } return t; };
+  const texOf = p => { const key = [p.name, p.kind, p.ocean, p.liquid, p.ice, p.pressure, JSON.stringify(p.palette || {}), A.pixelPlanet.heightOf && A.pixelPlanet.heightOf(p) ? "real" : "", p.look ? JSON.stringify(p.look) : ""].join("|"); let t = TEX.get(key); if (!t) { t = texture(p); TEX.set(key, t); if (TEX.size > 80) TEX.delete(TEX.keys().next().value); } return t; };
 
   /* ---- the sphere: N pixels across, turned by rot, lit from the upper left by its star; with rings, wider */
   function render(p, N, rot, star, light) {
-    const T = texOf(p), P = p.palette || {}, rings = p.rings, M = rings ? Math.round(N * 2.2) : N + 6, img = new Uint8ClampedArray(M * M * 4);
+    // (its look: rings added, taken away or changed; its hue, saturation and brightness; how it is turned; its glow)
+    const LK = p.look || {}, LR = LK.rings, rings = LR ? (LR.on ? Object.assign({ icy: true }, p.rings || {}, LR) : null) : p.rings, rw = rings ? clamp(+rings.width || 1, .5, 1.8) : 1;
+    const T = texOf(p), P = withLook(p).palette || {}, M = rings ? Math.round(N * (1.15 + 1.05 * rw)) : N + 6, img = new Uint8ClampedArray(M * M * 4);
+    if (LK.rot) rot = (rot || 0) + LK.rot * Math.PI / 180;
     const R = N / 2 - .5, cx = M / 2, cy = M / 2, L = light ? light.slice(0, 3) : [-.8, -.3, .52], LN = Math.hypot(...L); L[0] /= LN; L[1] /= LN; L[2] /= LN;
-    const sun = star ? hex(star).map(v => .82 + v / 255 * .18) : [1, 1, 1], sky = P.sky ? hex(P.sky) : null, air = clamp(Math.log10(Math.max(p.pressure || 0, 1e-4) * 1000) / 4, 0, 1);
-    const ringC = rings ? (rings.icy ? [226, 220, 204] : [150, 138, 120]) : null, tilt = -.32, ct = Math.cos(tilt), st = Math.sin(tilt);
-    const putPx = (i, j, c, a) => { const o = (j * M + i) * 4; img[o] = c[0]; img[o + 1] = c[1]; img[o + 2] = c[2]; img[o + 3] = a == null ? 255 : a; };
-    const ringAt = (dx, dy) => { if (!rings) return null; const rx = dx * ct + dy * st, ry = (-dx * st + dy * ct) / .28, rr = Math.hypot(rx, ry) / R; if (rr < 1.3 || rr > 2.05) return null; const band = .7 + .3 * Math.sin(rr * 23) * Math.sin(rr * 7.3); return { c: ringC.map(v => v * band), a: Math.round(clamp((rr - 1.3) * 8, 0, 1) * clamp((2.05 - rr) * 8, 0, 1) * (rings.icy ? 235 : 170)), back: ry < 0 }; };
+    const sun = star ? hex(star).map(v => .82 + v / 255 * .18) : [1, 1, 1], sky = P.sky ? hex(P.sky) : null, air = clamp(Math.log10(Math.max(p.pressure || 0, LK.sky ? .5 : 1e-4) * 1000) / 4, 0, 1);
+    const ringC = rings ? (rings.tint ? hex(rings.tint) : rings.icy ? [226, 220, 204] : [150, 138, 120]) : null, tilt = rings && rings.tilt != null ? -rings.tilt * Math.PI / 180 : -.32, ct = Math.cos(tilt), st = Math.sin(tilt), rOut = 1.3 + .75 * rw;
+    const adj = LK.hue || (LK.sat != null && LK.sat !== 1) || (LK.bright != null && LK.bright !== 1) ? c => hsb(c, +LK.hue || 0, LK.sat != null ? +LK.sat : 1, LK.bright != null ? +LK.bright : 1) : null;
+    const putPx = (i, j, c, a) => { if (adj && a == null) c = adj(c); const o = (j * M + i) * 4; img[o] = c[0]; img[o + 1] = c[1]; img[o + 2] = c[2]; img[o + 3] = a == null ? 255 : a; };
+    const ringAt = (dx, dy) => { if (!rings) return null; const rx = dx * ct + dy * st, ry = (-dx * st + dy * ct) / .28, rr = Math.hypot(rx, ry) / R; if (rr < 1.3 || rr > rOut) return null; const band = .7 + .3 * Math.sin(rr * 23) * Math.sin(rr * 7.3); return { c: ringC.map(v => v * band), a: Math.round(clamp((rr - 1.3) * 8, 0, 1) * clamp((rOut - rr) * 8, 0, 1) * (rings.icy ? 235 : 170)), back: ry < 0 }; };
     for (let j = 0; j < M; j++) for (let i = 0; i < M; i++) {
       const dx = i + .5 - cx, dy = j + .5 - cy, x = dx / R, y = dy / R, d2 = x * x + y * y, bay = BAYER[(j & 3) * 4 + (i & 3)], rg = ringAt(dx, dy);
       if (d2 > 1) {
@@ -138,7 +169,7 @@
   const URLS = new Map();
   function url(p, N, star) {
     if (typeof document === "undefined") return "";
-    const key = [p.name, p.kind, N, star, p.ocean, p.liquid, JSON.stringify(p.palette || {}), A.pixelPlanet.heightOf && A.pixelPlanet.heightOf(p) ? "real" : ""].join("|"); let u = URLS.get(key);
+    const key = [p.name, p.kind, N, star, p.ocean, p.liquid, JSON.stringify(p.palette || {}), A.pixelPlanet.heightOf && A.pixelPlanet.heightOf(p) ? "real" : "", p.look ? JSON.stringify(p.look) : ""].join("|"); let u = URLS.get(key);
     if (!u) { u = canvasOf(p, N || 32, .6, star).toDataURL("image/png"); URLS.set(key, u); if (URLS.size > 300) URLS.delete(URLS.keys().next().value); }
     return u;
   }
@@ -154,5 +185,5 @@
     requestAnimationFrame(tick);
   }
   // (heightOf(p): the world's opened surface, { H, cols, rows, sea }, or null; set by the star chart, atlas-galaxy.js)
-  A.pixelPlanet = { render, canvasOf, url, spin, heightOf: null };
+  A.pixelPlanet = { render, canvasOf, url, spin, heightOf: null, withLook, hsb };
 })(typeof ATLAS !== "undefined" ? ATLAS : typeof window !== "undefined" ? (window.ATLAS = window.ATLAS || {}) : null);

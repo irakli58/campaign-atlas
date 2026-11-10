@@ -28,8 +28,9 @@
   // [L ~ M^4 between half the Sun's mass and twice it, ~ 0.23 M^2.3 below, ~ 1.4 M^3.5 above; R ~ M^0.8]
   function starAs(cls, o) {
     const s = STAR[cls] || STAR.G, m = o.mass > 0 ? o.mass : s[2], age = clamp(o.age != null ? o.age : 4.6, .005, 13.5);
-    const ms = "OBAFGKM".includes(cls), L = ms ? (m < .43 ? .23 * Math.pow(m, 2.3) : m < 2 ? Math.pow(m, 4) : m < 55 ? 1.4 * Math.pow(m, 3.5) : 32000 * m) : cls === "R" ? 60 + m * 120 : s[1];
-    const R = ms ? Math.pow(m, .8) : cls === "R" ? 25 * Math.sqrt(m) : null, teff = R ? Math.round(5772 * Math.pow(L / (R * R), .25)) : s[3];
+    // (a star from the library brings its own light, warmth and size: o.lum, o.teff, o.radius)
+    const ms = "OBAFGKM".includes(cls), L = o.lum > 0 ? +o.lum : ms ? (m < .43 ? .23 * Math.pow(m, 2.3) : m < 2 ? Math.pow(m, 4) : m < 55 ? 1.4 * Math.pow(m, 3.5) : 32000 * m) : cls === "R" ? 60 + m * 120 : s[1];
+    const R = o.radius > 0 ? +o.radius : ms ? Math.pow(m, .8) : cls === "R" ? 25 * Math.sqrt(m) : null, teff = o.teff > 0 ? Math.round(+o.teff) : R ? Math.round(5772 * Math.pow(L / (R * R), .25)) : s[3];
     const fl = cls === "M" ? s[5] * clamp(1.6 - age / 5, .5, 1.6) : cls === "L" ? s[5] * clamp(1.4 - age / 5, .3, 1.4) : s[5];
     return { cls, color: s[0], lum: sig(L + (o.lum2 || 0)), mass: r2(m), teff, age: r1(age), flares: fl, metal: r2(clamp(o.feh || 0, -3, .6)), given: true };
   }

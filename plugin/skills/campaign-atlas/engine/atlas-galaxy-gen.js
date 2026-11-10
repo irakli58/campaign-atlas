@@ -209,10 +209,11 @@
     // used in either model; a copy of a system keeps its original's star exactly)
     const m2 = s.m2 && s.m2.cls === s.cls ? s.m2 : null, c = s.bin && s.comp && (m2 || s.compOwn) ? s.comp : null, close = c && (c.both != null ? c.both : c.a <= 2);
     const fixed = s.star0 && s.star0.cls === s.cls ? s.star0 : null;
-    const SYS = P.system(s.cls, r, Object.assign({ realism: G.p.realism || "balanced", tech: G.p.tech || "armoured" }, fixed ? { starFixed: fixed } : m2 ? { star: { mass: m2.mass, age: m2.age / 1000, feh: m2.feh, lum2: close ? lumOf(c.cls, c.mass || (STARS[c.cls] || STARS.M)[2]) : 0 } } : {}));
+    const SYS = P.system(s.cls, r, Object.assign({ realism: G.p.realism || "balanced", tech: G.p.tech || "armoured" }, fixed ? { starFixed: fixed } : m2 ? { star: { mass: m2.mass, age: m2.age / 1000, feh: m2.feh, lum: m2.lum, teff: m2.teff, radius: m2.radius, lum2: close ? lumOf(c.cls, c.mass || (STARS[c.cls] || STARS.M)[2]) : 0 } } : {}));
     // (built by hand or copied: no worlds grown, only the game master's own)
     if (s.noGen) { SYS.planets = []; SYS.belts = []; }
-    const S = SYS.star, out = { star: { cls: s.cls, name: STAR_NAME[s.cls], color: S.color, lum: S.lum, mass: S.mass, teff: S.teff, age: S.age, flares: S.flares, metal: S.metal, binary: s.bin, frost: SYS.frost }, planets: [], belts: SYS.belts, sites: [] };
+    // (what makes a star strange, from the library: a pulsar's beams, a black hole's disc or jets, a young star's dust)
+    const S = SYS.star, out = { star: Object.assign({ cls: s.cls, name: (s.m2 && s.m2.name) || STAR_NAME[s.cls], color: S.color, lum: S.lum, mass: S.mass, teff: S.teff, age: S.age, flares: s.special === "flare" ? Math.max(1.2, S.flares || 0) : S.flares, metal: S.metal, binary: s.bin, frost: SYS.frost }, s.special ? { special: s.special } : {}, m2 && m2.radius ? { radius: m2.radius } : {}), planets: [], belts: SYS.belts, sites: [] };
     // (a real companion: only the worlds whose orbits last are kept; round both stars beyond about 3.5 times the pair's
     // separation, round one within about a quarter of its companion's nearest approach [Holman & Wiegert 1999])
     if (c) {

@@ -91,7 +91,7 @@
       // (the editing plan of 10 Nov 2026: its height above the plane, a star given as it is, companions the game master
       // set, a copy's own star, no worlds grown for a system built by hand or copied, a mark)
       if (Number.isFinite(+e.z) && e.z != null) s.z = +e.z; if (e.m2) s.m2 = e.m2; if (e.comp !== undefined) { s.comp = e.comp || null; s.compOwn = !e.compNat; } if (e.comp2 !== undefined) s.comp2 = e.comp2 || null;
-      if (e.star0) s.star0 = e.star0; if (e.noGen) s.noGen = true; if (e.mark != null) s.mark = !!e.mark;
+      if (e.star0) s.star0 = e.star0; if (e.noGen) s.noGen = true; if (e.mark != null) s.mark = !!e.mark; if (e.special != null) s.special = e.special || "";
     }
     g.N = g.systems.length;
     // the lanes: a system added joins its two nearest; the game master's own lanes, trade routes and corridors, and cuts
@@ -451,7 +451,7 @@
         it.push("-", { label: "Change it", run: () => { UI.tools = true; UI.sel = best.id; UI.edit = best.id; tools(); side(); } }, { label: "Move it", run: () => { UI.tools = true; UI.moving = best.id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); } }, { label: "Duplicate it", run: () => dupSystem(best.id) }, { label: best.mark ? "Unmark it" : "Mark it", hint: "important", run: () => markSystem(best.id) }, { label: "A lane from it", run: tool("lane", () => { UI.first = best.id; }) });
       } else {
         if (SP) it.push({ label: "Something here…", hint: "a wreck, a beacon, a station, a gate, a nebula", run: () => KIND_MENU(e, wx, wy) });
-        it.push({ label: "A star system here…", run: () => A.ux.menu(e, [{ label: "As the galaxy would have one here", hint: "its star from the real mix, its worlds from its star", run: () => addSystemAt(wx, wy, "random") }, { label: "By hand", hint: "a star of your choosing, no worlds yet", run: () => addSystemAt(wx, wy, "hand") }], "A star system here") }, { label: "A region here", run: tool("region") }, "-", { label: "Our space", run: () => fitChart() }, { label: "The whole galaxy", run: () => fitGalaxy() });
+        it.push({ label: "A star system here…", run: () => A.ux.menu(e, [{ label: "As the galaxy would have one here", hint: "its star from the real mix, its worlds from its star", run: () => addSystemAt(wx, wy, "random") }, LIB ? { label: "From the library…", hint: "a premade star and its worlds", run: () => libDlg("system", sy => addSystemPreset(wx, wy, sy)) } : null, { label: "By hand", hint: "a star of your choosing, no worlds yet", run: () => addSystemAt(wx, wy, "hand") }].filter(Boolean), "A star system here") }, { label: "A region here", run: tool("region") }, "-", { label: "Our space", run: () => fitChart() }, { label: "The whole galaxy", run: () => fitGalaxy() });
       }
       A.ux.menu(e, it, best ? best.name : "Open space");
     };
@@ -503,6 +503,8 @@
     host.addEventListener("change", e => { const t = e.target; if (!t.dataset || t.dataset.gxl == null) return; const k = t.dataset.gxl; LAY[k] = t.type === "checkbox" ? t.checked : t.value; keepLay(); PIC = LAY.picture ? PIC : PIC; request(); });
     host.addEventListener("click", onClick); host.addEventListener("change", onChange); host.addEventListener("submit", onSubmit);
     // (the planet editor shows what its changes would do as they are made)
+    // (a world's look changes as it is changed: each field touched is kept, the preview drawn again)
+    host.addEventListener("input", e => { const lf = e.target.closest && e.target.closest("form.gx-look"); if (lf) { e.target.dataset.on = "1"; lookPreview(lf); } });
     host.addEventListener("input", e => { if (e.target.dataset && e.target.dataset.gxl === "depth") { LAY.depth = +e.target.value; keepLay(); depthSay(); request(); if (SV) sideDraw(); return; } const f = e.target.closest && e.target.closest("form.gx-phys"); if (f) physPreview(f); });
     depthSay();
     request();
@@ -545,7 +547,7 @@
   // ship, the date, the players' screen; and the way back to the chart as it was left
   const SYSAPI = {
     pick: (n, m) => {
-      UI.planet = n == null ? null : +n; UI.moon = m == null ? null : +m; UI.pedit = null; UI.phys = null; side(); if (A.starSystem) A.starSystem.redraw();
+      UI.planet = n == null ? null : +n; UI.moon = m == null ? null : +m; UI.pedit = null; UI.phys = null; UI.look = null; side(); if (A.starSystem) A.starSystem.redraw();
       // (its card brought into the side's view, the map left where it is)
       const sd = host && host.querySelector(".gx-side"), wc = sd && sd.querySelector(".gx-world"); if (wc && sd.scrollHeight > sd.clientHeight + 4) sd.scrollTop = Math.max(0, sd.scrollTop + wc.getBoundingClientRect().top - sd.getBoundingClientRect().top - 8);
     },
@@ -626,13 +628,13 @@
     const info = bodiesOf(s), it = [], KI = how => Object.entries(Gg.KINDS).map(([k, l]) => ({ label: l, run: () => sysAddWorld(s, ctx.a, how, k) }));
     if (ctx.kind === "space") {
       if (!(ctx.a > 0)) return;
-      it.push({ label: "What its star would make here", hint: "from its physics", run: () => sysAddWorld(s, ctx.a, "random") }, { label: "A world of a kind…", hint: "made from its physics", run: () => A.ux.menu(ev, KI("kind"), `A world ${ctx.a} AU out`) }, { label: "A world by hand…", hint: "your own figures", run: () => A.ux.menu(ev, KI("hand"), "By hand: what kind?") },
+      it.push({ label: "What its star would make here", hint: "from its physics", run: () => sysAddWorld(s, ctx.a, "random") }, { label: "A world of a kind…", hint: "made from its physics", run: () => A.ux.menu(ev, KI("kind"), `A world ${ctx.a} AU out`) }, LIB ? { label: "A world from the library…", hint: "worked out here", run: () => libDlg("world", w => sysAddPreset(s, ctx.a, w, ev), { info, a: ctx.a, say: `Each worked out ${ctx.a} AU from ${s.name}, as the planet maker would make it there; “fits here” means it stays of its kind.` }) } : null, { label: "A world by hand…", hint: "your own figures", run: () => A.ux.menu(ev, KI("hand"), "By hand: what kind?") },
         "-", { label: "A belt here", run: () => sysAddBelt(s, ctx.a) }, { label: "A station here", run: () => sysAddSite(s, "station", ctx.a, ctx.ph) }, { label: "Something else here…", run: () => A.ux.menu(ev, SITEK.filter(([k]) => k !== "station").map(([k, l]) => ({ label: l, run: () => sysAddSite(s, k, ctx.a, ctx.ph) })), `${ctx.a} AU out`) });
-      A.ux.menu(ev, it, `${ctx.a} AU from ${s.name}`); return;
+      A.ux.menu(ev, it.filter(Boolean), `${ctx.a} AU from ${s.name}`); return;
     }
     if (ctx.kind === "world" || ctx.kind === "rock") {
       const p = info.planets.find(x => x.n === ctx.n); if (!p) return;
-      it.push({ label: "Its card", run: () => SYSAPI.pick(p.n) }, { label: "Change this world", run: () => { toolsOn(); UI.planet = p.n; UI.moon = null; UI.pedit = p.n; UI.phys = null; side(); } });
+      it.push({ label: "Its card", run: () => SYSAPI.pick(p.n) }, { label: "Its look", hint: "its picture only", run: () => { UI.planet = p.n; UI.moon = null; UI.look = p.n; UI.pedit = null; UI.phys = null; side(); } }, { label: "Change this world", run: () => { toolsOn(); UI.planet = p.n; UI.moon = null; UI.look = null; UI.pedit = p.n; UI.phys = null; side(); } });
       if ((p.made || p).inputs && Gg.rework) it.push({ label: "Work it out again", run: () => { toolsOn(); UI.planet = p.n; UI.moon = null; UI.phys = p.n; UI.pedit = null; side(); } });
       it.push({ label: "Duplicate it", run: () => sysDupWorld(s, p.n) }, { label: "Add a moon", run: () => sysAddMoon(s, p.n) });
       if (p.landable && A.worldGenerate) it.push({ label: "Open its surface", run: () => { SYSAPI.pick(p.n); setTimeout(() => { const b = host.querySelector('.gx-side .gx-world [data-gx="surface"]:not([data-m])'); if (b) b.click(); }, 80); } });
@@ -804,6 +806,96 @@
     put("desc", v.desc); put("gm", v.gm); put("condition", v.condition); put("crew", v.crew); put("cargo", v.cargo); if (v.message && f.elements.sig_msg) { put("sig_msg", v.message); }
     msg.textContent = "Suggested: change anything, then Keep it. Nothing is kept until you do.";
   }
+  /* ---- the library of premade worlds, stars and systems (atlas-library.js; the editing plan of 10 Nov 2026, stage 3),
+          and a world's own look: its picture changed, never its physics */
+  const LIB = A.library;
+  // a premade star as the planet maker makes it (its light, warmth, size, age and metals given), for a preview or a world
+  function presetStar(sp) { const S0 = A.planets.system(sp.cls, Gg.rng("libstar|" + sp.id), { star: { mass: sp.mass, age: sp.age / 1000, feh: sp.feh, lum: sp.lum, teff: sp.teff, radius: sp.radius } }).star; return Object.assign({}, S0, { name: sp.name, special: sp.special, radius: sp.radius, frost: 2.7 * Math.sqrt(Math.max(S0.lum, .0005)) }); }
+  const REFINFO = {};
+  const refInfo = cls => REFINFO[cls] || (REFINFO[cls] = { star: presetStar(LIB.get(cls === "M" ? "m-quiet" : "g-sun")), planets: [], belts: [], sites: [] });
+  // a premade world worked out at an orbit of a star (info), as the planet maker makes it there; its look and its name
+  function presetWorld(w, info, a, n, name) {
+    const R = w.recipe, mk = (t, life) => Gg.rework(G(), info, { a, mass: R.mass, env: R.env, ecc: 0, name: name || w.name }, { a, mass: R.mass, wf: R.wf, fe: R.fe, tect: R.tect, pressure: R.pressure, gas: R.gas, life, seed: R.seed + t });
+    let q = null;
+    for (let t = 0; t < 40; t++) { q = mk(t, R.life); if (LIB.fits(w, q)) break; }
+    // (a living world put where it cannot be one: its life no longer set, the planet maker deciding again whether life arose)
+    if (R.life && !LIB.fits(w, q)) q = mk(0, null);
+    return Object.assign(q, { n, name: name || w.name, look: Object.assign({}, w.look), preset: w.id, hand: true, minerals: q.minerals || (w.say && /mineral|sulphur|iron|carbon|salt|copper|basalt|olivine|silica/.test(w.say) ? w.say : "silicates"), chance: q.chance || "Nothing yet found" });
+  }
+  const PREV = new Map();
+  const previewOf = w => { let p = PREV.get(w.id); if (!p) { const ri = refInfo(w.star); p = presetWorld(w, ri, LIB.fitOrbit(w, ri.star.lum), 0); PREV.set(w.id, p); } return p; };
+  // the library's window: its worlds by kind (or its stars, or its systems), each drawn; a choice made, onPick(it)
+  function libDlg(mode, onPick, ctx) {
+    if (!LIB) return; let dlg = document.getElementById("libDlg");
+    if (!dlg) { dlg = document.createElement("dialog"); dlg.id = "libDlg"; dlg.className = "lib-dlg"; document.body.appendChild(dlg); }
+    const groups = mode === "star" ? [["red", "Red dwarfs", s => s.cls === "M"], ["sun", "Orange, yellow and white", s => "KGFA".includes(s.cls) && !s.special.match(/super|ttauri/)], ["hot", "Blue, giants and supergiants", s => "OBR".includes(s.cls) || /super|giant|wolfrayet/.test(s.special)], ["dead", "White dwarfs, neutron stars, black holes", s => "DNX".includes(s.cls)], ["odd", "Brown dwarfs and young stars", s => "LTY".includes(s.cls) || s.special === "ttauri"]] : mode === "system" ? [["all", "Systems", () => true]] : LIB.CATS.map(c => [c.id, c.name, w => w.cat === c.id]);
+    const list = mode === "star" ? LIB.STARS : mode === "system" ? LIB.SYSTEMS : LIB.WORLDS;
+    let cur = (dlg.dataset.mode === mode && dlg.dataset.g) || groups[0][0];
+    const draw = () => {
+      const g0 = groups.find(g => g[0] === cur) || groups[0], items = list.filter(g0[2]);
+      dlg.innerHTML = `<div class="lib-head"><h3>${mode === "star" ? "Stars from the library" : mode === "system" ? "Systems from the library" : mode === "look" ? "Looks from the library" : "Worlds from the library"}</h3><button type="button" class="t-btn" data-lib="x">Close</button></div>
+        ${ctx && ctx.say ? `<p class="t-small">${esc(ctx.say)}</p>` : ""}${groups.length > 1 ? `<div class="lib-tabs" role="tablist">${groups.map(g => `<button type="button" role="tab" class="gx-b" data-lib="tab" data-g="${g[0]}" aria-pressed="${g[0] === cur}">${esc(g[1])}</button>`).join("")}</div>` : ""}
+        <div class="lib-grid">${items.map(it => `<button type="button" class="lib-tile" data-lib="pick" data-id="${esc(it.id)}"><canvas data-libpic="${esc(it.id)}" width="64" height="64" aria-hidden="true"></canvas><b>${esc(it.name)}</b><span class="kn">${esc(mode === "system" ? `${(LIB.get(it.star) || {}).name || ""} · ${it.worlds.length} worlds` : mode === "star" ? `${it.cls === "X" ? "" : (it.teff ? it.teff.toLocaleString("en") + " K · " : "")}${it.mass} Suns` : (it.say || it.catName))}</span><span class="lib-fit t-small" data-libfit="${esc(it.id)}"></span></button>`).join("")}</div>`;
+      dlg.dataset.mode = mode; dlg.dataset.g = cur;
+      // each drawn, a few at a time, so the window opens at once; and for a world to put at an orbit, whether it stays of
+      // its kind there
+      const pics = [...dlg.querySelectorAll("canvas[data-libpic]")]; let i = 0;
+      const step = () => { const t0 = Date.now(); while (i < pics.length && Date.now() - t0 < 30) { const cv = pics[i++], it = LIB.get(cv.dataset.libpic); try { drawPreset(cv, it, mode); if (mode === "world" && ctx && ctx.info && ctx.a) { const q = presetWorld(it, ctx.info, ctx.a, 0), f = dlg.querySelector(`[data-libfit="${CSS.escape(it.id)}"]`); if (f) f.textContent = LIB.fits(it, q) ? "fits here" : `here: ${String(q.kname || q.kind).toLowerCase()}`; } } catch (e) { console.warn(e); } } if (i < pics.length && dlg.open) setTimeout(step, 0); };
+      setTimeout(step, 0);
+    };
+    dlg.onclick = e => { const b = e.target.closest("[data-lib]"); if (!b) { if (e.target === dlg) dlg.close(); return; } if (b.dataset.lib === "x") dlg.close(); else if (b.dataset.lib === "tab") { cur = b.dataset.g; draw(); } else if (b.dataset.lib === "pick") { const it = LIB.get(b.dataset.id); dlg.close(); if (it) onPick(it); } };
+    draw(); if (!dlg.open) dlg.showModal();
+  }
+  function drawPreset(cv, it, mode) {
+    const c = cv.getContext("2d"); c.imageSmoothingEnabled = false; c.clearRect(0, 0, 64, 64); c.fillStyle = "#04060b"; c.fillRect(0, 0, 64, 64);
+    if (mode === "star" || mode === "system") { const sp = mode === "system" ? LIB.get(it.star) : it, ic = A.starSystem && A.starSystem.starIcon ? A.starSystem.starIcon(sp.cls, sp.special, 14) : null; if (ic) { const s0 = sp.special === "super" ? 56 : "DN".includes(sp.cls) ? 22 : "LTY".includes(sp.cls) ? 30 : 44; c.drawImage(ic, 32 - s0 / 2, 32 - s0 / 2, s0, s0); } return; }
+    const p = previewOf(it), pic = A.pixelPlanet.canvasOf(p, 24, .6, "#fff4ea"), k = Math.min(44 / 24, 62 / pic.width); c.drawImage(pic, 32 - pic.width * k / 2, 32 - pic.height * k / 2, pic.width * k, pic.height * k);
+  }
+  // a premade world put at an orbit: worked out there; if it is no longer of its kind, the game master chooses
+  function sysAddPreset(s, a, w, ev) {
+    const D = doc(s.id), B = D.bodies = D.bodies || {}, info = bodiesOf(s), n = nextN(info), nm = `${s.name} ${nextLetter(info)}`, q = presetWorld(w, info, a, n, nm);
+    const put = x => { B.add = (B.add || []).concat(x); setG(s.id, D); UI.planet = n; UI.moon = null; refresh(); };
+    if (LIB.fits(w, q)) { put(q); if (A.tableUI) A.tableUI.api.note(`${nm}: the library's “${w.name}”, worked out ${a} AU from ${s.name}.`); return; }
+    const keep = () => { const ri = refInfo(w.star), k = presetWorld(w, ri, LIB.fitOrbit(w, ri.star.lum), n, nm); put(Object.assign(k, { a, keepA: true, override: `At ${a} AU from ${s.name} it would be ${String(q.kname || q.kind).toLowerCase()}: kept as the library's ${w.name}, your setting's` })); };
+    if (A.ux && ev) A.ux.menu(ev, [{ label: `Work it out here: ${String(q.kname || q.kind).toLowerCase()}`, run: () => { put(q); } }, { label: `Keep it as the library's ${w.name}`, hint: "your setting's", run: keep }], `Here, ${w.name} would change`); else put(q);
+  }
+  // a premade star given to a system: its kind, mass, age, metals, light and warmth (its worlds made again round it,
+  // the game master's own kept)
+  function setStarPreset(id, sp) { const s = findSys(id); if (!s) return; setG(id, Object.assign(doc(id), { cls: sp.cls, special: sp.special || "", m2: { cls: sp.cls, mass: sp.mass, m0: sp.mass, age: sp.age, feh: sp.feh, lum: sp.lum, teff: sp.teff, radius: sp.radius, name: sp.name }, t: Date.now() })); refresh(); if (A.tableUI) A.tableUI.api.note(`${s.name}: ${sp.name.toLowerCase()}. Its worlds are made again round it; your own stay.`); }
+  // a premade system where the game master right-clicked: its star, and its worlds and belts at their orbits
+  function addSystemPreset(wx, wy, sy) {
+    const sp = LIB.get(sy.star); if (!sp) return; const id = "C" + Date.now().toString(36), nm = Gg.nameOf ? Gg.nameOf(Gg.rng(id + "|name")) : "A new system", info = { star: presetStar(sp), planets: [], belts: [], sites: [] };
+    const worlds = sy.worlds.map(([wid, a], i) => { const w = LIB.get(wid); return w ? presetWorld(w, info, a, 100 + i, `${nm} ${"bcdefghijklmnop"[i]}`) : null; }).filter(Boolean);
+    setG(id, { added: true, name: nm, x: r1c(wx), y: r1c(wy), f: {}, cls: sp.cls, special: sp.special || "", noGen: true, m2: { cls: sp.cls, mass: sp.mass, m0: sp.mass, age: sp.age, feh: sp.feh, lum: sp.lum, teff: sp.teff, radius: sp.radius, name: sp.name }, bodies: { add: worlds, addB: (sy.belts || []).map((a, i) => ({ k: 100 + i, a, name: a > info.star.frost ? "An icy belt" : "An asteroid belt", rich: false, icy: a > info.star.frost })) }, t: Date.now() });
+    UI.tools = true; UI.sel = id; refresh(); if (A.tableUI) A.tableUI.api.note(`${nm}: the library's “${sy.name}”, ${sy.say}.`);
+  }
+  // a world's look: its picture's colours, clouds, ice, bands, storm, rings, hue, turn and size on the map
+  function lookForm(s, p) {
+    const L = p.look || {}, P = (A.pixelPlanet && A.pixelPlanet.withLook ? A.pixelPlanet.withLook(p) : p).palette || {}, giant = /gas|ice|mini/.test(p.env || "") || ["gas", "icegiant", "hotjupiter", "mini"].includes(p.kind), rg = L.rings || {};
+    const rng0 = (k, l, mn, mx, st, v, on) => `<label class="tw-l lk-r"><span>${l}</span><input type="range" name="${k}" min="${mn}" max="${mx}" step="${st}" value="${v}"${on ? ' data-on="1"' : ""}></label>`;
+    const col = (k, l, v, on) => `<label class="lk-c"><input type="color" name="${k}" value="${esc(v || "#888888")}"${on ? ' data-on="1"' : ""}> ${l}</label>`;
+    return `<form class="gx-wform gx-look" data-gx="savelook" data-id="${esc(s.id)}" data-n="${p.n}"><h4>The look of ${esc(p.name)}</h4>
+      <p class="t-small">Only its picture changes: its physics (its size, air, warmth, seas) stay as they are. Its real size is in Change this world.</p>
+      <canvas class="lk-prev" width="112" height="112" role="img" aria-label="How it will look"></canvas>
+      <div class="t-row"><button type="button" class="t-mini" data-gx="looklib">Start from a library look…</button></div>
+      ${rng0("hue", "Hue", -180, 180, 5, L.hue || 0, L.hue != null)}${rng0("sat", "Saturation", 0, 2, .05, L.sat != null ? L.sat : 1, L.sat != null)}${rng0("bright", "Brightness", .5, 1.6, .05, L.bright != null ? L.bright : 1, L.bright != null)}
+      <div class="lk-cols">${giant ? [0, 1, 2].map(i => col("band" + i, i ? "" : "Its bands", (L.bands || P.bands || [])[i] || ["#d8c0a0", "#b08860", "#e6d6bc"][i], !!L.bands)).join("") : col("ground", "Ground", P.ground, !!L.ground) + col("sea", "Seas", P.sea || "#2a5a8a", !!L.sea) + col("plant", "Plants", P.plant || "#4f7a3a", !!L.plant)}${col("cloudCol", "Clouds", P.clouds || "#ffffff", !!L.cloudCol)}${col("sky", "Glow of its air", P.sky || "#7fa8d8", !!L.sky)}</div>
+      ${giant ? `${rng0("bandsN", "How many bands", 2, 20, 1, L.bandsN || 8, L.bandsN != null)}<label class="t-fogck"><input type="checkbox" name="storm"${(L.storm != null ? L.storm : /great/.test((p.winds || {}).storms || "")) ? " checked" : ""}${L.storm != null ? ' data-on="1"' : ""}> A great storm</label>` : `${rng0("clouds", "Clouds", 0, 1, .05, L.clouds != null ? L.clouds : .5, L.clouds != null)}${rng0("ice", "Ice", 0, 1, .05, L.ice != null ? L.ice : (p.ice || 0), L.ice != null)}${rng0("ocean", "How much is sea, in its picture", 0, 1, .05, L.ocean != null ? L.ocean : (p.ocean || 0), L.ocean != null)}${rng0("craters", "Craters", 0, 4, .1, L.craters != null ? L.craters : 1, L.craters != null)}`}
+      <fieldset class="lk-ring"><legend class="t-small">Rings</legend><label class="t-fogck"><input type="checkbox" name="r_on"${(L.rings ? rg.on : !!p.rings) ? " checked" : ""}${L.rings ? ' data-on="1"' : ""}> Rings</label>${rng0("r_w", "Width", .5, 1.8, .05, rg.width || 1, L.rings != null)}${rng0("r_tilt", "Tilt", -80, 80, 1, rg.tilt != null ? rg.tilt : 18, L.rings != null)}${col("r_tint", "Their colour", rg.tint || (p.rings && !p.rings.icy ? "#968a78" : "#e2dccc"), L.rings != null)}</fieldset>
+      ${rng0("rot", "Turned", 0, 360, 5, L.rot || 0, L.rot != null)}${rng0("size", "Its size on the map (the picture only)", .4, 2.5, .05, L.size || 1, L.size != null)}
+      <div class="t-row"><button class="t-btn prim">Keep it</button><button type="button" class="t-mini" data-gx="look" data-n="">Cancel</button>${p.look ? `<button type="button" class="t-mini" data-gx="unlook" data-id="${esc(s.id)}" data-n="${p.n}">As it was</button>` : ""}</div></form>`;
+  }
+  // the look the form says: only what the game master touched (or had set before)
+  function lookOfForm(f) {
+    const on = n => f.elements[n] && f.elements[n].dataset.on === "1", v = n => f.elements[n] ? f.elements[n].value : "", L = {};
+    for (const k of ["hue", "sat", "bright", "clouds", "ice", "ocean", "craters", "bandsN", "rot", "size"]) if (on(k)) L[k] = +v(k);
+    for (const k of ["ground", "sea", "plant", "cloudCol", "sky"]) if (on(k)) L[k] = v(k);
+    if (f.elements.band0 && (on("band0") || on("band1") || on("band2"))) L.bands = [v("band0"), v("band1"), v("band2")];
+    if (on("storm")) L.storm = !!f.elements.storm.checked;
+    if (on("r_on") || on("r_w") || on("r_tilt") || on("r_tint")) L.rings = { on: !!f.elements.r_on.checked, width: +v("r_w"), tilt: +v("r_tilt"), tint: v("r_tint") };
+    return L;
+  }
+  function lookPreview(f) { const s = findSys(f.dataset.id), info = s && bodiesOf(s), p = info && info.planets.find(x => x.n === +f.dataset.n), cv = f.querySelector(".lk-prev"); if (!p || !cv || !A.pixelPlanet) return; const pic = A.pixelPlanet.canvasOf(Object.assign({}, p, { look: lookOfForm(f) }), 40, .6, info.star.color), c = cv.getContext("2d"); c.imageSmoothingEnabled = false; c.clearRect(0, 0, 112, 112); const k = 112 / Math.max(pic.width, 40) * .98; c.drawImage(pic, 56 - pic.width * k / 2, 56 - pic.height * k / 2, pic.width * k, pic.height * k); }
   function thingPlace(t) { if (A.locations && A.locations.forPlace) A.locations.forPlace({ thing: t.id, kind: t.kind, name: t.name, pd: t.desc || "", kp: t.gm || "", label: t.name, done: () => refresh() }); }
   A.galaxyThing = id => { if (!host) return false; const t = thingById(id); if (!t) return false; if (A.starSystem && A.starSystem.isOpen()) leaveSystem(false); UI.thing = id; UI.sel = null; const p = gxOf(thingAt(t)); flyTo(p.x, p.y, Math.max(CAM.s, sChart() * 4), 400); side(); return true; };
 
@@ -1044,7 +1136,7 @@
     const e = edits()[s.id] || {}, ov = ((A.galaxyOver || {}).systems || {})[s.id] || {};
     return `<section class="gx-card"><h4>Change ${esc(s.name)}</h4><form data-gx="save" data-id="${esc(s.id)}">
       <label class="tw-l"><span>Name</span><input class="t-in" name="name" maxlength="60" value="${esc(s.name)}"></label>
-      <label class="tw-l"><span>Its star</span><select class="t-in" name="cls">${Object.keys(Gg.STARS).map(k => `<option value="${k}"${k === s.cls ? " selected" : ""}>${esc(Gg.STAR_NAME[k])}</option>`).join("")}</select></label>
+      <label class="tw-l"><span>Its star</span><select class="t-in" name="cls">${Object.keys(Gg.STARS).map(k => `<option value="${k}"${k === s.cls ? " selected" : ""}>${esc(Gg.STAR_NAME[k])}</option>`).join("")}</select></label>${LIB ? `<div class="t-row"><button type="button" class="t-mini" data-gx="starlib" data-id="${esc(s.id)}" title="A real kind of star with its own mass, age, light and warmth: a pulsar, a supergiant, a black hole with its disc...">Its star from the library…</button>${s.m2 && s.m2.name ? `<span class="kn">now: ${esc(s.m2.name.toLowerCase())}</span>` : ""}</div>` : ""}
       ${starsForm(s)}
       <label class="tw-l"><span>Held by</span><select class="t-in" name="owner">${[["", "No one"], ...G().powers.map(p => [p.id, p.name]), ...Object.entries(A.factionsData || {}).filter(([id]) => !G().powers.some(p => p.id === id)).map(([id, f]) => [id, (f.n || id) + " (a faction)"])].map(([v, l]) => `<option value="${esc(v)}"${(s.pw != null && G().powers[s.pw] && G().powers[s.pw].id === v) || (s.pw == null && !v) ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
       <div class="tj-keys">${[["colony", "A colony"], ["station", "A station"], ["fuel", "Fuel"], ["mining", "Mining"], ["research", "Research"], ["derelict", "A derelict"], ["anomaly", "An anomaly"]].map(([k, l]) => `<label class="t-fogck"><input type="checkbox" name="f_${k}"${s.f[k] ? " checked" : ""}> ${l}</label>`).join("")}</div>
@@ -1352,16 +1444,17 @@
       <p class="t-small">${info.planets.length ? info.planets.length + " world" + (info.planets.length > 1 ? "s" : "") : "No worlds"}${info.belts.length ? ", " + info.belts.length + " belt" + (info.belts.length > 1 ? "s" : "") : ""}. ${mapOpen ? "Click a world on the map, or its name here, to see it." : `<button type="button" class="t-link" data-gx="open" data-id="${esc(s.id)}">Open its map</button>`}</p>
       ${info.belts.map(b => `<div class="gx-f"><span class="kn">Belt</span> ${esc(b.name)} at ${b.a} AU${b.rich ? ", rich" : ""}${ed ? ` <button type="button" class="t-mini" data-gx="delbelt" data-id="${esc(s.id)}" data-k="${b.k}" aria-label="Take away the belt">×</button>` : ""}</div>`).join("")}
       ${info.sites.filter(t => t.on == null).map(t => siteRow("In orbit", t)).join("")}${here.length ? `<div class="gx-f"><span class="kn">Your places</span> ${here.map(id => `<button type="button" class="t-go" data-go="${esc(id)}">${esc(A.meta[id].name || id)}</button>`).join(" ")}</div>` : ""}
-      ${mo ? moonHTML(s, p, mo) : p ? (ed && UI.pedit === p.n ? worldForm(s, p) : ed && UI.phys === p.n ? physForm(s, p) : `<div class="gx-world">${A.pixelPlanet ? `<canvas class="gx-pxg" data-id="${esc(s.id)}" data-n="${p.n}" role="img" aria-label="${esc(p.name)}, turning"></canvas>` : ""}<h4>${esc(p.name)}: ${esc(p.kname || Gg.KINDS[p.kind] || "")}</h4>${row("Size", p.size + " times the Earth")}${row("Gravity", p.grav + " g")}${row("Warmth", p.temp + " °C at the surface, on average")}${row("Air", p.air)}${p.pres != null ? row("Pressure", p.pres + " atmospheres") : ""}${row("Climate", p.climate)}${row("Surface", p.geo)}${row("Liquids", p.water)}${row("Life", p.life || "None found")}${row("Minerals", p.minerals)}${row("Dangers", (p.hazards || []).join(", "))}${row("Landing", p.land)}${row("For people", p.hab)}${row("Moons", p.moons ? String(p.moons) : "")}${row("To be found", p.chance)}${profileHTML(p, info, s.id)}
+      ${mo ? moonHTML(s, p, mo) : p ? (ed && UI.pedit === p.n ? worldForm(s, p) : ed && UI.phys === p.n ? physForm(s, p) : UI.look === p.n && gmMode() ? lookForm(s, p) : `<div class="gx-world">${A.pixelPlanet ? `<canvas class="gx-pxg" data-id="${esc(s.id)}" data-n="${p.n}" role="img" aria-label="${esc(p.name)}, turning"></canvas>` : ""}<h4>${esc(p.name)}: ${esc(p.kname || Gg.KINDS[p.kind] || "")}</h4>${row("Size", p.size + " times the Earth")}${row("Gravity", p.grav + " g")}${row("Warmth", p.temp + " °C at the surface, on average")}${row("Air", p.air)}${p.pres != null ? row("Pressure", p.pres + " atmospheres") : ""}${row("Climate", p.climate)}${row("Surface", p.geo)}${row("Liquids", p.water)}${row("Life", p.life || "None found")}${row("Minerals", p.minerals)}${row("Dangers", (p.hazards || []).join(", "))}${row("Landing", p.land)}${row("For people", p.hab)}${row("Moons", p.moons ? String(p.moons) : "")}${row("To be found", p.chance)}${profileHTML(p, info, s.id)}
         ${p.owner ? row("Held by", (G().powers.find(x => x.id === p.owner) || {}).name || ((A.factionsData || {})[p.owner] || {}).n || p.owner) : ""}${p.gm ? `<p class="gx-gm"><span class="kn">Only you</span> ${esc(p.gm)}</p>` : ""}
         ${onP(p.n).map(t => siteRow("Here", t)).join("")}${places.filter(id => (A.meta[id] || {}).planet === p.n).map(id => `<div class="gx-f"><span class="kn">Your place</span> <button type="button" class="t-go" data-go="${esc(id)}">${esc(A.meta[id].name || id)}</button></div>`).join("")}
         ${wn.length ? `<ul class="gx-risks gx-wn">${wn.map(w => `<li>${esc(w)}</li>`).join("")}</ul><p class="t-small">Allowed: it is your setting. Atlas only says what would not hang together.</p>` : ""}
         ${extrasHTML(s, p, info)}
         ${p.landable && A.worldGenerate ? `<div class="t-row"><button type="button" class="t-btn prim" data-gx="surface" data-id="${esc(s.id)}" data-n="${p.n}">Open its surface</button></div><p class="t-small kn">The whole globe, made from this world's own physics the first time (a few minutes), then kept.</p>` : ""}
         ${canLand && !placeHere ? `<details class="gx-how"><summary class="t-small">Its surface as a map to explore</summary><p class="t-small">Ask Claude: “make the surface of ${esc(p.name)} as a place”, or: <code>node atlas.js wild &lt;campaign&gt; ${esc(String(p.name).toLowerCase().replace(/[^a-z0-9]+/g, "-"))} --system ${esc(s.id)} --planet ${p.n}</code></p></details>` : ""}
-        ${ed ? `<div class="t-row"><button type="button" class="t-mini" data-gx="pedit" data-n="${p.n}">Change this world</button>${(p.made || p).inputs && Gg.rework ? `<button type="button" class="t-mini" data-gx="phys" data-n="${p.n}">Work it out again</button>` : ""}</div>` : ""}</div>`) : ""}
+        ${p.override ? `<p class="gx-warn t-small">${esc(p.override)}.</p>` : ""}
+        ${gmMode() ? `<div class="t-row"><button type="button" class="t-mini" data-gx="look" data-n="${p.n}" title="Its picture's colours, clouds, ice, bands, rings, turn and size on the map: never its physics">Its look</button>${ed ? `<button type="button" class="t-mini" data-gx="pedit" data-n="${p.n}">Change this world</button>${(p.made || p).inputs && Gg.rework ? `<button type="button" class="t-mini" data-gx="phys" data-n="${p.n}">Work it out again</button>` : ""}` : ""}</div>` : ""}</div>`) : ""}
       ${ed ? `<details class="gx-add"><summary>Add to the system</summary>
-        <form class="t-row" data-gx="addworld" data-id="${esc(s.id)}"><select class="t-in" name="kind" aria-label="What kind of world">${kinds}</select><label class="kn">at <input class="t-in t-n" type="number" name="a" min="0.01" step="any" value="${Math.round((Math.max(0, ...info.planets.map(x => x.a)) * 1.6 || 1) * 100) / 100}"> AU</label><button class="t-mini">+ A world</button></form>
+        <form class="t-row" data-gx="addworld" data-id="${esc(s.id)}"><select class="t-in" name="kind" aria-label="What kind of world">${kinds}</select><label class="kn">at <input class="t-in t-n" type="number" name="a" min="0.01" step="any" value="${Math.round((Math.max(0, ...info.planets.map(x => x.a)) * 1.6 || 1) * 100) / 100}"> AU</label><button class="t-mini">+ A world</button>${LIB ? `<button type="button" class="t-mini" data-gx="libadd" data-id="${esc(s.id)}">+ From the library…</button>` : ""}</form>
         <form class="t-row" data-gx="addsite" data-id="${esc(s.id)}"><select class="t-in" name="kind" aria-label="What">${SITEK.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select><input class="t-in" name="name" placeholder="Its name" maxlength="60"><select class="t-in" name="on" aria-label="Where"><option value="">In orbit</option>${info.planets.map(x => `<option value="${x.n}">On ${esc(x.name)}</option>`).join("")}</select><button class="t-mini">+ Add it</button></form>
         <form class="t-row" data-gx="addbelt" data-id="${esc(s.id)}"><input class="t-in" name="name" placeholder="An asteroid belt" maxlength="60"><label class="kn">at <input class="t-in t-n" type="number" name="a" min="0.01" step="any" value="2.5"> AU</label><button class="t-mini">+ A belt</button></form></details>` : ""}</section>`;
   }
@@ -1428,7 +1521,7 @@
     const inSys = s && UI.sys === s.id && A.starSystem && A.starSystem.isOpen();
     const th = !inSys && UI.thing && thingById(UI.thing);
     sd.innerHTML = (UI.panel === "sp" ? spHTML() : "") + (UI.hole ? holeHTML() : "") + (inSys ? sysHTML(s) + shipHTML() : (th ? thingHTML(th) + (UI.plan && UI.plan.thing === th.id ? planHTML() : "") + shipHTML() : shipHTML() + (s ? sysHTML(s) : rg ? regHTML(rg) : UI.selLane ? laneHTML(UI.selLane) : galaxyHTML())));
-    { const pf = sd.querySelector("form.gx-phys"); if (pf) physPreview(pf); }
+    { const pf = sd.querySelector("form.gx-phys"); if (pf) physPreview(pf); const lf = sd.querySelector("form.gx-look"); if (lf) lookPreview(lf); }
     // (the world in its card, turning, as pixel art: atlas-pixelplanet.js)
     if (A.pixelPlanet) sd.querySelectorAll("canvas.gx-pxg").forEach(cv => { const s2 = findSys(cv.dataset.id), info = s2 && bodiesOf(s2), p = info && info.planets.find(x => x.n === +cv.dataset.n); if (!p) return; const m = cv.dataset.m != null && cv.dataset.m !== "" ? (p.moonList || []).find(x => x.n === +cv.dataset.m) : null; A.pixelPlanet.spin(cv, m ? Object.assign({}, m, { name: moonName(p, m) }) : p, 48, info.star.color); });
   }
@@ -1459,6 +1552,12 @@
       case "holex": UI.hole = false; side(); return;
       case "sideview": if (TL) tlClose(); sideOpen(); return;
       // (things between the stars)
+      // (the library, and a world's look)
+      case "look": UI.look = b.dataset.n === "" || b.dataset.n == null || UI.look === +b.dataset.n ? null : +b.dataset.n; if (UI.look != null) UI.planet = UI.look; UI.pedit = null; UI.phys = null; break;
+      case "unlook": { const n = +b.dataset.n, D = doc(id), B = D.bodies = D.bodies || {}, own = (B.add || []).find(x => x.n === n); if (own) delete own.look; else if (B.p && B.p[n]) { delete B.p[n].look; if (!Object.keys(B.p[n]).length) delete B.p[n]; } setG(id, D); UI.look = null; refresh(); return; }
+      case "looklib": { const f = b.closest("form"); libDlg("look", w => { const L = w.look || {}, set = (k, v) => { const el = f.elements[k]; if (el && v != null) { if (el.type === "checkbox") el.checked = !!v; else el.value = v; el.dataset.on = "1"; } }; for (const k of ["hue", "sat", "bright", "clouds", "ice", "ocean", "craters", "bandsN", "ground", "sea", "plant", "cloudCol", "sky"]) set(k, L[k]); if (L.bands) L.bands.slice(0, 3).forEach((c, i) => set("band" + i, c)); if (L.storm != null) set("storm", L.storm); if (L.rings) { set("r_on", L.rings.on); set("r_w", L.rings.width || 1); set("r_tilt", L.rings.tilt != null ? L.rings.tilt : 18); set("r_tint", L.rings.tint || "#e2dccc"); } lookPreview(f); }, { say: "Only its look is taken: its colours, clouds, ice, bands and rings. Its physics stay its own." }); return; }
+      case "libadd": { const s = findSys(id), f = b.closest("form"), a = Math.max(.01, parseFloat(f && f.elements.a ? f.elements.a.value : "1") || 1); if (!s) return; libDlg("world", w => sysAddPreset(s, a, w, { clientX: b.getBoundingClientRect().left, clientY: b.getBoundingClientRect().bottom, target: b, preventDefault() {} }), { info: bodiesOf(s), a, say: `Each worked out ${a} AU from ${s.name}, as the planet maker would make it there; “fits here” means it stays of its kind.` }); return; }
+      case "starlib": { libDlg("star", sp => setStarPreset(id, sp), { say: "Each a real kind of star: its mass, age, metals, light and warmth. The system's worlds are made again round it; your own stay." }); return; }
       case "tpick": { const t = thingById(id); if (t) A.galaxyThing(id); const fl = host.querySelector(".gx-found"); if (fl) fl.hidden = true; return; }
       case "treveal": setThing(id, { found: true, ready: false, foundHow: (thingById(id) || {}).readyHow || "shown by the game master", foundAt: nowMin() }); refresh(); return;
       case "thide": setThing(id, { found: false, ready: false }); refresh(); return;
@@ -1526,7 +1625,7 @@
         const w = A.ux ? A.ux.work({ what: "the surface of " + nm, uses: ["its physics"] }) : null, est = (A.worldGenSecs ? A.worldGenSecs("planet") : 180) * 1000, t0 = Date.now(), iv = w ? setInterval(() => w.progress(Math.min(.95, (Date.now() - t0) / est)), 1000) : null;
         const here = () => ((document.getElementById("app") || {}).dataset || {}).view === "galaxy";
         planetSurface(sid, n, say, mo).then(wid => { clearInterval(iv); b.disabled = false; b.textContent = "Open its surface"; const stay = here(); if (w) w.end(true, "its surface is ready", () => { if (A.openWorld) A.openWorld(wid); }); if (stay && A.openWorld) A.openWorld(wid); }).catch(e => { clearInterval(iv); if (w) w.end(false); b.disabled = false; b.textContent = "Open its surface"; const m = host && host.querySelector(".gx-note"); if (m) m.textContent = e.message; else alert(e.message); }); return; }
-      case "planet": UI.planet = +b.dataset.n; UI.moon = null; UI.pedit = null; if (A.starSystem) A.starSystem.redraw(); break;
+      case "planet": UI.planet = +b.dataset.n; UI.moon = null; UI.pedit = null; UI.look = null; if (A.starSystem) A.starSystem.redraw(); break;
       case "moon": UI.moon = b.dataset.m === "" || b.dataset.m == null ? null : +b.dataset.m; if (A.starSystem) A.starSystem.redraw(); break;
       case "edit": UI.edit = UI.edit === id ? null : id; break;
       case "move": UI.moving = id; tools(); if (A.tableUI) A.tableUI.api.note("Click the map where it should stand."); return;
@@ -1575,6 +1674,11 @@
       const R = doc("~regions"), body = { name: v("name") || "A region", kind: v("kind"), r: Math.max(.5, num("r", 3)) / G().ly }, own = (R.add || []).find(a => a.id === id);
       if (own) Object.assign(own, body); else { R.edit = R.edit || {}; R.edit[id] = Object.assign(R.edit[id] || {}, body); }
       setG("~regions", R);
+    } else if (k === "savelook") {
+      // (a world's look kept: its picture only, beside its physics)
+      const n = +f.dataset.n, L = lookOfForm(f), D = doc(id), B = D.bodies = D.bodies || {}, own = (B.add || []).find(x => x.n === n);
+      if (own) { if (Object.keys(L).length) own.look = L; else delete own.look; } else { B.p = B.p || {}; B.p[n] = Object.assign(B.p[n] || {}, { look: L }); if (!Object.keys(L).length) delete B.p[n].look; }
+      setG(id, D); UI.look = null;
     } else if (k === "savething") {
       // (a thing's card kept: what it is, its signal, its drift from where it is now, how it is found)
       const t = thingById(id); if (!t) return; const ck = n => !!(f.elements[n] && f.elements[n].checked), area = SP.isArea(v("kind"));
