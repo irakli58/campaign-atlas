@@ -15,15 +15,17 @@
   const has = s => () => !!document.querySelector(s);
   const chapters = [
     { id: "handmade", title: "Making a campaign by hand", lessons: [
-      { id: "encyclopedia", title: "The Gazetteer, the campaign's encyclopedia", summary: "Everything the campaign holds beside its places: people, clues, handouts and story, each with its New; and where to begin in an empty campaign.", features: ["encyclopedia", "handmade"], needs: has("#encyc"), steps: [
+      { id: "encyclopedia", title: "The Gazetteer, the campaign's encyclopedia", summary: "Everything the campaign holds beside its places: people, clues, handouts and story, each with its New; and where to begin in an empty campaign.", features: ["encyclopedia", "handmade", "citymake"], needs: has("#encyc"), steps: [
         { say: "Above the Gazetteer's places is the campaign's index: its people, its clues, its handouts and its story, each counted.", sel: "#encyc", act: "look" },
         { say: "Open one to see what is in it. Each entry opens where it is written; each part has its New button. Nothing is kept here twice: it reads what each part keeps.", sel: ["#encyc .enc-sec", "#encyc"], act: "look" },
         { say: "A campaign started empty, in the Atlas app's By hand, or with atlas.js init and blank, opens on where to begin. Nothing is invented for it: Claude helps only when you ask.", sel: [".enc-empty", "#dossier"], act: "look", optional: true },
-        { say: "A place needs only a name. Where there is a city it goes in the city; else it is a place of the campaign, on no map yet, with a plan for its kind to change in the map editor.", sel: ["[data-enca='place']", "#encyc"], act: "look" }
+        { say: "A place needs only a name. Where there is a city it goes in the city; else it is a place of the campaign, on no map yet, with a plan for its kind to change in the map editor.", sel: ["[data-enca='place']", "#encyc"], act: "look" },
+        { say: "In the Atlas app, a campaign with no city can have one made from here: + A city for the campaign. Invented for its age, its size, its river or coast, its streets and its people's buildings; or a real city, its real streets, river and landmarks fetched and drawn in buildings of the age you choose. The page opens again on it in 3D, and your places go into it with + Add location.", sel: ["[data-enca='city']", "#encyc"], act: "look", optional: true }
       ] },
-      { id: "people", title: "People of your own", summary: "A person made with only a name, and the rest when you know it: their face, where they are, what they want and hide, what they carry, their statistics.", features: ["peopleeditor"], needs: has("[data-enca='person']"), steps: [
+      { id: "people", title: "People of your own", summary: "A person made with only a name, and the rest when you know it: their face, where they are, what they want and hide, what they carry, their statistics.", features: ["peopleeditor", "portraits"], needs: has("[data-enca='person']"), steps: [
         { say: "A person: a name is all they need.", sel: "[data-enca='person']", act: "click", try: "Click + A person.", wait: 500 },
         { say: "Their occupation, age, a picture, where they are: a place and a room, where they then stand on its map, and their faction.", sel: ["#ppDlg .pp-top", "#ppDlg"], act: "look" },
+        { say: "No picture of your own? Draw a portrait draws one from what you wrote of them: their age, how they look, what they do and how they act, in the look of the campaign's age, a sepia photograph for the 1920s, a painted portrait for fantasy. Draw again gives another; Change the drawing changes what it read wrongly, the hair, a beard, spectacles, a hat, the clothes. In the Gazetteer's People, one button draws everyone who has no picture.", sel: ["#ppDlg [data-pp='draw']", "#ppDlg .pp-face"], act: "look", optional: true },
         { say: "What they are like, what drives them, what they hide and the lie they tell, what they carry, notes for playing them, statistics and attributes of your own. Each is there when you want it, never required.", sel: ["#ppDlg .loc-more", "#ppDlg"], act: "look" },
         { say: "Suggest what is still empty asks Claude, when you choose to: each suggestion is shown on its own, to use or leave. Nothing is kept until you save. They are one of the cast, so their card, what they know, Talk and the board all know them.", sel: ["#ppDlg .loc-ai", "#ppDlg"], act: "look" },
         { say: "", sel: "#ppDlg [data-pp='x']", act: "click", auto: true }
@@ -283,7 +285,7 @@
       ] }
     ] },
     { id: "table", title: "Game night", lessons: [
-      { id: "screen", module: ["players"], title: "The players' screen", summary: "A window for the players: maps a room at a time, handouts, faces, the fog of war.", features: ["deckplan", "players-screen", "fog", "fog3d", "players-copy", "phones", "journal", "projector"], needs: has("#v-table"), steps: [
+      { id: "screen", module: ["players"], title: "The players' screen", summary: "A window for the players: maps a room at a time, handouts, faces, the fog of war.", features: ["deckplan", "players-screen", "fog", "fog3d", "players-copy", "phones", "oneplayer", "journal", "projector"], needs: has("#v-table"), steps: [
         { say: "At the table holds the tools for game night.", sel: "#v-table", act: "click", try: "Click At the table.", wait: 500 },
         { say: "On a phone the table's tools are a menu at the top, in the same groups as the list beside them on a bigger screen: choose one there. The quick tools along the bottom are the same everywhere.", sel: "[data-t='tabpick']", act: "look", optional: true },
         { say: "The players' screen is a window of its own for the television or a second screen, with nothing of yours on it.", sel: "[data-t='tab'][data-tab='screen']", act: "click", try: "Click Players' screen.", wait: 500 },
@@ -292,6 +294,7 @@
         { say: "Maps go to them a room at a time. In caves you brush the fog away as they explore, flat or in 3D.", sel: ".t-fog, .t-fog3d", act: "look" },
         { say: "Hand them its plan gives them a handout of the place, floor by floor or deck by deck, with only the rooms they have seen, as their own map shows them; it stays among their handouts.", sel: "[data-t='planho']", act: "look", optional: true },
         { say: "With the Atlas app, players can also follow on their own phones: switch it on and show them the QR code.", sel: ".t-lan", act: "look", optional: true },
+        { say: "Something for one player only: on their own phone each player says whose screen it is, a character or their name. Write a note here, or choose Only to… beside a handout, and it reaches that one phone alone, waiting behind Tap to read so a neighbour does not see it. The shared screen never shows it, and Take it back takes it from their phone.", sel: "#tvBody .t-priv", act: "look", optional: true },
         { say: "The players' journal: choose how much Atlas keeps for them, from their own notes only to quests, hints and a timeline. Only what they found, or what you give them, is ever in it.", sel: "#tvBody .t-journal", act: "look" },
         { say: "It is their chronicle too, on their screen and their phones: what they mean to do, written in their own words for you to read; their purse and what they carry; and what the table remembers that they saw, did and said, never your notes for later. Each is a switch here.", sel: "#tvBody .tj-keys", act: "look", optional: true }
       ] },
@@ -442,6 +445,9 @@
   ];
   // the features of the page, each taught by a lesson (the library's index; the coverage check's list)
   const FEATURES = {
+    citymake: ["A city made from the page", "city make new invent invented real streets town 3d map handmade own city"],
+    portraits: ["Portraits drawn from a description", "portrait picture face drawn draw again likeness photograph painted npc image"],
+    oneplayer: ["Something for one player only", "secret private note one player only whisper their own phone eyes only pass hidden"],
     back: ["Back and forward", "back forward history where was i alt left return"], recent: ["Recently visited", "recent lately visited ctrl k quick"], trail: ["Where you are on a map", "trail breadcrumb parent map system planet plane layer world chooser"],
     cards: ["A person's card", "person card npc profile faction place peek who is"], ailine: ["What Claude is doing", "claude working stop tray look at progress surface long"], aicard: ["What Claude suggests", "suggestion keep ticked edit ask again throw away preview approve"],
     editkeys: ["The keys of every editor", "keys shortcuts undo redo escape delete number right-click menu space"], versions: ["Earlier versions of a map", "versions history bring back restore yesterday"], pins: ["Your own short list of tools", "pin pinned tools favourites more"], checklist: ["Ready for the first session", "checklist first session getting started"],

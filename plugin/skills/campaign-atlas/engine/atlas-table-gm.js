@@ -99,7 +99,7 @@
     return [];
   }
   function handoutBtns(hid) {
-    return `<span class="t-hbtn"><button type="button" class="t-mini" data-t="hview" data-id="${esc(hid)}">Read the handout</button><button type="button" class="t-mini" data-t="hshow" data-id="${esc(hid)}">Give it to the players</button></span>`;
+    return `<span class="t-hbtn"><button type="button" class="t-mini" data-t="hview" data-id="${esc(hid)}">Read the handout</button><button type="button" class="t-mini" data-t="hshow" data-id="${esc(hid)}">Give it to the players</button>${onlyTo(hid)}</span>`;
   }
 
   /* ================================================================ random tables everyone has, in the story's age */
@@ -619,6 +619,29 @@
     if (doc.kind === "handout" && doc.id) S.set("given", doc.id, doc.h ? { t, h: doc.h } : { t });
     note("On the players' screen now.");
   }
+  /* ---- something for one player only (atlas-table.js): a note or a handout, to one player's own screen alone */
+  const privOn = () => T.privateOn && T.privateOn();
+  function showTo(to, doc) {
+    if (!to) return show(doc);
+    if (doc.kind === "handout" && doc.id && !doc.h) { const h = T.allHandouts().find(x => x.id === doc.id); if (h) doc = Object.assign({}, doc, { h }); }
+    const t = Date.now(), id = "p" + t.toString(36) + Math.random().toString(36).slice(2, 5);
+    S.set("private", id, Object.assign({ t, to }, doc.kind === "handout" ? { kind: "handout", hid: doc.id, h: doc.h, title: (doc.h && (doc.h.title || doc.h.headline)) || "" } : { kind: "note", title: String(doc.title || "").slice(0, 80), text: String(doc.text || "").slice(0, 2000) }));
+    const open = T.screensNow(S).includes(to);
+    note(`For ${T.recipientName(S, to)} alone, on their own screen${open ? ": it is open now" : ", when they open it"}.`);
+  }
+  const toOptions = () => { const live = new Set(T.screensNow(S)); return T.recipients(S).map(r => `<option value="${esc(r.key)}">${esc(r.name)}${live.has(r.key) ? " (their screen is open)" : ""}</option>`).join(""); };
+  function privHTML() {
+    if (!privOn()) return "";
+    const R = T.recipients(S), live = T.screensNow(S), sent = Object.entries(S.get("private") || {}).filter(([, x]) => x).sort((a, b) => (b[1].t || 0) - (a[1].t || 0)).slice(0, 8);
+    return `<section class="t-card t-priv"><h3>${T.icon("person")} For one player only</h3>
+      <p class="t-small">A note or a handout for one player's eyes: it reaches only their own phone or laptop, where they said who they are, and waits there until they tap it open. The shared screen never shows it.</p>
+      ${R.length ? `<form class="t-privf" data-t="privnote"><select name="to" aria-label="To whom">${toOptions()}</select><input class="t-in" name="title" maxlength="80" placeholder="A heading, if you like" aria-label="A heading"><textarea name="text" rows="3" maxlength="2000" placeholder="You know that handwriting: it is your father's." aria-label="What only they learn"></textarea><div class="t-row"><button type="submit" class="t-btn prim">Pass it to them alone</button></div></form>`
+        : `<p class="kn">Nobody to pass it to yet. The players' characters are listed here, and any player who opens their own copy of the players' window and says who they are.</p>`}
+      <p class="t-small">${live.length ? `Their own screens open now: ${live.map(k => esc(T.recipientName(S, k))).join(", ")}.` : "No player's own screen is open just now."} A handout goes to one player with <b>Only to…</b> beside it.</p>
+      ${sent.length ? `<ul class="t-privl">${sent.map(([id, x]) => `<li><b>${esc(T.recipientName(S, x.to))}</b> <span class="kn">${x.kind === "handout" ? "the handout " + esc(x.title || "") : esc(x.title || String(x.text || "").slice(0, 70))}</span><button type="button" class="t-mini" data-t="privdel" data-id="${esc(id)}">Take it back</button></li>`).join("")}</ul>` : ""}</section>`;
+  }
+  // a handout's "Only to…": one player alone (a choice beside Give it to the players)
+  const onlyTo = hid => privOn() && T.recipients(S).length ? `<select class="t-mini t-onlyto" data-t="honly" data-id="${esc(hid)}" aria-label="Give it to one player only"><option value="">Only to…</option>${toOptions()}</select>` : "";
   function nowText(d) {
     switch (d.kind) {
       case "map": return `the map of ${placeName(d.place)}${d.floor ? ", floor " + (+d.floor + 1) : ""}${d.view === "3d" ? ", in 3D" : ""}`;
@@ -730,6 +753,7 @@
           <p class="t-small">On another computer or a tablet instead: open this same page there, and on that one press <button type="button" class="t-link" data-t="beplayers">make this window the players' screen</button>. (Pressed here, it turns this page into theirs.)</p></div>
         <div class="t-scr-r"><div class="kl">What they see now</div><div class="t-prev" role="img" aria-label="${esc(cap(nowText(d)))}">${previewHTML(d)}</div><div class="t-small">${esc(cap(nowText(d)))}</div></div>
       </section>
+      ${privHTML()}
       ${lanAvail() ? `<section class="t-card t-lan"><h3>${T.icon("party")} On the players' own phones and laptops</h3><div id="tLan"><p class="t-small">…</p></div></section>` : ""}
       ${cardsFor("screen")}
       <section class="t-card"><h3>Show them</h3><div class="t-tiles">${tile("title", "The title", "play")}${A.worldData && A.worldMount ? tile("world", "The world map", "map") : ""}${A.galaxyParams ? tile("galaxy", "The star chart", "map") : ""}${tile("board", "Their board", "board")}${tile("safety", "Lines and veils", "safety")}${tile("blank", "A dark screen", "close")}</div></section>
@@ -1009,8 +1033,9 @@
       case "fogreset": if (b.dataset.sure) { const cur = S.get("fog", UI.fogPlace) || {}; S.set("fog", UI.fogPlace, { off: cur.off || false, f: {}, c: {} }); } else { b.dataset.sure = 1; b.textContent = "Really hide every floor again?"; } break;
       case "fognone": setRooms(false); break;
       case "showscene": { const bx = boxOf(b), tt = (bx.querySelector('[data-t="scenetitle"]') || {}).value || "", tx = (bx.querySelector('[data-t="scenetext"]') || {}).value || ""; if (!tx.trim() && !tt.trim()) return; show({ kind: "scene", title: tt.trim().slice(0, 120), text: tx.trim().slice(0, 4000) }); break; }
-      case "showface": { const cid = (boxOf(b).querySelector('[data-t="facepick"]') || {}).value, c = (A.castData || {})[cid]; if (c) show({ kind: "person", name: c.n, role: T.plainRole(c.role), look: c.look || "" }); break; }   // the plain part of a role only: what follows a semicolon or a dash is often the secret
+      case "showface": { const cid = (boxOf(b).querySelector('[data-t="facepick"]') || {}).value, c = (A.castData || {})[cid]; if (c) show(Object.assign({ kind: "person", name: c.n, role: T.plainRole(c.role), look: c.look || "" }, c.img ? { img: c.img } : {})); break; }   // the plain part of a role only: what follows a semicolon or a dash is often the secret
       case "hview": if (b.closest("summary") && e) e.preventDefault(); openHandout(d.id, d.list || null); break;
+      case "privdel": twice(b, () => { S.set("private", d.id, null); note("Taken back: it is gone from their screen."); renderTab(); }); break;
       case "hshow": { const h = T.allHandouts().find(x => x.id === d.id); if (!h) return; show({ kind: "handout", id: h.id }); const dl = b.closest("#tDlg"); if (dl) openHandout(h.id, dl.dataset.place || null); break; }
       case "hprint": { const h = T.allHandouts().find(x => x.id === d.id); if (h) printNow(`<div class="bk-ho">${T.handoutHTML(h)}</div>`, "pr-ho"); break; }
       case "printhandouts": printNow(T.allHandouts().map(h => `<div class="bk-ho">${T.handoutHTML(h)}</div>`).join(""), "pr-ho"); break;
@@ -1068,7 +1093,7 @@
     let dlg = document.getElementById("tDlg");
     if (!dlg) { dlg = document.createElement("dialog"); dlg.id = "tDlg"; dlg.className = "t-dlg"; document.body.appendChild(dlg); dlg.addEventListener("click", e => { if (e.target === dlg || e.target.closest("[data-x]")) dlg.close(); }); }
     dlg.dataset.place = placeId || "";
-    dlg.innerHTML = `<div class="t-dlgbar">${T.icon("handout")}<b>${esc(nm(h))}</b><span class="t-sp"></span>${on ? `<span class="t-onscr">${T.icon("screen")}On their screen</span>` : `<button type="button" class="t-btn prim" data-t="hshow" data-id="${esc(h.id)}">${T.icon("screen")}Give it to the players</button>`}<button type="button" class="t-mini" data-t="hprint" data-id="${esc(h.id)}">Print</button><button type="button" class="t-mini" data-x="1">Close</button></div>${list.length > 1 ? `<div class="t-dlgtabs" role="group" aria-label="This place's handouts">${list.map(x => `<button type="button" data-t="hview" data-id="${esc(x.id)}" data-list="${esc(placeId)}" aria-pressed="${x.id === h.id}">${esc(nm(x))}</button>`).join("")}</div>` : ""}<div class="t-dlgbody">${T.handoutHTML(h)}</div>`;
+    dlg.innerHTML = `<div class="t-dlgbar">${T.icon("handout")}<b>${esc(nm(h))}</b><span class="t-sp"></span>${on ? `<span class="t-onscr">${T.icon("screen")}On their screen</span>` : `<button type="button" class="t-btn prim" data-t="hshow" data-id="${esc(h.id)}">${T.icon("screen")}Give it to the players</button>`}${onlyTo(h.id)}<button type="button" class="t-mini" data-t="hprint" data-id="${esc(h.id)}">Print</button><button type="button" class="t-mini" data-x="1">Close</button></div>${list.length > 1 ? `<div class="t-dlgtabs" role="group" aria-label="This place's handouts">${list.map(x => `<button type="button" data-t="hview" data-id="${esc(x.id)}" data-list="${esc(placeId)}" aria-pressed="${x.id === h.id}">${esc(nm(x))}</button>`).join("")}</div>` : ""}<div class="t-dlgbody">${T.handoutHTML(h)}</div>`;
     if (dlg.showModal) { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute("open", "");
   }
   // the X-card: a banner the referee cannot miss
@@ -1139,7 +1164,7 @@
 
   /* ================================================================ connecting it to the page */
   A.tableUI = {
-    twice,
+    twice, onlyTo: hid => onlyTo(hid), showTo: (to, doc) => showTo(to, doc),
     stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab, addDock, addCard,
     // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
     api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s, m) => askRaw(p, f || (() => {}), s, m), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, tabs: () => TABS.filter(t => shownTab(t[0])).map(t => ({ key: t[0], label: t[1], desc: t[4] })), open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
@@ -1208,6 +1233,10 @@
       const fogEnd = () => { if (!fogStroke) return; const st = fogStroke; fogStroke = null; if (st.todo.length) paintFog(st.todo, st.v); };
       document.addEventListener("pointerup", fogEnd); document.addEventListener("pointercancel", fogEnd);
       S.watch("presence", screenStatusPaint); setInterval(screenStatusPaint, 15000);
+      // (For one player only: drawn again when a player's own screen opens or closes, or something is passed or taken back)
+      let privKey = null;
+      const privPaint = () => { if (UI.tab !== "screen" || !privOn()) return; const k = T.screensNow(S).join(",") + "|" + Object.keys(S.get("private") || {}).join(",") + "|" + T.recipients(S).map(r => r.key).join(","); if (privKey === null) { privKey = k; return; } if (k === privKey) return; privKey = k; const f = document.querySelector(".t-privf"); if (f && f.contains(document.activeElement)) return; renderTab(); };
+      S.watch("presence", privPaint); S.watch("private", privPaint); setInterval(privPaint, 20000);
       S.watch("xcard", xcard);
       document.addEventListener("click", async e => {
         const t = e.target; if (!t.closest) return;
@@ -1234,6 +1263,8 @@
         else if (d.t === "fogprev") { UI.fogPrev = t.checked; t.blur(); renderTab(); fogDlgPaint(); }
         else if (d.t === "fogoff") { t.blur(); const cur = S.get("fog", UI.fogPlace) || {}; S.set("fog", UI.fogPlace, Object.assign({}, cur, { off: !t.checked })); }
         else if (d.t === "notes") saveNotes(+d.n, t.value);
+        // a handout to one player alone
+        else if (d.t === "honly") { const to = t.value; t.value = ""; if (to) showTo(to, { kind: "handout", id: d.id }); if (UI.tab === "screen") renderTab(); }
         else if (d.t === "lines" || d.t === "veils") { const z = Object.assign({}, S.get("safety", "zero") || {}); z[d.t] = t.value.split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 60); S.set("safety", "zero", z); }
         else if (d.t === "cbset") { const c = cnow(), r = c.list.find(x => x.id === d.id); if (!r) return; r[d.f] = ["name", "note", "ac"].includes(d.f) ? t.value.slice(0, 120) : (t.value === "" ? null : +t.value); cset(c); }
       });
@@ -1241,6 +1272,7 @@
       document.addEventListener("submit", e => {
         const f = e.target; if (!f.matches) return;
         if (f.matches('[data-t="ask"]')) { e.preventDefault(); const q = f.q.value.trim(); if (q) { f.q.value = ""; ask(q); } }
+        if (f.matches('[data-t="privnote"]')) { e.preventDefault(); const to = f.elements.to.value, text = f.elements.text.value.trim(), title = f.elements.title.value.trim(); if (!to || !text) { note("Write what only they learn first."); return; } showTo(to, { kind: "note", title, text }); f.elements.text.value = ""; f.elements.title.value = ""; renderTab(); }
         if (f.matches('[data-t="jadd"]')) { e.preventDefault(); const ta = f.querySelector("textarea"), v = ta.value.trim().slice(0, 2000); if (!v) return; S.set("journal", uid("j"), { text: v, t: Date.now(), gm: true }); ta.value = ""; }
       });
       document.addEventListener("keydown", e => {

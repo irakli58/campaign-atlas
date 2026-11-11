@@ -40,6 +40,24 @@ A handout written on the page: any kind of atlas-table.js `handoutHTML`, plus `p
 (**bold**, *italic*, _underline_, # headings, --- rules); `state: "draft"` keeps it the Keeper's; `notes` never leave the
 Keeper's side (stripped in `allHandouts`).
 
+A portrait drawn from a description (atlas-portrait.js, part `people.portraits`): `A.portrait.params(person, { seed,
+over })` reads the person's words (age, a woman's or a man's face, skin, hair and its colour, eyes, beard, spectacles, a
+scar, freckles, build, a hat, what they do, their manner; `A.portrait.WORDS`) into choices; `svg(choices)` draws it in
+the look of the campaign's age (`photo` sepia for victorian and 1920s, `painted` for medieval and fantasy, `colour` for
+modern, `future`); `url()` is kept as the person's `img`, with `portrait: { seed, over }` beside it so Draw again and
+Change the drawing work from what was chosen. Deterministic: the same person, seed and choices draw the same face.
+`A.people.drawAll()` draws everyone without a picture. The workspace's dev/portrait-gallery.js shows a range of them.
+
+Something for one player only (part `players.private`): collection `private` `{ t, to, kind: "note" | "handout", title,
+text | h }`; `to` is `pc:<id>` (A.pcsData) or `n:<name>` (a player who named their own screen); a screen says whose it is
+in the players' window (kept per browser) and in `presence` `who-<device>`. The Atlas app's players' link sends a phone
+only the entries for the `me` it asks with (app/lib/players-lan.js); the shared screen shows none.
+
+A city made from the page (the Atlas app only): `+ A city for the campaign` (atlas-encyclopedia.js) asks the app
+(`ATLAS_APP.makeCity({ main: true, name, real, era, year, size, site, plan, culture, kind, seed, around, km })`, app
+lib/jobs.js `makeMainCity`), which runs `atlas.js city` for city.js and builds the page again; only while there is no
+city.js.
+
 ## Where the game master finds it
 
 - The Gazetteer's index above its places (atlas-encyclopedia.js): people, clues, handouts, story, each with its New; an
@@ -58,10 +76,10 @@ request at `askRaw`.
 ## Switches (atlas-modules.js)
 
 Modules may have parts, `module.part`, each on unless switched off: `investigation.clues`, `.board`, `.mysteries`,
-`.autoconnect`; `people.editor`, `.knowledge`, `.relations`; `living.events`, `.rumours`, `.factions`; `caves.traps`;
+`.autoconnect`; `people.editor`, `.portraits`, `.knowledge`, `.relations`; `players.private`; `living.events`, `.rumours`, `.factions`; `caves.traps`;
 `makeup.encounters`; `plot.quests`. New modules: `handouts`, `plot`, `survival`, `ai`, `sounds`. `A.modules.on("x.y")`,
 `A.modules.part(x, y)`, `A.modules.setPart(k, bool)`; html `data-m-<module>-<part>`. New work that makes content must
 respect them (an interior generator makes no clues with `investigation.clues` off).
 
-Test: the workspace's dev/handmade-test.js (the user's fourteen steps, then the copilot and the switches) must end
-"all well".
+Tests: the workspace's dev/handmade-test.js (the user's fourteen steps, then the copilot and the switches) and
+dev/more-handmade-test.js (one player only, portraits, a city from the page) must end "all well".

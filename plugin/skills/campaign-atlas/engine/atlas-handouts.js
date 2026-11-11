@@ -89,7 +89,7 @@
         <div class="loc-ai" data-ai-help><span class="kl">Optional help</span><button type="button" class="t-btn" data-hw="ai">Help me write it</button><span class="hw-aimsg t-small" aria-live="polite"></span></div>
       </div>
       <div class="hw-right"><div class="kn">What the players see</div><div class="hw-prev">${T.handoutHTML(playerView(r))}</div></div></div>
-      <div class="loc-go"><button type="button" class="t-btn prim" data-hw="save">Save</button>${cur.id && A.handbook[cur.id] && A.handbook[cur.id].state !== "draft" ? `<button type="button" class="t-btn" data-hw="give">Give to the players</button><button type="button" class="t-btn" data-t="hprint" data-id="${esc(cur.id)}">Print</button>` : ""}${cur.id ? `<button type="button" class="t-btn" data-hw="lib">Keep in my library</button><button type="button" class="t-btn ic-del" data-hw="del">Remove</button>` : ""}<button type="button" class="t-btn" data-hw="x">Cancel</button></div>
+      <div class="loc-go"><button type="button" class="t-btn prim" data-hw="save">Save</button>${cur.id && A.handbook[cur.id] && A.handbook[cur.id].state !== "draft" ? `<button type="button" class="t-btn" data-hw="give">Give to the players</button>${A.tableUI && A.tableUI.onlyTo ? A.tableUI.onlyTo(cur.id) : ""}<button type="button" class="t-btn" data-t="hprint" data-id="${esc(cur.id)}">Print</button>` : ""}${cur.id ? `<button type="button" class="t-btn" data-hw="lib">Keep in my library</button><button type="button" class="t-btn ic-del" data-hw="del">Remove</button>` : ""}<button type="button" class="t-btn" data-hw="x">Cancel</button></div>
     </form>`;
   }
   // the players' version: everything but the Keeper's notes

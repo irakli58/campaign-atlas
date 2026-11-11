@@ -563,6 +563,21 @@
   };
   const journalCfg = st => { const c = (st && st.get("jcfg", "now")) || {}; return Object.assign({ mode: "assisted" }, JOURNAL.modes.assisted, JOURNAL.modes[c.mode] || {}, c); };
   const STATUS_WORDS = { rumoured: "Heard of", known: "Known", open: "Open to us", resolved: "Finished", closed: "Closed" };
+  /* ---- something for one player only (the user, 11 Nov 2026: "do these"): a player's own phone or laptop says whose it
+          is, one of the players' characters or a name. What the game master passes to one player reaches that screen
+          alone (the Atlas app sends it to no other phone, app/lib/players-lan.js) and waits behind "Tap to read", so a
+          neighbour does not read it over a shoulder; a shared screen shows none of it. Collection "private":
+          { t, to, kind: "note" | "handout", title, text | h }. Recipients: "pc:<id>" a character, "n:<name>" a player. */
+  const privateOn = () => !A.modules || A.modules.on("players.private");
+  function recipients(st) {
+    const out = [], seen = new Set(), add = (key, name, sub) => { if (!key || seen.has(key)) return; seen.add(key); out.push({ key, name, sub: sub || "" }); };
+    for (const [id, pc] of Object.entries(A.pcsData || {})) if (pc) add("pc:" + id, pc.n || id, pc.player ? "played by " + pc.player : "");
+    for (const [k, p] of Object.entries((st && st.get("presence")) || {})) if (/^who-/.test(k) && p && /^n:/.test(p.me || "")) add(p.me, p.name || p.me.slice(2), "named on their own screen");
+    return out;
+  }
+  const recipientName = (st, key) => { const r = recipients(st).find(x => x.key === key); return r ? r.name : String(key || "").replace(/^(pc|n):/, ""); };
+  // the screens that said whose they are, within the last minute and a half
+  const screensNow = st => [...new Set(Object.entries((st && st.get("presence")) || {}).filter(([k, p]) => /^who-/.test(k) && p && p.me && Date.now() - (+p.t || 0) < 90000).map(([, p]) => p.me))];
   A.playersScreen = function (ctx) {
     const app = document.getElementById("app"), cfg = A.config, st = ctx.store;
     document.documentElement.dataset.theme = "dark"; app.dataset.mode = "player"; app.classList.add("ps-wrap");
@@ -576,6 +591,7 @@
       <main class="ps-page" id="psPage" hidden></main>
       <nav class="ps-menu" aria-label="The players' window">${TABS.map(([k, l, ic]) => `<button type="button" class="ps-tab" data-ptab="${k}" aria-pressed="${k === "table"}">${icon(ic)}<span>${l}</span><b class="ps-badge" hidden></b></button>`).join("")}
         <span class="ps-sep" aria-hidden="true"></span>
+        ${privateOn() ? `<button type="button" class="ps-btn ps-me" data-ps="me" title="Whose screen this is: on your own phone, say who you are, and the game master can pass you something for your eyes only" aria-label="Whose screen this is">${icon("person")}<span class="ps-me-n"></span></button>` : ""}
         <button type="button" class="ps-btn" data-ps="proj" title="A projector over the table: each square of a map one inch, as the miniatures stand" aria-label="Projector over the table" aria-pressed="false">▦</button>
         <button type="button" class="ps-btn" data-ps="full" title="Full screen" aria-label="Full screen">⤢</button>
         <button type="button" class="ps-x" data-ps="x" title="Touch this if you want what is happening to stop. No need to explain.">✕<span>Stop</span></button>
@@ -584,6 +600,32 @@
     const root = app.querySelector(".ps"), stage = app.querySelector("#psStage"), page = app.querySelector("#psPage");
     let now = { kind: "title" }, world = null, room3 = null, tab = "table", first = true;
     const pref = { get(k) { try { return localStorage.getItem(cfg.storageKey + "-p-" + k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(cfg.storageKey + "-p-" + k, v); } catch (e) {} } };
+    // whose screen this is, kept in this browser: "" a shared screen; "pc:<id>" a character; "n:<name>" a player
+    let me = privateOn() ? pref.get("me") || "" : "";
+    const dev = (() => { let d = pref.get("dev"); if (!d) { d = Math.random().toString(36).slice(2, 10); pref.set("dev", d); } return d; })();
+    // (the players' copy on a phone asks the app with this, and is sent only what is for it: app/ui/players-db.js)
+    const tellLink = () => { window.ATLAS_ME = me; if (window.ATLAS_PLAYERS_DB && window.ATLAS_PLAYERS_DB.refresh) window.ATLAS_PLAYERS_DB.refresh(); };
+    tellLink();
+    const meName = () => !me ? "" : /^n:/.test(me) ? pref.get("mename") || me.slice(2) : recipientName(st, me);
+    const opened = new Set();   // what was tapped open since this window opened (it waits behind "Tap to read" again later)
+    const forMe = () => !me || !privateOn() ? [] : Object.entries(st.get("private") || {}).filter(([, x]) => x && x.to === me).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => (b.t || 0) - (a.t || 0));
+    function meHTML() {
+      const R = recipients(st).filter(r => /^pc:/.test(r.key));
+      return `<div class="ps-mechoose" role="dialog" aria-label="Whose screen is this?"><div class="ps-mebox"><h2>Whose screen is this?</h2>
+        <p class="ps-hint">On your own phone or laptop, say who you are: the game master can then pass you something for your eyes only. A screen the whole table shares shows none of it.</p>
+        <div class="ps-mel">${R.map(r => `<button type="button" data-ps="meset" data-me="${esc(r.key)}" aria-pressed="${me === r.key}"><b>${esc(r.name)}</b>${r.sub ? `<span>${esc(r.sub)}</span>` : ""}</button>`).join("")}
+          <button type="button" data-ps="meset" data-me="" aria-pressed="${!me}"><b>Everyone</b><span>a screen the table shares</span></button></div>
+        <form class="ps-mef"><label>${R.length ? "Someone else" : "Your name"} <input name="n" maxlength="40" value="${/^n:/.test(me) ? esc(meName()) : ""}" placeholder="Your name or your character's" autocomplete="off"></label><button type="submit">That is me</button></form>
+        <button type="button" class="ps-mex" data-ps="meclose">Close</button></div></div>`;
+    }
+    const meOpen = () => { if (!privateOn() || app.querySelector(".ps-mechoose")) return; root.insertAdjacentHTML("beforeend", meHTML()); };
+    const paintMe = () => { const n = app.querySelector(".ps-me-n"); if (n) n.textContent = meName() || ""; const b = app.querySelector('[data-ps="me"]'); if (b) b.setAttribute("aria-pressed", String(!!me)); };
+    function setMe(v, name) {
+      me = v; pref.set("me", v); if (/^n:/.test(v)) pref.set("mename", name || v.slice(2));
+      if (!v) st.set("presence", "who-" + dev, null);
+      tellLink(); paintMe(); beat(); badges(); if (tab !== "table") renderPage();
+      const el = app.querySelector(".ps-mechoose"); if (el) el.remove();
+    }
     const fit = () => { const el = stage.firstElementChild; if (!el || !el.classList.contains("ps-fit")) return; const w = el.offsetWidth, h = el.offsetHeight, s = Math.min(stage.clientWidth * .94 / w, stage.clientHeight * .86 / h, 3); el.style.transform = `translate(-50%, -50%) scale(${s})`; };
     const when = t => new Date(t || 0).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     const placeName = id => (A.meta[id] || {}).name || id;
@@ -626,7 +668,7 @@
         const h = allHandouts().find(x => x.id === now.id) || (now.h || null);
         stage.innerHTML = h ? `<div class="ps-fit">${handoutHTML(h)}</div>` : "";
       } else if (k === "person") {
-        stage.innerHTML = `<div class="ps-fit"><div class="ps-person">${PERSON_SIL}<h2>${esc(now.name || "A stranger")}</h2>${now.role ? `<p class="ps-role">${esc(now.role)}</p>` : ""}${now.look ? `<p>${esc(now.look)}</p>` : ""}</div></div>`;
+        stage.innerHTML = `<div class="ps-fit"><div class="ps-person">${now.img && /^data:image\//.test(now.img) ? `<img class="ps-face" src="${esc(now.img)}" alt="">` : PERSON_SIL}<h2>${esc(now.name || "A stranger")}</h2>${now.role ? `<p class="ps-role">${esc(now.role)}</p>` : ""}${now.look ? `<p>${esc(now.look)}</p>` : ""}</div></div>`;
       } else if (k === "scene") {
         stage.innerHTML = `<div class="ps-fit"><div class="ps-scene">${now.title ? `<h2>${esc(now.title)}</h2>` : ""}${paras(now.text)}</div></div>`;
       } else if (k === "world" && A.worldMount && A.worldData) {
@@ -677,8 +719,12 @@
     function pageHTML() {
       switch (tab) {
         case "handouts": {
-          const l = given();
-          return `<h2>Handouts</h2><p class="ps-hint">Everything the game master has handed you, newest first. Read them again whenever you like.</p>${l.length ? l.map(x => `<article class="ps-ho"><div class="ps-when">${esc(when(x.t))}</div>${handoutHTML(x.h)}</article>`).join("") : `<p class="ps-empty">Nothing handed to you yet.</p>`}`;
+          const l = given(), p = forMe();
+          // (for this screen's player alone, each behind "Tap to read" until it is tapped open)
+          const priv = p.length ? `<section class="ps-priv"><h3>For you only</h3><p class="ps-hint">From the game master to ${esc(meName())} alone: no other screen has it.</p>${p.map(x => opened.has(x.id)
+            ? `<article class="ps-ho ps-pv"><div class="ps-when">${esc(when(x.t))} · for you only</div>${x.kind === "handout" && x.h ? handoutHTML(x.h) : `<div class="ps-pnote">${x.title ? `<h4>${esc(x.title)}</h4>` : ""}${paras(x.text || "")}</div>`}<button type="button" class="ps-mini" data-ps="phide" data-id="${esc(x.id)}">Hide it again</button></article>`
+            : `<button type="button" class="ps-veil" data-ps="pread" data-id="${esc(x.id)}"><b>${x.kind === "handout" ? "A handout" : "A note"} for you only</b><span>Tap to read · ${esc(when(x.t))}</span></button>`).join("")}</section>` : "";
+          return `<h2>Handouts</h2>${priv}<p class="ps-hint">Everything the game master has handed you, newest first. Read them again whenever you like.</p>${l.length ? l.map(x => `<article class="ps-ho"><div class="ps-when">${esc(when(x.t))}</div>${handoutHTML(x.h)}</article>`).join("") : `<p class="ps-empty">Nothing handed to you yet.</p>`}`;
         }
         case "board": {
           const [model, pos, W, H] = theirBoard();
@@ -767,7 +813,7 @@
     }
     // a count on Handouts of what has come since they last looked
     function badges() {
-      const seen = +pref.get("seen") || 0, n = given().filter(x => x.t > seen).length, b = root.querySelector('[data-ptab="handouts"] .ps-badge');
+      const seen = +pref.get("seen") || 0, n = given().filter(x => x.t > seen).length + forMe().filter(x => (x.t || 0) > seen).length, b = root.querySelector('[data-ptab="handouts"] .ps-badge');
       b.hidden = !n || tab === "handouts"; b.textContent = n;
       const sn = +pref.get("seennews") || 0, nn = news().filter(x => (x.t || 0) > sn).length, bn = root.querySelector('[data-ptab="news"] .ps-badge');
       bn.hidden = !nn || tab === "news"; bn.textContent = nn;
@@ -792,6 +838,15 @@
     st.watch("safety", () => { if (now.kind === "safety") render(); });
     for (const c of ["clues", "status"]) st.watch(c, () => { if (now.kind === "board") render(); if (tab === "board" || tab === "places") renderPage(); });
     st.watch("given", () => { badges(); if (tab === "handouts") renderPage(); });
+    // something for this screen's player alone: a word on the screen when it comes (never what it says)
+    let privSeen = null;
+    st.watch("private", () => {
+      const l = forMe(), firstLoad = privSeen == null; privSeen = privSeen || new Set();
+      if (!firstLoad && l.some(x => !privSeen.has(x.id) && Date.now() - (x.t || 0) < 10 * 60 * 1000)) toast(`Something for ${meName() || "you"} only, from the game master.`, "handouts");
+      l.forEach(x => privSeen.add(x.id)); badges(); if (tab === "handouts") renderPage();
+    });
+    // the names the players gave their screens (for the list of whom to pass something to)
+    st.watch("presence", () => paintMe());
     // news of the world, with a word on the screen when it comes (not for what was there before the window opened)
     let newsSeen = null;
     st.watch("news", () => {
@@ -824,6 +879,11 @@
       const b = e.target.closest("[data-ps]"), jd = e.target.closest("[data-jdel]");
       if (jd) { if (jd.dataset.sure) st.set("journal", jd.dataset.jdel, null); else { jd.dataset.sure = 1; jd.textContent = "Really?"; } return; }
       if (!b) return;
+      // whose screen this is; something for them alone, tapped open and hidden again
+      if (b.dataset.ps === "me") { meOpen(); return; }
+      if (b.dataset.ps === "meclose") { const el = app.querySelector(".ps-mechoose"); if (el) el.remove(); if (pref.get("me") === null) pref.set("me", me); return; }
+      if (b.dataset.ps === "meset") { setMe(b.dataset.me || ""); toast(b.dataset.me ? `This is ${meName()}'s screen now.` : "A screen for everyone: nothing for one player alone shows here.", false); return; }
+      if (b.dataset.ps === "pread" || b.dataset.ps === "phide") { if (b.dataset.ps === "pread") opened.add(b.dataset.id); else opened.delete(b.dataset.id); renderPage(); return; }
       if (b.dataset.ps === "back") {          // twice, so a player does not turn the window into the referee's page by accident
         if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = "Back to the game master's page? Click again"; setTimeout(() => { delete b.dataset.sure; b.textContent = "⌂"; }, 4000); return; }
         try { sessionStorage.removeItem(cfg.storageKey + "-players"); } catch (e) {}
@@ -840,6 +900,12 @@
       else if (b.dataset.ps === "x") { const t = Date.now(); st.set("xcard", "now", { t }); st.set("xcard", "x" + t, { t }); toast("The game master has been told. Take a breath; the game will move on.", false); }
     });
     app.addEventListener("submit", e => {
+      // a player naming their own screen
+      if (e.target.matches(".ps-mef")) {
+        e.preventDefault(); const n = String(e.target.elements.n.value || "").trim().replace(/\s+/g, " ").slice(0, 40); if (!n) return;
+        const pc = recipients(st).find(r => /^pc:/.test(r.key) && r.name.toLowerCase() === n.toLowerCase());
+        setMe(pc ? pc.key : "n:" + n.toLowerCase(), n); toast(`This is ${meName()}'s screen now.`, false); return;
+      }
       // what they mean to do, for the game master (collection "intent": with the world's date when there is one)
       if (e.target.matches(".ps-intent-f")) {
         e.preventDefault(); const ta = e.target.querySelector("textarea"), v = ta.value.trim().slice(0, 1200); if (!v) return;
@@ -861,8 +927,9 @@
       else if (e.key === "m" || e.key === "M") { proj.cal = true; render(); }
     });
     // so the referee's page can say the players' window is open and following
-    const beat = () => st.set("presence", "players", { t: Date.now() });
-    st.ready.then(beat); setInterval(beat, 30000);
+    // (and a screen that says whose it is says so too, for the game master's list of whom to pass something to)
+    function beat() { st.set("presence", "players", { t: Date.now() }); if (me && privateOn()) st.set("presence", "who-" + dev, { t: Date.now(), me, name: meName() }); }
+    st.ready.then(() => { beat(); paintMe(); if (A.playersCopy && privateOn() && pref.get("me") === null) meOpen(); }); setInterval(beat, 30000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) beat(); });
   };
 
@@ -904,5 +971,5 @@
   const icon = (k, cls) => `<svg class="ic${cls ? " " + cls : ""}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${IC[k] || ""}</svg>`;
 
   // for the referee's tools (atlas-table-gm.js), the checker and the build
-  A.table = { JOURNAL, journalCfg, fogCells, fogSeen, fogVis, fog3d, applyMapEdits, plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES };
+  A.table = { JOURNAL, journalCfg, fogCells, fogSeen, fogVis, fog3d, applyMapEdits, plainRole, icon, boardSize, foundIn, SAFETY_NOTE, era, allHandouts, handoutHTML, makeStore, fogSVG, roll, skillRoll, rollTable, personNow, culture, boardModel, boardLayout, boardHTML, paras, PERSON_SIL, ERA_KIND, NAMES, recipients, recipientName, screensNow, privateOn };
 })(ATLAS);

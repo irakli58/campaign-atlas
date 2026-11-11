@@ -6,13 +6,16 @@
   "use strict";
   var URL_ = "db", data = {}, v = -1, subs = [];
   var copy = function (o) { return o === undefined ? undefined : JSON.parse(JSON.stringify(o)); };
+  // (with whose screen this is, window.ATLAS_ME, set by the players' window: the app sends a phone only what was passed
+  // to that player alone, and nothing of it to a phone that has not said)
   function pull() {
-    return fetch(URL_ + "?v=" + v, { cache: "no-store" }).then(function (r) {
+    return fetch(URL_ + "?v=" + v + "&me=" + encodeURIComponent(window.ATLAS_ME || ""), { cache: "no-store" }).then(function (r) {
       if (r.status === 204 || !r.ok) return;
       return r.json().then(function (d) { data = d.data || {}; v = d.v; subs.forEach(function (f) { f(); }); });
     });
   }
   var ready = pull().catch(function () {});
+  window.ATLAS_PLAYERS_DB = { refresh: function () { v = -1; return pull().catch(function () {}); } };
   setInterval(function () { if (!document.hidden) pull().catch(function () {}); }, 2000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) pull().catch(function () {}); });
   function write(kind, coll, id, body) {

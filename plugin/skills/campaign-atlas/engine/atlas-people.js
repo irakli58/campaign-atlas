@@ -95,7 +95,7 @@
     return `<form class="pp-form" method="dialog">
       <div class="loc-head"><h3>${id ? esc(r.n || "A person") : "A person of your own"}</h3><button type="button" class="t-btn" data-pp="x" aria-label="Close">Close</button></div>
       ${id ? "" : `<p class="t-small">A name is all they need. Everything else is for when you know it, and can be changed whenever you like.</p>`}
-      <div class="pp-top"><div class="pp-face">${r.img ? `<img src="${esc(r.img)}" alt="">` : `<span>No picture</span>`}<label class="t-btn">${r.img ? "Another picture" : "A picture"}<input type="file" accept="image/*" data-pp="img" hidden></label>${r.img ? `<button type="button" class="t-mini" data-pp="noimg">No picture</button>` : ""}</div>
+      <div class="pp-top"><div class="pp-face">${r.img ? `<img src="${esc(r.img)}" alt="">` : `<span>No picture</span>`}<label class="t-btn">${r.img ? "Another picture" : "A picture"}<input type="file" accept="image/*" data-pp="img" hidden></label>${pz() ? `<button type="button" class="t-btn" data-pp="draw" title="Drawn from what is written of them: their age, how they look, what they do, how they act">${r.img && r.portrait ? "Draw again" : "Draw a portrait"}</button>` : ""}${r.img ? `<button type="button" class="t-mini" data-pp="noimg">No picture</button>` : ""}${pz() && r.img && r.portrait ? changeHTML(r) : ""}</div>
         <div class="pp-who">${F.filter(f => f[4] === "who").map(field).join("")}
           <div class="loc-g2"><label>Where they are<select class="t-in" name="pl">${opt(places, at.pl || "", "Nowhere in particular")}</select></label><label>The room<select class="t-in" name="room">${opt(roomsOf(at.pl), at.room || "", "Not in a room")}</select></label></div>
           <label>Faction<select class="t-in" name="faction">${opt(facs, my, "None")}</select></label></div></div>
@@ -106,12 +106,27 @@
       <div class="loc-go"><button type="button" class="t-btn prim" data-pp="save">${id ? "Save" : "Make them"}</button>${id ? `<button type="button" class="t-btn" data-pp="show" title="Their name and face on the players' screen">Show them to the players</button><button type="button" class="t-btn" data-pp="lib">Keep in my library</button><button type="button" class="t-btn ic-del" data-pp="del">${FILE[id] ? "Back as written" : "Take them away"}</button>` : ""}<button type="button" class="t-btn" data-pp="x">Cancel</button></div>
     </form>`;
   }
+  /* ---- a portrait drawn from what is written of them (atlas-portrait.js): drawn again for another, each choice changeable */
+  const pz = () => !!(A.portrait && A.portrait.on());
+  const PZ_LABELS = [["sex", "Face"], ["age", "Age"], ["skin", "Skin"], ["hairCol", "Hair colour"], ["hair", "Hair"], ["beard", "Beard"], ["eyes", "Eyes"], ["glasses", "Spectacles"], ["hat", "On the head"], ["clothes", "Clothes"], ["expr", "Expression"], ["build", "Build"], ["look", "The look"]];
+  function changeHTML(r) {
+    const p = A.portrait.params(r, r.portrait), C = A.portrait.CHOICES;
+    return `<details class="pp-pchange"><summary>Change the drawing</summary><div class="pp-pz">${PZ_LABELS.map(([k, l]) => k === "age" ? `<label>${l}<input class="t-in" type="number" min="5" max="100" data-ppz="age" value="${esc(p.age)}"></label>` : `<label>${l}<select class="t-in" data-ppz="${k}">${C[k].map(([v, t]) => `<option value="${esc(v)}"${p[k] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>`).join("")}</div>
+      <p class="t-small">Drawn from what is written of them, and the same each time. Change what it read wrongly here, or change the words and draw again. <button type="button" class="t-link" data-pp="pzreset">Back to what the words say</button></p></details>`;
+  }
+  function drawNow(r) {
+    const p = A.portrait.params(r, cur.portrait); cur.img = A.portrait.url(p, { label: r.n || "" });
+    const keep = dlg.querySelector(".pp-pchange"), open = !!(keep && keep.open);
+    dlg.innerHTML = form(cur.id, Object.assign(r, { img: cur.img, portrait: cur.portrait }));
+    if (open) { const d = dlg.querySelector(".pp-pchange"); if (d) d.open = true; }
+  }
   function read() {
     const f = dlg.querySelector("form"), v = n => (f.elements[n] ? f.elements[n].value : "").trim(), r = Object.assign({}, cur.rec);
     for (const [k] of F) { if (k === "attrs") { const o = {}; for (const l of v(k).split(/\n/)) { const i = l.indexOf(":"); if (i > 0 && l.slice(i + 1).trim()) o[l.slice(0, i).trim()] = l.slice(i + 1).trim(); } if (Object.keys(o).length) r.attrs = o; else delete r.attrs; continue; } const s = v(k); if (s) r[k] = s; else delete r[k]; }
     const pl = v("pl"), room = v("room"); if (pl) r.at = Object.assign({}, r.at && r.at.pl === pl ? r.at : {}, { pl, room: room || undefined }); else delete r.at;
     const fa = v("faction"); const rest = [].concat(r.factions || []).slice(1); if (fa) r.factions = [fa].concat(rest.filter(x => x !== fa)); else if (rest.length) r.factions = rest; else delete r.factions;
     if (cur.img !== undefined) { if (cur.img) r.img = cur.img; else delete r.img; }
+    if (cur.portrait !== undefined) { if (cur.portrait) r.portrait = cur.portrait; else delete r.portrait; }
     return r;
   }
   P.open = (id, seed) => {
@@ -122,17 +137,19 @@
       dlg.addEventListener("change", e => {
         if (e.target.name === "pl") { const f = dlg.querySelector("form"); f.elements.room.innerHTML = opt(roomsOf(e.target.value), "", "Not in a room"); }
         if (e.target.dataset && e.target.dataset.pp === "img" && e.target.files[0]) picture(e.target.files[0]);
+        // a choice of the drawing changed by hand
+        if (e.target.dataset && e.target.dataset.ppz) { const r = read(); cur.portrait = Object.assign({ seed: 0 }, cur.portrait || r.portrait || {}); cur.portrait.over = Object.assign({}, cur.portrait.over, { [e.target.dataset.ppz]: e.target.value }); drawNow(r); }
       });
     }
     const rec = id && A.castData && A.castData[id] ? JSON.parse(JSON.stringify(A.castData[id])) : Object.assign({}, seed || {});
-    cur = { id: id || null, rec, img: undefined };
+    cur = { id: id || null, rec, img: undefined, portrait: undefined };
     dlg.innerHTML = form(cur.id, rec); if (!dlg.open) dlg.showModal();
     setTimeout(() => { const n = dlg.querySelector('[name="n"]'); if (n && !id) n.focus(); }, 30);
   };
   // (a picture of their own, made small enough to keep in the page)
   function picture(file) {
     const img = new Image(), url = URL.createObjectURL(file);
-    img.onload = () => { const k = Math.min(1, 360 / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); cur.img = c.toDataURL("image/jpeg", .85); const r = read(); dlg.innerHTML = form(cur.id, Object.assign(r, { img: cur.img })); };
+    img.onload = () => { const k = Math.min(1, 360 / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); cur.img = c.toDataURL("image/jpeg", .85); cur.portrait = null; const r = read(); dlg.innerHTML = form(cur.id, Object.assign(r, { img: cur.img })); };
     img.onerror = () => note("That file could not be read as a picture.");
     img.src = url;
   }
@@ -140,7 +157,10 @@
     const b = e.target.closest("[data-pp]"); if (!b) return; const a = b.dataset.pp;
     if (a === "x") { dlg.close(); return; }
     if (a === "img") return;
-    if (a === "noimg") { cur.img = null; const r = read(); delete r.img; dlg.innerHTML = form(cur.id, r); return; }
+    if (a === "noimg") { cur.img = null; cur.portrait = null; const r = read(); delete r.img; delete r.portrait; dlg.innerHTML = form(cur.id, r); return; }
+    // drawn from the words: the first time as they say, again for another (the changes by hand kept)
+    if (a === "draw") { const r = read(), was = cur.portrait || r.portrait; cur.portrait = { seed: was && r.img ? (was.seed || 0) + 1 : 0, over: (was && was.over) || {} }; drawNow(r); return; }
+    if (a === "pzreset") { const r = read(); cur.portrait = { seed: (cur.portrait || r.portrait || {}).seed || 0, over: {} }; drawNow(r); return; }
     if (a === "ai") return suggest(b);
     if (a === "use") { const f = dlg.querySelector("form"), k = b.dataset.k, el = f.elements[k]; if (el) { el.value = cur.sug[k]; const d = el.closest("details"); if (d) d.open = true; } b.closest("li").remove(); return; }
     if (a === "save") { const r = read(); if (!r.n) { dlg.querySelector('[name="n"]').focus(); return; } const id = cur.id || newId(r.n); dlg.close(); await save(id, r); return; }
@@ -168,6 +188,18 @@
   // the people made or changed here, for the Gazetteer's list
   P.list = () => Object.entries(A.castData || {}).filter(([, c]) => c).map(([id, c]) => ({ id, n: c.n || id, role: c.role || "", made: c.made === "hand", at: c.at || null, img: c.img || "" })).sort((a, b) => a.n.localeCompare(b.n));
   P.save = save; P.forget = forget;
+  // a portrait for each of the cast who has none, drawn from what is written of them, kept in one go
+  P.drawAll = async () => {
+    if (!pz()) return 0; let n = 0;
+    for (const [id, c] of Object.entries(A.castData || {})) {
+      if (!c || c.img) continue;
+      const rec = JSON.parse(JSON.stringify(c)); rec.portrait = { seed: 0, over: {} }; rec.img = A.portrait.url(A.portrait.params(rec, rec.portrait), { label: rec.n || "" }); rec.t = Date.now();
+      if (S) S.set("people", id, rec); apply(id, rec); n++;
+    }
+    if (n) { bump(); changed(); const w = await mirror(); note(`${n} portrait${n === 1 ? "" : "s"} drawn from what is written of them: open anyone to draw theirs again or change it. ${w}`); } else note("Everyone has a picture already.");
+    return n;
+  };
+  P.missing = () => Object.values(A.castData || {}).filter(c => c && !c.img).length;
   // from the library: an independent copy
   P.fromLibrary = async it => { const d = JSON.parse(JSON.stringify(it.data || {})); return save(newId(d.n || it.name), Object.assign(d, { made: "hand" })); };
   P.init = store => {
