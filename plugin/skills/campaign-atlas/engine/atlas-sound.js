@@ -20,7 +20,7 @@
   const esc = s => (A.esc ? A.esc(s) : String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]));
   const SK = () => ((A.config && A.config.storageKey) || "atlas") + "-sound-";
   const pref = { get: (k, d) => { try { const v = localStorage.getItem(SK() + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(SK() + k, JSON.stringify(v)); } catch (e) {} } };
-  const S = { items: new Map(), packs: [], loaded: false, ac: null, out: null, buses: {}, layers: new Map(), events: new Map(), scene: null, duck: 1, vol: pref.get("vol", .8), open: false, q: "", own: [] };
+  const S = { items: new Map(), packs: [], loaded: false, ac: null, out: null, buses: {}, layers: new Map(), events: new Map(), scene: null, once: new Set(), duck: 1, vol: pref.get("vol", .8), open: false, q: "", own: [] };
 
   /* ---- the scenes Atlas starts with: layers that loop at their level, and sounds that come now and then (every so many
           seconds, between the two numbers). A sound missing from the packs installed is simply left out */
@@ -164,6 +164,8 @@
     s.buffer = buf; s.playbackRate.value = o.vary === false ? 1 : 1 + (Math.random() - .5) * .07;
     g.gain.value = level(it, o.vol == null ? .8 : o.vol) * (o.vary === false ? 1 : Math.pow(10, (Math.random() - .5) * .25));
     if (pan) { pan.pan.value = o.pan != null ? o.pan : o.vary === false ? 0 : (Math.random() - .5) * 1.1; s.connect(g); g.connect(pan); pan.connect(S.buses.fx); } else { s.connect(g); g.connect(S.buses.fx); }
+    // (kept while it sounds, so that Stop all can fade a thunder or a scream already under way)
+    const one = { s, g }; S.once.add(one); s.onended = () => S.once.delete(one);
     s.start(); return true;
   }
   // a sound now and then: every so many seconds, at random between the two
@@ -180,7 +182,10 @@
     for (const [id, a, b, v] of sc.events) if (S.items.has(id)) { any = true; startEvent(id, a, b, v); }
     S.scene = sc.id; pref.set("scene", sc.id); paint(); return any;
   }
-  function stopAll(fade) { for (const id of [...S.layers.keys()]) stopLayer(id, fade == null ? 2.5 : fade); for (const id of [...S.events.keys()]) stopEvent(id); S.scene = null; paint(); }
+  function stopAll(fade) {
+    const f = fade == null ? 2.5 : fade; for (const id of [...S.layers.keys()]) stopLayer(id, f); for (const id of [...S.events.keys()]) stopEvent(id);
+    if (S.ac) { const t = S.ac.currentTime; for (const o of S.once) { try { o.g.gain.cancelScheduledValues(t); o.g.gain.setValueAtTime(o.g.gain.value, t); o.g.gain.linearRampToValueAtTime(0, t + f); o.s.stop(t + f + .05); } catch (e) {} } S.once.clear(); }
+    S.scene = null; paint(); }
   // the narrator speaking: the ambience steps back (to a third, as the music does), and comes up again after
   function duck(on) { S.duck = on ? (pref.get("duckTo", .35)) : 1; if (S.ac) S.buses.amb.gain.setTargetAtTime(S.duck, S.ac.currentTime, on ? .2 : .6); }
   // what is playing, kept as a scene of the game master's own

@@ -406,7 +406,9 @@ lan = PlayersLan.create({ DATA, campDir, db, PORT: PORT + 1, UI }); lan.resume()
 // the recorder on a phone of its own (off until the game master opens its link for a campaign): lib/recorder-lan.js
 recorder = RecorderLan.create({ DATA, campDir, db, PORT: PORT + 2, UI }); recorder.resume();
 // the sound packs, installed into data/audio/ when the game master asks: lib/audio.js
-audio = Audio.create({ DATA });
+// (where this app sits in the workspace the packs were made in, they are installed from there, not from the release)
+const PACKS_MADE = path.join(ROOT, "..", "dev", "sound-packs", "out", "release");
+audio = Audio.create({ DATA, local: fs.existsSync(path.join(PACKS_MADE, "packs.json")) ? PACKS_MADE : null });
 // the narrator's voices, installed into data/voices/ when the game master asks: lib/voices.js. (Where this app sits in
 // the workspace it was made in, the files the narrator trial already downloaded are copied rather than fetched again.)
 const TRIAL = path.join(ROOT, "..", "dev", "narrator-trial");
