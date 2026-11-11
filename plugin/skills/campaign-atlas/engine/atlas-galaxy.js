@@ -446,7 +446,7 @@
       const s = UI.sel && findSys(UI.sel), g = G(); if (s && s.sec != null && g.sectors[s.sec]) parts.push(`<span>${esc(g.sectors[s.sec].name)}</span>`);
       if (s) parts.push(`<button type="button" data-gx="pick" data-id="${esc(s.id)}" aria-current="page">${esc(s.name)}</button>`);
     }
-    const h = `<nav class="trail ux-trail" aria-label="Where this is">${parts.join('<span class="tr-sep" aria-hidden="true">›</span>')}</nav><span class="gx-where">${esc(schematic() && chartPx() > 60 ? "a jump map: its routes' own lengths count" : ly1(viewLy) + " light years across")}${MG && !(schematic() && chartPx() > 60) ? ` · the centre ${ly1(Math.hypot(CAM.x, CAM.y))} light years away` : ""}</span>`;
+    const h = `<nav class="trail ux-trail" aria-label="Where this is">${parts.join('<span class="tr-sep" aria-hidden="true">›</span>')}</nav><span class="gx-where">${esc(schematic() && chartPx() > 60 ? "a jump map: its routes' own lengths count" : ly1(viewLy) + " light years across")}${MG && !(schematic() && chartPx() > 60) && Math.hypot(CAM.x, CAM.y) > viewLy * .02 ? ` · the centre ${ly1(Math.hypot(CAM.x, CAM.y))} light years away` : MG && !(schematic() && chartPx() > 60) ? " · centred on its heart" : ""}</span>`;
     if (el.__h !== h) { el.__h = h; el.innerHTML = h; }
   }
   // the card on hover: a star's name, its kind, what is there, how far from the ship
