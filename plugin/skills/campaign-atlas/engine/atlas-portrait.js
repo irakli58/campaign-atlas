@@ -194,12 +194,15 @@
     const back = [];
     if (P.hair === "long" || (P.hair === "braid" && sexF)) back.push(`<path d="${smooth([[cx - w * 1.12, cy - h * .5], [cx - w * 1.3, cy + h * .4], [cx - w * 1.42, cy + h * 1.55], [cx - w * .7, cy + h * 1.85], [cx + w * .7, cy + h * 1.85], [cx + w * 1.42, cy + h * 1.55], [cx + w * 1.3, cy + h * .4], [cx + w * 1.12, cy - h * .5], [cx, cy - h * 1.25]], true)}" fill="${hc2}"/>`);
     if (P.hair === "bob") back.push(`<path d="${smooth([[cx - w * 1.15, cy - h * .5], [cx - w * 1.25, cy + h * .35], [cx - w * 1.05, cy + h * .78], [cx, cy + h * .7], [cx + w * 1.05, cy + h * .78], [cx + w * 1.25, cy + h * .35], [cx + w * 1.15, cy - h * .5], [cx, cy - h * 1.22]], true)}" fill="${hc2}"/>`);
-    if (P.hair === "bun") back.push(`<circle cx="${f1(cx + w * .1)}" cy="${f1(cy - h * 1.17)}" r="${f1(w * .42)}" fill="url(#${u("hl")})"/><path d="M${f1(cx + w * -.2)} ${f1(cy - h * 1.2)}q${f1(w * .3)} ${f1(-h * .12)} ${f1(w * .6)} 0" stroke="${hc2}" stroke-width="1.2" fill="none"/>`);
+    const HB = hatBand(P, cy, h);
+    if (P.hair === "bun" && HB == null) back.push(`<circle cx="${f1(cx + w * .1)}" cy="${f1(cy - h * 1.17)}" r="${f1(w * .42)}" fill="url(#${u("hl")})"/><path d="M${f1(cx + w * -.2)} ${f1(cy - h * 1.2)}q${f1(w * .3)} ${f1(-h * .12)} ${f1(w * .6)} 0" stroke="${hc2}" stroke-width="1.2" fill="none"/>`);
     if (P.hair === "ponytail") back.push(`<path d="${smooth([[cx + w * .7, cy - h * .9], [cx + w * 1.25, cy - h * .6], [cx + w * 1.32, cy + h * .4], [cx + w * 1.12, cy + h * 1.3], [cx + w * .95, cy + h * .4], [cx + w * .85, cy - h * .5]], true)}" fill="${hc2}"/>`);
     if (P.hat === "hood") back.push(`<path d="${smooth([[cx, cy - h * 1.55], [cx + w * 1.45, cy - h * .9], [cx + w * 1.6, cy + h * .4], [cx + w * 1.7, cy + h * 1.6], [cx - w * 1.7, cy + h * 1.6], [cx - w * 1.6, cy + h * .4], [cx - w * 1.45, cy - h * .9]], true)}" fill="${shade(cc, -.15)}"/>`);
     if (P.clothes === "robe" && P.hat !== "hood") back.push(`<path d="${smooth([[cx - w * 1.55, cy + h * 1.5], [cx - w * 1.2, cy + h * .7], [cx, cy + h * .55], [cx + w * 1.2, cy + h * .7], [cx + w * 1.55, cy + h * 1.5]], false)}L${cx + w * 1.6} 250L${cx - w * 1.6} 250Z" fill="${cc2}"/>`);
     if (P.hat === "veil") back.push(`<path d="${smooth([[cx, cy - h * 1.32], [cx + w * 1.4, cy - h * .7], [cx + w * 1.55, cy + h * .7], [cx + w * 1.75, cy + h * 1.9], [cx - w * 1.75, cy + h * 1.9], [cx - w * 1.55, cy + h * .7], [cx - w * 1.4, cy - h * .7]], true)}" fill="${P.clothes === "fine" ? "#1d1a1c" : "#191719"}"/>`);
-    add(back.join(""));
+    // (under a hat, the hair shows only below its band)
+    if (HB != null) add(`<clipPath id="${u("hc")}"><rect x="0" y="${f1(HB - 1)}" width="200" height="${f1(250 - HB)}"/></clipPath><linearGradient id="${u("hsh")}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".5"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>`);
+    add(HB != null ? `<g clip-path="url(#${u("hc")})">${back.join("")}</g>` : back.join(""));
     // the shoulders, and the neck
     const sy = cy + h * 1.62, nw = w * (soft ? .44 : .52) * (P.build === "heavy" ? 1.15 : 1);
     const torso = `M4 250C8 ${f1(sy + 22)} 30 ${f1(sy + 4)} ${f1(cx - w * 1.15)} ${f1(sy)}Q${cx} ${f1(sy - 6)} ${f1(cx + w * 1.15)} ${f1(sy)}C170 ${f1(sy + 4)} 192 ${f1(sy + 22)} 196 250Z`;
@@ -219,6 +222,8 @@
     add(`<ellipse cx="${f1(cx - ex)}" cy="${f1(ey - 2)}" rx="${f1(w * .3)}" ry="${f1(h * .1)}" fill="${sk3}" opacity=".22"/><ellipse cx="${f1(cx + ex)}" cy="${f1(ey - 2)}" rx="${f1(w * .3)}" ry="${f1(h * .1)}" fill="${sk3}" opacity=".26"/>`);
     if (soft && age < 50) add(`<circle cx="${f1(cx - w * .55)}" cy="${f1(cy + h * .28)}" r="${f1(w * .28)}" fill="#e07a6a" opacity=".16"/><circle cx="${f1(cx + w * .55)}" cy="${f1(cy + h * .28)}" r="${f1(w * .28)}" fill="#e07a6a" opacity=".13"/>`);
     if (P.build === "thin" || age > 70) add(`<path d="M${f1(cx + w * .82)} ${f1(cy + h * .1)}q${f1(-w * .2)} ${f1(h * .25)} ${f1(-w * .1)} ${f1(h * .45)}M${f1(cx - w * .82)} ${f1(cy + h * .1)}q${f1(w * .2)} ${f1(h * .25)} ${f1(w * .1)} ${f1(h * .45)}" stroke="${sk3}" stroke-width="3" opacity=".22" fill="none"/>`);
+    // the brim's shadow over the forehead (and the eyes, under a wide brim)
+    if (HB != null) add(`<rect x="0" y="${f1(HB - 2)}" width="200" height="${f1(h * (P.hat === "pointed" || P.hat === "fedora" ? .5 : .36))}" fill="url(#${u("hsh")})"/>`);
     // what the years have drawn
     const lines = (age > 44 ? 1 : 0) + (age > 56 ? 1 : 0) + (age > 68 ? 1 : 0) + (P.marks.includes("lined") ? 1 : 0);
     for (let i = 0; i < Math.min(3, lines); i++) add(`<path d="M${f1(cx - w * (.5 - i * .05))} ${f1(cy - h * (.62 - i * .07))}q${f1(w * (.5 - i * .05))} ${f1(-h * .04)} ${f1(w * (1 - i * .1))} 0" stroke="${line}" stroke-opacity="${f1(.16 + lines * .04)}" stroke-width=".9" fill="none"/>`);
@@ -261,7 +266,8 @@
     if (P.marks.includes("scar")) add(`<path d="M${f1(cx - ex - 5)} ${f1(ey - 14)}L${f1(cx - ex + 4)} ${f1(ny + 6)}" stroke="${shade(skin, -.25)}" stroke-width="2.2" stroke-linecap="round" opacity=".8"/><path d="M${f1(cx - ex - 5)} ${f1(ey - 14)}L${f1(cx - ex + 4)} ${f1(ny + 6)}" stroke="${shade(skin, .25)}" stroke-width=".8" stroke-linecap="round" opacity=".7"/>`);
     if (P.marks.includes("tattoo")) add(`<path d="M${f1(cx + w * .62)} ${f1(ey + 6)}l4 6-4 6M${f1(cx + w * .7)} ${f1(ey + 4)}v16" stroke="${P.look === "future" ? "#38c8ff" : "#2b3a55"}" stroke-width="1.1" fill="none" opacity=".7"/>`);
     // the hair over the head
-    add(hairSVG(P, { cx, cy, w, h, hc, hc2, hc3, u, r, sexF }));
+    const hairNow = hairSVG(P, { cx, cy, w, h, hc, hc2, hc3, u, r, sexF });
+    add(HB != null ? `<g clip-path="url(#${u("hc")})">${hairNow}</g>` : hairNow);
     // spectacles
     if (P.glasses === "round" || P.glasses === "rect" || P.glasses === "pince") {
       const gr = P.glasses === "pince" ? 6.6 : 8.4, met = P.glasses === "rect" ? "#1f1f1f" : "#4a3a22";
@@ -364,18 +370,61 @@
     return s;
   }
 
+  // where a hat sits: the line of its band across the forehead (none for what does not cover the top of the head).
+  // (the user, 11 Nov 2026: "some of the hats looks weird like they look like the hat is pasted on": the crown as wide
+  // as the head and over it, the hair only below its band, the brim a ring round the head, its shadow on the forehead,
+  // the hat lit from the upper left as the face is)
+  const BAND = { fedora: .56, bowler: .56, tophat: .58, cap: .55, peaked: .56, beanie: .5, cloche: .4, pointed: .58 };
+  const hatBand = (P, cy, h) => BAND[P.hat] != null ? cy - h * BAND[P.hat] : null;
   function hatSVG(P, o) {
-    const { cx, cy, w, h, cc, u, r } = o, k = P.hat, top = cy - h * 1.22, by = cy - h * .7;
-    const brim = (wd, lift, col) => `<path d="M${f1(cx - w * wd)} ${f1(by + 2)}Q${cx} ${f1(by - lift)} ${f1(cx + w * wd)} ${f1(by + 2)}Q${cx} ${f1(by + lift * .7 + 5)} ${f1(cx - w * wd)} ${f1(by + 2)}Z" fill="${col}"/>`;
+    const { cx, cy, w, h, cc, u, r } = o, k = P.hat, bY = hatBand(P, cy, h);
     const hcol = pick(r, ["#3a3530", "#4a4036", "#2b2b2e", "#5a4f42", "#3d3a33"]);
+    // the hat's own light: its sides lit from the left, the brim darker toward its front edge
+    const side = c => `<linearGradient id="${u("hs")}" x1="0" x2="1"><stop offset="0" stop-color="${shade(c, .18)}"/><stop offset=".4" stop-color="${c}"/><stop offset="1" stop-color="${shade(c, -.45)}"/></linearGradient>`;
+    const under = c => `<linearGradient id="${u("hb")}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, .1)}"/><stop offset=".5" stop-color="${shade(c, -.1)}"/><stop offset="1" stop-color="${shade(c, -.5)}"/></linearGradient>`;
+    // the brim, a ring round the head: flat, snapped down in front (a fedora's), or curled up at the sides
+    const brim = (rx, ry, c, kind) => {
+      const L = cx - rx, R = cx + rx, y = bY;
+      const d = kind === "curl" ? `M${f1(L)} ${f1(y - ry * .9)}Q${f1(cx - rx * .55)} ${f1(y + ry * 1.05)} ${cx} ${f1(y + ry * 1.1)}Q${f1(cx + rx * .55)} ${f1(y + ry * 1.05)} ${f1(R)} ${f1(y - ry * .9)}Q${f1(cx + rx * .75)} ${f1(y - ry * .3)} ${cx} ${f1(y - ry)}Q${f1(cx - rx * .75)} ${f1(y - ry * .3)} ${f1(L)} ${f1(y - ry * .9)}Z`
+        : kind === "snap" ? `M${f1(L)} ${f1(y)}A${f1(rx)} ${f1(ry)} 0 0 1 ${f1(R)} ${f1(y)}C${f1(R - rx * .25)} ${f1(y + ry * 1.05)} ${f1(cx + rx * .35)} ${f1(y + ry * 1.6)} ${cx} ${f1(y + ry * 1.6)}C${f1(cx - rx * .35)} ${f1(y + ry * 1.6)} ${f1(L + rx * .25)} ${f1(y + ry * 1.05)} ${f1(L)} ${f1(y)}Z`
+        : `M${f1(L)} ${f1(y)}A${f1(rx)} ${f1(ry)} 0 1 1 ${f1(R)} ${f1(y)}A${f1(rx)} ${f1(ry)} 0 1 1 ${f1(L)} ${f1(y)}Z`;
+      const edge = kind === "snap" ? `M${f1(L)} ${f1(y)}C${f1(L + rx * .25)} ${f1(y + ry * 1.05)} ${f1(cx - rx * .35)} ${f1(y + ry * 1.6)} ${cx} ${f1(y + ry * 1.6)}C${f1(cx + rx * .35)} ${f1(y + ry * 1.6)} ${f1(R - rx * .25)} ${f1(y + ry * 1.05)} ${f1(R)} ${f1(y)}`
+        : kind === "curl" ? `M${f1(L)} ${f1(y - ry * .9)}Q${f1(cx - rx * .55)} ${f1(y + ry * 1.05)} ${cx} ${f1(y + ry * 1.1)}Q${f1(cx + rx * .55)} ${f1(y + ry * 1.05)} ${f1(R)} ${f1(y - ry * .9)}`
+        : `M${f1(L)} ${f1(y)}A${f1(rx)} ${f1(ry)} 0 0 0 ${f1(R)} ${f1(y)}`;
+      return under(c) + `<path d="${d}" fill="url(#${u("hb")})"/><path d="${edge}" stroke="${shade(c, .28)}" stroke-width=".9" fill="none" opacity=".55"/>`;
+    };
+    // the band round the crown, following the brim's curve in front
+    const band = (cw, hgt, col, dip) => `<path d="M${f1(cx - cw)} ${f1(bY)}Q${cx} ${f1(bY + dip)} ${f1(cx + cw)} ${f1(bY)}L${f1(cx + cw * .995)} ${f1(bY - hgt)}Q${cx} ${f1(bY - hgt + dip)} ${f1(cx - cw * .995)} ${f1(bY - hgt)}Z" fill="${col}"/>`;
+    const crown = d => `<path d="${d}" fill="url(#${u("hs")})"/>`;
     switch (k) {
-      case "fedora": return `<path d="M${f1(cx - w * .98)} ${f1(by)}C${f1(cx - w * 1.0)} ${f1(top - 4)} ${f1(cx - w * .55)} ${f1(top - 14)} ${cx} ${f1(top - 6)}C${f1(cx + w * .55)} ${f1(top - 14)} ${f1(cx + w * 1.0)} ${f1(top - 4)} ${f1(cx + w * .98)} ${f1(by)}Z" fill="${hcol}"/><path d="M${f1(cx - w * .98)} ${f1(by - 2)}Q${cx} ${f1(by - 9)} ${f1(cx + w * .98)} ${f1(by - 2)}L${f1(cx + w * .98)} ${f1(by - 9)}Q${cx} ${f1(by - 16)} ${f1(cx - w * .98)} ${f1(by - 9)}Z" fill="#1a1715"/><path d="M${f1(cx - w * .2)} ${f1(top - 9)}Q${cx} ${f1(top - 2)} ${f1(cx + w * .2)} ${f1(top - 9)}" stroke="#000" stroke-opacity=".3" stroke-width="2" fill="none"/>` + brim(1.62, 12, shade(hcol, -.08));
-      case "bowler": return `<path d="M${f1(cx - w * .94)} ${f1(by)}C${f1(cx - w * 1.0)} ${f1(top - 22)} ${f1(cx + w * 1.0)} ${f1(top - 22)} ${f1(cx + w * .94)} ${f1(by)}Z" fill="#1c1a19"/><ellipse cx="${f1(cx - w * .3)}" cy="${f1(top - 6)}" rx="${f1(w * .3)}" ry="5" fill="#fff" opacity=".12"/>` + brim(1.3, 6, "#141312");
-      case "tophat": return `<path d="M${f1(cx - w * .82)} ${f1(by)}L${f1(cx - w * .9)} ${f1(top - 40)}Q${cx} ${f1(top - 46)} ${f1(cx + w * .9)} ${f1(top - 40)}L${f1(cx + w * .82)} ${f1(by)}Z" fill="#141313"/><rect x="${f1(cx - w * .84)}" y="${f1(by - 10)}" width="${f1(w * 1.68)}" height="6" fill="#3a3533"/>` + brim(1.35, 7, "#0f0e0e");
-      case "cap": return `<path d="M${f1(cx - w * 1.06)} ${f1(by + 2)}C${f1(cx - w * 1.1)} ${f1(top - 8)} ${f1(cx + w * 1.2)} ${f1(top - 10)} ${f1(cx + w * 1.08)} ${f1(by + 2)}Z" fill="${pick(r, ["#5a5246", "#4a4a44", "#6a5a44", "#3f4a44"])}"/><path d="M${f1(cx - w * .95)} ${f1(by + 2)}Q${cx} ${f1(by + 14)} ${f1(cx + w * .95)} ${f1(by + 2)}Q${cx} ${f1(by + 4)} ${f1(cx - w * .95)} ${f1(by + 2)}Z" fill="#2a2620"/>`;
-      case "peaked": { const pc = P.clothes === "military" ? shade(cc, -.05) : "#1b2235"; return `<path d="M${f1(cx - w * 1.0)} ${f1(by)}L${f1(cx - w * 1.15)} ${f1(top - 6)}Q${cx} ${f1(top - 16)} ${f1(cx + w * 1.15)} ${f1(top - 6)}L${f1(cx + w * 1.0)} ${f1(by)}Z" fill="${pc}"/><rect x="${f1(cx - w)}" y="${f1(by - 8)}" width="${f1(w * 2)}" height="8" fill="${shade(pc, -.3)}"/><circle cx="${cx}" cy="${f1(by - 13)}" r="4" fill="#c9a44a"/><path d="M${f1(cx - w * .95)} ${f1(by)}Q${cx} ${f1(by + 16)} ${f1(cx + w * .95)} ${f1(by)}Z" fill="#0d0d0d"/><path d="M${f1(cx - w * .5)} ${f1(by + 5)}q${f1(w * .3)} 3 ${f1(w * .6)} 0" stroke="#fff" stroke-opacity=".3" stroke-width="1.4" fill="none"/>`; }
-      case "beanie": { const bc = pick(r, ["#2a3346", "#5a2a24", "#3a3a3a", "#4a4232"]); return `<path d="M${f1(cx - w * 1.08)} ${f1(by + 6)}C${f1(cx - w * 1.15)} ${f1(top - 16)} ${f1(cx + w * 1.15)} ${f1(top - 16)} ${f1(cx + w * 1.08)} ${f1(by + 6)}Z" fill="${bc}"/><rect x="${f1(cx - w * 1.1)}" y="${f1(by - 6)}" width="${f1(w * 2.2)}" height="12" rx="4" fill="${shade(bc, .12)}"/><g stroke="${shade(bc, -.3)}" stroke-width=".8">${Array.from({ length: 12 }, (_, i) => `<path d="M${f1(cx - w + i * w * .18)} ${f1(by - 5)}v10"/>`).join("")}</g>`; }
-      case "cloche": { const cl = pick(r, ["#5a2a3a", "#2a3a4a", "#4a3a2a", "#3a3a3a", "#6a5a3a"]); return `<path d="M${f1(cx - w * 1.16)} ${f1(cy - h * .32)}C${f1(cx - w * 1.2)} ${f1(top - 16)} ${f1(cx + w * 1.2)} ${f1(top - 16)} ${f1(cx + w * 1.16)} ${f1(cy - h * .32)}Q${cx} ${f1(cy - h * .58)} ${f1(cx - w * 1.16)} ${f1(cy - h * .32)}Z" fill="${cl}"/><path d="M${f1(cx - w * 1.1)} ${f1(cy - h * .5)}Q${cx} ${f1(cy - h * .78)} ${f1(cx + w * 1.1)} ${f1(cy - h * .5)}" stroke="${shade(cl, -.4)}" stroke-width="4" fill="none"/>`; }
+      case "fedora": { const rx = w * 1.72, ry = h * .16, cw = w * 1.07, ct = bY - h * .62, dip = ry * .62;
+        return side(hcol) + brim(rx, ry, shade(hcol, -.06), "snap") + crown(`M${f1(cx - cw)} ${f1(bY)}C${f1(cx - cw * 1.02)} ${f1(bY - h * .32)} ${f1(cx - cw * .9)} ${f1(ct + 5)} ${f1(cx - cw * .55)} ${f1(ct + 1)}Q${cx} ${f1(ct + 9)} ${f1(cx + cw * .55)} ${f1(ct + 1)}C${f1(cx + cw * .9)} ${f1(ct + 5)} ${f1(cx + cw * 1.02)} ${f1(bY - h * .32)} ${f1(cx + cw)} ${f1(bY)}Q${cx} ${f1(bY + dip)} ${f1(cx - cw)} ${f1(bY)}Z`)
+          + `<path d="M${cx} ${f1(ct + 8)}Q${f1(cx - 1.5)} ${f1(ct + h * .2)} ${cx} ${f1(ct + h * .32)}M${f1(cx - cw * .5)} ${f1(ct + 5)}q2 ${f1(h * .12)} 6 ${f1(h * .2)}M${f1(cx + cw * .5)} ${f1(ct + 5)}q-2 ${f1(h * .12)} -6 ${f1(h * .2)}" stroke="${shade(hcol, -.55)}" stroke-width="1.3" fill="none" opacity=".5"/>` + band(cw, 7, shade(hcol, -.6), dip) + `<path d="M${f1(cx - cw * .72)} ${f1(bY - 6)}l-4 -3v7z" fill="${shade(hcol, -.6)}"/>`; }
+      case "bowler": { const c = "#1f1c1b", rx = w * 1.38, ry = h * .11, cw = w * 1.04, dip = ry * .7;
+        return side(c) + brim(rx, ry, "#171514", "curl") + crown(`M${f1(cx - cw)} ${f1(bY)}C${f1(cx - cw * 1.04)} ${f1(bY - h * .8)} ${f1(cx + cw * 1.04)} ${f1(bY - h * .8)} ${f1(cx + cw)} ${f1(bY)}Q${cx} ${f1(bY + dip)} ${f1(cx - cw)} ${f1(bY)}Z`) + band(cw, 5, "#0e0d0d", dip) + `<ellipse cx="${f1(cx - cw * .38)}" cy="${f1(bY - h * .46)}" rx="${f1(cw * .26)}" ry="${f1(h * .08)}" fill="#fff" opacity=".13" transform="rotate(-18 ${f1(cx - cw * .38)} ${f1(bY - h * .46)})"/>`; }
+      case "tophat": { const c = "#1a1818", rx = w * 1.45, ry = h * .12, cw = w * .99, tw = w * 1.05, ct = bY - h * 1.05, dip = ry * .7;
+        return side(c) + brim(rx, ry, "#121111", "curl") + crown(`M${f1(cx - cw)} ${f1(bY)}L${f1(cx - tw)} ${f1(ct)}Q${cx} ${f1(ct - 3)} ${f1(cx + tw)} ${f1(ct)}L${f1(cx + cw)} ${f1(bY)}Q${cx} ${f1(bY + dip)} ${f1(cx - cw)} ${f1(bY)}Z`) + band(cw, 11, "#2c2827", dip) + `<path d="M${f1(cx - cw * .55)} ${f1(ct + 3)}L${f1(cx - cw * .5)} ${f1(bY - 12)}" stroke="#fff" stroke-opacity=".12" stroke-width="5"/>`; }
+      case "cap": { const c = pick(r, ["#5a5246", "#4a4a44", "#6a5a44", "#3f4a44"]), dip = h * .1;
+        return side(c) + crown(`M${f1(cx - w * 1.12)} ${f1(bY + 3)}C${f1(cx - w * 1.2)} ${f1(bY - h * .42)} ${f1(cx - w * .4)} ${f1(bY - h * .64)} ${f1(cx + w * .15)} ${f1(bY - h * .62)}C${f1(cx + w * .9)} ${f1(bY - h * .6)} ${f1(cx + w * 1.26)} ${f1(bY - h * .34)} ${f1(cx + w * 1.12)} ${f1(bY + 3)}Q${cx} ${f1(bY + dip + 3)} ${f1(cx - w * 1.12)} ${f1(bY + 3)}Z`)
+          + `<path d="M${f1(cx - w * .9)} ${f1(bY - h * .2)}Q${cx} ${f1(bY - h * .4)} ${f1(cx + w * 1.0)} ${f1(bY - h * .18)}" stroke="#000" stroke-opacity=".25" stroke-width="1.2" fill="none"/><circle cx="${f1(cx + w * .1)}" cy="${f1(bY - h * .6)}" r="2.2" fill="${shade(c, -.3)}"/>` + under(c) + `<path d="M${f1(cx - w * .98)} ${f1(bY + 2)}Q${cx} ${f1(bY + h * .3)} ${f1(cx + w * .98)} ${f1(bY + 2)}Q${cx} ${f1(bY + h * .12)} ${f1(cx - w * .98)} ${f1(bY + 2)}Z" fill="url(#${u("hb")})"/>`; }
+      case "peaked": { const c = P.clothes === "military" ? shade(cc, -.05) : "#1f2840", cw = w * 1.03, dip = h * .08;
+        return side(c) + crown(`M${f1(cx - cw)} ${f1(bY - 10)}C${f1(cx - w * 1.44)} ${f1(bY - 13)} ${f1(cx - w * 1.32)} ${f1(bY - h * .54)} ${cx} ${f1(bY - h * .58)}C${f1(cx + w * 1.32)} ${f1(bY - h * .54)} ${f1(cx + w * 1.44)} ${f1(bY - 13)} ${f1(cx + cw)} ${f1(bY - 10)}Z`) + band(cw, 11, shade(c, -.35), dip)
+          + `<circle cx="${cx}" cy="${f1(bY - 16)}" r="4" fill="#c9a44a" stroke="#7a5a12" stroke-width=".6"/><path d="M${f1(cx - w * .98)} ${f1(bY + 1)}Q${cx} ${f1(bY + h * .36)} ${f1(cx + w * .98)} ${f1(bY + 1)}Q${cx} ${f1(bY + h * .1)} ${f1(cx - w * .98)} ${f1(bY + 1)}Z" fill="#0d0d0d"/><path d="M${f1(cx - w * .55)} ${f1(bY + h * .16)}q${f1(w * .3)} 3.5 ${f1(w * .7)} 0" stroke="#fff" stroke-opacity=".3" stroke-width="1.4" fill="none"/>`; }
+      case "beanie": { const c = pick(r, ["#2a3346", "#5a2a24", "#3a3a3a", "#4a4232"]), cw = w * 1.1, dip = h * .1;
+        return side(c) + crown(`M${f1(cx - cw)} ${f1(bY + 4)}C${f1(cx - cw * 1.06)} ${f1(bY - h * .94)} ${f1(cx + cw * 1.06)} ${f1(bY - h * .94)} ${f1(cx + cw)} ${f1(bY + 4)}Q${cx} ${f1(bY + dip + 4)} ${f1(cx - cw)} ${f1(bY + 4)}Z`)
+          + `<path d="M${f1(cx - cw * 1.02)} ${f1(bY + 6)}Q${cx} ${f1(bY + dip + 6)} ${f1(cx + cw * 1.02)} ${f1(bY + 6)}L${f1(cx + cw)} ${f1(bY - 7)}Q${cx} ${f1(bY + dip - 7)} ${f1(cx - cw)} ${f1(bY - 7)}Z" fill="${shade(c, .1)}"/><g stroke="${shade(c, -.35)}" stroke-width=".8" opacity=".8">${Array.from({ length: 13 }, (_, i) => { const x = cx - cw * .95 + i * cw * .158, t = (x - cx) / cw, yb = bY + 6 + dip * (1 - t * t); return `<path d="M${f1(x)} ${f1(yb - 12)}v10"/>`; }).join("")}</g>`; }
+      case "cloche": { const c = pick(r, ["#5a2a3a", "#2a3a4a", "#4a3a2a", "#3a3a3a", "#6a5a3a"]), cw = w * 1.16, dip = h * .1;
+        return side(c) + brim(w * 1.26, h * .07, shade(c, -.08), "flat") + crown(`M${f1(cx - cw)} ${f1(bY + 2)}C${f1(cx - cw * 1.05)} ${f1(bY - h * .98)} ${f1(cx + cw * 1.05)} ${f1(bY - h * .98)} ${f1(cx + cw)} ${f1(bY + 2)}Q${cx} ${f1(bY + dip + 2)} ${f1(cx - cw)} ${f1(bY + 2)}Z`)
+          + band(cw * .99, 6, shade(c, -.45), dip) + `<path d="M${f1(cx - cw * .7)} ${f1(bY - 3)}c-6 -6 -10 -1 -4 3c-6 4 -2 9 4 3z" fill="${shade(c, -.45)}"/>`; }
+      case "pointed": { const c = pick(r, ["#2a2a4a", "#3a1f3a", "#1f2a3a", "#2a2a2a"]), rx = w * 2.05, ry = h * .2, cw = w * 1.06, tx = cx + w * .78, ty = bY - h * 1.58, dip = ry * .62;
+        return side(c) + brim(rx, ry, shade(c, -.06), "flat") + crown(`M${f1(cx - cw)} ${f1(bY)}C${f1(cx - cw * .78)} ${f1(bY - h * .55)} ${f1(cx - w * .2)} ${f1(bY - h * 1.15)} ${f1(tx)} ${f1(ty)}C${f1(cx + w * .2)} ${f1(bY - h * .95)} ${f1(cx + cw * .82)} ${f1(bY - h * .5)} ${f1(cx + cw)} ${f1(bY)}Q${cx} ${f1(bY + dip)} ${f1(cx - cw)} ${f1(bY)}Z`)
+          + `<path d="M${f1(cx - cw * .45)} ${f1(bY - h * .38)}q${f1(w * .25)} ${f1(-h * .04)} ${f1(w * .5)} ${f1(h * .03)}M${f1(cx - w * .1)} ${f1(bY - h * .82)}q${f1(w * .2)} -1 ${f1(w * .36)} 2" stroke="#000" stroke-opacity=".3" stroke-width="1.2" fill="none"/>` + band(cw, 7, "#a8843a", dip); }
+      case "crown": {
+        // a crown sits on the hair: a ring seen a little from the front, its back showing between the points
+        const y0 = cy - h * .9, cw = w * .86, g = "#d4a93a", g2 = "#8a6a1c";
+        const pts = [-1, -.5, 0, .5, 1].map((t, i) => [cx + t * cw, y0 - 8 + 3 * (1 - t * t) - (i % 2 ? 9 : 15)]);
+        return `<path d="M${f1(cx - cw)} ${f1(y0 - 8)}Q${cx} ${f1(y0 - 15)} ${f1(cx + cw)} ${f1(y0 - 8)}" stroke="${g2}" stroke-width="3" fill="none"/>` + pts.map(([x, y]) => `<path d="M${f1(x - 5)} ${f1(y0 - 7)}L${f1(x)} ${f1(y)}L${f1(x + 5)} ${f1(y0 - 7)}Z" fill="${g}" stroke="${g2}" stroke-width=".8"/><circle cx="${f1(x)}" cy="${f1(y + 1.5)}" r="1.6" fill="#f3e3a8"/>`).join("")
+          + `<path d="M${f1(cx - cw)} ${f1(y0)}Q${cx} ${f1(y0 + 6)} ${f1(cx + cw)} ${f1(y0)}L${f1(cx + cw)} ${f1(y0 - 8)}Q${cx} ${f1(y0 - 2)} ${f1(cx - cw)} ${f1(y0 - 8)}Z" fill="${g}" stroke="${g2}" stroke-width="1"/><circle cx="${cx}" cy="${f1(y0 - 1)}" r="2.6" fill="#9a1f2a"/><circle cx="${f1(cx - cw * .55)}" cy="${f1(y0 - 2)}" r="1.9" fill="#1f4a9a"/><circle cx="${f1(cx + cw * .55)}" cy="${f1(y0 - 2)}" r="1.9" fill="#1f7a4a"/>`; }
       case "hood": { const hd = shade(cc, -.12); return `<path d="${smooth([[cx, cy - h * 1.5], [cx + w * 1.35, cy - h * .85], [cx + w * 1.5, cy + h * .4], [cx + w * 1.3, cy + h * 1.1], [cx + w * .95, cy + h * .5], [cx + w * .9, cy - h * .45], [cx, cy - h * .95], [cx - w * .9, cy - h * .45], [cx - w * .95, cy + h * .5], [cx - w * 1.3, cy + h * 1.1], [cx - w * 1.5, cy + h * .4], [cx - w * 1.35, cy - h * .85]], true)}" fill="${hd}"/><path d="M${f1(cx - w * .9)} ${f1(cy - h * .45)}Q${cx} ${f1(cy - h * 1.0)} ${f1(cx + w * .9)} ${f1(cy - h * .45)}" stroke="#000" stroke-opacity=".35" stroke-width="5" fill="none"/>`; }
       case "pointed": { const pc = pick(r, ["#2a2a4a", "#3a1f3a", "#1f2a3a", "#2a2a2a"]); return `<path d="M${f1(cx - w * .95)} ${f1(by)}L${f1(cx + w * .55)} ${f1(top - 70)}L${f1(cx + w * .95)} ${f1(by)}Z" fill="${pc}"/><rect x="${f1(cx - w * .95)}" y="${f1(by - 8)}" width="${f1(w * 1.9)}" height="6" fill="#c9a44a" opacity=".8"/>` + brim(1.7, 8, shade(pc, -.1)); }
       case "crown": return `<path d="M${f1(cx - w * .9)} ${f1(by + 2)}L${f1(cx - w * .95)} ${f1(top - 14)}L${f1(cx - w * .5)} ${f1(top - 2)}L${f1(cx - w * .2)} ${f1(top - 20)}L${cx} ${f1(top - 4)}L${f1(cx + w * .2)} ${f1(top - 20)}L${f1(cx + w * .5)} ${f1(top - 2)}L${f1(cx + w * .95)} ${f1(top - 14)}L${f1(cx + w * .9)} ${f1(by + 2)}Z" fill="#d4a93a" stroke="#7a5a12" stroke-width="1"/><circle cx="${cx}" cy="${f1(by - 6)}" r="3.2" fill="#9a1f2a"/><circle cx="${f1(cx - w * .5)}" cy="${f1(by - 5)}" r="2.4" fill="#1f4a9a"/><circle cx="${f1(cx + w * .5)}" cy="${f1(by - 5)}" r="2.4" fill="#1f7a4a"/>`;
@@ -387,5 +436,9 @@
 
   const url = (P, opts) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg(P, opts));
   const on = () => !A.modules || A.modules.on("people.portraits");
-  A.portrait = { params, svg, url, on, CHOICES, WORDS };
+  // (the drawing's version: a portrait kept with an older one is drawn again, the same choices, when its page opens;
+  // 2: the hats worn, 11 Nov 2026)
+  const V = 2;
+  const fresh = rec => { const p = rec && rec.portrait; if (!p || !rec.img || !/^data:image\/svg/.test(rec.img) || (p.v || 1) >= V) return null; return { img: url(params(rec, p), { label: rec.n || "" }), portrait: Object.assign({}, p, { v: V }) }; };
+  A.portrait = { params, svg, url, on, fresh, V, CHOICES, WORDS };
 })(typeof ATLAS !== "undefined" ? ATLAS : {});

@@ -37,7 +37,7 @@
     if (!A.castData) A.castData = {};
     if (!(id in FILE)) FILE[id] = A.castData[id] ? JSON.parse(JSON.stringify(A.castData[id])) : null;
     if (!rec || rec.off) { if (FILE[id]) A.castData[id] = JSON.parse(JSON.stringify(FILE[id])); else delete A.castData[id]; }
-    else { const r = Object.assign({}, rec); delete r.t; A.castData[id] = r; }
+    else { const r = Object.assign({}, rec); delete r.t; const nw = A.portrait && A.portrait.fresh && A.portrait.fresh(r); if (nw) Object.assign(r, nw); A.castData[id] = r; }
     if (A.story) A.story._ents = null; if (A.state) A.state.cache = {};
   }
   function loadAll() { const all = (S && S.get("people")) || {}; for (const [id, rec] of Object.entries(all)) apply(id, rec); }
@@ -115,6 +115,7 @@
       <p class="t-small">Drawn from what is written of them, and the same each time. Change what it read wrongly here, or change the words and draw again. <button type="button" class="t-link" data-pp="pzreset">Back to what the words say</button></p></details>`;
   }
   function drawNow(r) {
+    cur.portrait = Object.assign({}, cur.portrait, { v: A.portrait.V || 1 });
     const p = A.portrait.params(r, cur.portrait); cur.img = A.portrait.url(p, { label: r.n || "" });
     const keep = dlg.querySelector(".pp-pchange"), open = !!(keep && keep.open);
     dlg.innerHTML = form(cur.id, Object.assign(r, { img: cur.img, portrait: cur.portrait }));
@@ -193,7 +194,7 @@
     if (!pz()) return 0; let n = 0;
     for (const [id, c] of Object.entries(A.castData || {})) {
       if (!c || c.img) continue;
-      const rec = JSON.parse(JSON.stringify(c)); rec.portrait = { seed: 0, over: {} }; rec.img = A.portrait.url(A.portrait.params(rec, rec.portrait), { label: rec.n || "" }); rec.t = Date.now();
+      const rec = JSON.parse(JSON.stringify(c)); rec.portrait = { seed: 0, over: {}, v: A.portrait.V || 1 }; rec.img = A.portrait.url(A.portrait.params(rec, rec.portrait), { label: rec.n || "" }); rec.t = Date.now();
       if (S) S.set("people", id, rec); apply(id, rec); n++;
     }
     if (n) { bump(); changed(); const w = await mirror(); note(`${n} portrait${n === 1 ? "" : "s"} drawn from what is written of them: open anyone to draw theirs again or change it. ${w}`); } else note("Everyone has a picture already.");
