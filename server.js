@@ -9,7 +9,7 @@
 if (+process.versions.node.split(".")[0] < 18) { console.error("\n  Campaign Atlas needs Node.js 18 or newer; this is " + process.version + ". Get the LTS version from https://nodejs.org/\n"); process.exit(1); }
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto"), { spawn, execFile } = require("child_process");
 const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch"), Ask = require("./lib/ask");
-const PlayersLan = require("./lib/players-lan"), RecorderLan = require("./lib/recorder-lan");
+const PlayersLan = require("./lib/players-lan"), RecorderLan = require("./lib/recorder-lan"), Audio = require("./lib/audio"), Voices = require("./lib/voices");
 
 const ROOT = __dirname, PORT = +process.env.ATLAS_PORT || 4747;
 const UI = path.join(ROOT, "ui"), DATA = path.join(ROOT, "data"), WORK = path.join(ROOT, "workspace"), CAMPS = path.join(WORK, "campaigns");
@@ -80,7 +80,7 @@ async function state(fresh) {
 }
 
 /* ---- http */
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".woff2": "font/woff2" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".woff2": "font/woff2", ".ogg": "audio/ogg", ".opus": "audio/ogg", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac", ".md": "text/markdown; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".wasm": "application/wasm" };
 const HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
 const send = (res, code, body, type) => { res.writeHead(code, { "content-type": type || "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff" }); res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body)); };
 const fail = (res, code, msg) => send(res, code, { error: msg });
@@ -118,7 +118,7 @@ function openFolder(dir) {
   try { spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: false }).unref(); } catch (e) {}
 }
 
-let jobs, db, lan, recorder;
+let jobs, db, lan, recorder, audio, voices;
 async function route(req, res) {
   // this computer only, and only pages the app served itself may ask it to do anything
   if (!HOSTS.has(req.headers.host || "")) return fail(res, 403, "This app answers only on this computer.");
@@ -135,6 +135,10 @@ async function route(req, res) {
   // the tutorials' player, the same as a campaign page's (the app's lessons are ui/tour-data.js)
   if (m === "GET" && p === "/tour.js") return file(res, path.join(SHIPPED, "engine", "atlas-tutorial.js"));
 
+  // the sound packs installed (lib/audio.js), for every campaign's page: nothing in them is private
+  if (m === "GET" && p.startsWith("/audio/")) { if (!ours) return fail(res, 403, "forbidden"); const f = audio.fileOf(decodeURIComponent(p.slice(7))); return f ? file(res, f) : fail(res, 404, "not found"); }
+  // the narrator's voices installed (lib/voices.js): the models and their runtime, for the pages' background workers
+  if (m === "GET" && p.startsWith("/voices/")) { if (!ours) return fail(res, 403, "forbidden"); const f = voices.fileOf(decodeURIComponent(p.slice(8))); return f ? file(res, f) : fail(res, 404, "not found"); }
   // a finished campaign, opened from the app: its page, with the app's database in place of claude.ai's
   let mm, mm2;
   if ((mm = p.match(/^\/play\/([a-z0-9-]+)\/(.*)$/))) {
@@ -194,10 +198,28 @@ async function route(req, res) {
           const d = await body(req, 4 << 20);
           if (d && d.forget) { const f = fileOf(d.forget); if (!f) return fail(res, 400, "Not an item of the library."); if (fs.existsSync(f)) fs.unlinkSync(f); return send(res, 200, { ok: true }); }
           const it = d && d.item, f = it && fileOf(it.id);
-          if (!f || it.atlasLib !== 1 || !["system", "world", "look", "place"].includes(it.kind) || !it.data || typeof it.data !== "object") return fail(res, 400, "That cannot be kept in the library.");
+          if (!f || it.atlasLib !== 1 || !["system", "world", "look", "place", "soundscape", "person", "handout", "story"].includes(it.kind) || !it.data || typeof it.data !== "object") return fail(res, 400, "That cannot be kept in the library.");
           fs.mkdirSync(LIBD, { recursive: true }); fs.writeFileSync(f, JSON.stringify(it));
           return send(res, 200, { ok: true });
         } catch (e) { return fail(res, 400, e.message); }
+      }
+    }
+    // the sound packs (lib/audio.js): those installed and those there are; one installed or taken away
+    if (rest === "audio-packs") {
+      if (!authed) return fail(res, 403, "forbidden");
+      if (m === "GET") { let available = null, error = null; try { available = await audio.available(); } catch (e) { error = e.message; } return send(res, 200, { installed: audio.installed(), available, error, busy: audio.busy() }); }
+      if (m === "POST") {
+        try { const d = await body(req, 1 << 10); if (d.remove) return send(res, 200, audio.remove(String(d.remove))); return send(res, 200, await audio.install(String(d.install || ""))); }
+        catch (e) { return fail(res, 400, e.message); }
+      }
+    }
+    // the narrator's voices (lib/voices.js): the engines there are, those installed; one installed or taken away
+    if (rest === "voices") {
+      if (!authed) return fail(res, 403, "forbidden");
+      if (m === "GET") return send(res, 200, { engines: voices.list() });
+      if (m === "POST") {
+        try { const d = await body(req, 1 << 10); if (d.remove) return send(res, 200, voices.remove(String(d.remove))); voices.install(String(d.install || "")).catch(e => note("voices", e)); return send(res, 200, { started: true, engines: voices.list() }); }
+        catch (e) { return fail(res, 400, e.message); }
       }
     }
     // the world map's "Make its 3D map now"
@@ -233,6 +255,33 @@ async function route(req, res) {
     }
     // places the game master made in a city on the page (atlas-locations.js): all of them, in edits/0-places.js (read
     // before the interiors drawn for them, edits/<id>.js); none left, the file goes
+    // handouts written on the page (atlas-handouts.js) and the campaign's own story (atlas-knowledge.js), each a file of
+    // the campaign's edits, written again each time
+    if (m === "POST" && (rest === "save-handouts" || rest === "save-context")) {
+      if (!authed) return fail(res, 403, "forbidden");
+      try {
+        const o = await body(req, 24 << 20), hand = rest === "save-handouts", d = o && typeof o.data === "object" && o.data ? o.data : {};
+        const keep = {}; if (hand) { for (const [id, h] of Object.entries(d)) if (/^[\w-]{1,60}$/.test(id) && h && typeof h === "object" && !h.off) keep[id] = h; } else for (const [k, v] of Object.entries(d)) if (/^[a-z]{2,16}$/i.test(k) && typeof v === "string") keep[k] = v;
+        const dir2 = path.join(dir, "edits"), f = path.join(dir2, hand ? "0-handouts.js" : "0-context.js");
+        if (!Object.keys(keep).length) { if (fs.existsSync(f)) fs.unlinkSync(f); return send(res, 200, { ok: true }); }
+        fs.mkdirSync(dir2, { recursive: true });
+        fs.writeFileSync(f, "// " + (hand ? "Handouts the game master wrote on the page (atlas-handouts.js)" : "The campaign's own story as the game master wrote it on the page (atlas-knowledge.js)") + ", " + new Date().toISOString().slice(0, 10) + ".\n// Change it on the page; this file is written again each time.\nATLAS." + (hand ? "handbookEdit" : "contextEdit") + "(" + JSON.stringify(keep, null, 1) + ");\n");
+        return send(res, 200, { ok: true });
+      } catch (e) { return fail(res, 400, e.message); }
+    }
+    // people the game master made or changed on the page (atlas-people.js): one ATLAS.cast of their own, edits/0-people.js
+    if (m === "POST" && rest === "save-people") {
+      if (!authed) return fail(res, 403, "forbidden");
+      try {
+        const o = await body(req, 8 << 20), pp = o.people && typeof o.people === "object" ? o.people : {};
+        const keep = {}; for (const [id, rec] of Object.entries(pp)) if (/^[\w-]{1,60}$/.test(id) && rec && typeof rec === "object" && !rec.off && typeof rec.n === "string") keep[id] = rec;
+        const dir2 = path.join(dir, "edits"), f = path.join(dir2, "0-people.js");
+        if (!Object.keys(keep).length) { if (fs.existsSync(f)) fs.unlinkSync(f); return send(res, 200, { ok: true }); }
+        fs.mkdirSync(dir2, { recursive: true });
+        fs.writeFileSync(f, "// People the game master made or changed on the page (" + new Date().toISOString().slice(0, 10) + "): written over the campaign's cast\n// (atlas-people.js). Change them on the page; this file is written again each time.\nATLAS.cast(" + JSON.stringify(keep, null, 1) + ");\n");
+        return send(res, 200, { ok: true });
+      } catch (e) { return fail(res, 400, e.message); }
+    }
     if (m === "POST" && rest === "save-places") {
       if (!authed) return fail(res, 403, "forbidden");
       try {
@@ -356,6 +405,17 @@ db = LocalDB.create(path.join(DATA, "play"));
 lan = PlayersLan.create({ DATA, campDir, db, PORT: PORT + 1, UI }); lan.resume();
 // the recorder on a phone of its own (off until the game master opens its link for a campaign): lib/recorder-lan.js
 recorder = RecorderLan.create({ DATA, campDir, db, PORT: PORT + 2, UI }); recorder.resume();
+// the sound packs, installed into data/audio/ when the game master asks: lib/audio.js
+audio = Audio.create({ DATA });
+// the narrator's voices, installed into data/voices/ when the game master asks: lib/voices.js. (Where this app sits in
+// the workspace it was made in, the files the narrator trial already downloaded are copied rather than fetched again.)
+const TRIAL = path.join(ROOT, "..", "dev", "narrator-trial");
+const SEED = { kokoro: n => n.startsWith("model/") ? path.join(TRIAL, "models", "kokoro", n.slice(6)) : path.join(TRIAL, "lib", n),
+  piper: n => { if (n.startsWith("ort/")) return path.join(TRIAL, "lib", "ort118", n.slice(4)); if (n.startsWith("phonemize/")) return path.join(TRIAL, "lib", "piper-wasm", n.slice(10));
+    const m = n.match(/^models\/(?:en_US-)?(ljspeech|libritts)/); if (m) return path.join(TRIAL, "models", "piper", m[1], /MODEL_CARD$/.test(n) ? "MODEL_CARD" : path.basename(n));
+    return path.join(TRIAL, "lib", "piper", n); },
+  chatterbox: n => n.startsWith("model/") ? path.join(TRIAL, "models", n.slice(6)) : path.join(TRIAL, "lib", "tf4", n) };
+voices = Voices.create({ DATA, seed: fs.existsSync(TRIAL) ? (id, n) => SEED[id] && SEED[id](n) : null });
 const server = http.createServer((req, res) => route(req, res).catch(e => { try { fail(res, 500, e.message); } catch (x) {} }));
 server.on("error", e => { if (e.code === "EADDRINUSE") { console.log(`Campaign Atlas is already running: open http://localhost:${PORT}`); process.exit(0); } throw e; });
 server.listen(PORT, "127.0.0.1", () => {

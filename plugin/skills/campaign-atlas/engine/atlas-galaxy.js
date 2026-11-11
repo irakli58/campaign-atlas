@@ -1176,6 +1176,7 @@
   // (a leg passes through a region where either end lies in it, or where it comes within the region's reach)
   const legThrough = (p, q, r) => { const dx = q.x - p.x, dy = q.y - p.y, L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((r.x - p.x) * dx + (r.y - p.y) * dy) / L2)); return Math.hypot(p.x + dx * t - r.x, p.y + dy * t - r.y) <= r.r; };
   function rollEncounters(path, rnd) {
+    if (A.modules && !A.modules.on("makeup.encounters")) return [];
     const g = G(), out = [], rr = rnd || Math.random, any = encLines((edits()["~enc"] || {}).any);
     for (let k = 1; k < path.length; k++) {
       const p = findSys(path[k - 1]), q = findSys(path[k]); if (!p || !q) continue;

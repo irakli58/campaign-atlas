@@ -7,11 +7,12 @@
    (localStorage "atlas-mylib", shared by the campaigns opened from the same place). Nothing of it is in a campaign's
    files, so a campaign shared with others carries none of it.
    ATLAS.myLibrary: list(kind) → Promise of items, save(item) → Promise of the item kept, forget(id), where(), on(fn).
-   An item: { atlasLib: 1, id, kind: "system" | "world" | "look" | "place", name, say, from, t, data }. */
+   An item: { atlasLib: 1, id, kind: "system" | "world" | "look" | "place" | "soundscape", name, say, from, t, data }.
+   (A soundscape is a scene of sounds, from the Sounds panel, atlas-sound.js: its layers and its sounds now and then.) */
 (function (A) {
   "use strict";
   if (typeof window === "undefined") return;
-  const KEY = "atlas-mylib", KINDS = ["system", "world", "look", "place"], subs = [];
+  const KEY = "atlas-mylib", KINDS = ["system", "world", "look", "place", "soundscape", "person", "handout", "story"], subs = [];
   const app = () => window.ATLAS_APP && window.ATLAS_APP.library;
   const local = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } };
   const keepLocal = list => { try { localStorage.setItem(KEY, JSON.stringify(list)); return true; } catch (e) { return false; } };

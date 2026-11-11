@@ -114,6 +114,7 @@
   // the campaign's own tables first (references/table.md: an "Encounters on the road" table, "Rumours"...)
   function fromTables(re, r) { const T = A.tablesData || {}, k = Object.keys(T).find(n => re.test(n)); return k && T[k] && T[k].length ? { text: String(pick(r, T[k])), from: k } : null; }
   function meet(r, gr, danger, kind) {
+    if (A.modules && !A.modules.on("makeup.encounters")) return null;
     const odds = (danger ? .55 : MADE.has(kind) && kind !== "sea" ? .22 : .35) + (gr === "mountains" || gr === "marsh" ? .1 : 0);
     if (r() > odds) return null;
     const own = fromTables(/encounter|road|travel|wild|journey/i, r); if (own) return own;
@@ -143,6 +144,7 @@
   const tripOf = id => (follow() && id ? store().get("journeys", id) : null) || null;
   const putTrip = (id, t) => { const S = store(); if (S) S.set("journeys", id, t); };
   function start(H, plan, food) {
+    if (A.modules && !A.modules.on("survival")) food = 0;
     const P = H.party(), id = "j" + Date.now().toString(36), people = Math.max(1, Object.keys(A.pcsData || {}).length || 4);
     putTrip(id, { from: P.at, to: plan[plan.length - 1], plan: plan.slice(), m: nowM(), t: Date.now(), food: food > 0 ? { days: food, people } : null, days: [] });
     return id;

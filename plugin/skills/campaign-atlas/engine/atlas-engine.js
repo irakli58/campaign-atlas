@@ -608,7 +608,8 @@ var ATLAS = (function () {
       const MK = markers(), cl = M.clues || {}, pk = keyOf(id);
       for (const [mid, x, y] of (F.M || [])) {
         const k = MK[mid[0]] || MK.C, isClue = dirOf(mid) === "clues", c = isClue ? cl[mid] : null;
-        if (isClue && (A.state.noClues || (c && c.arch) || (!c && A.clueGone && A.clueGone(pk, mid)))) continue;
+        if (isClue && (A.state.noClues || (c && c.arch) || (!c && A.clueGone && A.clueGone(pk, mid)) || (A.modules && !A.modules.on("investigation.clues")))) continue;
+        if ((dirOf(mid) === "traps" || dirOf(mid) === "riddles") && A.modules && !A.modules.on("caves.traps")) continue;
         const g = c && c.k && A.clueGlyph ? A.clueGlyph(c.k) : "";
         s += `<g class="lm-mk${isClue ? " lm-mk-c" : ""}" data-ref="${mid}"><circle cx="${x * C}" cy="${y * C}" r="9.5" fill="${k[0]}" stroke="${P.halo}" stroke-width="2"/><text x="${x * C}" y="${y * C + 3.2}" text-anchor="middle" font-family="${mono}" font-size="8.5" font-weight="700" fill="#fff">${mid}</text>${g ? `<g transform="translate(${(x * C + 9).toFixed(1)} ${(y * C - 9).toFixed(1)})"><circle r="6.6" fill="#fff" stroke="${k[0]}" stroke-width="1.5"/><path d="${g}" fill="none" stroke="${k[0]}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></g>` : ""}</g>`;
       }

@@ -499,6 +499,8 @@
     openDialog({ type, ext, at: [Math.round(b.x * 100) / 100, Math.round(b.y * 100) / 100], ang: Math.round((b.a || 0) * 1000) / 1000, here: true }, true);
   };
   L.setCity = ctl => { cityCtl = ctl; };
+  // (the Gazetteer's "+ A place", atlas-encyclopedia.js: in the city when there is one, else a place on no map yet)
+  L.hasCity = () => !!cityCtl; L.newInCity = () => { if (cityCtl) L.create(cityCtl); };
   L.save = keep; L.forget = forget; L.place = (id, def) => startPlacing(id, def, !A.customs[id]);
   L.init = (store) => {
     S = store;

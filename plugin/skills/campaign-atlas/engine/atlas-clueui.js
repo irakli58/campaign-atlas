@@ -29,11 +29,14 @@
   const go = ref => { const e = ent(ref); if (!e) return `<span class="ic-gone">${esc(St.name(ref))}</span>`; return `<button type="button" class="ic-ref k-${esc(e.kind)}" data-icgo="${esc(ref)}" title="${esc(St.kindName[e.kind] || "")}">${e.kind === "clue" ? glyph(e.k) : ""}${esc(e.name)}</button>`; };
 
   /* ================================================================ the tab */
+  // (a view of a part switched off for the campaign is not shown: clues, knowledge)
+  const VMOD = { clues: "investigation.clues", people: "people.knowledge" };
+  const viewOn = k => !VMOD[k] || !A.modules || A.modules.on(VMOD[k]);
   const VIEWS = [["clues", "Clues", "clue"], ["people", "People and what they know", "know"], ["loose", "Questions and loose ends", "ask"], ["items", "Story elements", "link"], ["history", "History", "tonight"]];
   function html() {
     const w = St.warnings();
     const head = `<div class="ic-head"><div><h3>${T.icon("clue")} The investigation</h3><p class="t-small">Every clue in the campaign, where it lies, what it joins to and who knows of it. Only you see this.</p></div><span class="t-sp"></span><button type="button" class="t-btn prim" data-ica="new">${T.icon("clue")} A new clue</button></div>
-      <nav class="ic-views" role="tablist">${VIEWS.map(([k, l, ic]) => `<button type="button" role="tab" data-icv="${k}" aria-selected="${UI.view === k}">${T.icon(ic)}${esc(l)}${k === "loose" && w.length ? ` <b class="ic-badge">${w.length + Object.values(St.questions()).filter(q => q.state === "open" || q.state === "develop").length}</b>` : ""}</button>`).join("")}</nav>
+      <nav class="ic-views" role="tablist">${VIEWS.filter(v => viewOn(v[0])).map(([k, l, ic]) => `<button type="button" role="tab" data-icv="${k}" aria-selected="${UI.view === k}">${T.icon(ic)}${esc(l)}${k === "loose" && w.length ? ` <b class="ic-badge">${w.length + Object.values(St.questions()).filter(q => q.state === "open" || q.state === "develop").length}</b>` : ""}</button>`).join("")}</nav>
       ${UI.undo ? `<div class="ic-toast"><span>${esc(UI.undo.text)}</span>${UI.undo.batch ? `<button type="button" class="t-btn" data-ica="undobatch" data-b="${esc(UI.undo.batch)}">Undo</button>` : ""}<button type="button" class="t-mini" data-ica="toastx" aria-label="Close">×</button></div>` : ""}
       ${!St.ready() ? `<p class="ic-warn">The page's store is not ready: changes cannot be kept yet.</p>` : ""}`;
     const body = { clues: cluesView, people: peopleView, loose: looseView, items: itemsView, history: historyView }[UI.view] || cluesView;
@@ -72,7 +75,7 @@
   }
   function clueDetail(ref) {
     const x = clueOf(ref); if (!x || !x.c) return `<p class="kn">That clue is no longer here.</p>`;
-    const { pl, id, c } = x, M = A.get(pl, 99), s = St.status(pl, id), mk = St.markerOf(pl, id), rooms = Object.keys(M.rooms || {}).filter(r => /^R\d/.test(r)).map(r => [r, `${r} ${A.nameOf(M, r) || ""}`]);
+    const { pl, id, c } = x, M = A.get(pl, 99), s = St.status(pl, id), mk = St.markerOf(pl, id), rooms = [...new Set(Object.keys(M.rooms || {}).concat((M.floors || []).flatMap(F => (F.R || []).map(r => r[0]))))].filter(r => /^R\d/.test(r)).sort((p, q) => +p.slice(1) - +q.slice(1)).map(r => [r, `${r} ${A.nameOf(M, r) || ""}`]);   // (the rooms on its floors too: a place made on the page has no room descriptions yet)
     const hist = St.history(e => e.coll === "cluebook" && e.key === pl + "/" + id && !e.undone)[0];
     const busy = UI.busy && UI.busy.ref === ref ? UI.busy.what : "";
     const places = (A.order || []).filter(q => A.meta[q] && q !== pl).map(q => [q, A.meta[q].name || q]);
@@ -274,7 +277,7 @@
     const sel = UI.item && St.items()[UI.item] ? UI.item : null, cur = sel ? St.items()[sel] : {};
     return `<div class="ic-g2 ic-top"><section class="ic-sec2"><h5>Story elements</h5><p class="t-small">The factions, quests, events and mysteries the campaign speaks of but has no page for: made here, they can be joined to clues, people and places. The rest of the campaign (people, places, villains' plans, sessions, the story bible) is already here to join to.</p>
         ${its.length ? `<ul class="ic-lks">${its.map(it => `<li><b>${esc(it.n)}</b> <span class="ic-rel">${esc(label(St.ITEMS, it.kind, ""))}</span> ${srcChip(it.src)}${it.d ? `<p class="kn">${esc(it.d)}</p>` : ""}<p class="kn">${St.linksOf("item:" + it.id).length} connections</p><span class="ic-la"><button type="button" class="t-mini" data-ica="iedit" data-id="${esc(it.id)}">Change</button><button type="button" class="t-mini ic-del" data-ica="idel" data-id="${esc(it.id)}">Remove</button></span>${St.linksOf("item:" + it.id).length ? `<ul class="ic-tree">${St.linksOf("item:" + it.id).map(l => `<li><span class="ic-rel">${esc(l.dir === 1 ? l.rel : St.relBack(l.rel))}</span> ${go(l.other)}</li>`).join("")}</ul>` : ""}</li>`).join("")}</ul>` : `<p class="kn">None made yet.</p>`}</section>
-      <section class="ic-sec2"><h5>${sel ? "Change it" : "Make one"}</h5><form class="ic-form" data-icform="item" data-id="${esc(sel || "")}"><div class="ic-g2"><label>Kind<select class="t-in" name="kind">${opt(St.ITEMS, cur.kind || "mystery")}</select></label><label>Name<input class="t-in" name="n" value="${esc(cur.n || "")}" maxlength="120" required></label></div><label>What it is<textarea class="t-in" name="d" rows="3" maxlength="1500">${esc(cur.d || "")}</textarea></label><label>When (for an event)<input class="t-in" name="when" value="${esc(cur.when || "")}" maxlength="80"></label><div class="t-row"><button class="t-btn prim">${sel ? "Save" : "Make it"}</button>${sel ? `<button type="button" class="t-mini" data-ica="icancel">Cancel</button>` : ""}</div></form></section></div>`;
+      <section class="ic-sec2"><h5>${sel ? "Change it" : "Make one"}</h5><form class="ic-form" data-icform="item" data-id="${esc(sel || "")}"><div class="ic-g2"><label>Kind<select class="t-in" name="kind">${opt(St.ITEMS, cur.kind || UI.itemKind || "mystery")}</select></label><label>Name<input class="t-in" name="n" value="${esc(cur.n || "")}" maxlength="120" required></label></div><label>What it is<textarea class="t-in" name="d" rows="3" maxlength="1500">${esc(cur.d || "")}</textarea></label><label>When (for an event)<input class="t-in" name="when" value="${esc(cur.when || "")}" maxlength="80"></label><div class="t-row"><button class="t-btn prim">${sel ? "Save" : "Make it"}</button>${sel ? `<button type="button" class="t-mini" data-ica="icancel">Cancel</button>` : ""}</div></form></section></div>`;
   }
 
   /* ---- the history: every change, by whom (you, or an approved suggestion), each undoable */
@@ -528,5 +531,8 @@
     if (A.ux.isUndo(e)) { e.preventDefault(); flash(St.undoLast() ? "Undone." : "Nothing to undo."); api.render(); return; }
     if (A.ux.isRedo(e)) { e.preventDefault(); flash(St.redo() ? "Done again." : "Nothing to do again."); api.render(); }
   });
-  A.clueUI = { open: ref => openRef(ref), autoConnect, placeNext: null };
+  A.clueUI = { open: ref => openRef(ref), autoConnect, placeNext: null,
+    // (the Gazetteer's New buttons, atlas-encyclopedia.js: a clue in a place, a story element of a kind)
+    newClue: pl => { const ref = newClue(pl); if (ref) { UI.view = "clues"; UI.sel = ref; flash("A new clue, without a marker yet: name it, then place it on the map."); api.render(); } return ref; },
+    newItem: kind => { UI.view = "items"; UI.item = null; UI.itemSeed = ""; UI.itemKind = kind || null; api.render(); } };
 })(ATLAS);

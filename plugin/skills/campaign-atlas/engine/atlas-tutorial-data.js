@@ -14,6 +14,42 @@
   "use strict";
   const has = s => () => !!document.querySelector(s);
   const chapters = [
+    { id: "handmade", title: "Making a campaign by hand", lessons: [
+      { id: "encyclopedia", title: "The Gazetteer, the campaign's encyclopedia", summary: "Everything the campaign holds beside its places: people, clues, handouts and story, each with its New; and where to begin in an empty campaign.", features: ["encyclopedia", "handmade"], needs: has("#encyc"), steps: [
+        { say: "Above the Gazetteer's places is the campaign's index: its people, its clues, its handouts and its story, each counted.", sel: "#encyc", act: "look" },
+        { say: "Open one to see what is in it. Each entry opens where it is written; each part has its New button. Nothing is kept here twice: it reads what each part keeps.", sel: ["#encyc .enc-sec", "#encyc"], act: "look" },
+        { say: "A campaign started empty, in the Atlas app's By hand, or with atlas.js init and blank, opens on where to begin. Nothing is invented for it: Claude helps only when you ask.", sel: [".enc-empty", "#dossier"], act: "look", optional: true },
+        { say: "A place needs only a name. Where there is a city it goes in the city; else it is a place of the campaign, on no map yet, with a plan for its kind to change in the map editor.", sel: ["[data-enca='place']", "#encyc"], act: "look" }
+      ] },
+      { id: "people", title: "People of your own", summary: "A person made with only a name, and the rest when you know it: their face, where they are, what they want and hide, what they carry, their statistics.", features: ["peopleeditor"], needs: has("[data-enca='person']"), steps: [
+        { say: "A person: a name is all they need.", sel: "[data-enca='person']", act: "click", try: "Click + A person.", wait: 500 },
+        { say: "Their occupation, age, a picture, where they are: a place and a room, where they then stand on its map, and their faction.", sel: ["#ppDlg .pp-top", "#ppDlg"], act: "look" },
+        { say: "What they are like, what drives them, what they hide and the lie they tell, what they carry, notes for playing them, statistics and attributes of your own. Each is there when you want it, never required.", sel: ["#ppDlg .loc-more", "#ppDlg"], act: "look" },
+        { say: "Suggest what is still empty asks Claude, when you choose to: each suggestion is shown on its own, to use or leave. Nothing is kept until you save. They are one of the cast, so their card, what they know, Talk and the board all know them.", sel: ["#ppDlg .loc-ai", "#ppDlg"], act: "look" },
+        { say: "", sel: "#ppDlg [data-pp='x']", act: "click", auto: true }
+      ] },
+      { id: "handwriter", title: "Writing a handout", summary: "A letter, a newspaper, a telegram, a police report, a recording: written on the page from a blank page or a template, its players' version beside it, given in the session.", features: ["handoutwriter"], needs: has("[data-enca='handout']"), steps: [
+        { say: "A handout of your own.", sel: "[data-enca='handout']", act: "click", try: "Click + A handout.", wait: 500 },
+        { say: "Start from a blank page or a template: a 1920s newspaper, a letter, a telegram, a police report, a hospital record. Choose what it is and the look of its age.", sel: ["#hwDlg select[name='tpl']", "#hwDlg"], act: "look" },
+        { say: "Write it, with bold, italic, headings if you like; add a picture, a signature, a stamp, aged paper.", sel: ["#hwDlg textarea[name='text']", "#hwDlg"], act: "look" },
+        { say: "Beside it, what the players will see. Your notes on it are never shown to them, nor sent to their screen. Unticked Ready, it is a draft only you see.", sel: ["#hwDlg .hw-right", "#hwDlg"], act: "look" },
+        { say: "Saved, it is among the campaign's handouts: found where you said, given to the players' screen when you choose, theirs to keep, printed with the rest.", sel: ["#hwDlg [data-hw='save']", "#hwDlg"], act: "look" },
+        { say: "", sel: "#hwDlg [data-hw='x']", act: "click", auto: true }
+      ] },
+      { id: "plotstory", title: "Plot points, mysteries and quests", summary: "The story as you write it: what sets each moment off, what follows, the branches the players' choices open; a mystery's truth, suspects and clues; quests.", features: ["plotpoints", "mysteries"], needs: () => !!(window.ATLAS && ATLAS.plot), steps: [
+        { say: "Plot and story is a tab of At the table.", sel: ["[data-t='tab'][data-tab='plot']", "#v-table"], act: "click", try: "Open Plot and story.", wait: 600 },
+        { say: "A plot point: what happens, what sets it off, what follows. Atlas can watch for its moment, a clue found, another plot point, an event, and say when it has come. You mark it happened.", sel: ["[data-pl='new'][data-k='plot']", "#tvBody"], act: "look" },
+        { say: "Its branches: if the players do this, that plot point comes next. In an order, or in none at all.", sel: ["#tvBody .pl-list", "#tvBody"], act: "look", optional: true },
+        { say: "A mystery holds its question, the truth, the suspects, and its clues, each essential, optional or misleading. Atlas only says what it may lack, a clue nobody can reach, fewer than three ways to the answer: it never changes your story.", sel: ["[data-pl='new'][data-k='mystery']", "#tvBody"], act: "look" }
+      ] },
+      { id: "knows", title: "What Atlas knows", summary: "The campaign's own story, written or read from a document; what each part of Atlas switched on could use; asking Atlas what it knows.", features: ["knowledgepanel"], needs: () => !!(window.ATLAS && ATLAS.knowledge), steps: [
+        { say: "What Atlas knows is a tab of At the table.", sel: ["[data-t='tab'][data-tab='know']", "#v-table"], act: "click", try: "Open What Atlas knows.", wait: 600 },
+        { say: "The campaign's story, in as many of its parts as you like, or a whole document pasted or read from a file: text, Markdown, Word or PDF. Kept word for word; the copilot and Ask the campaign read it with everything else.", sel: ["#knCtx", "#tvBody"], act: "look" },
+        { say: "Read it into entries asks Claude to find the people, places, secrets and plot points it holds. Each is shown to tick or leave; only what you tick is made.", sel: ["[data-know='read']", "#knCtx"], act: "look", optional: true },
+        { say: "For each part of Atlas switched on: ready, ready in part, or needs information, from what the campaign actually holds. Each gap opens where it is filled in. It is never a list you must finish before playing.", sel: [".kn-rs", "#tvBody"], act: "look" },
+        { say: "And ask what it knows: what can be seen for certain is listed at once; anything else Claude answers from the campaign's own words, facts told apart from suggestions.", sel: ["form[data-knform='ask']", "#tvBody"], act: "look", optional: true }
+      ] }
+    ] },
     { id: "start", title: "Welcome to Atlas", lessons: [
       { id: "tour", title: "Finding your way", summary: "The page your campaign lives on: its book of places, the tools for game night, and where help is.", features: ["gazetteer", "search", "views", "help"], steps: [
         { say: "This is your campaign's page: everything the council wrote, every place mapped, and the tools to run it. Let's look around.", sel: "header, .mast, h1", act: "look" },
@@ -49,10 +85,11 @@
         { say: "Player-safe hides every secret, so you can show the page itself to the table if you like.", sel: "#m-player", act: "click", try: "Click Player-safe." },
         { say: "And back to your own view.", sel: "#m-keeper", act: "click", try: "Click your own view again." }
       ] },
-      { id: "modules", title: "What this campaign uses", summary: "Switch off the parts of Atlas a campaign does not need; nothing is deleted.", features: ["modules"], needs: has(".featbtn[data-mf-open]"), steps: [
+      { id: "modules", title: "What this campaign uses", summary: "Switch off the parts of Atlas a campaign does not need; nothing is deleted.", features: ["modules", "modparts"], needs: has(".featbtn[data-mf-open]"), steps: [
         { say: "The gear at the top chooses what this campaign uses. Switch off what it does not need: it is hidden and its work stops. Nothing is deleted, and switching it back on picks up where it was.", sel: ".featbtn[data-mf-open]", act: "click", try: "Click the gear.", wait: 700 },
         { say: "A preset sets them all at once: Minimal, Detective, Sandbox world, Traditional fantasy, Science fiction or Everything. As before keeps everything as it was.", sel: ".mf-dlg .mf-pres", act: "look" },
         { say: "Or choose each part yourself: off, or how much of it. A line under a part tells you when it leans on another. Safety is always on.", sel: ".mf-dlg .mf-seg", act: "look" },
+        { say: "Some have parts of their own, each switched on its own: the investigation's clues, its board, mysteries and Auto-Connect; what people know and their relationships; the world's events, rumours and factions; traps; random encounters. Handouts, plot points, survival and Claude's help are switches of their own. Off, a part is hidden everywhere, makes nothing, and asks Claude for nothing.", sel: [".mf-dlg .mf-parts", ".mf-dlg"], act: "look" },
         { say: "Save these as my own keeps your choices as a preset of your own, for the other campaigns you open here.", sel: ".mf-dlg [data-mf-save]", act: "look" },
         { say: "Done closes it. The same choices are on At the table, under Start here.", sel: ".mf-dlg [data-mf-close]", act: "click", auto: true }
       ] }
@@ -378,6 +415,28 @@
         { say: "The story: the council's bible, the judge's grades, and the story as you gave it.", sel: "#v-story", act: "look", optional: true },
         { say: "Every place has its own music, made by the page itself. Play it from here.", sel: ".musicbar, #v-music", act: "look" },
         { say: "That is Atlas. Help and tutorials is always here for any lesson again.", sel: ".tu-helpbtn", act: "look" }
+      ] },
+      { id: "sounds", title: "Sounds at the table", summary: "Real recordings for a scene: rain, a tavern, an engine's hum, a door, a scream; scenes of several at once, your own sounds, and the narrator's cues.", features: ["sounds"], needs: has("#snd-btn"), steps: [
+        { say: "Beside the music: Sounds. Real recordings, not made by the page: rain and wind, a tavern, a forest at night, an engine's hum, a door, a scream.", sel: "#snd-btn", act: "click", try: "Click Sounds.", wait: 500 },
+        { say: "Search by what the scene is. Type a storm, a tavern, or an abandoned spaceship, and it finds the scenes and the sounds for it.", sel: ".snd-q", act: "type", value: "storm", try: "Type a word into the search." },
+        { say: "", sel: ".snd-q", act: "type", value: "", auto: true },
+        { say: "A scene starts several sounds at once. Its ambience loops with no seam, and its occasional sounds come now and then: a different take each time, a little to the left or the right.", sel: [".snd-sec .snd-grid", ".snd-panel"], act: "look" },
+        { say: "Every sound is here too: those that loop, to start and stop, and those that play once, at a click. What is playing is listed with its own volume, and Stop all fades everything out.", sel: [".snd-bar", ".snd-panel"], act: "look" },
+        { say: "Keep what is playing as a scene of your own: in this campaign, and in your library for every campaign. Add your own sound files too: they stay in this browser.", sel: [".snd-foot", ".snd-panel"], act: "look" },
+        { say: "Each place can start its scene when it is opened, and the day's weather adds its rain, wind and thunder. While the narrator reads, the sounds step back; and in the text he reads, a cue in square brackets, sound and the sound's name, plays it where it is written.", sel: [".snd-foot", ".snd-panel"], act: "look" },
+        { say: "Credits lists every recording, where it comes from and its licence. In the Atlas app, the sound packs install from here with a click.", sel: ["[data-snd='credits']", ".snd-panel"], act: "look" },
+        { say: "", sel: ".snd-close", act: "click", auto: true }
+      ] },
+      { id: "narrator", title: "The narrator and recorded music", summary: "A place read aloud: by natural AI voices made on your own computer, four narrators to choose from, how names sound; and recorded music for a place.", features: ["narrator", "recordedmusic"], needs: has("[data-narrator], [data-narrate]"), steps: [
+        { say: "Read aloud reads a place's first impressions, or a room as you open it, with a storyteller's pauses. While he reads, the music and the sounds step back.", sel: ["#dossier [data-narrate]", "[data-narrate]"], act: "look" },
+        { say: "Narrator opens his settings.", sel: "[data-narrator]", act: "click", try: "Click Narrator.", wait: 600 },
+        { say: "In the Atlas app, the AI narrator reads with natural voices made on your own computer by free models: nothing is sent anywhere. Install Kokoro once, below, and choose one of four narrators, each with voices to choose from: science fiction, a calm woman close in your ear; Call of Cthulhu, an old British man; modern; and fantasy, a British woman telling a tale.", sel: ["#narDlg .nar-ai", "#narDlg"], act: "look" },
+        { say: "Each voice starts as the model makes it. Speed changes it without a trace; a changed pitch adds a slight mechanical edge, so it is there to try, with the pitch suggested for that narrator. The soft echo is for a ship's speakers.", sel: ["#narDlg [data-naradj='pitch']", "#narDlg [data-nar='pitch']"], act: "look" },
+        { say: "Outside the app, he reads with this browser's own voices, deeper or higher, slower or faster.", sel: ["#narDlg [data-nar='voice']", "#narDlg"], act: "look", optional: true },
+        { say: "How names sound: write a name, an equals sign, and how to say it, one a line, and every voice says it that way.", sel: ["#narDlg [data-nar='say']", "#narDlg"], act: "look" },
+        { say: "Hear the narrator reads a little of the open place with what you chose.", sel: ["#narDlg [data-nartest]", "#narDlg"], act: "look" },
+        { say: "", sel: "#narDlg [data-narclose]", act: "click", auto: true },
+        { say: "Recorded music: with the music packs installed in the app, a place's own song can be a recorded track, chosen by its mood, by composers who let their music be used with credit. Open a place's song card and choose Recorded music.", sel: [".songcard .sc-edit", ".songcard", ".musicbar"], act: "look" }
       ] }
     ] }
   ];
@@ -414,7 +473,7 @@
     dashboard: ["The world at a glance", "dashboard overview glance mode manual assisted autonomous by hand helped on its own safeguards approve waiting"], history: ["The world's history", "history timeline record past filter snapshot save moment go back rollback players know"],
     deeds: ["Consequences", "consequence deed party did reaction follows simulator council days weeks"], money: ["Money and goods", "money loot treasure purse stash prices merchant shop buy sell economy rarity quality condition coins gold credits"],
     investigation: ["The investigation", "clues connections"], clues: ["Clues", "clue evidence"], knowledge: ["Who knows what", "knowledge"], autoconnect: ["Auto-Connect", "connect suggest"],
-    consistency: ["Consistency", "contradiction check fits"], bible: ["The story bible", "story council tolkien"], music: ["Music", "music theme sound"],
+    consistency: ["Consistency", "contradiction check fits"], bible: ["The story bible", "story council tolkien"], music: ["Music", "music theme sound"], encyclopedia: ["The Gazetteer as the campaign's encyclopedia", "encyclopedia index gazetteer people clues handouts story new entries list"], handmade: ["A campaign made by hand", "blank slate empty handmade by hand from scratch no ai start where to begin"], peopleeditor: ["People of your own", "npc person character create make portrait picture occupation age faction location room motive goals secret lie inventory belongings statistics attributes"], handoutwriter: ["Writing a handout", "handout write letter newspaper telegram police report medical record diary photograph map recording template blank page signature stamp aged paper draft preview give print"], plotpoints: ["Plot points", "plot point story arc trigger sets off happens consequence follows branch branches order nonlinear quest objective"], mysteries: ["Mysteries", "mystery truth suspects clues essential optional misleading false lead conclusion solvable three clue rule"], knowledgepanel: ["What Atlas knows", "knowledge readiness ready missing information campaign story context premise document import word pdf read into entries ask what atlas knows"], modparts: ["Switching parts on and off", "modules features switches parts clues board mysteries auto-connect knowledge relationships events rumours factions traps encounters handouts plot quests survival claude help ai"], narrator: ["The narrator", "narrator read aloud voice ai kokoro piper chatterbox natural voices pitch speed echo deeper slower how names sound pronunciation say install offline sci-fi cthulhu modern fantasy"], recordedmusic: ["Recorded music", "recorded music track song composer scott buckley kevin macleod music packs mood own song credit"], sounds: ["Sounds at the table", "sounds soundboard sound effects ambience ambient loop scene rain storm tavern spaceship door scream recordings layers volume stop all own files credits packs install narrator cue duck weather"],
     tablehome: ["Start here", "game night overview tools"], combat: ["Combat and dice", "initiative wounds sanity combat"], make: ["Make it up", "random tables person place"], board: ["The board", "corkboard string conspiracy"],
     party: ["The players' characters", "party pcs notes"], safety: ["Safety tools", "lines veils x-card"], export: ["Print and export", "book print vtt foundry roll20"]
   };
@@ -422,7 +481,7 @@
   // map's buttons. dev/tutorial-coverage.js finds every one of these in the engine; one with no feature here, or a feature
   // no lesson teaches, fails it: a new tool is not finished until it has its lesson.
   const COVERS = {
-    tab: { dims: "dimensions", home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", rumours: "rumours", factions: "factions", dash: "dashboard", history: "history", deeds: "deeds", money: "money", recorded: "sessions" },
+    tab: { plot: "plotpoints", know: "knowledgepanel", dims: "dimensions", home: "tablehome", screen: "players-screen", tonight: "tonight", clocks: "clocks", combat: "combat", make: "make", ask: "ask", board: "board", party: "party", safety: "safety", export: "export", clues: "investigation", copilot: "copilot", consistency: "consistency", time: "worldtime", rumours: "rumours", factions: "factions", dash: "dashboard", history: "history", deeds: "deeds", money: "money", recorded: "sessions" },
     dock: { dice: "dice", person: "person", stuck: "stuck", ask: "ask", talk: "talk", time: "worldtime", screen: "players-screen" },
     view: { gaz: "gazetteer", table: "views", world: "worldmap", worldsel: "worldmap", galaxy: "galaxy", story: "bible", music: "music" },
     tool: { select: "mapeditor", room: "mapeditor", door: "mapeditor", stairs: "mapeditor", erase: "mapeditor", carve: "caves", terrain: "caves", traps: "traps", riddles: "riddles", furnish: "furnish", clues: "clues", marks: "mapmarks" },

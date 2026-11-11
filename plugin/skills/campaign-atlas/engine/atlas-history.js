@@ -281,7 +281,9 @@
     init(store) {
       for (const c of ["history", "events", "news", "snaps", "clues", "status", "clock", "eventdefs"]) store.watch(c, () => { loaded.add(c); if (["clues", "status", "history"].includes(c)) discoveries(); if (!UI.write) paint(); });
       // (the session moved on at the table: the world's time it began at, for the timeline's bands)
-      store.watch("log", L => { const n = +((L.now || {}).n); if (n && !(L["s" + n] || {}).m0 && loaded.has("clock")) store.set("log", "s" + n, Object.assign({}, L["s" + n] || {}, { m0: nowM() })); });
+      // (a session begun at the world's very first minute begins at 0: so "not yet recorded" is no number at all, not
+      // a falsy one, or the record is written again for ever; a handmade campaign starts there, 11 Nov 2026)
+      store.watch("log", L => { const n = +((L.now || {}).n); if (n && typeof (L["s" + n] || {}).m0 !== "number" && loaded.has("clock")) store.set("log", "s" + n, Object.assign({}, L["s" + n] || {}, { m0: nowM() || 0 })); });
     } });
 
   A.history = { add, remove, all, list, recent, snapshot, restore, snaps, KIND, keep: c => { if (!COLLS.includes(c)) COLLS.push(c); } };

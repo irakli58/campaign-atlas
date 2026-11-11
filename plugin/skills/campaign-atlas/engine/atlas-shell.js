@@ -94,7 +94,7 @@
       ${A.modules ? `<button type="button" class="featbtn keeper" data-mf-open title="What this campaign uses: switch parts of Atlas on and off" aria-label="What this campaign uses"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>` : ""}
     </div>
   </header>
-  ${A.music ? `<div class="musicbar">${A.music.html()}</div>` : ""}
+  ${A.music ? `<div class="musicbar">${A.music.html()}${A.sound ? A.sound.html() : ""}</div>` : ""}
   <nav class="views" aria-label="View">
     ${A.nav ? A.nav.btnsHTML() : ""}<button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
     ${A.worldMount && A.worldList && A.worldList().length ? `<button type="button" id="v-world" aria-pressed="false">World map</button>${A.worldList().length > 1 ? `<select id="v-worldsel" class="v-worldsel" aria-label="Which world" title="This campaign's worlds: its own, and the others it holds (a planet, a moon, a plane's layer)">${A.nav ? A.nav.worldOptions("main") : A.worldList().map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")}</select>` : ""}` : ""}
@@ -115,7 +115,7 @@
   ${A.galaxyParams && A.galaxyMount ? `<section class="galaxyv keeper" id="galaxyv" aria-label="The galaxy"></section>` : ""}
   ${A.cityData && A.cityMount ? `<section class="atlas" aria-label="Plan of the whole"><div class="citybar" id="citybar" hidden></div><div class="cmap" id="citybox"></div></section>` : ""}
   <div class="layout">
-    <aside class="index"><div class="chips" id="cats" role="group" aria-label="Filter by type of place"></div><div class="list" id="list"></div></aside>
+    <aside class="index"><div class="encyc keeper" id="encyc" aria-label="The campaign's people, clues, handouts and story"></div><div class="chips" id="cats" role="group" aria-label="Filter by type of place"></div><div class="list" id="list"></div></aside>
     <main class="dossier" id="dossier" aria-live="polite"></main>
   </div>`;
 
@@ -278,7 +278,7 @@
     return items ? `<section class="sec keeper"><h3>Why they're connected${FOLDALL}</h3><div class="connbox">${items}</div></section>` : "";
   }
   function renderDossier(flash) {
-    if (!byId[state.sel]) { $("#dossier").innerHTML = `<p class="empty">No places yet. Each place the campaign registers appears here.</p>`; return; }
+    if (!byId[state.sel]) { $("#dossier").innerHTML = A.encyclopedia && A.tableUI && state.mode === "gm" ? A.encyclopedia.startHTML() : `<p class="empty">No places yet. Each place the campaign registers appears here.</p>`; return; }
     const p = byId[state.sel], M = p.M || {}, i = P.indexOf(p), prev = P[(i - 1 + P.length) % P.length], next = P[(i + 1) % P.length];
     const acts = p.acts.map(a => `<span class="tag">Act ${roman(a)}</span>`).join("");
     const bone = bonesAt(p.id).map(b => `<span class="tag bone keeper">${esc(keyWord)} ${b.k} · ${esc(b.name)}</span>`).join("");
@@ -534,7 +534,7 @@
     const lead = (r, done) => r.to.length ? `<div class="cl-to"><span class="kn">${TR.ready ? (done ? "Opened" : "Would open") : "Leads to"}</span>${r.to.map(t => `<span class="pc">${accBadge(t)}<button type="button" class="pcg" data-go="${esc(t)}">${esc(placeName(t))}</button></span>`).join("")}</div>` : "";
     const hint = r => r.hint ? `<details class="chint"><summary>${r.to.length === 1 ? "How to hint at " + esc(placeName(r.to[0])) : r.to.length ? "How to hint where it leads" : "If it is missed"}</summary><p>${esc(r.hint)}</p></details>` : "";
     const fold = (r, done) => `<details class="clf"><summary>${esc(r.short)}${r.roll && A.tableUI ? " " + A.tableUI.roll(r.roll) : ""}${r.handout && A.tableUI ? ` <button type="button" class="ho-b" data-t="hview" data-id="${esc(r.handout)}" title="Read this handout, or give it to the players">${A.table.icon("handout")}Handout</button>` : ""}</summary><p class="clx">${esc(r.text)}</p>${lead(r, done)}${hint(r)}${r.rescue ? `<details class="chint"><summary>If they're stuck</summary><p>${esc(r.rescue)}</p></details>` : ""}${r.handout && A.tableUI ? `<p class="cl-ho">${A.tableUI.handoutBtns(r.handout)}</p>` : ""}</details>`;
-    if (!TR.ready) return `<section class="sec"><h3>Clues to find${rows.length ? FOLDALL : ""}</h3>${rows.length ? `<ul class="cls">${rows.map(r => `<li class="cl"><span class="ckx"></span>${fold(r)}</li>`).join("")}</ul>` : `<p class="kn">None here.</p>`}</section>`;
+    if (!TR.ready) return `<section class="sec sec-clues"><h3>Clues to find${rows.length ? FOLDALL : ""}</h3>${rows.length ? `<ul class="cls">${rows.map(r => `<li class="cl"><span class="ckx"></span>${fold(r)}</li>`).join("")}</ul>` : `<p class="kn">None here.</p>`}</section>`;
     const ro = TR.canWrite ? "" : " disabled";
     const main = rows.map(r => { const done = clueDone(p.id, r.k); return `<li class="cl${done ? " done" : ""}"><input type="checkbox" data-clue="${esc(p.id)}" data-ck="${esc(r.k)}" aria-label="Found: ${esc(r.short)}"${done ? " checked" : ""}${ro}>${fold(r, done)}</li>`; }).join("");
     const extra = keysFoundAt(p.id).map(k => {
@@ -543,7 +543,7 @@
       return `<li class="cl${done ? " done" : ""}"><input type="checkbox" data-found="${esc(k.id)}" aria-label="Found: ${esc(k.title)}"${done ? " checked" : ""}${ro}><details class="clf"><summary>${esc(k.title)}</summary>${k.from ? `<p class="clx kn">From ${esc(k.from)}</p>` : ""}${leads}</details></li>`;
     }).join("");
     const n = rows.filter(r => clueDone(p.id, r.k)).length + keysFoundAt(p.id).filter(isFound).length, tot = rows.length + keysFoundAt(p.id).length;
-    return `<section class="sec"><h3>Clues to find <span class="cl-n">${n} of ${tot} found</span>${tot ? FOLDALL : ""}</h3><ul class="cls">${main}${extra}</ul>
+    return `<section class="sec sec-clues"><h3>Clues to find <span class="cl-n">${n} of ${tot} found</span>${tot ? FOLDALL : ""}</h3><ul class="cls">${main}${extra}</ul>
       ${TR.canWrite ? `<button type="button" class="addclue" data-kfound="${esc(p.id)}">+ Add a clue found here</button>` : ""}</section>`;
   }
   function accHead(id) {

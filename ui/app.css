@@ -411,3 +411,6 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 @media (prefers-reduced-motion: reduce) { .scene svg *, .scene .sc-cap { animation: none !important; } }
 .planpick { display: grid; gap: 6px; border: 1px dashed var(--rule, #c5ccc5); border-radius: 6px; padding: 10px 12px; font-size: 14px; line-height: 1.45; }
 .planpick input { max-width: 100%; }
+
+/* a campaign made by hand (the user's request of 11 Nov 2026): only what an empty campaign needs is asked */
+#newform[data-how="hand"] .ai-only { display: none !important; }

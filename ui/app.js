@@ -343,8 +343,25 @@
     r.readAsText(f); e.target.value = "";
   });
   let launchNote = null;
+  // how it is made: with the council (a story, the AI's work), or by hand from an empty campaign
+  const howNow = () => (form.querySelector("input[name=how]:checked") || {}).value === "hand" ? "hand" : "council";
+  const paintHow = () => {
+    const hand = howNow() === "hand"; form.dataset.how = hand ? "hand" : "council"; form.story.required = !hand;
+    if (hand && genreNow() === "auto") { const g = form.querySelector("input[name=genre][value=modern]"); if (g) g.checked = true; }
+    const b = $("#gobtn"); if (b) b.textContent = hand ? "Make the empty campaign" : "Make my campaign";
+  };
+  form.addEventListener("change", e => { if (e.target.name === "how") paintHow(); });
+  paintHow();
   form.addEventListener("submit", async e => {
     e.preventDefault();
+    if (howNow() === "hand") {
+      const err = $("#newerr"); err.textContent = "";
+      const o = { blank: true, title: form.title.value, genre: genreNow() === "auto" ? "" : genreNow(), kind: kindNow() === "auto" ? "" : kindNow(), period: genreNow() === "modern" ? form.period.value.trim() : "", system: form.system.value, maps: (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d", uses: form.uses ? form.uses.value : "everything" };
+      store.set("uses", o.uses);
+      const btn = $("#gobtn"); btn.disabled = true;
+      try { const r = await api("/api/campaigns", o); setS(r.state); store.del("draft-title"); form.title.value = ""; location.hash = "c/" + r.job.slug; } catch (x) { err.textContent = x.message; }
+      btn.disabled = false; return;
+    }
     const p = prov(), own = isOwn(p), err = $("#newerr"); err.textContent = "";
     if (own && !S.tools[toolOf(p)].found) { err.textContent = "Put " + S.tools[toolOf(p)].label + " on this computer first: the steps are above."; return; }
     if (!own && !S.connectors[p].connected) { err.textContent = "Connect " + PROV[p] + " first: paste your key above."; $(".ckey") && $(".ckey").focus(); return; }
@@ -441,10 +458,11 @@
     const begun = P && P.steps.some(s => s.id !== "story" && (s.done || s.active));
     const model = !own && j.model && S.models[j.provider] && S.models[j.provider][j.model] ? S.models[j.provider][j.model].label : "";
     let main = "";
-    if (own) main = j.status === "finished" ? `<button class="btn ghost" data-act="launch">Work on it more in ${esc(tool)}</button>` : `<button class="btn${page ? "" : " big"}" data-act="launch">${begun ? "Carry on" : "Start"} in ${esc(tool)}</button>`;
+    if (j.blank) main = "";   // (made by hand: nothing for an AI to carry on)
+    else if (own) main = j.status === "finished" ? `<button class="btn ghost" data-act="launch">Work on it more in ${esc(tool)}</button>` : `<button class="btn${page ? "" : " big"}" data-act="launch">${begun ? "Carry on" : "Start"} in ${esc(tool)}</button>`;
     else if (working) main = `<button class="btn warn" data-act="stop">Stop</button>`;
     else main = j.status === "finished" ? `<button class="btn ghost" data-act="more">Work on it more</button>` : `<button class="btn" data-act="more">Continue</button>`;
-    $(".jhead", box).innerHTML = `<div><div class="kicker">${esc(PROV[provOf(j)])}${model ? " · " + esc(model) : ""}</div><h2>${esc(j.title)}</h2>
+    $(".jhead", box).innerHTML = `<div><div class="kicker">${j.blank ? "Made by hand" : esc(PROV[provOf(j)])}${model ? " · " + esc(model) : ""}</div><h2>${esc(j.title)}</h2>
       <span class="pill ${esc(j.status)}">${esc(STATUS[j.status] || j.status)}</span></div>
       <div class="acts">
         ${page ? `<a class="btn big" href="/play/${esc(j.slug)}/" target="_blank" rel="noopener">Open the campaign</a>` : ""}

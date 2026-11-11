@@ -68,6 +68,20 @@
       return fetch(URL_.replace(/db$/, "save-places"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ places: places }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not kept"); return d; }); });
     },
+    // handouts written on the page and the campaign's own story: kept in the campaign (edits/0-handouts.js, 0-context.js)
+    saveHandouts: function (data) {
+      return fetch(URL_.replace(/db$/, "save-handouts"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ data: data }) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not kept"); return d; }); });
+    },
+    saveContext: function (data) {
+      return fetch(URL_.replace(/db$/, "save-context"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ data: data }) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not kept"); return d; }); });
+    },
+    // people made or changed on the page (atlas-people.js): kept in the campaign (edits/0-people.js)
+    savePeople: function (people) {
+      return fetch(URL_.replace(/db$/, "save-people"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ people: people }) })
+        .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not kept"); return d; }); });
+    },
     // the model library: keep a model the game master brought in with the campaign (null meta forgets it)
     saveModel: function (id, meta, data, ext) {
       return fetch(URL_.replace(/db$/, "save-model"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ id: id, meta: meta, data: data, ext: ext }) })
@@ -76,6 +90,38 @@
     trace: function (image, prompt) {
       return fetch(URL_.replace(/db$/, "trace"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ image: image, prompt: prompt }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not read"); return d.plan; }); });
+    },
+    // the narrator's voices (atlas-narrator.js; the app's lib/voices.js): free models that speak on this computer
+    voices: {
+      base: "/voices/",
+      list: function () {
+        return fetch(URL_.replace(/db$/, "voices"), { headers: { "x-atlas-token": TOKEN }, cache: "no-store" })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not read"); return x.engines || []; }); });
+      },
+      install: function (id) {
+        return fetch(URL_.replace(/db$/, "voices"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ install: id }) })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not installed"); return x; }); });
+      },
+      remove: function (id) {
+        return fetch(URL_.replace(/db$/, "voices"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ remove: id }) })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not taken away"); return x; }); });
+      }
+    },
+    // the sound packs (atlas-sound.js; the app's lib/audio.js): installed into the app's folder, served to every page
+    audio: {
+      base: "/audio/",
+      packs: function () {
+        return fetch(URL_.replace(/db$/, "audio-packs"), { headers: { "x-atlas-token": TOKEN }, cache: "no-store" })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not read"); return x; }); });
+      },
+      install: function (id) {
+        return fetch(URL_.replace(/db$/, "audio-packs"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ install: id }) })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not installed"); return x; }); });
+      },
+      remove: function (id) {
+        return fetch(URL_.replace(/db$/, "audio-packs"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ remove: id }) })
+          .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not taken away"); return x; }); });
+      }
     },
     // the game master's own library (atlas-mylib.js): systems, worlds, looks and places kept on this computer for every
     // campaign, in the app's own folder

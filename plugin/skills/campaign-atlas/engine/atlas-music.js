@@ -537,7 +537,14 @@
     const filt = (type, f, q) => { const b = ac.createBiquadFilter(); b.type = type; b.frequency.setValueAtTime(f, t0); if (q) b.Q.value = q; return b; };
     const wander = (first, fn) => T.mods.push({ next: t0 + first, step(until) { while (this.next < until) this.next += fn(this.next); } });
     const chain = (...nodes) => { for (let i = 1; i < nodes.length; i++) nodes[i - 1].connect(nodes[i]); return nodes[nodes.length - 1]; };
+    // (a recording of it from the sound packs installed, when there is one: the user's audio request of 11 Nov 2026. It
+    // fades in once it has loaded; the synthesized texture is played when there is none. Measured level: a recording
+    // is about as loud as the texture it replaces at the same setting)
+    const REC_TEX = { wind: .55, rain: .5, water: .5, sea: .55, hum: .4, crowd: .5, fire: .6 };
+    const recTex = (k, lvl) => { const id = A.sound && A.sound.recorded && A.sound.recorded(k); if (!id || ac.startRendering) return false;
+      const g = G(0); g.connect(T.tex); A.sound.bufferFor(ac, id).then(buf => { if (T.dead) return; const s = ac.createBufferSource(), t = Math.max(ac.currentTime + .05, t0); s.buffer = buf; s.loop = true; s.connect(g); s.start(t, rnd() * Math.max(0, buf.duration - 2)); T.stops.push(s); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(lvl * (REC_TEX[k] || .5) * ((A.sound.item(id) || {}).gain || 1), t + 3); }).catch(() => {}); return true; };
     for (const [k, lvl] of Object.entries(M.tex || {})) {
+      if (recTex(k, lvl)) continue;
       if (k === "wind") { const b = filt("bandpass", 520, 1.1), g = G(0); g.gain.setValueAtTime(lvl * .3, t0); chain(loop(E.white), b, g, T.tex); wander(0, t => { const d = 2.5 + rnd() * 4.5; b.frequency.linearRampToValueAtTime(260 + rnd() * 900, t + d); g.gain.linearRampToValueAtTime(lvl * (.2 + rnd() * .7), t + d); return d; }); }
       else if (k === "rain") { const g = G(0); g.gain.setValueAtTime(lvl * .22, t0); chain(loop(E.white), filt("highpass", 2600), filt("lowpass", 9000), g, T.tex); wander(0, t => { const d = 4 + rnd() * 6; g.gain.linearRampToValueAtTime(lvl * (.16 + rnd() * .12), t + d); return d; }); }
       else if (k === "water" || k === "sea") { const sea = k === "sea", g = G(0); g.gain.setValueAtTime(lvl * .1, t0); chain(loop(E.white), filt("lowpass", sea ? 900 : 480), g, T.tex); wander(0, t => { const p = (sea ? 7 : 4) + rnd() * (sea ? 4 : 3); g.gain.linearRampToValueAtTime(lvl * (sea ? .55 : .42), t + p * .4); g.gain.linearRampToValueAtTime(lvl * .08, t + p); return p; }); if (sea) chain(loop(E.brown), filt("lowpass", 140), G(lvl * .5), T.tex); }
@@ -552,7 +559,8 @@
     const mute = spec.mix || !F.cine ? /^(drip|chirp|beep)$/ : /^(drip|chirp|beep|tick|clank|steam)$/;   // (sounds the referee put in their own music they get)
     for (const [k, p] of Object.entries(M.ev || {})) {
       if (mute.test(k) || (k === "toll" && F.toll === null)) continue;
-      const o = { root, F }, once = t => SFX[k](T, t, o);     // the sound itself is in SFX; here, how often it comes
+      const o = { root, F }, rid = A.sound && A.sound.recorded && A.sound.recorded(k), rb = []; if (rid && !ac.startRendering && k !== "tick" && k !== "heart") for (let i = 0; i < 3; i++) A.sound.bufferFor(ac, rid).then(b => rb.push(b)).catch(() => {});
+      const once = t => { if (rb.length) { const s = ac.createBufferSource(), g = G(.5 * ((A.sound.item(rid) || {}).gain || 1) * (.8 + rnd() * .4)), pn = ac.createStereoPanner ? ac.createStereoPanner() : null; s.buffer = rb[Math.floor(rnd() * rb.length)]; s.playbackRate.value = .97 + rnd() * .06; if (pn) { pn.pan.value = (rnd() - .5) * 1.1; s.connect(g); g.connect(pn); pn.connect(T.tex); } else { s.connect(g); g.connect(T.tex); } s.start(t); return; } SFX[k](T, t, o); };     // the sound itself is in SFX (or a recording); here, how often it comes
       if (k === "drip") wander(rnd() * p, t => { const f = 1300 + rnd() * 1200; ping(T, t, f, f * .55, .07, .2 + rnd() * .12); if (rnd() < .3) ping(T, t + .11 + rnd() * .1, f * 1.3, f * .7, .05, .1); return p * (.4 + rnd() * 1.2); });
       else if (k === "tick") wander(.5, t => { once(t); return 1; });
       else if (k === "heart") wander(1, t => { once(t); return 60 / p * (.97 + rnd() * .06); });
@@ -768,17 +776,20 @@
     if (o && o.kind === "mood" && MOODS[o.mood] && !MOODS[o.mood].off) return o;
     if (o && o.kind === "mix" && mixOf(o.mix)) return o;
     if (o && o.kind === "link" && okUrl(o.url)) return o;
+    // (recorded music from the music packs installed: the user's audio request of 11 Nov 2026)
+    if (o && o.kind === "rec" && A.sound && A.sound.track && A.sound.track(o.track)) { const t = A.sound.track(o.track); return { kind: "rec", track: o.track, url: t.url, title: t.title, composer: t.composer, licence: t.licence }; }
     const d = (A.meta[id] || {}).music;
     if (d && typeof d === "object" && okUrl(d.link)) return { kind: "link", url: okUrl(d.link), title: d.title || "", fromData: true };
     return null;
   }
   const linkPlays = o => !!o && o.kind === "link" && AUDIO_FILE.test(o.url);
   const opensTab = o => !!o && o.kind === "link" && !linkPlays(o);
-  const ownTitle = o => (o.kind === "mood" ? MOODS[o.mood].label : o.kind === "mix" ? (mixOf(o.mix) || {}).name || "Your music" : o.kind === "file" ? o.name.replace(/\.[a-z0-9]{2,5}$/i, "") : o.title || hostOf(o.url));
+  const ownTitle = o => (o.kind === "mood" ? MOODS[o.mood].label : o.kind === "mix" ? (mixOf(o.mix) || {}).name || "Your music" : o.kind === "file" ? o.name.replace(/\.[a-z0-9]{2,5}$/i, "") : o.kind === "rec" ? o.title : o.title || hostOf(o.url));
   function ownNote(o, fl) {
     if (o.kind === "mood") { const f = FLAVOURS[o.flavour] ? o.flavour : fl; return shortStyle(f) + " · " + describe(o.mood, f); }
     if (o.kind === "mix") return "your music · " + describeMix(mixOf(o.mix) || {});
     if (o.kind === "file") return o.temp ? "your file · for this visit only" : "your file · kept in this browser";
+    if (o.kind === "rec") return "recorded · " + (o.composer || "") + (o.licence ? ", " + o.licence : "");
     return linkPlays(o) ? "your link · plays here" : "your link · opens " + hostOf(o.url) + " in a new tab";
   }
   // what plays for a place's own song: one of Atlas's songs runs in the synthesiser, a file or a music-file link in a player
@@ -872,7 +883,7 @@
   function apply() {
     const th = current(), synth = th && (th.mix || (MOODS[th.mood] && !MOODS[th.mood].off)) ? th : null;
     if (P.on && P.eng) { P.eng.setTheme(synth, P.ac.currentTime + .05); tick(); }
-    audioTo(P.on && th && th.own && (th.own.kind === "file" || linkPlays(th.own)) ? th.own.url : "");
+    audioTo(P.on && th && th.own && (th.own.kind === "file" || th.own.kind === "rec" || linkPlays(th.own)) ? th.own.url : "");
     paint();
   }
   const linkA = (o, cls, inner) => `<a class="${cls}" href="${esc(o.url)}" target="_blank" rel="noopener noreferrer" data-mlink="1">${inner}</a>`;
@@ -981,14 +992,17 @@
       d = document.createElement("dialog"); d.id = "songDlg"; d.className = "kedlg"; d.setAttribute("aria-label", "Your own song");
       P.root.appendChild(d); d.addEventListener("submit", onEditorSubmit); d.addEventListener("click", onEditorClick);
     }
-    const o = ownOf(id), tab = o ? ({ mood: "atlas", mix: "mix", file: "file" }[o.kind] || "link") : "atlas", fl = (o && o.kind === "mood" && FLAVOURS[o.flavour] && o.flavour) || styleOf(id), mixes = mixList();
+    const o = ownOf(id), tab = o ? ({ mood: "atlas", mix: "mix", file: "file", rec: "rec" }[o.kind] || "link") : "atlas", recs = A.sound && A.sound.tracks ? A.sound.tracks() : [], fl = (o && o.kind === "mood" && FLAVOURS[o.flavour] && o.flavour) || styleOf(id), mixes = mixList();
     const removable = !!(FILES[id] || OWN[id]), sug = MOODS[themeFor(id).mood].label;
     d.dataset.place = id; d.dataset.tab = tab;
     const tabBtn = (k, l) => `<button type="button" role="tab" data-sdtab="${k}" aria-selected="${tab === k}">${l}</button>`;
     d.innerHTML = `<form method="dialog" class="ke sedit" id="songForm">
       <h3>Your own song</h3>
       <p class="sd-for">For ${esc(placeName(id))}. It plays here in place of the suggested song (${esc(sug)}), and the suggested song stays on the card beneath it.</p>
-      <div class="mp-tabs" role="tablist">${tabBtn("atlas", "One of Atlas's songs")}${tabBtn("mix", "Your music")}${tabBtn("file", "A music file")}${tabBtn("link", "A link")}</div>
+      <div class="mp-tabs" role="tablist">${tabBtn("atlas", "One of Atlas's songs")}${recs.length ? tabBtn("rec", "Recorded music") : ""}${tabBtn("mix", "Your music")}${tabBtn("file", "A music file")}${tabBtn("link", "A link")}</div>
+      ${recs.length ? (() => { const m = themeFor(id).mood, fits = t => (t.moods || []).includes(m), by = {}; for (const t of recs) for (const k of (t.moods || ["other"]).slice(0, 1)) (by[k] = by[k] || []).push(t);
+        const opt = t => `<option value="${esc(t.id)}"${o && o.kind === "rec" && o.track === t.id ? " selected" : ""}>${esc(t.title)} · ${esc(t.composer)} (${Math.round(t.dur / 60)} min)</option>`;
+        return `<div class="sd-p" data-sdp="rec"${tab === "rec" ? "" : " hidden"}><label><span>Track</span><select name="track">${recs.some(fits) ? `<optgroup label="Suits ${esc(MOODS[m].label)}">${recs.filter(fits).map(opt).join("")}</optgroup>` : ""}${Object.entries(by).map(([k, L]) => `<optgroup label="${esc(MOODS[k] ? MOODS[k].label : k)}">${L.filter(t => !fits(t)).map(opt).join("")}</optgroup>`).join("")}</select></label><p class="sd-note">Real recordings by composers who let their music be used with credit (Scott Buckley, Kevin MacLeod), from the music packs installed; it plays round and round at the music's volume. Credited in Sounds, Credits.</p></div>`; })() : ""}
       <div class="sd-p" data-sdp="mix"${tab === "mix" ? "" : " hidden"}>
         ${mixes.length ? `<label><span>Music you made</span><select name="mix">${mixes.map(x => `<option value="${esc(x.id)}"${o && o.kind === "mix" && o.mix === x.id ? " selected" : ""}>${esc(x.name || "Your music")}</option>`).join("")}</select></label><p class="sd-note">Made in the Music tab. Saved with the page.</p>` : `<p class="sd-note">You have not made any music of your own yet. Open the Music tab at the top of the page to make some: a band, a beat, and sounds like wind, rain, lightning or a heartbeat.</p>`}
       </div>
@@ -1021,6 +1035,7 @@
     err.textContent = "";
     try {
       if (d.dataset.tab === "atlas") { await dropFile(id); await saveOwn(id, { kind: "mood", mood: f.mood.value, flavour: f.flavour.value }); }
+      else if (d.dataset.tab === "rec") { if (!f.track || !f.track.value) { err.textContent = "Choose a track."; return; } await dropFile(id); await saveOwn(id, { kind: "rec", track: f.track.value }); }
       else if (d.dataset.tab === "mix") { if (!f.mix || !f.mix.value) { err.textContent = "Make some music of your own in the Music tab first."; return; } await dropFile(id); await saveOwn(id, { kind: "mix", mix: f.mix.value }); }
       else if (d.dataset.tab === "file") {
         const file = f.file.files && f.file.files[0];

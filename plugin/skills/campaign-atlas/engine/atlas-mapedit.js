@@ -8,6 +8,8 @@
    place everywhere: the dossier, the players' window, fog of war, the book, maps for online tables. */
 (function (A) {
   "use strict";
+  const TOOLMOD = { clues: "investigation.clues", traps: "caves.traps", riddles: "caves.traps" };
+  const toolOn = k => !TOOLMOD[k] || !ATLAS.modules || ATLAS.modules.on(TOOLMOD[k]);
   if (!A.table) return;
   const T = A.table, esc = A.esc, C = A.C;
   let S = null, X = null;
@@ -182,7 +184,7 @@
           <button type="button" data-me="undo" title="Undo">${icon("undo")}</button><button type="button" data-me="redo" title="Redo">${icon("redo")}</button>
           ${A.ux ? `<span class="me-uxs"><button type="button" data-me="vers" hidden title="The map as it was at each save before, to look at and keep again">Earlier versions</button><span class="ux-save" data-own aria-live="polite"></span>${A.ux.keysBtn("room")}</span>` : ""}
           <button type="button" data-me="close">Close</button><button type="button" class="prim" data-me="save">Save</button></div>
-        <div class="me-body"><div class="me-tools" role="toolbar" aria-label="Tools">${TOOLS.map(([k, l]) => `<button type="button" data-tool="${k}" title="${esc(l)}">${icon(k)}<span>${esc(l)}</span></button>`).join("")}<span class="me-gap"></span><button type="button" data-me="zin" title="Closer">${icon("plus")}</button><button type="button" data-me="zout" title="Further">${icon("minus")}</button></div>
+        <div class="me-body"><div class="me-tools" role="toolbar" aria-label="Tools">${TOOLS.filter(t => toolOn(t[0])).map(([k, l]) => `<button type="button" data-tool="${k}" title="${esc(l)}">${icon(k)}<span>${esc(l)}</span></button>`).join("")}<span class="me-gap"></span><button type="button" data-me="zin" title="Closer">${icon("plus")}</button><button type="button" data-me="zout" title="Further">${icon("minus")}</button></div>
           <div class="me-canvas" id="meCanvas"></div><aside class="me-side" id="meSide"></aside>${PLUGS.map(p => p.bodyHTML ? p.bodyHTML(api) : "").join("")}</div>
         <p class="me-tip" aria-live="polite"></p>`;
       bind(dlg);
@@ -493,7 +495,7 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
       if (k === "escape" && (E.tool !== "select" || E.sel)) { e.preventDefault(); if (E.tool !== "select") E.tool = "select"; else E.sel = null; paint(); return; }
       if ((k === "+" || k === "=") && !e.ctrlKey && !e.metaKey) { e.preventDefault(); E.zoom = Math.min(4, E.zoom * 1.25); paintCanvas(); return; }
       if (k === "-" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); E.zoom = Math.max(.3, E.zoom / 1.25); paintCanvas(); return; }
-      { const nt = A.ux && A.ux.numKey(e, TOOLS.map(t => t[0])); if (nt) { e.preventDefault(); E.tool = nt; E.sel = nt === "select" ? E.sel : null; paint(); return; } }
+      { const nt = A.ux && A.ux.numKey(e, TOOLS.filter(t => toolOn(t[0])).map(t => t[0])); if (nt) { e.preventDefault(); E.tool = nt; E.sel = nt === "select" ? E.sel : null; paint(); return; } }
       if ((e.ctrlKey || e.metaKey) && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
       if ((e.ctrlKey || e.metaKey) && k === "y") { e.preventDefault(); redo(); return; }
       if ((k === "delete" || k === "backspace") && E.sel) { e.preventDefault(); const m = { room: "delroom", stair: "delstair", door: "deldoor" }[E.sel.kind]; const b = dlg.querySelector(`[data-me="${m}"]`); if (b) b.click(); return; }
@@ -510,6 +512,8 @@ Rules: every room is a rectangle of whole squares, x and y its top-left square; 
     // top, side, overlay, down, move, up, click, change, input, key, cancel, save, paintCanvas, pt } (each handler
     // returns true when it dealt with it; save(api, edit) runs when the map is saved; paintCanvas draws the canvas
     // itself, and pt(e) gives the point on the map under the pointer, for a view of the map that is not the flat one)
+    // (the parts of a module each tool belongs to: atlas-modules.js)
+    toolOn: k => toolOn(k),
     plug(p) { PLUGS.push(p); for (const t of p.tools || []) TOOLS.push(t); Object.assign(IC, p.icons || {}); },
     init(store, ctx) {
       S = store; X = ctx;

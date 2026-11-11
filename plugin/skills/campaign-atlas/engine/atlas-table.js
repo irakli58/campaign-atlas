@@ -18,6 +18,10 @@
   A.pcs = obj => { A.pcsData = Object.assign(A.pcsData || {}, obj || {}); return A; };
   A.tables = obj => { A.tablesData = Object.assign(A.tablesData || {}, obj || {}); return A; };
   A.handouts = list => { A.handoutsData = (A.handoutsData || []).concat(list || []); return A; };
+  // handouts written on the page and the campaign's own story, as the campaign's files keep them (edits/0-handouts.js,
+  // edits/0-context.js; atlas-handouts.js, atlas-knowledge.js)
+  A.handbook = A.handbook || {}; A.handbookEdit = o => { Object.assign(A.handbook, o || {}); return A; };
+  A.contextData = A.contextData || {}; A.contextEdit = o => { Object.assign(A.contextData, o || {}); return A; };
   A.rescues = list => { A.rescuesData = (A.rescuesData || []).concat(list || []); return A; };
   // the world's time (atlas-worldtime.js; the user asked for a world clock, its events and news, 26 Oct 2026): the
   // calendar ({ start, months, weekdays, era }) and the events that happen in the world whether or not the party acts
@@ -117,6 +121,8 @@
   function allHandouts() {
     const out = [];
     (A.handoutsData || []).forEach((h, i) => out.push(Object.assign({ id: h.id || "h" + (i + 1) }, h)));
+    // (the Keeper's notes on it never leave: a handout given travels whole to the players' screen and their copy)
+    for (const [id, h] of Object.entries(A.handbook || {})) if (h && !h.off && h.state !== "draft" && !out.some(x => x.id === id)) { const o = Object.assign({}, h, { id }); delete o.notes; delete o.made; delete o.t; out.push(o); }
     for (const id of A.order || []) {
       if (!A.maps[id]) continue;
       const M = A.get(id, 99);
@@ -125,11 +131,23 @@
     return out;
   }
   const paras = t => String(t || "").split(/\n\s*\n/).map(p => `<p>${esc(p.trim()).replace(/\n/g, "<br>")}</p>`).join("");
+  // (a handout written on the page may be formatted: **bold**, *italic*, _underlined_, a line of # as a heading, a line
+  // of --- as a rule; only handouts that say so, fmt: true, so no older handout changes its look)
+  const fmtLine = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>").replace(/(^|\W)_(.+?)_(?=\W|$)/g, "$1<u>$2</u>");
+  const fmtParas = t => String(t || "").split(/\n\s*\n/).map(p => { p = p.trim(); if (/^-{3,}$/.test(p)) return "<hr>"; const h = /^(#{1,3})\s+(.*)$/.exec(p); if (h) return `<h${h[1].length + 3} class="ho-h">${fmtLine(h[2])}</h${h[1].length + 3}>`; return `<p>${p.split(/\n/).map(fmtLine).join("<br>")}</p>`; }).join("");
   // a newspaper's name from the city, when the handout gives none
   function paperName(h) { if (h.paper) return h.paper; const city = (A.cityData && A.cityData.title) || (A.config && A.config.setting) || ""; const town = String(city).replace(/^(a true map of|the)\s+/i, "").split(/[,·(]/)[0].trim() || "Evening"; return `The ${town} ${["Gazette", "Herald", "Chronicle", "Courier"][town.length % 4]}`; }
   // a handout, drawn as the thing it is, in the look of its age
   function handoutHTML(h) {
-    const e = h.era || era(), kind = h.kind || ERA_KIND[e] || "letter", body = paras(h.text);
+    const html = handoutCore(h);
+    // what a handout written on the page may add to any kind: a picture of its own, a signature, a stamp, aged paper
+    if (!h.img && !h.sig && !h.stamp && !h.aged) return html;
+    const extra = `${h.img && h.kind !== "photo" && h.kind !== "map" ? `<figure class="ho-img"><img src="${esc(h.img)}" alt=""></figure>` : ""}${h.sig ? `<div class="ho-sig2">${esc(h.sig)}</div>` : ""}${h.stamp ? `<div class="ho-stamp">${esc(h.stamp)}</div>` : ""}`;
+    const out = html.replace(/<\/(article|figure)>\s*$/, m => extra + m);
+    return h.aged ? out.replace(/class="ho /, 'class="ho ho-aged ') : out;
+  }
+  function handoutCore(h) {
+    const e = h.era || era(), kind = h.kind || ERA_KIND[e] || "letter", body = h.fmt ? fmtParas(h.text) : paras(h.text);
     const head = h.title && !["letter", "note", "diary", "telegram"].includes(kind) ? `<h4 class="ho-title">${esc(h.title)}</h4>` : "";
     switch (kind) {
       case "telegram": {
@@ -158,7 +176,7 @@
       case "notice": case "poster":
         return `<article class="ho ho-notice era-${e}">${head}<div class="ho-body">${body}</div>${h.from ? `<div class="ho-sign">${esc(h.from)}</div>` : ""}</article>`;
       case "photo":
-        return `<figure class="ho ho-photo era-${e}"><div class="ho-ph"><span>${esc(h.scene || h.text || "")}</span></div><figcaption>${esc(h.caption || h.title || "")}</figcaption></figure>`;
+        return `<figure class="ho ho-photo era-${e}"><div class="ho-ph">${h.img ? `<img src="${esc(h.img)}" alt="">` : `<span>${esc(h.scene || h.text || "")}</span>`}</div><figcaption>${esc(h.caption || h.title || "")}</figcaption></figure>`;
       case "email":
         return `<article class="ho ho-email era-${e}"><header><div><b>From</b> ${esc(h.from || "")}</div><div><b>To</b> ${esc(h.to || "")}</div><div><b>Subject</b> ${esc(h.title || "")}</div><div class="ho-date">${esc(h.date || "")}</div></header><div class="ho-body">${body}</div></article>`;
       case "message":
@@ -172,6 +190,18 @@
       case "deckplan": {   // a place's plan, floor by floor or deck by deck, only what the players have seen (atlas-table-gm.js)
         return `<article class="ho ho-deckplan era-${e}"><header><span>${esc(h.title || "A plan")}</span><span>${esc(h.date || "")}</span></header>${(h.decks || []).map(d => `<section class="ho-deck"><h5>${esc(d.name)}</h5><div class="ho-dsvg">${d.svg || ""}</div></section>`).join("")}${h.text ? `<div class="ho-body">${paras(h.text)}</div>` : ""}</article>`;
       }
+      case "page":   // a blank page, the game master's own (atlas-handouts.js)
+        return `<article class="ho ho-page era-${e}">${head}<div class="ho-body">${body}</div></article>`;
+      case "report": {   // a police report, a medical record, a scientific report: a form's heading, its fields, its text
+        const rows = String(h.fields || "").split(/\n/).filter(l => l.trim()).map(l => { const i = l.indexOf(":"); return i > 0 ? `<tr><th>${esc(l.slice(0, i).trim())}</th><td>${esc(l.slice(i + 1).trim())}</td></tr>` : `<tr><td colspan="2">${esc(l)}</td></tr>`; }).join("");
+        return `<article class="ho ho-report era-${e}"><header><div class="ho-form">${esc(h.form || "Report")}</div><div class="ho-dateline">${esc(h.date || "")}</div></header>${h.title ? `<h4 class="ho-title">${esc(h.title)}</h4>` : ""}${rows ? `<table>${rows}</table>` : ""}<div class="ho-body">${body}</div>${h.from ? `<div class="ho-sign">${esc(h.from)}</div>` : ""}</article>`;
+      }
+      case "recording":   // a recording: its label, the sound itself where there is one, and what is heard on it
+        return `<article class="ho ho-recording era-${e}"><header><span>${esc(h.title || "A recording")}</span><span>${esc(h.date || "")}</span></header>${h.audio ? `<audio controls preload="none" src="${esc(h.audio)}"></audio>` : ""}${h.text ? `<div class="ho-body">${body}</div>` : ""}</article>`;
+      case "book":   // a page of a book or a manuscript
+        return `<article class="ho ho-book era-${e}">${h.title ? `<div class="ho-run">${esc(h.title)}</div>` : ""}<div class="ho-body">${body}</div>${h.date ? `<div class="ho-folio">${esc(h.date)}</div>` : ""}</article>`;
+      case "map":   // a map: the picture given, with its title
+        return `<figure class="ho ho-mapho era-${e}">${h.img ? `<img src="${esc(h.img)}" alt="">` : `<div class="ho-ph"><span>${esc(h.text || "")}</span></div>`}<figcaption>${esc(h.title || h.caption || "")}</figcaption></figure>`;
       case "inscription":   // words cut in stone: a riddle shown to the players (atlas-caveui.js)
         return `<article class="ho ho-stone era-${e}">${head}<div class="ho-body">${body}</div></article>`;
       case "scroll":

@@ -260,6 +260,10 @@
   // (meta: what it is doing, in words, and from what: { kind: reading | writing | suggesting | answering | checking,
   // what, uses: [...] }, for the line at the top of the page and the tray: atlas-ux.js)
   async function askRaw(prompt, onText, signal, meta) {
+    // (Claude's help switched off for this campaign: nothing on the page asks Claude; each asker shows its "Claude could
+    // not answer", the game master writes it themselves. The user, 11 Nov 2026: "If AI generation is disabled, it
+    // shouldn't generate new content without an explicit request")
+    if (A.modules && !A.modules.on("ai")) { note("Claude's help is switched off for this campaign (the gear: What this campaign uses)."); return null; }
     const run = A.ux ? A.ux.aiBegin(meta, signal) : null, sig = run ? run.signal : signal; let ok = false;
     try {
       let sample = null; try { sample = window.claude && window.claude.use ? await window.claude.use("sample") : null; } catch (e) { sample = null; }
@@ -270,6 +274,9 @@
   }
   // the campaign's own words, cut into passages, to look up what a question is about
   let CORPUS = null;
+  // (what is written on the page, a person, a clue, a plot point, the campaign's own story, joins the passages the copilot
+  // and Ask the campaign read from at once: the handmade campaigns of 11 Nov 2026, whose whole campaign is written there)
+  if (typeof document !== "undefined") for (const ev of ["atlas-story", "atlas-places", "atlas-context"]) document.addEventListener(ev, () => { CORPUS = null; });
   const STOP = new Set("the and for are but not you all any can had her was one our out has have his how its may new now old see two way who did get him let say she too use that this with from they them then than there their what when where which while will would about into your been were also only some such more most very just like over after before under again does doing done here why whom whose".split(" "));
   const words = s => (String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9']{3,}/g) || []).map(w => w.length > 4 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w);
   function corpus() {
@@ -294,6 +301,16 @@
     for (const pc of Object.values(A.pcsData || {})) push(`Player character: ${pc.n}`, j(pc.concept, pc.bg, pc.hook, pc.secret, pc.clue && pc.clue.t, pc.clue && pc.clue.d));
     for (const c of A.clocksData || []) push(`Clock: ${c.name}`, j(c.who, ...(c.ticks || []), c.done));
     for (const s of sessions()) push(`Session ${s.n}: ${s.title || ""}`, j(s.start, s.cliff, s.notes));
+    // the story elements the game master wrote (plot points, mysteries, quests, factions, events...), what each person
+    // knows, believes wrongly or hides, and the handouts written on the page
+    if (A.story) {
+      const St = A.story, nm = r => St.name(r);
+      for (const [, it] of Object.entries(St.items())) push(`${(St.ITEMS.find(x => x[0] === it.kind) || [0, "Story"])[1]}: ${it.n || ""}`, j(it.d, it.when, it.trig, it.cons, it.truth ? "The truth (the game master's only): " + it.truth : "", (it.concl || []).join("; "), (it.suspects || []).map(nm).join(", ") && "Suspects: " + (it.suspects || []).map(nm).join(", "), (it.branches || []).map(b => "If " + (b.if || "…") + ", then " + (b.to && St.items()[b.to] ? St.items()[b.to].n : "…")).join("; "), it.notes));
+      for (const k of Object.values(St.knowledge())) if (k && k.who) push(`What ${nm(k.who)} knows`, j(nm(k.who), (St.KTYPES.find(x => x[0] === k.type) || [0, ""])[1], k.text, k.about ? "about " + nm(k.about) : "", (St.KSHARE.find(x => x[0] === k.share) || [0, ""])[1], k.why));
+    }
+    for (const h of Object.values(A.handbook || {})) if (h && !h.off) push(`Handout: ${h.title || h.headline || h.caption || ""}`, j(h.sub, h.text, h.notes ? "For the game master: " + h.notes : ""));
+    // what other files give it (atlas-knowledge.js: the campaign's own story as the game master wrote it)
+    for (const fx of A.corpusExtra || []) { try { for (const [src, text] of fx() || []) push(src, text, null, 1); } catch (e) { console.warn("atlas", e); } }
     const df = {}; for (const d of docs) { d.tf = {}; for (const w of words(d.src + " " + d.text)) d.tf[w] = (d.tf[w] || 0) + 1; for (const w in d.tf) df[w] = (df[w] || 0) + 1; }
     return (CORPUS = { docs, df, N: docs.length });
   }
@@ -436,9 +453,10 @@
   // which module each tab and quick tool belongs to, and from which level (atlas-modules.js; the user, 3 Nov 2026): a
   // module off draws neither, and its tab's work does not start. Home, Tonight, the clocks, the party and safety are the
   // core, always there
-  const KMOD = { dims: ["dimensions"], screen: ["players"], combat: ["fights"], make: ["makeup"], ask: ["copilot"], board: ["investigation"], export: ["print"], clues: ["investigation"], consistency: ["consistency"], copilot: ["copilot"], dash: ["living", "advanced"], deeds: ["living", "advanced"], factions: ["living", "advanced"], time: ["living"], rumours: ["living"], history: ["living"], money: ["money"], recorded: ["recorded"] };
+  const KMOD = { dims: ["dimensions"], screen: ["players"], combat: ["fights"], make: ["makeup"], ask: ["copilot"], board: [["investigation"], ["investigation.board"]], plot: ["plot"], export: ["print"], clues: ["investigation"], consistency: ["consistency"], copilot: ["copilot"], dash: ["living", "advanced"], deeds: ["living", "advanced"], factions: [["living", "advanced"], ["living.factions"]], time: ["living"], rumours: [["living"], ["living.rumours"]], history: ["living"], money: ["money"], recorded: ["recorded"] };
   const DMOD = { dice: ["fights"], person: ["makeup"], ask: ["copilot"], screen: ["players"], talk: ["copilot"], time: ["living"] };
-  const modOn = r => !r || !A.modules || A.modules.on(r[0], r[1]);
+  // (one requirement [module, level], or several: [[module, level], ["module.part"]])
+  const modOn = r => !r || !A.modules || (Array.isArray(r[0]) ? r.every(x => A.modules.on(x[0], x[1])) : A.modules.on(r[0], r[1]));
   const shownTab = k => modOn(KMOD[k]), shownDock = k => modOn(DMOD[k]);
   const pins = () => { try { return (JSON.parse(pref.get("pins") || "[]") || []).filter(k => TABS.some(t => t[0] === k) && shownTab(k)); } catch (e) { return []; } };
   const navBtn = ([k, l, ic, , desc]) => `<span class="tvn-it"><button type="button" role="tab" data-t="tab" data-tab="${k}" aria-selected="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>${k === "home" ? "" : `<button type="button" class="tvn-pin" data-t="pin" data-tab="${k}" aria-pressed="${pins().includes(k)}" title="${pins().includes(k) ? "Unpin: back among all the tools" : "Pin it: your pinned tools come first"}" aria-label="${pins().includes(k) ? "Unpin" : "Pin"} ${esc(l)}">${pins().includes(k) ? "★" : "☆"}</button>`}</span>`;
@@ -718,7 +736,7 @@
       <div class="t-grid t-g2"><div>
         <section class="t-card"><h3>${T.icon("map")} A map, a room at a time</h3>${fogEditor()}</section></div>
       <div>
-        <section class="t-card"><h3>${T.icon("handout")} Handouts</h3>${hs.length ? `<ul class="t-hl">${hs.map(h => `<li><b>${esc(h.title || h.headline || "Untitled")}</b> <span class="kn">${esc(h.kind || T.ERA_KIND[T.era()] || "letter")}${h.place ? " · " + esc(placeName(h.place)) : ""}</span><span class="t-row">${handoutBtns(h.id)}<button type="button" class="t-mini" data-t="hprint" data-id="${esc(h.id)}">Print</button></span></li>`).join("")}</ul>` : `<p class="kn">None yet. A clue becomes a handout when the council gives it one (handout: on the clue).</p>`}</section>
+        <section class="t-card"><h3>${T.icon("handout")} Handouts${A.handoutWriter && (!A.modules || A.modules.on("handouts")) ? ` <button type="button" class="t-mini" data-enca="handout">+ Write one</button>` : ""}</h3>${hs.length ? `<ul class="t-hl">${hs.map(h => `<li><b>${esc(h.title || h.headline || "Untitled")}</b> <span class="kn">${esc(h.kind || T.ERA_KIND[T.era()] || "letter")}${h.place ? " · " + esc(placeName(h.place)) : ""}</span><span class="t-row">${handoutBtns(h.id)}<button type="button" class="t-mini" data-t="hprint" data-id="${esc(h.id)}">Print</button></span></li>`).join("")}</ul>` : `<p class="kn">None yet. A clue becomes a handout when the council gives it one (handout: on the clue).</p>`}</section>
         <section class="t-card"><h3>${T.icon("person")} A face</h3><div class="t-row"><select data-t="facepick" aria-label="Who">${people.map(([cid, c]) => `<option value="${esc(cid)}">${esc(c.n)}</option>`).join("")}</select><button type="button" class="t-btn" data-t="showface">Show who they're meeting</button></div><p class="t-small">Their name, what they do and how they look; nothing they hide.</p></section>
         <section class="t-card"><h3>${T.icon("tonight")} Words to read</h3><input class="t-in" data-t="scenetitle" placeholder="A title (optional)" maxlength="120"><textarea rows="4" data-t="scenetext" placeholder="Words to show the players: a description, a sign, a message"></textarea><div class="t-row"><button type="button" class="t-btn" data-t="showscene">Show it to them</button></div></section>
       </div></div>`;
@@ -1121,6 +1139,7 @@
 
   /* ================================================================ connecting it to the page */
   A.tableUI = {
+    twice,
     stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab, addDock, addCard,
     // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
     api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s, m) => askRaw(p, f || (() => {}), s, m), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, tabs: () => TABS.filter(t => shownTab(t[0])).map(t => ({ key: t[0], label: t[1], desc: t[4] })), open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
@@ -1132,6 +1151,9 @@
       dockInit(); intro();
       if (A.mapEditor) A.mapEditor.init(S, ctx);
       if (A.locations) A.locations.init(S, ctx);
+      if (A.people && A.people.init) A.people.init(S);
+      if (A.handoutWriter && A.handoutWriter.init) A.handoutWriter.init(S);
+      if (A.encyclopedia) setTimeout(() => A.encyclopedia.paint(), 0);
       // the cities of the world map already laid out on the page come back (atlas-world.js)
       if (A.worldCitiesInit) A.worldCitiesInit(S);
       // the players' copy: what the players have been shown, kept for it as the table changes (atlas-share.js); only with
