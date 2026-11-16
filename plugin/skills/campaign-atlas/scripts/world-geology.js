@@ -143,13 +143,14 @@ function geology(o, U) {
       const ci0 = Math.min(cc - 1, ((sx / c) / f) | 0), cj0 = Math.min(cr - 1, ((sy / c) / f) | 0), R = Math.ceil(60 / ckm) + 1;
       for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) { const a = ci0 + di, b = cj0 + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; up[b * cc + a] += 1.3 * gauss(Math.hypot(di, dj) * ckm / 30); }
       volc.push(cj0 * cc + ci0); } }
-  // old belts, worn low, across the old continents
+  // old belts, worn low, across the old continents (each kept for the rocks: old mountain roots)
+  const oldB = new Float32Array(CN), hotC = [];
   for (let k = 0; k < nP && !drawnM; k++) {
     if (rnd() < .45) continue; const s = plates[k].seed; if (!crust[s]) continue;
     const a = rnd() * Math.PI, ux = Math.cos(a), uy = Math.sin(a), L = (.2 + rnd() * .25) / (zs > 1 ? Math.sqrt(zs) : 1), cx = X(s), cy = Y(s), wd = zs > 1 ? 300 : 90, oa = zs > 1 ? .4 : .7;
     // (on a whole planet such a belt would run thousands of km dead straight: there it is shorter and bends along its
     // length, as the Appalachians and the Urals do)
-    for (let n = 0; n < CN; n++) { if (plate[n] !== k || !crust[n]) continue; const dx = X(n) - cx, dy = Y(n) - cy, t = dx * ux + dy * uy; if (Math.abs(t) > L) continue; const bend = zs > 1 ? (U.fbm(nD, t / L * 1.5 + k * 3.1, k * 1.7, 2) - .5) * L * 1.2 : 0, off = Math.abs(-dx * uy + dy * ux - bend) * cr * ckm; up[n] += oa * gauss(off / wd) * (1 - (t / L) ** 2); }
+    for (let n = 0; n < CN; n++) { if (plate[n] !== k || !crust[n]) continue; const dx = X(n) - cx, dy = Y(n) - cy, t = dx * ux + dy * uy; if (Math.abs(t) > L) continue; const bend = zs > 1 ? (U.fbm(nD, t / L * 1.5 + k * 3.1, k * 1.7, 2) - .5) * L * 1.2 : 0, off = Math.abs(-dx * uy + dy * ux - bend) * cr * ckm; { const g0 = oa * gauss(off / wd) * (1 - (t / L) ** 2); up[n] += g0; oldB[n] += g0; } }
   }
   // (geologic coasts: an arc is a line of separate volcanoes some 100 km behind the trench, 40 to 80 km apart, each a
   // cone, the close ones merging into long islands as Java's do)
@@ -177,7 +178,7 @@ function geology(o, U) {
       const x = X(s) - p.vx / sp * k * 60 / (cr * ckm), y = Y(s) - p.vy / sp * k * 60 / (cr * ckm); if (x < 0 || y < 0 || x > asp || y > 1) break;
       const m0 = cell(x, y), R = Math.ceil(80 / ckm);
       for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) { const a = ci(m0) + di, b = cj(m0) + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a, d = Math.hypot(di, dj) * ckm, w = gauss(d / 28); if (crust[m] === 1) continue; else if (w > .35 && k < 4) { crust[m] = 2; up[m] += 1.2 * Math.pow(.8, k) * w; } }
-      if (k < 2) volc.push(m0);
+      if (k < 2) volc.push(m0); if (k < 4) hotC.push(m0);
       if (o.shores) hotT.push([m0, k]);
     }
   }
@@ -370,7 +371,9 @@ function geology(o, U) {
   const coast = U.distance(cols, rows, n => Hb[n] <= 128);
   const full = m => Math.min(rows - 1, Math.floor((cj(m) + .5) * f)) * cols + Math.min(cols - 1, Math.floor((ci(m) + .5) * f));
   const vols = [], maxV = Math.max(2, Math.round(N / 22000)); for (const m of volc) { const n = full(m); if (vols.length < maxV && Hb[n] > 128 && !lakeCells[n] && vols.every(v => Math.hypot(I(v) - I(n), J(v) - J(n)) > 28)) vols.push(n); }
-  return { H: Hb, Lo, M, coast, temp: C.temp, eco, ocean: C.ocean || null, shore: SH ? Object.assign(SH, { margin: SHin.margin, crust: SHin.crust, hotspots: SHin.hotspots, lat: SHin.lat, wrap: SHin.wrap }) : null, info: { plates: nP, continental: plates.filter(p => crust[p.seed] === 1).length, volcanoes: vols, playa, lakes: lakeCells.reduce((s, v) => s + v, 0), peak: Math.round(top / 10) * 10 } };
+  // the plates, the rocks and what lies in them (world-tectonics.js), for the map's plate and geology layers
+  const tect = o.tectonics === false ? null : require("./world-tectonics.js").tectonics({ cell0: o.cell || 4, cols, rows, f, cc, cr, ckm, cellKm, plate, plates, crust, bInfo, oldB, hotC, vols, E, isLand, lake: lakeCells, playa, eco, lat: o.lat || LAT[o.climate] || LAT.temperate, seed: o.seed });
+  return { H: Hb, Lo, M, coast, temp: C.temp, eco, ocean: C.ocean || null, tect, shore: SH ? Object.assign(SH, { margin: SHin.margin, crust: SHin.crust, hotspots: SHin.hotspots, lat: SHin.lat, wrap: SHin.wrap }) : null, info: { plates: nP, continental: plates.filter(p => crust[p.seed] === 1).length, volcanoes: vols, playa, lakes: lakeCells.reduce((s, v) => s + v, 0), peak: Math.round(top / 10) * 10 } };
 }
 // one step of the rivers' cutting: water routed down the land (through its hollows, which it fills and spills from:
 // a priority flood from the sea), gathered from all the land above, and the stream power law solved implicitly from

@@ -40,6 +40,43 @@ What was asked, what was done, and what is waiting, so the next session can carr
   latitude lines, names and strengths). Behind an opt-in until approved.
 - The user will continue in a local session after this one: keep this file and HANDOFF.md current.
 
+## Where the ocean and beach work stands (work in progress, committed so it is not lost)
+Both are opt-in and change nothing unless asked: `atlas.js world <dir> --ocean natural --coast natural`, or the
+"Simulate the oceans (preview)" checkbox in Make a new world. Regional and existing worlds stay byte-identical.
+- scripts/world-ocean.js (done, working): winds by belt plus geostrophic turn round each ocean's high; Stommel's
+  equation r∇²ψ + β∂ψ/∂x = curl τ solved by SOR on the basins (coasts as walls, regional maps padded with open sea);
+  circumpolar current where a westerly band is all sea on a planet; Ekman upwelling; SST advected along the currents
+  and relaxed to the latitude's; sea ice below -1.2 °C. Output `T.ocean` (coarse u, v, warmth, named gyres and
+  currents). Feeds climateEarth (sea warmth, cold/upwelling → fog and drought) and the ecology (coast temperature
+  anomaly, winter-weighted). Tested on a 6-continent planet: gyres at ±30°, western boundary currents warm, eastern
+  cold, equatorial currents westward.
+- Map layer (done): `ATLAS.worldArt.currents(WD)` draws arrows (orange-red warm, blue cold), gyre circles with turn,
+  named currents with warm/cold and strength, equator and 30° lines, a key. Page toggle button "Ocean currents"
+  (`.wm-octog`, data-w="currents"), shown only when the world has `T.ocean`, remembered per browser.
+- scripts/world-coast.js (working, still being tuned): sediment by stream power down the rivers (gravel from steep,
+  cold ground, worn to sand with distance), cliff supply, reef carbonate in warm seas, volcanic black sand; waves
+  from belt winds with fetch, openness and storminess, normalised per world; longshore drift with capacity ~ E^1.5
+  sin2θ, deposition where it slows, converges or is sheltered; classes beach/gravel/cliff/dune/marsh/mangrove/
+  barrier/spit/lagoon; a report of the 8 greatest beaches and why. Calibrated so about a third of coasts are sandy.
+  Output T.shore, T.shoreW (width), T.sand (makeup); drawn in both relief looks (old `beaches` strip is used only
+  when a world has no T.shore).
+- Barrier islands fixed: judged by the sand to be had along ~100 km of coast (log-averaged), on a shallow shelf, low
+  land behind (relief < 220 m), moderate waves; two cells wide, inlets at river mouths and rarely elsewhere; capped
+  at ~12% of coasts (Stutz & Pilkey 2011). Sandy coasts ~1/3 (Luijendijk et al. 2018). Label bug fixed (coral vs
+  volcanic sand).
+- Measured on a 6-continent planet: coasts by warm currents ~8 °C warmer than coasts by cold currents at the same
+  latitude; a cold eastern-boundary current runs beside a west-coast desert (as Canary/Sahara).
+- Then still to do for these requests: before/after images and the explanations the user asked for (why each beach
+  and each current formed, how currents change the nearby climate), docs (references/world.md), tutorial step for
+  the currents toggle, and wait for the user's approval before making either the default.
+
+## Plates, rocks and resources (16 Nov 2026: the user asked "do 1 and 3 and add both to the planet generation")
+- Done: scripts/world-tectonics.js, called at the end of world-geology.js (records old belts and hotspots without
+  touching the land: land, climate and rivers verified identical). T.tect, T.rocks, T.deposits; plates named.
+  Page buttons "Plates" and "Rocks and resources" (atlas-world-art.js plateLayer, rockLayer). Tested on a large
+  5-landmass world and a 6-continent planet; page toggles tested; tutorial step added.
+- Not done (option 2, offered): plates moving over time (continental drift history).
+
 ## Decided (the user: "okay I like everything now")
 - The Earth climate model is the default for new worlds (a plates world made before keeps the classic rules when made
   again with the same seed; `--climate-model classic|earth` overrides; T.climateModel is written when earth).

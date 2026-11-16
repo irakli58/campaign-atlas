@@ -1222,5 +1222,54 @@
   const DETAIL = { hydro: 3200, relief: 2600, painted: 2000, planet: 2600 };
   const detailBase = (WD, look) => DETAIL[look] ? Math.min(2, DETAIL[look] / Math.max(WD.size[0], WD.size[1])) : 0;
   function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; if (look === "painted") return painted(WD, "d", { rect, k, only: true }); return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6, colours: look === "planet" ? planetColours(WD.T && WD.T.planetPalette) : null }, look === "hydro" ? HYDRO : undefined); }
-  A.worldArt = { LOOKS, looksFor, draw, detail, detailBase };
+    // the plates (world-tectonics.js), a layer the referee shows or hides: each border drawn in its kind's colour
+  // (collision, subduction, island arc, spreading ridge, rift, transform), each plate's heading and speed, its name
+  const BORDER_STYLE = { 1: ["#8e1b1b", 2.6, "", "Collision: continents meet, great ranges rise"], 2: ["#c94a1c", 2.2, "", "Subduction: an ocean plate sinks under a continent"], 3: ["#d98a1c", 2, "", "Island arc: ocean sinks under ocean"], 4: ["#1f6fb2", 1.8, "", "Spreading ridge: plates part, new sea floor"], 5: ["#2e9a8a", 2, "6 4", "Rift: a continent tearing apart"], 6: ["#5a5a5a", 1.4, "3 4", "Transform: plates slide past"] };
+  function plateLayer(WD) {
+    const L = WD.T && WD.T.tect; if (!L) return "";
+    const [W, H] = WD.size, gc = L.cols, gr = L.rows, st = L.step, dec = b => { const s = atob(b), a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; };
+    const B = dec(L.border), K = Math.max(1, Math.min(W, H) / 900), r1 = v => Math.round(v * 10) / 10, by = {};
+    // (each border point eased toward the border cells about it, so the borders curve instead of stepping along the grid)
+    const at = (i, j) => { const k = B[j * gc + i]; let x = 0, y = 0, c = 0; for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= gc || b >= gr || B[b * gc + a] !== k) continue; x += a; y += b; c++; } return [(x / c + .5) * st, (y / c + .5) * st]; };
+    for (let j = 0; j < gr; j++) for (let i = 0; i < gc; i++) { const k = B[j * gc + i]; if (!k) continue; for (const [di, dj] of [[1, 0], [0, 1], [1, 1], [-1, 1]]) { const a = i + di, b = j + dj; if (a < 0 || b >= gr || a >= gc) continue; if (B[b * gc + a] !== k) continue; if ((di && dj) && (B[j * gc + a] === k || B[b * gc + i] === k)) continue; const [x0, y0] = at(i, j), [x1, y1] = at(a, b); by[k] = (by[k] || "") + `M${r1(x0)} ${r1(y0)}L${r1(x1)} ${r1(y1)}`; } }
+    let s = "";
+    for (const [k, d] of Object.entries(by)) { const [c, w, dash] = BORDER_STYLE[k]; s += `<path d="${d}" fill="none" stroke="#f6f2e8" stroke-opacity=".55" stroke-width="${r1((w + 2) * K)}" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="${r1(w * K)}" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash.split(" ").map(v => r1(v * K)).join(" ")}"` : ""}/>`; }
+    const fs = Math.min(W, H) * .014;
+    for (const p of L.plates) { const [x, y] = p.at, a = -p.dir * Math.PI / 180, len = Math.min(W, H) * (.03 + .006 * p.speed), ex = x + Math.cos(a) * len, ey = y + Math.sin(a) * len, hl = 7 * K;
+      s += `<path d="M${r1(x)} ${r1(y)}L${r1(ex)} ${r1(ey)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(a - .45) * hl)} ${r1(ey - Math.sin(a - .45) * hl)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(a + .45) * hl)} ${r1(ey - Math.sin(a + .45) * hl)}" fill="none" stroke="#f6f2e8" stroke-width="${r1(4.5 * K)}" stroke-linecap="round"/><path d="M${r1(x)} ${r1(y)}L${r1(ex)} ${r1(ey)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(a - .45) * hl)} ${r1(ey - Math.sin(a - .45) * hl)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(a + .45) * hl)} ${r1(ey - Math.sin(a + .45) * hl)}" fill="none" stroke="#3b2f22" stroke-width="${r1(2 * K)}" stroke-linecap="round"/><circle cx="${r1(x)}" cy="${r1(y)}" r="${r1(3 * K)}" fill="#3b2f22"/>`;
+      s += `<text x="${r1(x)}" y="${r1(y - fs * .8)}" text-anchor="middle" font-size="${r1(fs)}" font-family="Georgia, serif" font-variant="small-caps" letter-spacing=".08em" fill="#3b2f22" stroke="#f6f2e8" stroke-width="${r1(2.6 * K)}" stroke-opacity=".8" paint-order="stroke">${A.esc ? A.esc(p.name || "Plate " + (p.id + 1)) : p.name}<tspan x="${r1(x)}" dy="${r1(fs * 2.6)}" font-size="${r1(fs * .7)}" font-variant="normal" font-style="italic">${p.kind}, about ${p.speed} cm a year</tspan></text>`; }
+    s += legend(W, H, Object.values(BORDER_STYLE).map(([c, w, dash, l]) => [c, l, dash]), "Plate borders");
+    return `<g class="wm-plates" pointer-events="none">${s}</g>`;
+  }
+  // the rocks and what lies in them: each region tinted by its rock, each deposit marked and named, with why it is
+  // there (on hovering, and in the key)
+  const ROCK_STYLE = { 1: ["#7a3b46", "Volcanic rock (basalt, andesite)"], 2: ["#c46d8c", "Granite and metamorphic rock"], 3: ["#9b6b3c", "Ancient shield (the oldest crust)"], 4: ["#a88a5a", "Folded sedimentary rock"], 5: ["#d8c27a", "Sedimentary basin (sandstone, shale)"], 6: ["#8fb4c4", "Limestone"], 7: ["#9ccf8a", "River plains and deltas (alluvium)"] };
+  const DEP_STYLE = { copper: ["#b4602a", "Cu"], gold: ["#d4a017", "Au"], silver: ["#9aa4ad", "Ag"], iron: ["#7a2e1d", "Fe"], tin: ["#6f7f8a", "Sn"], gems: ["#a2245c", "◆"], leadzinc: ["#55606b", "Pb"], coal: ["#2a2a2a", "C"], oil: ["#1d1d1d", "⬤"], salt: ["#e8e4dc", "Na"], hotspring: ["#d0442b", "♨"], caves: ["#4a6a7a", "∩"] };
+  function rockLayer(WD) {
+    const T = WD.T; if (!T || !T.rocks) return "";
+    const [W, H] = WD.size, cols = T.cols, rows = T.rows, s0 = atob(T.rocks), K = Math.max(1, Math.min(W, H) / 900), r1 = v => Math.round(v * 10) / 10;
+    let s = "";
+    if (typeof document !== "undefined") {
+      const cv = document.createElement("canvas"); cv.width = cols; cv.height = rows; const g = cv.getContext("2d"), img = g.createImageData(cols, rows);
+      const RGB = Object.fromEntries(Object.entries(ROCK_STYLE).map(([k, [c]]) => [k, [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]]));
+      for (let n = 0; n < cols * rows; n++) { const c = RGB[s0.charCodeAt(n)]; if (!c) continue; img.data[n * 4] = c[0]; img.data[n * 4 + 1] = c[1]; img.data[n * 4 + 2] = c[2]; img.data[n * 4 + 3] = 150; }
+      g.putImageData(img, 0, 0);
+      // (drawn again larger and softly blurred, so the rocks' edges blend rather than step)
+      const cv2 = document.createElement("canvas"); cv2.width = cols * 3; cv2.height = rows * 3; const g2 = cv2.getContext("2d"); g2.filter = "blur(2px)"; g2.drawImage(cv, 0, 0, cv2.width, cv2.height);
+      s += `<image href="${cv2.toDataURL()}" width="${W}" height="${H}" preserveAspectRatio="none" style="image-rendering:auto"/>`;
+    }
+    const fs = Math.min(W, H) * .011, R = 6.5 * K;
+    for (const d of T.deposits || []) { const [c, sym] = DEP_STYLE[d.kind] || ["#333", "?"], [x, y] = d.at, light = d.kind === "salt";
+      s += `<g><title>${A.esc ? A.esc(d.name + ": " + d.why) : d.name}</title><circle cx="${x}" cy="${y}" r="${r1(R)}" fill="${c}" stroke="#f6f2e8" stroke-width="${r1(1.5 * K)}"/><text x="${x}" y="${r1(y + R * .38)}" text-anchor="middle" font-size="${r1(R * 1.05)}" font-family="Georgia, serif" font-weight="bold" fill="${light ? "#3b2f22" : "#fff"}">${sym}</text><text x="${x}" y="${r1(y + R + fs)}" text-anchor="middle" font-size="${r1(fs)}" font-family="Georgia, serif" font-style="italic" fill="#3b2f22" stroke="#f6f2e8" stroke-width="${r1(2.2 * K)}" stroke-opacity=".85" paint-order="stroke">${A.esc ? A.esc(d.name) : d.name}</text></g>`; }
+    s += legend(W, H, Object.values(ROCK_STYLE).map(([c, l]) => [c, l, "", true]), "Rocks", true);
+    return `<g class="wm-rocks" pointer-events="visiblePainted">${s}</g>`;
+  }
+  // a small key in a corner (left: rocks, right: plates)
+  function legend(W, H, rows2, title, left) {
+    const K = Math.max(1, Math.min(W, H) / 900), fs = 11 * K, lh = fs * 1.5, w = fs * 22, h = lh * (rows2.length + 1.4), x = left ? 14 * K : W - w - 14 * K, y = H - h - 14 * K, r1 = v => Math.round(v * 10) / 10;
+    let s = `<rect x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" rx="${r1(4 * K)}" fill="#f6f2e8" fill-opacity=".9" stroke="#3b2f22" stroke-opacity=".3"/><text x="${r1(x + fs * .8)}" y="${r1(y + lh)}" font-size="${r1(fs)}" font-family="Georgia, serif" font-weight="bold" fill="#3b2f22">${title}</text>`;
+    rows2.forEach(([c, l, dash, sw], i) => { const yy = y + lh * (i + 2); s += sw ? `<rect x="${r1(x + fs * .8)}" y="${r1(yy - fs * .75)}" width="${r1(fs * 1.6)}" height="${r1(fs * .9)}" fill="${c}"/>` : `<path d="M${r1(x + fs * .8)} ${r1(yy - fs * .3)}h${r1(fs * 1.8)}" stroke="${c}" stroke-width="${r1(2.2 * K)}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`; s += `<text x="${r1(x + fs * 3.2)}" y="${r1(yy)}" font-size="${r1(fs * .85)}" font-family="Georgia, serif" fill="#3b2f22">${l}</text>`; });
+    return s;
+  }
+  A.worldArt = { LOOKS, looksFor, draw, detail, detailBase, plateLayer, rockLayer };
 })(ATLAS);

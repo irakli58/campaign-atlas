@@ -820,6 +820,8 @@
         <span class="wm-title">${esc(WD.title || "The world")}</span>
         <select class="wm-look keeper" aria-label="How the map is drawn" title="How the map is drawn: the players see it the same way" hidden></select>
         <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
+        <button type="button" class="wm-btn wm-pltog" data-w="plates" aria-pressed="false" hidden title="Show the tectonic plates: their borders, what happens at each, which way each plate moves">Plates</button>
+        <button type="button" class="wm-btn wm-rktog" data-w="rocks" aria-pressed="false" hidden title="Show the rocks of each region, and the ores, gems, coal, oil, salt, hot springs and caves in them, with why each is there">Rocks and resources</button>
         <span class="wm-sp"></span>
         <span class="wm-editbar keeper"></span>
         ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
@@ -830,7 +832,7 @@
         ${A.ux ? `<span class="keeper wm-uxs">${A.ux.saveMark()}${A.ux.keysBtn("world")}</span>` : ""}<button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false" title="Edit the map (E)">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-rk"></g><g class="wm-pl"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -988,6 +990,7 @@
     const CUR = { on: (() => { try { return ctx.store.get("world-currents") === "1"; } catch (e) { return false; } })(), names: (() => { try { return ctx.store.get("world-curnames") !== "0"; } catch (e) { return true; } })() };
     function along(p, t) { let s = 0; for (let i = 1; i < p.length; i++) { const l = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); if (s + l >= t) { const q = (t - s) / (l || 1); return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * q, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * q, Math.atan2(p[i][1] - p[i - 1][1], p[i][0] - p[i - 1][0]) * 180 / Math.PI]; } s += l; } const a = p[p.length - 2], b = p[p.length - 1]; return [b[0], b[1], Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI]; }
     function drawCurrents() {
+      if (typeof drawGeoLayers === "function") drawGeoLayers();
       const g = $(".wm-cur"), C = WD.T && WD.T.currents, btn = $('[data-w="currents"]');
       if (btn) { btn.hidden = !C; btn.setAttribute("aria-pressed", !!(C && CUR.on)); }
       if (!g) return; if (!C || !CUR.on) { g.innerHTML = ""; return; }
@@ -1247,6 +1250,12 @@
     // the sharper land where the map is zoomed in (the shaded reliefs): once the camera rests, the window in view is
     // drawn again as fine as the screen shows it and laid over the land, so a continent of a whole planet holds its
     // valleys and streams up close; zoomed back out, the whole map's own picture is enough
+    const LAY = { plates: (() => { try { return ctx.store.get("world-plates") === "1"; } catch (e) { return false; } })(), rocks: (() => { try { return ctx.store.get("world-rocks") === "1"; } catch (e) { return false; } })() };
+    function drawGeoLayers() {
+      const art = A.worldArt, hasP = !!(WD.T && WD.T.tect && art && art.plateLayer), hasR = !!(WD.T && WD.T.rocks && art && art.rockLayer);
+      const bp = $(".wm-pltog"), br = $(".wm-rktog"); bp.hidden = !hasP; br.hidden = !hasR; bp.setAttribute("aria-pressed", hasP && LAY.plates); br.setAttribute("aria-pressed", hasR && LAY.rocks);
+      $(".wm-pl").innerHTML = hasP && LAY.plates ? art.plateLayer(WD) : ""; $(".wm-rk").innerHTML = hasR && LAY.rocks ? art.rockLayer(WD) : "";
+    }
     function refine() {
       const slot = cam.querySelector(".wm-detail"); if (!slot || !A.worldArt || !A.worldArt.detail || gone || anim) return;
       const base = A.worldArt.detailBase(WD, WD.look); if (!base || V.k < base * 1.4) { slot.innerHTML = ""; refine.at = null; return; }
@@ -2090,6 +2099,7 @@
         case "currents": CUR.on = !CUR.on; try { ctx.store.set("world-currents", CUR.on ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
         case "coasts": COA.on = !COA.on; try { ctx.store.set("world-coasts", COA.on ? "1" : "0"); } catch (_) {} drawCoasts(); renderBars(); break;
         case "curnames": CUR.names = !CUR.names; try { ctx.store.set("world-curnames", CUR.names ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
+        case "plates": case "rocks": { const k = b.dataset.w; LAY[k] = !LAY[k]; try { ctx.store.set("world-" + k, LAY[k] ? "1" : ""); } catch (_) {} drawGeoLayers(); break; }
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
         case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }
         case "dlgclose": closeDlg(); break;
