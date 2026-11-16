@@ -46,7 +46,9 @@
     o = o || {}; const M = Object.assign({}, MAKERS[o.maker] || MAKERS.commoner), seed = o.seed || 1 + Math.floor(Math.random() * 99999);
     // how much is drawn (the user: "a commoner's map should be sparse and crude"): minimal for those who know little,
     // detailed for the cartographer, balanced between
-    const density = (o.style && o.style.density) || o.density || (["commoner", "elder"].includes(o.maker || "commoner") ? "minimal" : o.maker === "cartographer" ? "detailed" : "balanced"), DF = GEN_DENS[density] || GEN_DENS.balanced;
+    // (the user then: "a slider on how detailed the map is and how accurate it is": level, 0 the least .. 1 the most)
+    const st0 = o.style || {}, LV = clamp(o.level != null ? +o.level : st0.level != null ? +st0.level : LEVEL_OF[o.density || st0.density] != null ? LEVEL_OF[o.density || st0.density] : levelFor(o.maker), 0, 1);
+    const density = LV < .25 ? "minimal" : LV < .75 ? "balanced" : "detailed", DF = lerpD(GEN_DENS, LV);
     if (o.accuracy != null) M.err = M.err * (1.6 - 1.4 * clamp(+o.accuracy, 0, 1));
     const [W, H] = WD.size, G = WD.G, D = A.worldDraw, kmU = WD.scale && WD.scale.per ? WD.scale.per * (/mile/.test(WD.scale.unit || "") ? 1.609 : /km/.test(WD.scale.unit || "") ? 1 : 1) : 3;
     const R = Math.min(Math.max(W, H) * .75, M.km / kmU);
@@ -88,7 +90,7 @@
       const onLand = p => inRing(p, land);
       // (the famous places: the capital, then the great cities and ports; and home)
       const rank = l => l.kind === "capital" ? 0 : l.kind === "city" ? 1 : l.kind === "port" ? 2 : l.kind === "town" ? 3 : 9;
-      const famous = locs.filter(l => l !== home && rank(l) < 9 && onLand(l.at) && (l.state !== "unknown" || PUBLIC.has(l.kind))).sort((a, b) => rank(a) - rank(b)).slice(0, density === "detailed" ? 9 : density === "balanced" ? 7 : 6);
+      const famous = locs.filter(l => l !== home && rank(l) < 9 && onLand(l.at) && (l.state !== "unknown" || PUBLIC.has(l.kind))).sort((a, b) => rank(a) - rank(b)).slice(0, Math.round(3 + LV * 10));
       for (const l of (home ? [home] : []).concat(famous)) add({ k: "sym", s: SYM_OF[l.kind] || "village", at: warpW(l.at), size: span * (l.kind === "capital" ? .05 : l === home ? .042 : .04), label: l.name, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id, home: l === home ? 1 : undefined });
       // (the great ranges: high ground on a coarse grid, gathered; the biggest few, each a few peaks, named if they have a name)
       const S = D.sampler(G), sea = G.sea, step = span / 34, gw = Math.ceil((bx1 - bx0) / step) + 1, gh = Math.ceil((by1 - by0) / step) + 1, PK = new Float32Array(gw * gh);
@@ -106,10 +108,10 @@
       }
       const cx = q => bx0 + (q % gw + .5) * step, cy = q => by0 + (((q / gw) | 0) + .5) * step;
       const names = (WD.labels || []).filter(lb => lb.name && Array.isArray(lb.at) && lb.kind === "range"), usedN = new Set();
-      const nR = density === "detailed" ? 9 : density === "balanced" ? 8 : 7;
+      const nR = Math.round(4 + LV * 9);
       for (const rg of ranges.sort((a, b) => b.score - a.score).slice(0, nR)) {
         if (rg.cells.length < 2) continue;
-        const want = Math.min(rg.cells.length > 40 ? 5 : rg.cells.length > 20 ? 4 : rg.cells.length > 8 ? 3 : 2, density === "detailed" ? 6 : 5), got = [];
+        const want = Math.min(rg.cells.length > 40 ? 5 : rg.cells.length > 20 ? 4 : rg.cells.length > 8 ? 3 : 2, Math.round(3 + LV * 3)), got = [];
         for (const q of rg.cells.slice().sort((p1, p2) => PK[p2] - PK[p1])) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 2.2)) continue; got.push(q); }
         for (const q of got) add({ k: "sym", s: "mountain", at: warpW([cx(q), cy(q)]), size: step * (1.1 + .7 * PK[q]), layer: "geo", st: "c", big: PK[q] > .7 ? 1 : undefined });
         // (its name, if the world gives it one: the named range nearest its peaks)
@@ -145,7 +147,7 @@
       const HK = new Uint8Array(gw * gh), taken = els.filter(e => e.at).map(e => e.at);
       for (let b = 0; b < gh; b++) for (let a = 0; a < gw; a++) { const x = bx0 + (a + .5) * step, y = by0 + (b + .5) * step, t = (S(x, y) - sea) / (255 - sea); if (TV[b * gw + a] > tH && TV[b * gw + a] <= tM && !FK[b * gw + a]) HK[b * gw + a] = 1; }
       const hills = []; for (let q = 0; q < gw * gh; q++) if (HK[q]) hills.push(q);
-      let nh = 0; const hMax = density === "detailed" ? 10 : density === "balanced" ? 8 : 6;
+      let nh = 0; const hMax = Math.round(LV * 18);
       for (const q of hills.sort((p1, p2) => hash(p1, 5, seed + 43) - hash(p2, 5, seed + 43))) { if (nh >= hMax) break; const p = warpW([cx(q), cy(q)]); if (taken.some(t => Math.hypot(t[0] - p[0], t[1] - p[1]) < step * 3.2)) continue; taken.push(p); nh++; add({ k: "sym", s: "mountain", at: p, size: step * .8, layer: "geo", st: "c", small: 1 }); }
       return true;
     };
@@ -241,11 +243,16 @@
     // (room at the top for the title, above what was drawn)
     y0 -= (y1 - y0) * .1;
     if (home && M.labels !== "all") add({ k: "text", at: [(x0 + x1) / 2, y0 + (y1 - y0) * .07], label: o.title || (whole ? `The land, as folk tell it` : `${home.name} and thereabouts`), size: (y1 - y0) * .045, layer: "text", st: "c", title: 1 });
-    const style = Object.assign({ density, paper: "aged", wear: .4, ink: "brown", width: 1, rough: clamp(.35 + M.err * 2.6, .2, 1), hand: M.err > .1 ? "scrawl" : M.err > .05 ? "hand" : "fair", detail: M.detail }, o.style || {});
-    return { id: o.id || uid(), name: o.name || `${M.name}'s map`, whole: whole ? 1 : undefined, maker: o.maker || "commoner", home: home ? home.id : null, seed, accuracy: o.accuracy, made: Date.now(), frame: [r1(x0), r1(y0), r1(x1 - x0), r1(y1 - y0)], style, given: false, layers: { geo: 1, places: 1, roads: 1, text: 1, notes: 1, dm: 1 }, els, R: r1(wholeR || R), H: Hc.map(r1) };
+    const style = Object.assign({ paper: "aged", wear: .4, ink: "brown", width: 1, rough: clamp(.35 + M.err * 2.6, .2, 1), hand: M.err > .1 ? "scrawl" : M.err > .05 ? "hand" : "fair", detail: M.detail }, o.style || {}, { level: LV, density });
+    return { id: o.id || uid(), name: o.name || `${M.name}'s map`, whole: whole ? 1 : undefined, maker: o.maker || "commoner", home: home ? home.id : null, seed, accuracy: o.accuracy != null ? +o.accuracy : .5, made: Date.now(), frame: [r1(x0), r1(y0), r1(x1 - x0), r1(y1 - y0)], style, given: false, layers: { geo: 1, places: 1, roads: 1, text: 1, notes: 1, dm: 1 }, els, R: r1(wholeR || R), H: Hc.map(r1) };
   }
   // how much a map's maker draws, by density
   const GEN_DENS = { minimal: { mtn: .6, mtnMax: 3, hills: 0, woodMin: 3, trees: .5, treesMax: 2, waves: .06, words: 0 }, balanced: { mtn: .9, mtnMax: 4, hills: 1, woodMin: 2, trees: .8, treesMax: 4, waves: .12, words: 1 }, detailed: { mtn: 1.3, mtnMax: 7, hills: 1, woodMin: 1, trees: 1.2, treesMax: 7, waves: .2, words: 1 } };
+  // the level a maker draws at unless told (0 the least .. 1 the most), and a preset's level
+  const LEVEL_OF = { minimal: 0, balanced: .5, detailed: 1 };
+  const levelFor = mk => ({ commoner: .3, elder: .1, traveler: .5, merchant: .5, scout: .5, cartographer: 1 })[mk || "commoner"] ?? .5;
+  // (a table's settings between its presets, by level; whole numbers stay whole)
+  const lerpD = (tab, L) => { const lo = L < .5 ? tab.minimal : tab.balanced, hi = L < .5 ? tab.balanced : tab.detailed, f = L < .5 ? L * 2 : (L - .5) * 2, out = {}; for (const k in lo) { const v = lo[k] + (hi[k] - lo[k]) * f; out[k] = Number.isInteger(lo[k]) && Number.isInteger(hi[k]) ? Math.round(v) : v; } return out; };
   function smooth(a, b, v) { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
 
   // the land about one place, sketched onto a map at its mapmaker's skill (to reveal a region as the party learns it):
@@ -338,7 +345,7 @@
   const SZ = { city: 12, town: 10, port: 9, castle: 9, temple: 8, inn: 7, village: 8, tower: 7, ruin: 7, cave: 7, bridge: 7, mountain: 10, hill: 7, forest: 8, tree: 6, swamp: 8, wave: 5, landmark: 6, danger: 7, camp: 7, unknown: 7, x: 7, lake: 8 };
   const TERRAIN = { mountain: 3, forest: 3.3, swamp: 3.5, hill: 4, tree: 4, lake: 3.4, wave: 5 };
   function layout(map, sc, show) {
-    const D = DENS[(map.style || {}).density] || DENS.balanced, boxes = [], out = [], [fx, fy, fw, fh] = map.frame;
+    const ms = map.style || {}, D = lerpD(DENS, ms.level != null ? clamp(+ms.level, 0, 1) : LEVEL_OF[ms.density] != null ? LEVEL_OF[ms.density] : .5), boxes = [], out = [], [fx, fy, fw, fh] = map.frame;
     const hit = b => b[0] < fx + sc || b[1] < fy + sc || b[2] > fx + fw - sc || b[3] > fy + fh - sc || boxes.some(o => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]);
     const symBox = (at, z, pad) => [at[0] - z * .5 * pad, at[1] - z * .5 * pad, at[0] + z * .5 * pad, at[1] + z * .45 * pad];
     const tBox = (x, y, size, txt, anchor) => { const w = Math.max(1, (txt || "").length + 1) * size * .5, x0 = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2; return [x0, y - size * .85, x0 + w, y + size * .3]; };
@@ -446,8 +453,8 @@
         <div class="pm-new" hidden><fieldset class="pm-box"><legend>A new map, as one person knows the land</legend>
           <label>Drawn by <select data-pmn="maker">${opt(Object.entries(MAKERS).map(([k, v]) => [k, v.name]), "commoner")}</select></label><p class="kn pm-mk"></p>
           <label>Who lives at <select data-pmn="home">${opt(placesKnown.map(l => [l.id, l.name]), (W.party && W.party.at) || (placesKnown[0] || {}).id)}</select></label>
-          <label>How carefully drawn <input type="range" data-pmn="acc" min="0" max="1" step="0.05" value="0.5"></label>
-          <label title="Minimal suits a commoner's sketch; a cartographer draws in detail">How busy <select data-pmn="density">${opt([["", "As the maker would"]].concat([["minimal", "Minimal: only what matters"], ["balanced", "Balanced"], ["detailed", "Detailed"]]), "")}</select></label>
+          <label title="Few things, or many">How much is drawn<span class="pm-sl"><span class="kn">little</span><input type="range" data-pmn="level" min="0" max="1" step="0.05" value="${levelFor("commoner")}"><span class="kn">much</span></span></label>
+          <label title="How far things sit from where they truly are">How accurate<span class="pm-sl"><span class="kn">rough</span><input type="range" data-pmn="acc" min="0" max="1" step="0.05" value="0.5"><span class="kn">true</span></span></label>
           <label>Name <input type="text" data-pmn="name" placeholder="e.g. Old Marta's map"></label>
           <div class="pm-row"><button type="button" class="wm-btn prim" data-pm="make">Draw it</button><button type="button" class="wm-btn" data-pm="blank">A blank sheet</button><button type="button" class="wm-btn" data-pm="cancelnew">Cancel</button></div></fieldset></div>
         ${m ? `<fieldset class="pm-box"><legend>This map and the players</legend>
@@ -455,7 +462,7 @@
           <div class="pm-row"><button type="button" class="wm-btn" data-pm="show"${m.given ? "" : " disabled"} title="Put it on the players' screen now">Show on the players' screen</button></div>
           <div class="pm-row"><button type="button" class="wm-btn" data-pm="png">Save as a picture</button><button type="button" class="wm-btn" data-pm="print">Print</button></div>
           <p class="kn">The picture and the print are the players' version: nothing of your own layer or anything hidden.</p></fieldset>` : ""}`;
-      const mk = $('[data-pmn="maker"]'); if (mk) { const say = () => { $(".pm-mk").textContent = "Knows " + MAKERS[mk.value].say + "."; }; say(); mk.addEventListener("change", say); }
+      const mk = $('[data-pmn="maker"]'); if (mk) { const say = () => { $(".pm-mk").textContent = "Knows " + MAKERS[mk.value].say + "."; }; say(); mk.addEventListener("change", () => { say(); const lv = $('[data-pmn="level"]'); if (lv) lv.value = levelFor(mk.value); }); }
     }
     // the tools over the sheet
     function tools() {
@@ -491,7 +498,8 @@
           ${routes.length ? `<label>A road <select data-pmv="revroute">${opt(routes.map(r => [r.id, (r.name ? r.name + ": " : "") + WD_name(W, r.from) + " to " + WD_name(W, r.to) + (r.hidden ? " (secret)" : "")]), routes[0].id)}</select></label><div class="pm-row"><button type="button" class="wm-btn" data-pm="revroad">Sketch it on</button></div>` : ""}
           <p class="kn">Sketched as the map's maker would: roughly, a little out of place.</p></fieldset>
         <fieldset class="pm-box"><legend>The look</legend>
-          <label title="How much is drawn and named. Your own additions always stay.">How busy <select data-pms="density">${opt([["minimal", "Minimal: only what matters"], ["balanced", "Balanced"], ["detailed", "Detailed"]], st.density || "balanced")}</select></label>
+          <label title="How much the maker draws. Your own additions always stay.">How much is drawn<span class="pm-sl"><span class="kn">little</span><input type="range" data-pmg="level" min="0" max="1" step="0.05" value="${st.level != null ? st.level : LEVEL_OF[st.density] != null ? LEVEL_OF[st.density] : .5}"><span class="kn">much</span></span></label>
+          <label title="How far things sit from where they truly are. Your own additions always stay where you put them.">How accurate<span class="pm-sl"><span class="kn">rough</span><input type="range" data-pmg="accuracy" min="0" max="1" step="0.05" value="${m.accuracy != null ? m.accuracy : .5}"><span class="kn">true</span></span></label>
           <label>Parchment <select data-pms="paper">${opt([["aged", "Aged"], ["pale", "Pale"], ["brown", "Brown, old"], ["grey", "Grey"]], st.paper)}</select></label>
           <label>Wear <input type="range" data-pms="wear" min="0" max="1" step="0.05" value="${st.wear == null ? .5 : st.wear}"></label>
           <label>Ink <select data-pms="ink">${opt([["brown", "Brown"], ["black", "Black"], ["sepia", "Faded sepia"], ["iron", "Iron-gall"]], st.ink)}</select></label>
@@ -563,6 +571,11 @@
       if (t.matches('[data-pmv="forme"]')) { E.forMe = t.checked; return; }
       if (t.matches('[data-pmv="sym"]')) { E.sym = t.value; return; }
       if (t.matches('[data-pmv="given"]') && m) { mutate(d => { d.given = t.checked; }); return; }
+      if (t.matches("[data-pmg]") && m) { const k = t.dataset.pmg, v = +t.value; mutate(d => {
+        const acc = k === "accuracy" ? v : d.accuracy, lv = k === "level" ? v : (d.style || {}).level, sty = Object.assign({}, d.style, { level: lv }); delete sty.density;
+        const g = generate(ctx.WD(), { maker: d.maker, home: d.home, seed: d.seed, accuracy: acc, name: d.name, style: sty });
+        // (the maker's part drawn again at the new setting; the referee's own additions kept as they are)
+        d.accuracy = acc; d.style = Object.assign({}, d.style, { level: g.style.level, density: g.style.density }); d.els = g.els.concat(d.els.filter(e => !e.gen)); d.frame = g.frame; d.R = g.R; d.H = g.H; if (g.whole) d.whole = 1; }); return; }
       if (t.matches("[data-pml]") && m) { const k = t.dataset.pml; mutate(d => { d.layers = Object.assign({}, d.layers, { [k]: t.checked ? 1 : 0 }); }); return; }
       if (t.matches("[data-pme]") && m && E.sel) { const k = t.dataset.pme; if (k === "label") return; mutate(d => { const e = elById(d, E.sel); if (!e) return; if (k === "st") e.st = t.value; else if (k === "dm") { e.dm = t.checked ? 1 : undefined; if (!t.checked && e.layer === "dm") e.layer = "notes"; } else if (k === "hide") e.hide = t.checked ? 1 : undefined; else if (k === "lock") e.lock = t.checked ? 1 : undefined; }); }
     });
@@ -575,8 +588,8 @@
         case "new": $(".pm-new").hidden = false; break;
         case "cancelnew": $(".pm-new").hidden = true; break;
         case "make": case "blank": {
-          const maker = $('[data-pmn="maker"]').value, home = $('[data-pmn="home"]').value, acc = +$('[data-pmn="acc"]').value, name = $('[data-pmn="name"]').value.trim(), density = $('[data-pmn="density"]').value || undefined;
-          let d = generate(W, { maker, home, accuracy: acc, name: name || undefined, density });
+          const maker = $('[data-pmn="maker"]').value, home = $('[data-pmn="home"]').value, acc = +$('[data-pmn="acc"]').value, name = $('[data-pmn="name"]').value.trim(), level = +$('[data-pmn="level"]').value;
+          let d = generate(W, { maker, home, accuracy: acc, name: name || undefined, level });
           if (a === "blank") { d.els = d.els.filter(e => e.title); d.name = name || "A blank sheet"; }
           E.id = d.id; E.sel = null; E.view = null; save(d); break;
         }
