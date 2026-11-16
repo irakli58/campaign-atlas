@@ -28,7 +28,7 @@
   /* ---- who drew it: how far they know, how well they draw, what they care about (presets, not rules: the referee
           changes any of it) */
   const MAKERS = {
-    commoner: { name: "A village commoner", km: 45, err: .2, roads: false, places: 5, labels: "few", rivers: .9, detail: .45, keep: ["village", "hamlet", "town", "farm", "inn", "manor", "temple", "shrine", "bridge", "mill"], say: "only the country about home: the village, the wood, the river, the road to the next town; mountains seen far off" },
+    commoner: { name: "A village commoner", whole: 1, km: 45, err: .2, roads: false, places: 5, labels: "few", rivers: .9, detail: .45, keep: ["village", "hamlet", "town", "farm", "inn", "manor", "temple", "shrine", "bridge", "mill"], say: "the land as folk tell of it: the rough shape of the whole continent, the capital and the great cities, the great mountains and forests, and home" },
     elder: { name: "A village elder", km: 70, err: .16, roads: false, places: 8, labels: "some", rivers: 1, detail: .55, keep: ["village", "hamlet", "town", "farm", "inn", "manor", "temple", "shrine", "monastery", "bridge", "ruin", "stones", "grove"], say: "the old country round about, with its old places and tales" },
     traveler: { name: "A traveler", km: 240, err: .12, roads: true, places: 14, labels: "most", rivers: 1, detail: .6, keep: ["capital", "city", "town", "village", "port", "inn", "castle", "temple", "monastery", "bridge"], say: "the roads walked and the towns along them, the distances roughly" },
     merchant: { name: "A merchant", km: 420, err: .09, roads: true, places: 16, labels: "most", rivers: 1, detail: .6, keep: ["capital", "city", "town", "port", "inn", "market", "bridge", "mine", "castle"], say: "the trade roads, the market towns and ports, the river crossings" },
@@ -66,8 +66,79 @@
     const els = [], add = e => { e.id = e.id || uid(); e.gen = 1; els.push(e); return e; };
     const simp = (pts, eps) => { if (pts.length < 3) return pts; const out = [pts[0]]; let last = pts[0]; for (let i = 1; i < pts.length - 1; i++) if (Math.hypot(pts[i][0] - last[0], pts[i][1] - last[1]) >= eps) { out.push(pts[i]); last = pts[i]; } out.push(pts[pts.length - 1]); return out; };
     const eps = R * (.035 + .2 * M.err);
+    // the whole land as folk tell of it (the user: "a general contour of the continent, then only the really famous
+    // places and some of the really famous mountains, stuff a commoner would know"; and "do not add lines inside the
+    // contour"): the outline of the land home stands on, smoothed and rough; the capital and the great cities; the
+    // greatest ranges, a few peaks each, named; the great forests; home. Nothing else: no rivers, no roads.
+    let wholeR = 0;
+    const wholeLand = () => {
+      const inRing = (pt, ring) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const [xi, yi] = ring[i], [xj, yj] = ring[j]; if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) c = !c; } return c; };
+      const area = ring => { let a = 0; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) a += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]); return Math.abs(a / 2); };
+      const rings = D.coastRings(G).filter(r => r.length > 8);
+      let land = rings.filter(r => inRing(Hc, r)).sort((a, b) => area(b) - area(a))[0];
+      if (!land) land = rings.slice().sort((a, b) => Math.min(...a.map(p => Math.hypot(p[0] - Hc[0], p[1] - Hc[1]))) - Math.min(...b.map(p => Math.hypot(p[0] - Hc[0], p[1] - Hc[1]))))[0];
+      if (!land) return false;
+      let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9; for (const [x, y] of land) { bx0 = Math.min(bx0, x); by0 = Math.min(by0, y); bx1 = Math.max(bx1, x); by1 = Math.max(by1, y); }
+      const span = Math.max(bx1 - bx0, by1 - by0); wholeR = span * .6;
+      // (the outline: only the great bays and capes, softened, then drawn out of true the farther from home)
+      const ep = span * (.025 + .25 * M.err);
+      let out = simp(land.concat([land[0]]), ep);
+      for (let k = 0; k < 2; k++) { const nx = []; for (let i = 0; i < out.length - 1; i++) { const [ax, ay] = out[i], [bx, by] = out[i + 1]; nx.push([ax * .75 + bx * .25, ay * .75 + by * .25], [ax * .25 + bx * .75, ay * .25 + by * .75]); } nx.push(nx[0]); out = nx; }
+      add({ k: "line", t: "coast", pts: out.map(warpW), layer: "geo", st: "c" });
+      const onLand = p => inRing(p, land);
+      // (the famous places: the capital, then the great cities and ports; and home)
+      const rank = l => l.kind === "capital" ? 0 : l.kind === "city" ? 1 : l.kind === "port" ? 2 : 9;
+      const famous = locs.filter(l => l !== home && rank(l) < 9 && onLand(l.at) && (l.state !== "unknown" || PUBLIC.has(l.kind))).sort((a, b) => rank(a) - rank(b)).slice(0, density === "detailed" ? 7 : density === "balanced" ? 5 : 4);
+      for (const l of (home ? [home] : []).concat(famous)) add({ k: "sym", s: SYM_OF[l.kind] || "village", at: warpW(l.at), size: span * (l.kind === "capital" ? .05 : l === home ? .042 : .04), label: l.name, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id, home: l === home ? 1 : undefined });
+      // (the great ranges: high ground on a coarse grid, gathered; the biggest few, each a few peaks, named if they have a name)
+      const S = D.sampler(G), sea = G.sea, step = span / 34, gw = Math.ceil((bx1 - bx0) / step) + 1, gh = Math.ceil((by1 - by0) / step) + 1, PK = new Float32Array(gw * gh);
+      for (let b = 0; b < gh; b++) for (let a = 0; a < gw; a++) { const x = bx0 + (a + .5) * step, y = by0 + (b + .5) * step, t = (S(x, y) - sea) / (255 - sea); if (t > .5 && onLand([x, y])) PK[b * gw + a] = t; }
+      const seen = new Uint8Array(gw * gh), ranges = [];
+      for (let q0 = 0; q0 < gw * gh; q0++) {
+        if (!PK[q0] || seen[q0]) continue; const cells = [q0], st = [q0]; seen[q0] = 1;
+        while (st.length) { const q = st.pop(), a = q % gw, b = (q / gw) | 0; for (let db = -1; db <= 1; db++) for (let da = -1; da <= 1; da++) { const a2 = a + da, b2 = b + db; if (a2 < 0 || b2 < 0 || a2 >= gw || b2 >= gh) continue; const m = b2 * gw + a2; if (PK[m] && !seen[m]) { seen[m] = 1; st.push(m); cells.push(m); } } }
+        let sum = 0; for (const q of cells) sum += PK[q]; ranges.push({ cells, score: sum });
+      }
+      const cx = q => bx0 + (q % gw + .5) * step, cy = q => by0 + (((q / gw) | 0) + .5) * step;
+      const names = (WD.labels || []).filter(lb => lb.name && Array.isArray(lb.at) && lb.kind === "range"), usedN = new Set();
+      const nR = density === "detailed" ? 5 : density === "balanced" ? 4 : 3;
+      for (const rg of ranges.sort((a, b) => b.score - a.score).slice(0, nR)) {
+        if (rg.cells.length < 3) continue;
+        const want = Math.min(rg.cells.length > 30 ? 4 : rg.cells.length > 10 ? 3 : 2, density === "minimal" ? 3 : 4), got = [];
+        for (const q of rg.cells.slice().sort((p1, p2) => PK[p2] - PK[p1])) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 2.6)) continue; got.push(q); }
+        for (const q of got) add({ k: "sym", s: "mountain", at: warpW([cx(q), cy(q)]), size: step * (1.1 + .7 * PK[q]), layer: "geo", st: "c", big: PK[q] > .7 ? 1 : undefined });
+        // (its name, if the world gives it one: the named range nearest its peaks)
+        let mx = 0, my = 0; for (const q of got) { mx += cx(q) / got.length; my += cy(q) / got.length; }
+        const nm = names.filter(lb => !usedN.has(lb.name)).sort((a, b) => Math.hypot(a.at[0] - mx, a.at[1] - my) - Math.hypot(b.at[0] - mx, b.at[1] - my))[0];
+        if (nm && Math.hypot(nm.at[0] - mx, nm.at[1] - my) < span * .2) { usedN.add(nm.name); add({ k: "text", at: warpW([mx, my + step * 2.2]), label: nm.name, size: span * .022, layer: "text", st: "c" }); }
+      }
+      // (the great forests: the user, "also add the forests and that's it"; the biggest few woods, a small clump of
+      // trees each, named if the world names them)
+      const B = G.B, Cn = G.Cn, CODE = A.worldBiomes ? A.worldBiomes.CODE : {}, FK = new Uint8Array(gw * gh);
+      for (let b = 0; b < gh; b++) for (let a = 0; a < gw; a++) { const x = bx0 + (a + .5) * step, y = by0 + (b + .5) * step; if (S(x, y) <= sea || !onLand([x, y]) || PK[b * gw + a]) continue; const n = Math.min(G.rows - 1, Math.floor(y / G.cell)) * G.cols + Math.min(G.cols - 1, Math.floor(x / G.cell)); if (Cn ? Cn[n] > 120 : B && B[n] === CODE.forest) FK[b * gw + a] = 1; }
+      const seenF = new Uint8Array(gw * gh), woods = [];
+      for (let q0 = 0; q0 < gw * gh; q0++) {
+        if (!FK[q0] || seenF[q0]) continue; const cells = [q0], st = [q0]; seenF[q0] = 1;
+        while (st.length) { const q = st.pop(), a = q % gw, b = (q / gw) | 0; for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a2 = a + da, b2 = b + db; if (a2 < 0 || b2 < 0 || a2 >= gw || b2 >= gh) continue; const m = b2 * gw + a2; if (FK[m] && !seenF[m]) { seenF[m] = 1; st.push(m); cells.push(m); } } }
+        if (cells.length >= 6) woods.push(cells);
+      }
+      const fNames = (WD.labels || []).filter(lb => lb.name && Array.isArray(lb.at) && lb.kind === "forest");
+      for (const cells of woods.sort((a, b) => b.length - a.length).slice(0, nR)) {
+        let mx = 0, my = 0; for (const q of cells) { mx += cx(q) / cells.length; my += cy(q) / cells.length; }
+        // (the trees about the wood's heart: the cells nearest its middle, a few apart)
+        const want = cells.length > 40 ? 3 : 2, got = [];
+        for (const q of cells.slice().sort((p1, p2) => Math.hypot(cx(p1) - mx, cy(p1) - my) - Math.hypot(cx(p2) - mx, cy(p2) - my))) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 1.8)) continue; got.push(q); }
+        for (const q of got) add({ k: "sym", s: "forest", at: warpW([cx(q), cy(q)]), size: step * 1.1, layer: "geo", st: "c" });
+        const nm = fNames.filter(lb => !usedN.has(lb.name)).sort((a, b) => Math.hypot(a.at[0] - mx, a.at[1] - my) - Math.hypot(b.at[0] - mx, b.at[1] - my))[0];
+        if (nm && Math.hypot(nm.at[0] - mx, nm.at[1] - my) < span * .2) { usedN.add(nm.name); let gy = 0, gx = 0; for (const q of got) { gx += cx(q) / got.length; gy = Math.max(gy, cy(q)); } add({ k: "text", at: warpW([gx, gy + step * 1.6]), label: nm.name, size: span * .02, layer: "text", st: "c" }); }
+      }
+      return true;
+    };
+    // (the outline's error grows over the whole land, not the few miles about home)
+    const warpW = p => { const dx = p[0] - Hc[0], dy = p[1] - Hc[1], RW = wholeR || R, ox = (vn(p[0] / RW * 1.7 + 7, p[1] / RW * 1.7, seed + 1) - .5) * 2, oy = (vn(p[0] / RW * 1.7, p[1] / RW * 1.7 + 9, seed + 2) - .5) * 2, k = 1 + (vn(p[0] / RW, p[1] / RW, seed) - .5) * M.err * .8, wob = M.err * RW * .12; return [Hc[0] + dx * k + ox * wob, Hc[1] + dy * k + oy * wob]; };
+    const whole = M.whole && G && D && wholeLand();
     // the coast, as far as they know it: runs of the coastline near home, simplified and wandering
-    if (G && D) {
+    if (!whole && G && D) {
       const coast = D.coastRings(G);
       for (const ring of coast) {
         let run = [];
@@ -115,7 +186,7 @@
       }
     }
     // rivers: the ones near home (a commoner knows the big ones), wandering off their true courses
-    for (const rv of WD.rivers || []) {
+    for (const rv of whole ? [] : WD.rivers || []) {
       if (!rv.pts || rv.pts.length < 2) continue; if ((rv.w || 1) < 1.3 && M.rivers < 1) continue;
       let run = [];
       const flush = () => { if (run.length > 2) add({ k: "line", t: "river", pts: simp(run, eps * .8).map(warp), layer: "geo", st: "c", w: rv.w || 1.2, label: M.labels !== "few" && rv.name ? rv.name : "" }); run = []; };
@@ -130,33 +201,33 @@
       if (l === home) return true;
       return (near(l.at, 1) || byRoad.has(l.id)) && (M.keep.includes(l.kind) || l.state === "visited" || l.state === "done");
     }).sort((a, b) => (a === home ? -1 : b === home ? 1 : 0) || dHome(a) - dHome(b));
-    const placed = cand.slice(0, M.places + 1), have = new Set(placed.map(l => l.id));
+    const placed = whole ? [] : cand.slice(0, M.places + 1), have = new Set(placed.map(l => l.id));
     for (const l of placed) {
       const lab = M.labels === "all" || l === home || M.labels !== "few" && ["capital", "city", "town", "port"].includes(l.kind) || M.labels === "most" || M.labels === "some" && ["capital", "city", "town", "village"].includes(l.kind) ? l.name : "";
       add({ k: "sym", s: SYM_OF[l.kind] || "village", at: warp(l.at), size: R * (l.kind === "capital" || l.kind === "city" ? .07 : .05), label: lab, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id, home: l === home ? 1 : undefined });
     }
     // a great city far off, known only by name and a rough way (a rumour, drawn at the map's edge)
     const far = locs.filter(l => (l.kind === "capital" || l.kind === "city") && !have.has(l.id) && !near(l.at, 1)).sort((a, b) => dHome(a) - dHome(b))[0];
-    if (far && M.km < 800) { const dx = far.at[0] - Hc[0], dy = far.at[1] - Hc[1], d = Math.hypot(dx, dy) || 1, p = [Hc[0] + dx / d * R * 1.15, Hc[1] + dy / d * R * 1.15]; add({ k: "sym", s: "city", at: p, size: R * .06, label: far.name, layer: "places", st: "r", loc: far.id }); add({ k: "line", t: "path", pts: [[Hc[0] + dx / d * R * .85, Hc[1] + dy / d * R * .85], [Hc[0] + dx / d * R * 1.06, Hc[1] + dy / d * R * 1.06]], layer: "roads", st: "r", arrow: 1 }); }
+    if (far && !whole && M.km < 800) { const dx = far.at[0] - Hc[0], dy = far.at[1] - Hc[1], d = Math.hypot(dx, dy) || 1, p = [Hc[0] + dx / d * R * 1.15, Hc[1] + dy / d * R * 1.15]; add({ k: "sym", s: "city", at: p, size: R * .06, label: far.name, layer: "places", st: "r", loc: far.id }); add({ k: "line", t: "path", pts: [[Hc[0] + dx / d * R * .85, Hc[1] + dy / d * R * .85], [Hc[0] + dx / d * R * 1.06, Hc[1] + dy / d * R * 1.06]], layer: "roads", st: "r", arrow: 1 }); }
     // roads between the places drawn (never a hidden one), straighter than they are
-    for (const r of WD.routes) {
+    for (const r of whole ? [] : WD.routes) {
       if (r.hidden || !have.has(r.from) || !have.has(r.to) || !(r.kind in { road: 1, trail: 1, pass: 1 })) continue;
       const a = WD.byId[r.from], b = WD.byId[r.to], path = Array.isArray(r.path) && r.path.length > 1 ? r.path : (A.worldKit && A.worldKit.wayOf && A.worldKit.wayOf(WD, r)) || [a.at, b.at];
       add({ k: "line", t: r.kind === "trail" ? "path" : "road", pts: simp([a.at, ...path.slice(1, -1), b.at], eps * 2.2).map(warp), layer: "roads", st: "c", route: r.id, label: M.labels === "all" && r.name ? r.name : "" });
     }
     // the names they use for the land about them
-    if (M.labels !== "few" && DF.words) for (const lb of WD.labels || []) { if (!lb.name || !Array.isArray(lb.at) || !near(lb.at, .9) || /sea|ocean/.test(lb.kind || "") && M.labels !== "all") continue; add({ k: "text", at: warp(lb.at), label: lb.name, size: R * .035, layer: "text", st: "c" }); }
+    if (!whole && M.labels !== "few" && DF.words) for (const lb of WD.labels || []) { if (!lb.name || !Array.isArray(lb.at) || !near(lb.at, .9) || /sea|ocean/.test(lb.kind || "") && M.labels !== "all") continue; add({ k: "text", at: warp(lb.at), label: lb.name, size: R * .035, layer: "text", st: "c" }); }
     // the sheet: what they drew, and a margin
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; const grow = p => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); };
-    for (const e of els) (e.pts || [e.at]).forEach(grow); grow([Hc[0] - R * .5, Hc[1] - R * .4]); grow([Hc[0] + R * .5, Hc[1] + R * .4]);
+    for (const e of els) (e.pts || [e.at]).forEach(grow); if (!whole) { grow([Hc[0] - R * .5, Hc[1] - R * .4]); grow([Hc[0] + R * .5, Hc[1] + R * .4]); }
     const m = Math.max(x1 - x0, y1 - y0) * .08; x0 -= m; y0 -= m; x1 += m; y1 += m;
     // (a sheet a little wider than tall)
     if ((x1 - x0) / (y1 - y0) < 1.3) { const w = (y1 - y0) * 1.3, c = (x0 + x1) / 2; x0 = c - w / 2; x1 = c + w / 2; }
     // (room at the top for the title, above what was drawn)
     y0 -= (y1 - y0) * .1;
-    if (home && M.labels !== "all") add({ k: "text", at: [(x0 + x1) / 2, y0 + (y1 - y0) * .07], label: o.title || `${home.name} and thereabouts`, size: (y1 - y0) * .045, layer: "text", st: "c", title: 1 });
+    if (home && M.labels !== "all") add({ k: "text", at: [(x0 + x1) / 2, y0 + (y1 - y0) * .07], label: o.title || (whole ? `The land, as folk tell it` : `${home.name} and thereabouts`), size: (y1 - y0) * .045, layer: "text", st: "c", title: 1 });
     const style = Object.assign({ density, paper: "aged", wear: .4, ink: "brown", width: 1, rough: clamp(.35 + M.err * 2.6, .2, 1), hand: M.err > .1 ? "scrawl" : M.err > .05 ? "hand" : "fair", detail: M.detail }, o.style || {});
-    return { id: o.id || uid(), name: o.name || `${M.name}'s map`, maker: o.maker || "commoner", home: home ? home.id : null, seed, accuracy: o.accuracy, made: Date.now(), frame: [r1(x0), r1(y0), r1(x1 - x0), r1(y1 - y0)], style, given: false, layers: { geo: 1, places: 1, roads: 1, text: 1, notes: 1, dm: 1 }, els, R: r1(R), H: Hc.map(r1) };
+    return { id: o.id || uid(), name: o.name || `${M.name}'s map`, whole: whole ? 1 : undefined, maker: o.maker || "commoner", home: home ? home.id : null, seed, accuracy: o.accuracy, made: Date.now(), frame: [r1(x0), r1(y0), r1(x1 - x0), r1(y1 - y0)], style, given: false, layers: { geo: 1, places: 1, roads: 1, text: 1, notes: 1, dm: 1 }, els, R: r1(wholeR || R), H: Hc.map(r1) };
   }
   // how much a map's maker draws, by density
   const GEN_DENS = { minimal: { mtn: .6, mtnMax: 3, hills: 0, woodMin: 3, trees: .5, treesMax: 2, waves: .06, words: 0 }, balanced: { mtn: .9, mtnMax: 4, hills: 1, woodMin: 2, trees: .8, treesMax: 4, waves: .12, words: 1 }, detailed: { mtn: 1.3, mtnMax: 7, hills: 1, woodMin: 1, trees: 1.2, treesMax: 7, waves: .2, words: 1 } };
@@ -311,7 +382,7 @@
     const ed = [], n = 60; for (let k = 0; k < n; k++) { const t = k / n, side = Math.floor(t * 4), f = t * 4 - side, j = (hash(k, seed, 11) - .5) * sc * 2.4 * (.5 + st.wear); const P = [[fx + fw * f, fy + j], [fx + fw + j, fy + fh * f], [fx + fw * (1 - f), fy + fh + j], [fx + j, fy + fh * (1 - f)]][side]; ed.push(P); }
     const edge = "M" + ed.map(p => `${r1(p[0])} ${r1(p[1])}`).join("L") + "Z";
     s += `<path d="${edge}" fill="${p0}"/><path d="${edge}" fill="${p0}" filter="url(#${u}-g)"/><path d="${edge}" fill="url(#${u}-v)"/>`;
-    for (let k = 0; k < Math.round(st.wear * 3); k++) { const cx = fx + fw * (.1 + .8 * hash(k, seed, 21)), cy = fy + fh * (.1 + .8 * hash(k, seed, 22)), rr = Math.min(fw, fh) * (.04 + .1 * hash(k, seed, 23)); const ring = []; for (let q = 0; q < 24; q++) { const a = q / 24 * 6.283, rq = rr * (.7 + .5 * vn(Math.cos(a) * 1.5 + k * 3, Math.sin(a) * 1.5, seed + 30)); ring.push([cx + Math.cos(a) * rq, cy + Math.sin(a) * rq * .75]); } const dR = "M" + ring.map(p => `${r1(p[0])} ${r1(p[1])}`).join("L") + "Z"; s += `<path d="${dR}" fill="${p1}" fill-opacity="${r1(.06 + .09 * st.wear)}" stroke="${p1}" stroke-opacity="${r1(.15 + .2 * st.wear)}" stroke-width="${r1(sc * 1.1)}"/>`; }
+    for (let k = 0; k < Math.round(st.wear * 3); k++) { const cx = fx + fw * (.1 + .8 * hash(k, seed, 21)), cy = fy + fh * (.1 + .8 * hash(k, seed, 22)), rr = Math.min(fw, fh) * (.04 + .1 * hash(k, seed, 23)); const ring = []; for (let q = 0; q < 24; q++) { const a = q / 24 * 6.283, rq = rr * (.7 + .5 * vn(Math.cos(a) * 1.5 + k * 3, Math.sin(a) * 1.5, seed + 30)); ring.push([cx + Math.cos(a) * rq, cy + Math.sin(a) * rq * .75]); } const dR = "M" + ring.map(p => `${r1(p[0])} ${r1(p[1])}`).join("L") + "Z"; s += `<path d="${dR}" fill="${p1}" fill-opacity="${r1(.05 + .07 * st.wear)}"/>`; }
     s += `<path d="${edge}" fill="none" stroke="${p1}" stroke-width="${r1(sc * 1.2)}" stroke-opacity=".8"/>`;
     // the ink, faded here and there, in the layers' order
     const order = ["geo", "roads", "places", "text", "notes", "dm"];
