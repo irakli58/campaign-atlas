@@ -70,6 +70,13 @@ Both are opt-in and change nothing unless asked: `atlas.js world <dir> --ocean n
   and each current formed, how currents change the nearby climate), docs (references/world.md), tutorial step for
   the currents toggle, and wait for the user's approval before making either the default.
 
+## Plates, rocks and resources (16 Nov 2026: the user asked "do 1 and 3 and add both to the planet generation")
+- Done: scripts/world-tectonics.js, called at the end of world-geology.js (records old belts and hotspots without
+  touching the land: land, climate and rivers verified identical). T.tect, T.rocks, T.deposits; plates named.
+  Page buttons "Plates" and "Rocks and resources" (atlas-world-art.js plateLayer, rockLayer). Tested on a large
+  5-landmass world and a 6-continent planet; page toggles tested; tutorial step added.
+- Not done (option 2, offered): plates moving over time (continental drift history).
+
 ## Decided (the user: "okay I like everything now")
 - The Earth climate model is the default for new worlds (a plates world made before keeps the classic rules when made
   again with the same seed; `--climate-model classic|earth` overrides; T.climateModel is written when earth).

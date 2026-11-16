@@ -660,6 +660,8 @@
         <span class="wm-title">${esc(WD.title || "The world")}</span>
         <select class="wm-look keeper" aria-label="How the map is drawn" title="How the map is drawn: the players see it the same way" hidden></select>
         <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
+        <button type="button" class="wm-btn wm-pltog" data-w="plates" aria-pressed="false" hidden title="Show the tectonic plates: their borders, what happens at each, which way each plate moves">Plates</button>
+        <button type="button" class="wm-btn wm-rktog" data-w="rocks" aria-pressed="false" hidden title="Show the rocks of each region, and the ores, gems, coal, oil, salt, hot springs and caves in them, with why each is there">Rocks and resources</button>
         <button type="button" class="wm-btn wm-octog" data-w="currents" aria-pressed="false" hidden title="Show the oceans' currents: warm and cold, the gyres, the equator and the latitudes">Ocean currents</button>
         <span class="wm-sp"></span>
         <span class="wm-editbar keeper"></span>
@@ -667,7 +669,7 @@
         <button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-oc"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-rk"></g><g class="wm-pl"></g><g class="wm-oc"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -908,7 +910,14 @@
     // valleys and streams up close; zoomed back out, the whole map's own picture is enough
     // the oceans' currents (world-ocean.js), a layer over the land the referee shows or hides; the choice is kept
     const OCS = { on: (() => { try { return ctx.store.get("world-currents") === "1"; } catch (e) { return false; } })() };
+    const LAY = { plates: (() => { try { return ctx.store.get("world-plates") === "1"; } catch (e) { return false; } })(), rocks: (() => { try { return ctx.store.get("world-rocks") === "1"; } catch (e) { return false; } })() };
+    function drawGeoLayers() {
+      const art = A.worldArt, hasP = !!(WD.T && WD.T.tect && art && art.plateLayer), hasR = !!(WD.T && WD.T.rocks && art && art.rockLayer);
+      const bp = $(".wm-pltog"), br = $(".wm-rktog"); bp.hidden = !hasP; br.hidden = !hasR; bp.setAttribute("aria-pressed", hasP && LAY.plates); br.setAttribute("aria-pressed", hasR && LAY.rocks);
+      $(".wm-pl").innerHTML = hasP && LAY.plates ? art.plateLayer(WD) : ""; $(".wm-rk").innerHTML = hasR && LAY.rocks ? art.rockLayer(WD) : "";
+    }
     function drawCurrents() {
+      drawGeoLayers();
       const b = $(".wm-octog"), has = !!(WD.T && WD.T.ocean && A.worldArt && A.worldArt.currents);
       b.hidden = !has; b.setAttribute("aria-pressed", has && OCS.on);
       $(".wm-oc").innerHTML = has && OCS.on ? A.worldArt.currents(WD) : "";
@@ -1606,6 +1615,7 @@
         case "addroute": S.tool = S.tool === "route" ? null : "route"; S.first = null; renderBars(); break;
         case "export": exportJS(); break;
         case "newworld": newWorldDlg(); break;
+        case "plates": case "rocks": { const k = b.dataset.w; LAY[k] = !LAY[k]; try { ctx.store.set("world-" + k, LAY[k] ? "1" : ""); } catch (_) {} drawGeoLayers(); break; }
         case "currents": OCS.on = !OCS.on; try { ctx.store.set("world-currents", OCS.on ? "1" : ""); } catch (_) {} drawCurrents(); break;
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
         case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }

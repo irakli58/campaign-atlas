@@ -96,7 +96,7 @@ const hasWorld = dir => fs.existsSync(path.join(dir, "world.js"));
 // world-geology.js, world-ecology.js and the shared biomes and sketch files), put together to run in a worker in the
 // page, with the little of Node they use stood in for
 function worldGenJS() {
-  const mods = { "./world-invent.js": path.join(__dirname, "world-invent.js"), "./world-geology.js": path.join(__dirname, "world-geology.js"), "./world-ecology.js": path.join(__dirname, "world-ecology.js"), "./world-ocean.js": path.join(__dirname, "world-ocean.js"), "./world-coast.js": path.join(__dirname, "world-coast.js"), "../engine/atlas-world-biomes.js": path.join(ENGINE, "atlas-world-biomes.js"), "../engine/atlas-world-sketch.js": path.join(ENGINE, "atlas-world-sketch.js") };
+  const mods = { "./world-invent.js": path.join(__dirname, "world-invent.js"), "./world-geology.js": path.join(__dirname, "world-geology.js"), "./world-ecology.js": path.join(__dirname, "world-ecology.js"), "./world-ocean.js": path.join(__dirname, "world-ocean.js"), "./world-coast.js": path.join(__dirname, "world-coast.js"), "./world-tectonics.js": path.join(__dirname, "world-tectonics.js"), "../engine/atlas-world-biomes.js": path.join(ENGINE, "atlas-world-biomes.js"), "../engine/atlas-world-sketch.js": path.join(ENGINE, "atlas-world-sketch.js") };
   const mul = fs.readFileSync(path.join(__dirname, "city-common.js"), "utf8").match(/const mulberry32 = .*;/)[0];
   let src = "\"use strict\";\nvar process = { env: {} };\nvar Buffer = { from: function (a) { var u = a instanceof Uint8Array ? a : Uint8Array.from(a); return { toString: function () { var s = \"\"; for (var i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s); } }; } };\nvar __f = {\n";
   for (const [k, f] of Object.entries(mods)) src += JSON.stringify(k) + ": function (module, exports, require) {\n" + fs.readFileSync(f, "utf8") + "\n},\n";
@@ -1203,6 +1203,6 @@ switch (cmd) {
   case "export": cmdExport(pos[0], pos.slice(1)); break;
   case "catalogue": case "catalog": cmdCatalogue(pos[0]); break;
   case "kit": cmdKit(pos[0], pos[1], pos[2]); break;
-  case "world": cmdWorld(pos[0]).catch(e => die("world: " + e.message)); break;
+  case "world": cmdWorld(pos[0]).catch(e => { if (process.env.ATLAS_STACK) console.error(e.stack); die("world: " + e.message); }); break;
   default: console.log(fs.readFileSync(__filename, "utf8").split("*/")[0].replace(/^#!.*\n\/\* ?/, ""));
 }

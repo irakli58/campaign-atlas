@@ -60,7 +60,7 @@ function namer(rnd, own) {
     volcano: auto => own_("volcano") || (auto ? `Mount ${word()}` : null),
     wood: (auto, kind) => own_("wood") || (auto ? ({ enchanted: `The ${pick(["Witch", "Elder", "Silver", "Dream", "Faerie"])}wood`, glowforest: `The ${pick(["Lantern", "Ember", "Star", "Moon"])} Grove`, mushrooms: `The ${pick(["Spore", "Cap", "Gill"])}wood`, corrupted: `The ${pick(["Blighted", "Rotting", "Thorn", "Hollow"])} Wood`, floating: `The ${pick(["Drifting", "Hanging", "Sky"])} Isles` }[kind] || `The ${word()} Wood`) : null),
     blight: (auto, kind) => own_("blight") || (auto ? (kind === "vale" ? `The Vale of ${word()}` : `The ${pick(["Blight", "Scar", "Ruin", "Shatterlands", "Withering"])}`) : null),
-    current: () => `The ${word()} Current`, gyre: () => `The ${word()} Gyre`,
+    current: () => `The ${word()} Current`, plate: () => `The ${word()} Plate`, gyre: () => `The ${word()} Gyre`,
     leftover: () => Object.values(mine).flat()
   };
 }
@@ -504,6 +504,8 @@ function invent(A, flags, log) {
       const latA = whole ? [90, -90] : SIZE_KM[sizeWord] ? [Math.min(88, midL + spanL / 2), Math.max(-88, midL - spanL / 2)] : undefined;
       const G = require("./world-geology.js").geology({ ocean: flags.ocean === "natural", cell, sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
       L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river, ocean: G.ocean, kmA, latA: latA || require("./world-ecology.js").LAT[climate] || [52, 38], volcs: G.info.volcanoes }; geo = G.info; T.rain = 1;
+      // the plates, the rocks and what lies in them, for the map's plate and geology layers
+      if (G.tect) { T.tect = G.tect.layer; T.rocks = Buffer.from(G.tect.rocks).toString("base64"); T.deposits = G.tect.deposits; if (autoNames) for (const p of T.tect.plates) p.name = name.plate(); }
       if (G.ocean) { T.ocean = G.ocean.layer; if (autoNames) { for (const g of T.ocean.gyres) g.name = name.gyre(); for (const c of T.ocean.currents) c.name = name.current(); } }
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)
@@ -717,7 +719,7 @@ function fromDrawing(dir, A, src, flags, log) {
 }
 // the terrain file: written by the command, never by hand
 function writeTerrain(dir, T, title) {
-  const big = ["height", "heightLo", "moist", "cover", "biome", "canopy", "tempC", "ground", "shore", "shoreW", "sand"], lines = [];
+  const big = ["height", "heightLo", "moist", "cover", "biome", "canopy", "tempC", "ground", "shore", "shoreW", "sand", "rocks"], lines = [];
   for (const [k, v] of Object.entries(T)) if (v !== undefined && !big.includes(k) && !["rivers", "labels", "routes", "spots"].includes(k)) lines.push(`  ${k}: ${JSON.stringify(v)}`);
   lines.push(`  spots: {\n${Object.entries(T.spots).map(([k, v]) => `    ${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(",\n")}\n  }`);
   for (const k of ["labels", "routes", "rivers"]) lines.push(`  ${k}: [\n${(T[k] || []).map(x => "    " + JSON.stringify(x)).join(",\n")}\n  ]`);
