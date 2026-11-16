@@ -126,3 +126,4 @@ Then the user: "make a general contour of the continent, then put only the reall
 Then: "okay can you slightly fill out the map like slighlty more so its less empty do not go overboard": up to 6 places (towns after the cities), 4 ranges and 4 forests, a peak or clump more on the big ones.
 Then: "fill out the map with some more mountains and forests so its not as empty", and "the small hill looking stuff looks so weird remove that": heights and woods judged per continent, more ranges and woods, woods drawn as groups, small mountains (not hill arcs) on the lower uplands.
 Then: "i want a slider on how detailed the map is and how accurate it is": How much is drawn and How accurate, in the New map form and The look (references/world.md, "Two sliders").
+Then the user asked to see the most detailed one (commoner at much/true); fixed a forest name left in the sea: names now sit under the middle of their symbols, only on land, and are dropped with their symbols.
