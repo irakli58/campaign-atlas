@@ -97,6 +97,13 @@
     const out = {}, screen = S.get("screen", "now") || {};
     for (const id of A.order) { const d = placeShare(S, id, screen); if (d) out["place:" + id] = d; }
     const w = worldShare(S, prefs); if (w) out.world = w;
+    // the players' hand-drawn maps (atlas-pmap.js): only those given them, with the referee's own layer and anything
+    // hidden taken out; and, if the referee chose, the hand-drawn map instead of the real one (the real one then not
+    // sent at all)
+    if (A.pmap && A.worldOV) { let docs = Object.entries(S.get("world") || {}); if (!docs.length && prefs) { try { docs = Object.entries(JSON.parse(prefs.get("world-edits") || "{}") || {}); } catch (e) { docs = []; } }
+      const OV = A.worldOV(docs);
+      for (const m of Object.values(OV.pm || {})) if (m && m.given) out["pmap:" + m.id] = A.pmap.forPlayers(m);
+      if (OV.pmset && OV.pmset.mode === "parchment") { delete out.world; const m = OV.pm[OV.pmset.map]; out.pmset = { mode: "parchment", map: m && m.given ? m.id : null }; } }
     out.board = boardShare(S);
     // the star chart: only what is charted (atlas-galaxy.js), never the seed the galaxy grows from
     if (A.galaxyShare) { try { const g = A.galaxyShare(S); if (g) out.galaxy = g; } catch (e) { console.warn("atlas: the star chart could not be shared", e); } }

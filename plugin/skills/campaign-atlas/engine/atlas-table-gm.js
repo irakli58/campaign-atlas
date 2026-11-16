@@ -574,6 +574,7 @@
       case "person": return d.name || "a person";
       case "scene": return d.title ? `"${d.title}"` : "words to read";
       case "world": return "the world map";
+      case "pmap": return "a hand-drawn map";
       case "galaxy": return "the star chart";
       case "board": return "their board of what they know";
       case "safety": return "the lines and veils";

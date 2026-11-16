@@ -267,8 +267,8 @@
   // the referee's changes as the page keeps them (docs of the collection "world"): l- a location, r- a route, f- a river,
   // name or realm, and the reshaped land, the party, the look
   function ovFrom(docs) {
-    const OV = { loc: {}, route: {}, feat: {}, party: null, style: null, shape: null, gen: null };
-    for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id.startsWith("f-")) OV.feat[id.slice(2)] = d; else if (id === "party") OV.party = d; else if (id === "style") OV.style = d; else if (id === "shape") OV.shape = d; else if (id === "gen") OV.gen = d && d.size ? d : null; }
+    const OV = { loc: {}, route: {}, feat: {}, party: null, style: null, shape: null, gen: null, pm: {}, pmset: null };
+    for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id.startsWith("f-")) OV.feat[id.slice(2)] = d; else if (id === "party") OV.party = d; else if (id === "style") OV.style = d; else if (id === "shape") OV.shape = d; else if (id === "gen") OV.gen = d && d.size ? d : null; else if (id.startsWith("pm-")) { if (d && d.els) OV.pm[id.slice(3)] = d; } else if (id === "pmset") OV.pmset = d; }
     return OV;
   }
   A.worldOV = ovFrom;
@@ -1086,6 +1086,7 @@
         + tb("realm", WD.look === "stars" ? "+ Territory" : "+ Realm", S.tool === "realm", "Draw a kingdom, province or territory, and say who holds it") + tb("label", "+ Name", S.tool === "label", "Write a name on the map: a sea, a range, a forest")
         + `<button type="button" class="wm-btn" data-w="undo"${HIST.length ? "" : " disabled"} title="Undo (Ctrl+Z)">Undo</button><button type="button" class="wm-btn" data-w="redo"${REDO.length ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo</button>`
         + (A.worldGenSrc && WD.look !== "stars" && !DRAW ? tb("newworld", "Make a new world", false, "Generate a whole new land: how big, its shape (from your own drawing if you like), its climate") : "")
+        + (A.pmap && WD.look !== "stars" ? tb("pmaps", "Players' maps", false, "Hand-drawn parchment maps for the players: what their characters know, drawn as they would draw it; you draw and reveal on them as the game goes") : "")
         + tb("export", "Copy as world.js")
         + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
       $('[data-w="edit"]').setAttribute("aria-pressed", S.edit);
@@ -1244,6 +1245,18 @@
       });
       if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
     }
+    // the players' hand-drawn maps (atlas-pmap.js): the referee's desk over the map
+    let PM = null;
+    function openPmaps() {
+      if (!A.pmap || !gm()) return;
+      let host = root.querySelector(".pm-host"); if (!host) { host = document.createElement("div"); host.className = "pm-host"; root.appendChild(host); }
+      host.hidden = false;
+      PM = A.pmap.editor(host, { WD: () => WD, maps: () => OV.pm, setting: () => OV.pmset, save: (id, d) => save("pm-" + id, d), saveSetting: d => save("pmset", d), undo: () => undo(true), redo: () => undo(false), show: id => showOnScreen({ kind: "pmap", id }), close: () => { host.hidden = true; PM = null; } });
+      PM.open();
+    }
+    // (the players' screen is the table's: its store, as the table keeps it)
+    let SCR = null;
+    function showOnScreen(doc) { try { if (!SCR && A.table && A.table.makeStore && ctx.db) SCR = A.table.makeStore(ctx.db, (A.config || {}).storageKey || "atlas"); if (SCR) { SCR.set("screen", "now", Object.assign({ t: Date.now() }, doc)); note("On the players' screen now."); } } catch (e) { console.warn("world map: the players' screen could not be reached", e); } }
     function genRun(g) {
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
       const W0 = JSON.parse(JSON.stringify(A.worldData || {})); delete W0.size;
@@ -1280,14 +1293,14 @@
     let DB = null;
     function fromDocs(docs) { Object.assign(OV, ovFrom(docs)); }
     const localAll = () => { try { return JSON.parse(ctx.store.get("world-edits") || "{}") || {}; } catch (e) { return {}; } };
-    const docNow = doc => { const v = doc === "party" ? OV.party : doc === "style" ? OV.style : doc === "shape" ? OV.shape : doc === "gen" ? OV.gen : doc.startsWith("l-") ? OV.loc[doc.slice(2)] : doc.startsWith("r-") ? OV.route[doc.slice(2)] : doc.startsWith("f-") ? OV.feat[doc.slice(2)] : null; return v == null ? null : JSON.parse(JSON.stringify(v)); };
+    const docNow = doc => { const v = doc === "party" ? OV.party : doc === "style" ? OV.style : doc === "shape" ? OV.shape : doc === "gen" ? OV.gen : doc === "pmset" ? OV.pmset : doc.startsWith("pm-") ? OV.pm[doc.slice(3)] || null : doc.startsWith("l-") ? OV.loc[doc.slice(2)] : doc.startsWith("r-") ? OV.route[doc.slice(2)] : doc.startsWith("f-") ? OV.feat[doc.slice(2)] : null; return v == null ? null : JSON.parse(JSON.stringify(v)); };
     // undo and redo: every change but where the party is (that is play, not the map) can be taken back, and done again
     function save(doc, data, how) {
       if (doc !== "party" && how !== "hist") { HIST.push({ doc, before: docNow(doc), after: data == null ? null : JSON.parse(JSON.stringify(data)) }); if (HIST.length > 200) HIST.shift(); REDO.length = 0; }
       // the change shows at once; the database follows
       const all = DB ? null : localAll();
-      if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc === "shape") OV.shape = data; else if (doc === "gen") OV.gen = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; } else if (doc.startsWith("f-")) { if (data) OV.feat[doc.slice(2)] = data; else delete OV.feat[doc.slice(2)]; }
-      rebuild();
+      if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc === "shape") OV.shape = data; else if (doc === "gen") OV.gen = data; else if (doc === "pmset") OV.pmset = data; else if (doc.startsWith("pm-")) { if (data) OV.pm[doc.slice(3)] = data; else delete OV.pm[doc.slice(3)]; } else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; } else if (doc.startsWith("f-")) { if (data) OV.feat[doc.slice(2)] = data; else delete OV.feat[doc.slice(2)]; }
+      rebuild(); if (PM) PM.refresh();
       if (DB) { const ref = DB.collection("world").doc(doc); return Promise.resolve(data ? ref.set(data) : ref.delete()).catch(e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); }); }
       if (data) all[doc] = data; else delete all[doc];
       ctx.store.set("world-edits", JSON.stringify(all));
@@ -1304,7 +1317,7 @@
     (async function connect() {
       let db = null; try { db = ctx.db ? await ctx.db : null; } catch (e) { db = null; }
       if (gone) return;
-      if (db) { DB = db; try { db.collection("world").onSnapshot(s => { if (gone) return; fromDocs(s.docs.map(d => [d.id, d.data() || {}])); rebuild(); }, e => console.warn("world map", e)); } catch (e) { console.warn("world map", e); } }
+      if (db) { DB = db; try { db.collection("world").onSnapshot(s => { if (gone) return; fromDocs(s.docs.map(d => [d.id, d.data() || {}])); rebuild(); if (PM) PM.refresh(); }, e => console.warn("world map", e)); } catch (e) { console.warn("world map", e); } }
       else { fromDocs(Object.entries(localAll())); rebuild(); }
     })();
 
@@ -1615,6 +1628,7 @@
         case "addroute": S.tool = S.tool === "route" ? null : "route"; S.first = null; renderBars(); break;
         case "export": exportJS(); break;
         case "newworld": newWorldDlg(); break;
+        case "pmaps": openPmaps(); break;
         case "plates": case "rocks": { const k = b.dataset.w; LAY[k] = !LAY[k]; try { ctx.store.set("world-" + k, LAY[k] ? "1" : ""); } catch (_) {} drawGeoLayers(); break; }
         case "currents": OCS.on = !OCS.on; try { ctx.store.set("world-currents", OCS.on ? "1" : ""); } catch (_) {} drawCurrents(); break;
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
