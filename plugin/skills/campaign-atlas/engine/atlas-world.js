@@ -2255,5 +2255,5 @@
   };
 
   // for the checker (atlas.js check) and the generator
-  A.worldKit = { prepareWorld, KINDS, ROUTES, STATES, LOOK_OF, SETTLED, OVERLAND, travel, plen, unb64 };
+  A.worldKit = { prepareWorld, KINDS, ROUTES, STATES, LOOK_OF, SETTLED, OVERLAND, travel, plen, unb64, wayOf: (WD, r) => { if (!WD.G) return null; if (!WD._pg) WD._pg = pathGrid(WD); return wayOf(WD, WD._pg, r); } };
 })(ATLAS);
