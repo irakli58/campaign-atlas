@@ -135,9 +135,23 @@
       ${I.hits && I.hits.length && !I.out ? `<details open><summary>What the campaign says</summary><ol class="t-hits">${I.hits.map(h => `<li><b>${esc(h.src)}</b><p>${esc(h.text)}</p></li>`).join("")}</ol></details>` : ""}
       ${UI.err && UI.mode === "imp" ? `<p class="t-small cp-err">${esc(UI.err)}</p>` : ""}`;
   }
+  // the players' hand-drawn maps (atlas-pmap.js): places the party has learned of that a map given to them lacks,
+  // offered one by one; nothing goes on a map unless the game master says so
+  function pmapState() {
+    if (!A.pmap || !A.worldOV || !A.worldPrepare || !A.worldData) return null;
+    const docs = Object.entries(S().get("world") || {}), OV = A.worldOV(docs), maps = Object.values(OV.pm || {}).filter(m => m && m.given);
+    if (!maps.length) return null;
+    const WD = A.worldPrepare(A.worldData, A.worldTerrainData, OV, { noLand: true }), out = [];
+    for (const m of maps) { const on = new Set((m.els || []).filter(e => e.loc).map(e => e.loc)); for (const l of WD.locs) if (Array.isArray(l.at) && ["known", "visited", "done", "rumoured"].includes(l.state) && !on.has(l.id) && !(UI.pmSkip || {})[m.id + "|" + l.id]) out.push({ m, l, WD }); }
+    return out;
+  }
+  function pmapHTML() {
+    let st = null; try { st = pmapState(); } catch (e) { st = null; } if (!st || !st.length) return "";
+    return `<div class="cp-pm t-small"><b>The players' maps</b>: the party knows of places a map given to them lacks. Add them? ${st.slice(0, 4).map(({ m, l }) => `<span class="t-row"><span>${esc(l.name)}${l.state === "rumoured" ? " (a rumour)" : ""} on ${esc(m.name)}</span><button type="button" class="t-mini" data-cp="pmadd" data-map="${esc(m.id)}" data-loc="${esc(l.id)}">Add it</button><button type="button" class="t-mini" data-cp="pmskip" data-map="${esc(m.id)}" data-loc="${esc(l.id)}">Not now</button></span>`).join("")}</div>`;
+  }
   function panelHTML(compact, liveD) {
     return `<div class="cp${compact ? " cp-sm" : ""}"><div class="cp-modes" role="tablist"><button type="button" role="tab" data-cp="mode" data-m="talk" aria-selected="${UI.mode === "talk"}">Talk</button><button type="button" role="tab" data-cp="mode" data-m="imp" aria-selected="${UI.mode === "imp"}">Improvise</button></div>
-      ${UI.mode === "talk" ? talkHTML(compact, liveD) : impHTML()}</div>`;
+      ${compact ? "" : pmapHTML()}${UI.mode === "talk" ? talkHTML(compact, liveD) : impHTML()}</div>`;
   }
   // drawn again where it stands: the tab, and the toolbar's panel
   function paint(liveD) {
@@ -190,6 +204,10 @@ ${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n") || "(nothing
     const k = b.dataset.cp, ref = UI.who, d = ref ? talk(ref) : null, i = +b.dataset.i;
     switch (k) {
       case "mode": UI.mode = b.dataset.m; UI.err = ""; paint(); break;
+      case "pmskip": UI.pmSkip = Object.assign(UI.pmSkip || {}, { [b.dataset.map + "|" + b.dataset.loc]: 1 }); paint(); break;
+      case "pmadd": { const st = pmapState() || [], hit = st.find(x => x.m.id === b.dataset.map && x.l.id === b.dataset.loc); if (!hit) break; const { m, l, WD } = hit, d = JSON.parse(JSON.stringify(m)), sc = Math.max(d.frame[2], d.frame[3]) / 320, SYMK = { capital: "city", city: "city", town: "town", village: "village", hamlet: "village", port: "port", castle: "castle", keep: "castle", fort: "castle", tower: "tower", ruin: "ruin", temple: "temple", shrine: "temple", monastery: "temple", inn: "inn", bridge: "bridge", cave: "cave", dungeon: "cave", lair: "danger" };
+        d.els.push({ id: A.pmap.uid(), k: "sym", s: SYMK[l.kind] || "village", at: A.pmap.warpFn(WD, d)(l.at), size: sc * 11, label: l.name, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id });
+        S().set("world", "pm-" + d.id, d); paint(); break; }
       case "talkto": A.copilot.talkTo(b.dataset.who); break;
       case "kind": UI.imp.kind = b.dataset.k; UI.imp.out = ""; UI.imp.hits = null; paint(); break;
       case "again": answer(true); break;
