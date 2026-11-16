@@ -228,11 +228,23 @@ function geology(o, U) {
       for (let h = 0; h < cells.length; h++) { const c = cells[h], i = c % cols, j = (c / cols) | 0; for (const m of [i > 0 ? c - 1 : -1, i < cols - 1 ? c + 1 : -1, j > 0 ? c - cols : -1, j < rows - 1 ? c + cols : -1]) { if (m < 0) continue; if (SK.lake[m] && isLand[m]) { if (!seen[m]) { seen[m] = 1; cells.push(m); } } else if (isLand[m]) shore = Math.min(shore, E[m]); } }
       if (shore < 1e9) for (const c of cells) E[c] = Math.max(1, Math.min(E[c], shore - 40)); } }
 
+  /* 5b. the oceans' currents and warmth, from the winds, the basins and the planet's turning (world-ocean.js), when
+        asked (--ocean natural): they set the sea's warmth the climate reads */
+  let OC = null, coastAnom = null;
+  if (o.ocean) {
+    OC = require("./world-ocean.js").ocean(E, cols, rows, { lat: o.lat || LAT[o.climate] || LAT.temperate, km: o.km, whole: !!(o.lat && o.lat[0] >= 89), rotation: PL.rotation, cell: o.cell || 4 });
+    // (each land cell takes the warmth or chill of the nearest sea, fading inland)
+    coastAnom = new Float32Array(N); const dS = new Float32Array(N).fill(1e9), q = [];
+    for (let n = 0; n < N; n++) if (E[n] <= 0) { dS[n] = 0; coastAnom[n] = OC.ANOM[n]; q.push(n); }
+    for (let h = 0; h < q.length; h++) { const n = q[h], i = n % cols, j = (n / cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < cols - 1 ? n + 1 : -1, j > 0 ? n - cols : -1, j < rows - 1 ? n + cols : -1]) if (m >= 0 && dS[m] > dS[n] + 1) { dS[m] = dS[n] + 1; coastAnom[m] = coastAnom[n]; q.push(m); } }
+    for (let n = 0; n < N; n++) if (E[n] > 0) coastAnom[n] *= Math.exp(-dS[n] * cellKm / 350);
+  }
+
   /* 6. the climate on the land as it is */
   // (`--climate-model earth`: the Earth's own causes of wet and dry, worked out (climateEarth below); the classic model
   // stays the default until the user approves it. The land itself is the same either way: the erosion above always runs
   // on the classic rain)
-  let C = o.climateModel === "earth" ? climateEarth(E, cols, rows, o, nD, U, air) : climate(E, cols, rows, o, nD, U, air);
+  let C = o.climateModel === "earth" || OC ? climateEarth(E, cols, rows, Object.assign({}, o, { _ocean: OC }), nD, U, air) : climate(E, cols, rows, o, nD, U, air);
   if (C.mm) C.mm = Float32Array.from(C.rain);
   if (process.env.ATLAS_DUMP && C.mm) require("fs").writeFileSync(process.env.ATLAS_DUMP, JSON.stringify({ cols, rows, la: (o.lat || LAT[o.climate] || LAT.temperate), E: Array.from(E, v => Math.round(v)), mm: Array.from(C.mm, Math.round), sst: Array.from(C.sst, v => Math.round(v * 10) / 10), fog: Array.from(C.fog, v => Math.round(v * 100) / 100) }));
   { const r = []; for (let n = 0; n < N; n++) if (E[n] > 0) r.push(C.rain[n]); r.sort((a, b) => a - b);
@@ -260,7 +272,7 @@ function geology(o, U) {
 
   /* 8. what lives on it: climate classes, biomes and tree cover, from all of the above (world-ecology.js) */
   const want = ({ temperate: .62, varied: .55, cold: .55, polar: .4, warm: .5, tropical: .72, arid: .26, wet: .82 }[o.climate] || .55) * air;
-  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog, paint: SK && SK.kind ? SK.kind : null }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: o.climateModel, lat: o.lat, warmC: o.warmC }, U);
+  const eco = o.ecology === false ? null : require("./world-ecology.js").ecology({ E, lake: lakeCells, rain: C.rain, temp: C.temp, want, playa, mm: C.mm, fog: C.fog, seaAnom: coastAnom, paint: SK && SK.kind ? SK.kind : null }, { cols, rows, km: o.km, climate: o.climate, detailed: o.detailedBiomes, model: OC ? "earth" : o.climateModel, lat: o.lat, warmC: o.warmC }, U);
 
   /* to the grid the maps are drawn from */
   // (and each height's fraction, kept apart: a shaded relief map needs the land's slopes finer than 255 steps)
@@ -275,7 +287,7 @@ function geology(o, U) {
   const coast = U.distance(cols, rows, n => Hb[n] <= 128);
   const full = m => Math.min(rows - 1, Math.floor((cj(m) + .5) * f)) * cols + Math.min(cols - 1, Math.floor((ci(m) + .5) * f));
   const vols = [], maxV = Math.max(2, Math.round(N / 22000)); for (const m of volc) { const n = full(m); if (vols.length < maxV && Hb[n] > 128 && !lakeCells[n] && vols.every(v => Math.hypot(I(v) - I(n), J(v) - J(n)) > 28)) vols.push(n); }
-  return { H: Hb, Lo, M, coast, temp: C.temp, eco, info: { plates: nP, continental: plates.filter(p => crust[p.seed] === 1).length, volcanoes: vols, playa, lakes: lakeCells.reduce((s, v) => s + v, 0), peak: Math.round(top / 10) * 10 } };
+  return { H: Hb, Lo, M, coast, temp: C.temp, eco, ocean: OC, info: { plates: nP, continental: plates.filter(p => crust[p.seed] === 1).length, volcanoes: vols, playa, lakes: lakeCells.reduce((s, v) => s + v, 0), peak: Math.round(top / 10) * 10 } };
 }
 // one step of the rivers' cutting: water routed down the land (through its hollows, which it fills and spills from:
 // a priority flood from the sea), gathered from all the land above, and the stream power law solved implicitly from
@@ -393,7 +405,10 @@ function climateEarth(E, cols, rows, o, nz, U, air) {
   }
   // (a current is a broad stream, not a line along each row)
   boxBlur(cold, cols, rows, 5, 2); boxBlur(warmC, cols, rows, 5, 2);
-  for (let n = 0; n < N; n++) { if (E[n] > 0) { cold[n] = 0; continue; } const a = Math.abs(lat((n / cols) | 0)); sst[n] = Math.max(-1.8, 28 - .0058 * a * a - 8 * cold[n] + 3 * warmC[n]); }
+  // (with the oceans' own currents: the sea's warmth is theirs, and its chill (a cold current, upwelling) what steadies
+  // the air over it)
+  if (o._ocean) { const O = o._ocean; for (let n = 0; n < N; n++) { if (E[n] > 0) { cold[n] = 0; continue; } sst[n] = O.SST[n]; cold[n] = Math.min(1, Math.max(0, -O.ANOM[n] / 6) * .7 + O.UP[n] * .7) * smooth(4, 12, Math.abs(lat((n / cols) | 0))); } }
+  else for (let n = 0; n < N; n++) { if (E[n] > 0) { cold[n] = 0; continue; } const a = Math.abs(lat((n / cols) | 0)); sst[n] = Math.max(-1.8, 28 - .0058 * a * a - 8 * cold[n] + 3 * warmC[n]); }
   const cap = t => air * Math.min(1.8, Math.exp(.065 * (t - 25)));
   const eff0 = cellKm / 1400, sub = a => gauss((a - 27) / 7.5), itcz = a => gauss(a / 8), storm = a => gauss((a - 50) / 14);
   const mon = a => smooth(4, 9, a) * (1 - smooth(14, 24, a));

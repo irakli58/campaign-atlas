@@ -40,6 +40,34 @@ What was asked, what was done, and what is waiting, so the next session can carr
   latitude lines, names and strengths). Behind an opt-in until approved.
 - The user will continue in a local session after this one: keep this file and HANDOFF.md current.
 
+## Where the ocean and beach work stands (work in progress, committed so it is not lost)
+Both are opt-in and change nothing unless asked: `atlas.js world <dir> --ocean natural --coast natural`, or the
+"Simulate the oceans (preview)" checkbox in Make a new world. Regional and existing worlds stay byte-identical.
+- scripts/world-ocean.js (done, working): winds by belt plus geostrophic turn round each ocean's high; Stommel's
+  equation r∇²ψ + β∂ψ/∂x = curl τ solved by SOR on the basins (coasts as walls, regional maps padded with open sea);
+  circumpolar current where a westerly band is all sea on a planet; Ekman upwelling; SST advected along the currents
+  and relaxed to the latitude's; sea ice below -1.2 °C. Output `T.ocean` (coarse u, v, warmth, named gyres and
+  currents). Feeds climateEarth (sea warmth, cold/upwelling → fog and drought) and the ecology (coast temperature
+  anomaly, winter-weighted). Tested on a 6-continent planet: gyres at ±30°, western boundary currents warm, eastern
+  cold, equatorial currents westward.
+- Map layer (done): `ATLAS.worldArt.currents(WD)` draws arrows (orange-red warm, blue cold), gyre circles with turn,
+  named currents with warm/cold and strength, equator and 30° lines, a key. Page toggle button "Ocean currents"
+  (`.wm-octog`, data-w="currents"), shown only when the world has `T.ocean`, remembered per browser.
+- scripts/world-coast.js (working, still being tuned): sediment by stream power down the rivers (gravel from steep,
+  cold ground, worn to sand with distance), cliff supply, reef carbonate in warm seas, volcanic black sand; waves
+  from belt winds with fetch, openness and storminess, normalised per world; longshore drift with capacity ~ E^1.5
+  sin2θ, deposition where it slows, converges or is sheltered; classes beach/gravel/cliff/dune/marsh/mangrove/
+  barrier/spit/lagoon; a report of the 8 greatest beaches and why. Calibrated so about a third of coasts are sandy.
+  Output T.shore, T.shoreW (width), T.sand (makeup); drawn in both relief looks (old `beaches` strip is used only
+  when a world has no T.shore).
+- Open problem being worked on when the session restarted: barrier islands never form. Debug (COASTDBG=1) showed
+  1317 coasts with a shallow shelf, 317 of those low, but 0 also rich in sand: the "rich" test (V > vT*1.8) is too
+  strict where barriers would go. Next: base the barrier test on the sand passing by (qs) and the river supply
+  rather than the laid-down V, and recheck spits (3 formed after normalising wave energy).
+- Then still to do for these requests: before/after images and the explanations the user asked for (why each beach
+  and each current formed, how currents change the nearby climate), docs (references/world.md), tutorial step for
+  the currents toggle, and wait for the user's approval before making either the default.
+
 ## Decided (the user: "okay I like everything now")
 - The Earth climate model is the default for new worlds (a plates world made before keeps the classic rules when made
   again with the same seed; `--climate-model classic|earth` overrides; T.climateModel is written when earth).

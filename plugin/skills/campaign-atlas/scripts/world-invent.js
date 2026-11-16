@@ -60,6 +60,7 @@ function namer(rnd, own) {
     volcano: auto => own_("volcano") || (auto ? `Mount ${word()}` : null),
     wood: (auto, kind) => own_("wood") || (auto ? ({ enchanted: `The ${pick(["Witch", "Elder", "Silver", "Dream", "Faerie"])}wood`, glowforest: `The ${pick(["Lantern", "Ember", "Star", "Moon"])} Grove`, mushrooms: `The ${pick(["Spore", "Cap", "Gill"])}wood`, corrupted: `The ${pick(["Blighted", "Rotting", "Thorn", "Hollow"])} Wood`, floating: `The ${pick(["Drifting", "Hanging", "Sky"])} Isles` }[kind] || `The ${word()} Wood`) : null),
     blight: (auto, kind) => own_("blight") || (auto ? (kind === "vale" ? `The Vale of ${word()}` : `The ${pick(["Blight", "Scar", "Ruin", "Shatterlands", "Withering"])}`) : null),
+    current: () => `The ${word()} Current`, gyre: () => `The ${word()} Gyre`,
     leftover: () => Object.values(mine).flat()
   };
 }
@@ -501,8 +502,9 @@ function invent(A, flags, log) {
       // its climate's middle; a whole planet from pole to pole)
       const kmA = SIZE_KM[sizeWord] || num("km", Math.round(w * 2.3)), LATS = require("./world-ecology.js").LAT[climate] || [52, 38], midL = (LATS[0] + LATS[1]) / 2, spanL = h / w * kmA / 111;
       const latA = whole ? [90, -90] : SIZE_KM[sizeWord] ? [Math.min(88, midL + spanL / 2), Math.max(-88, midL - spanL / 2)] : undefined;
-      const G = require("./world-geology.js").geology({ sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
-      L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river }; geo = G.info; T.rain = 1;
+      const G = require("./world-geology.js").geology({ ocean: flags.ocean === "natural", cell, sketch, cols, rows, seed, land, climate, landShare: flags.landshare != null && flags.landshare !== true ? Math.max(.05, Math.min(.95, +flags.landshare)) : 1 - (SEA_SHARE[land] || .5), landmasses: flags.landmasses != null && flags.landmasses !== true ? +flags.landmasses : undefined, planet, km: kmA, tempShift: realism === "alien" ? num("warmth", 0) : 0, detailedBiomes: flags.biomes === "detailed", climateModel: climateModel === "earth" ? "earth" : undefined, lat: latA, warmC: whole ? ({ cold: -6, polar: -14, warm: 4, tropical: 6, temperate: -1 }[climate] || 0) : 0, coarse: SIZE_KM[sizeWord] ? 1.4e6 : undefined, noiseZoom: SIZE_KM[sizeWord] ? (whole ? 6 : Math.pow(kmA / 3200, .7)) : undefined, edgeMargin: SIZE_KM[sizeWord] ? (whole ? .025 : .04) : undefined }, { noiseFn, fbm, Heap, distance, mulberry32 });
+      L = { H: G.H, M: G.M, coast: G.coast, Lo: G.Lo, eco: G.eco, drawnRiver: sketch && sketch.river, ocean: G.ocean, kmA, latA: latA || require("./world-ecology.js").LAT[climate] || [52, 38], volcs: G.info.volcanoes }; geo = G.info; T.rain = 1;
+      if (G.ocean) { T.ocean = G.ocean.layer; if (autoNames) { for (const g of T.ocean.gyres) g.name = name.gyre(); for (const c of T.ocean.currents) c.name = name.current(); } }
       // the ecology's layers, kept for the map to draw: each cell's biome, its tree cover (0 to 255), its yearly mean
       // temperature (°C + 60)
       if (G.eco && flags.biomes !== "classic") { T.biome = Buffer.from(G.eco.biome).toString("base64"); T.canopy = Buffer.from(G.eco.canopy).toString("base64"); T.tempC = Buffer.from(Uint8Array.from(G.eco.T, v => Math.max(0, Math.min(255, Math.round(v + 60))))).toString("base64"); if (G.eco.ground.some(v => v)) T.ground = Buffer.from(G.eco.ground).toString("base64"); }
@@ -515,6 +517,11 @@ function invent(A, flags, log) {
     const fj = regions && !geo ? carveFjords(co, L, mulberry32(seed + 41)) : 0;
     const R = makeRivers(Object.assign({ wetf: geo ? 1 : BIO.CLIMATES[climate][2], lakesFlow: !!geo }, co), L); T.rivers = R.rivers; riverMask = R.mask;
     if (L.drawnRiver) drawnRivers(co, L, R);
+    // the coasts, as waves, drift and sediment shape them (world-coast.js), when asked (--coast natural; on trial)
+    if (geo && flags.coast === "natural") {
+      const CS = require("./world-coast.js").coasts({ cols, rows, cell, km: L.kmA, lat: L.latA, whole, seed, rotation: undefined }, { H: L.H, eco: L.eco, ocean: L.ocean }, R, L.volcs, log);
+      if (CS) { T.shore = Buffer.from(CS.shore).toString("base64"); T.shoreW = Buffer.from(CS.width).toString("base64"); T.sand = Buffer.from(CS.sand).toString("base64"); T.coastsSaid = CS.said; }
+    }
     if (regions) { CV = makeCover(Object.assign({ geo, rain: !!geo }, co), L, R, mulberry32(seed + 43), log); CV.fjords = fj; if (CV.liquid) T.liquid = CV.liquid; if (CV.lore && CV.lore.length) T.lore = CV.lore; }
     if (geo) CV = Object.assign(CV || { made: {}, vols: [] }, { geo });
     // seas and lakes, named at their deepest water
@@ -710,7 +717,7 @@ function fromDrawing(dir, A, src, flags, log) {
 }
 // the terrain file: written by the command, never by hand
 function writeTerrain(dir, T, title) {
-  const big = ["height", "heightLo", "moist", "cover", "biome", "canopy", "tempC", "ground"], lines = [];
+  const big = ["height", "heightLo", "moist", "cover", "biome", "canopy", "tempC", "ground", "shore", "shoreW", "sand"], lines = [];
   for (const [k, v] of Object.entries(T)) if (v !== undefined && !big.includes(k) && !["rivers", "labels", "routes", "spots"].includes(k)) lines.push(`  ${k}: ${JSON.stringify(v)}`);
   lines.push(`  spots: {\n${Object.entries(T.spots).map(([k, v]) => `    ${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(",\n")}\n  }`);
   for (const k of ["labels", "routes", "rivers"]) lines.push(`  ${k}: [\n${(T[k] || []).map(x => "    " + JSON.stringify(x)).join(",\n")}\n  ]`);

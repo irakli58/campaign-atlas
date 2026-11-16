@@ -204,7 +204,7 @@
     s += `<path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#5a4d3c" stroke-opacity=".5" stroke-width=".5" stroke-linejoin="round"/>`;
     // (where the page lays a sharper picture of the land when the map is zoomed in, within the land's own outline)
     s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath><g class="wm-detail" clip-path="url(#${uid}-land)"></g>`;
-    s += beaches(WD, pr, uid + "-land");
+    if (!G.Sh) s += beaches(WD, pr, uid + "-land");
     s += `<path d="${shore}" fill="none" stroke="#3f6f8c" stroke-opacity=".55" stroke-width=".45"/>`;
     s += streams(WD, "#4f7c95");
     s += N ? NT.rivers(WD, "relief", N, pr, "#3f6f8c", null, .9) : rivers(WD, "#3f6f8c", null, .9);
@@ -332,9 +332,9 @@
     const NA = nat(WD), simB = NA && WD.G.B ? WD.G.B : null, DES = BIO ? BIO.CODE.desert : -1, SWP = BIO ? BIO.CODE.swamp : -1;
     // (where the ecology says desert, the land's own share of it, and of swamp, eased across the cells)
     // (what the colours read from, made once for a world and kept: a zoomed-in window is drawn many times)
-    let desAt = null, swpAt = null, snwAt = null, canopyAt = null, bare = null, sandAt = null, badAt = null, shoreAt = null;
+    let desAt = null, swpAt = null, snwAt = null, canopyAt = null, bare = null, sandAt = null, badAt = null, shoreAt = null, SH = null;
     const kept = RPREP.get(WD.G);
-    if (kept && kept.NA === NA) ({ desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt, shoreAt } = kept);
+    if (kept && kept.NA === NA) ({ desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt, shoreAt, SH } = kept);
     else {
       const share = code => { if (!simB) return null; const G = WD.G, F = new Float32Array(G.cols * G.rows); for (let n = 0; n < F.length; n++) F[n] = simB[n] === code ? 1 : 0; const t = new Float32Array(F.length); for (let p = 0; p < 2; p++) { for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s += F[j * G.cols + a]; c++; } } t[j * G.cols + i] = s / c; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s = 0, c = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s += t[b * G.cols + i]; c++; } } F[j * G.cols + i] = s / c; } } return (x, y) => NA.S(x, y, F); };
         desAt = share(DES); swpAt = share(SWP); snwAt = BIO ? share(BIO.CODE.snow) : null;
@@ -360,10 +360,25 @@
         for (let n = 0; n < n0; n++) if (H0[n] <= G.sea) { D[n] = 0; q.push(n); }
         for (let h = 0; h < q.length; h++) { const n = q[h], i = n % G.cols, j = (n / G.cols) | 0; for (const m of [i > 0 ? n - 1 : -1, i < G.cols - 1 ? n + 1 : -1, j > 0 ? n - G.cols : -1, j < G.rows - 1 ? n + G.cols : -1]) if (m >= 0 && D[m] > D[n] + 1) { D[m] = D[n] + 1; q.push(m); } }
         shoreAt = NA ? (x, y) => NA.S(x, y, D) : null; }
-      RPREP.set(WD.G, { NA, desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt, shoreAt });
+      // the coasts as world-coast.js made them: each kind's share eased over the cells, the beaches' width, the sand's
+      // colour by what it is made of (quartz, coral, volcanic, gravel)
+      if (NA && WD.G.Sh) { const G = WD.G, n0 = G.cols * G.rows, mk = () => new Float32Array(n0), F = { beach: mk(), grav: mk(), dune: mk(), marsh: mk(), mang: mk(), cliff: mk(), lag: mk(), w: mk(), r: mk(), g: mk(), b: mk(), veg: mk() };
+        const SC = [[230, 208, 152], [244, 236, 212], [92, 88, 84], [150, 144, 134]];
+        for (let n = 0; n < n0; n++) { const c = G.Sh[n]; if (!c) continue; const sc = SC[G.Sd ? G.Sd[n] : 0] || SC[0];
+          if (c === 1 || c === 7 || c === 8) { F.beach[n] = 1; F.w[n] = (G.Sw ? G.Sw[n] : 64) / 64; } else if (c === 2) { F.grav[n] = 1; F.w[n] = (G.Sw ? G.Sw[n] : 32) / 64; } else if (c === 3) F.cliff[n] = 1; else if (c === 4) { F.dune[n] = 1; F.veg[n] = (G.Sw ? G.Sw[n] : 80) / 100; } else if (c === 5) F.marsh[n] = 1; else if (c === 6) F.mang[n] = 1; else if (c === 9) F.lag[n] = 1;
+          F.r[n] = sc[0]; F.g[n] = sc[1]; F.b[n] = sc[2]; }
+        // (a coast cell's width and colour reach the cells about it, so the band follows the shore smoothly)
+        for (const k of ["w", "r", "g", "b", "veg"]) { const A2 = F[k], o2 = Float32Array.from(A2); for (let n = 0; n < n0; n++) { if (A2[n]) continue; const i = n % G.cols, j = (n / G.cols) | 0; let s2 = 0, c2 = 0; for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= G.cols || b >= G.rows) continue; const m = b * G.cols + a; if (A2[m]) { s2 += A2[m]; c2++; } } if (c2) o2[n] = s2 / c2; } F[k] = o2; }
+        const bl = A2 => { const t = new Float32Array(n0); for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s2 = 0, c2 = 0; for (let k = -1; k <= 1; k++) { const a = i + k; if (a >= 0 && a < G.cols) { s2 += A2[j * G.cols + a]; c2++; } } t[j * G.cols + i] = s2 / c2; } for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { let s2 = 0, c2 = 0; for (let k = -1; k <= 1; k++) { const b = j + k; if (b >= 0 && b < G.rows) { s2 += t[b * G.cols + i]; c2++; } } A2[j * G.cols + i] = s2 / c2; } };
+        for (const k of ["beach", "grav", "dune", "marsh", "mang", "cliff", "lag"]) bl(F[k]);
+        SH = {}; for (const k of Object.keys(F)) SH[k] = (x, y) => NA.S(x, y, F[k]); }
+      RPREP.set(WD.G, { NA, desAt, swpAt, snwAt, canopyAt, bare, sandAt, badAt, shoreAt, SH });
     }
     const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
-      if (h <= sea && P) return I.lake ? [128, 170, 192] : P.paper;
+      // (a lagoon behind its barrier: shallow, pale water)
+      const lagW = SH && h <= sea ? SH.lag(x, y) : 0;
+      if (h <= sea && P) return I.lake ? [128, 170, 192] : lagW > .25 ? mix(P.paper, [150, 190, 200], smooth(.25, .6, lagW)) : P.paper;
+      if (h <= sea && lagW > .25) return lit(mix([60, 140, 170], [104, 184, 196], smooth(.25, .7, lagW)), gx, gy, RX * .2);
       if (h <= sea) {
         const d = clamp((sea - h) / 128, 0, 1);
         // the sea: pale over the shelf by the coast, deepening down the slope to the ocean floor, its relief faintly lit
@@ -412,6 +427,21 @@
         c = mix(c, [176, 168, 150], smooth(.2, .5, t) * .55);
         c = mix(c, [250, 250, 250], smooth(.42, .92, t));
       }
+      // the coasts (world-coast.js): sand as wide as the sediment laid down and the shore allow, its edge broken and
+      // darker where the waves wet it; gravel and shingle; darker rock at cliffs; dunes behind the beaches, rippled and
+      // grassed where it rains; salt marsh and mangroves on sheltered muddy shores
+      // (the distance from the shoreline itself, half a cell from a water cell's middle; beaches drawn wider than life,
+      // as a relief map exaggerates what is too small to see, in proportion to how wide they are)
+      if (SH && shoreAt) { const d0 = Math.max(0, shoreAt(x, y) - .5), d = d0 + (nz(x * .35 + 3, y * .35) - .5) * .35 + (nz(x * .09, y * .09 + 7) - .5) * .3;
+        if (d0 < 6) {
+          const wb = SH.beach(x, y), wg = SH.grav(x, y), wdn = SH.dune(x, y), wm = SH.marsh(x, y), wmg = SH.mang(x, y), wc = SH.cliff(x, y), sc = [SH.r(x, y), SH.g(x, y), SH.b(x, y)];
+          if (wm > .05) c = mix(c, (nz(x * .5, y * .5 + 9) > .62 ? [92, 128, 128] : [104, 122, 86]), Math.min(1, wm * 1.8) * smooth(3, .4, d0) * .85);
+          if (wmg > .05) c = mix(c, [46, 88, 54], Math.min(1, wmg * 1.8) * smooth(2.5, .3, d0) * .9);
+          if (wdn > .05) { const rip = Math.sin(x * .8 + y * .25 + nz(x * .05, y * .05) * 6) * .5 + .5, dune = mix(sc[0] ? sc.map(v => Math.min(255, v + 10)) : [228, 214, 172], [150, 166, 112], smooth(.5, 1.1, SH.veg(x, y)) * .7); c = mix(c, dune.map(v => v * (.94 + .1 * rip)), Math.min(1, wdn * 1.6) * .85); }
+          if (wg > .05) { const w = .55 + SH.w(x, y) * 1.4, a = smooth(w + .3, w - .2, d) * Math.min(1, wg * 2.2), peb = nz(x * 1.3, y * 1.3); c = mix(c, [146 + 24 * peb, 140 + 22 * peb, 130 + 20 * peb], a * .9); }
+          if (wb > .05) { const w = .7 + SH.w(x, y) * 1.8, a = smooth(w + .3, w - .2, d) * Math.min(1, wb * 2.2); if (a > .01) { const wet = smooth(.3, .05, d0); c = mix(c, (sc[0] ? sc : [222, 206, 162]).map(v => Math.min(255, v * 1.04) * (1 - .14 * wet) * (.97 + .06 * nz(x * .8, y * .8))), Math.min(1, a * 1.15)); } }
+          if (wc > .05) c = mix(c, [112, 100, 90], Math.min(1, wc * 2) * smooth(.9, .1, d0) * .55);
+        } }
       // snow and ice where it never melts
       if (snwAt) { const w = snwAt(x, y); if (w > .02) c = mix(c, [246, 248, 250], w * .9); }
       // swamp: a dark olive green, wet and low
@@ -425,7 +455,7 @@
     let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
     const cd = coastD(G, .6);
     s += `<path d="${cd}" fill="none" stroke="#f4f8fa" stroke-opacity=".45" stroke-width="3"/><path d="${cd}" fill="url(#${uid}-b)" fill-rule="evenodd" stroke="#4f6f86" stroke-opacity=".75" stroke-width=".6" stroke-linejoin="round"/><g class="wm-detail"></g>`;
-    s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath>` + beaches(WD, pr, uid + "-land");
+    s += `<clipPath id="${uid}-land"><path d="${cd}" fill-rule="evenodd"/></clipPath>` + (G.Sh ? "" : beaches(WD, pr, uid + "-land"));
     s += N ? NT.rivers(WD, "relief", N, pr, "#2c5fc6", null, 1.25) : rivers(WD, "#2c5fc6", null, 1.25);
     const c = seaCorner(WD, pr);
     s += `<g class="wm-deco"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" fill="none" stroke="#2b2a24" stroke-width="1.4"/>${northArrow(W * c[0], H * c[1], Math.min(W, H) * .045, "#2b2a24", true)}${WD.title ? `<text class="wm-ttl" x="${W / 2}" y="34" text-anchor="middle" fill="#2b2a24">${A.esc ? A.esc(WD.title) : WD.title}</text>` : ""}</g>`;
@@ -1006,5 +1036,46 @@
   const DETAIL = { hydro: 3200, relief: 2600 };
   const detailBase = (WD, look) => DETAIL[look] ? Math.min(2, DETAIL[look] / Math.max(WD.size[0], WD.size[1])) : 0;
   function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6 }, look === "hydro" ? HYDRO : undefined); }
-  A.worldArt = { LOOKS, looksFor, draw, detail, detailBase };
+  // the oceans' currents, a layer the referee shows or hides (the user, 27 Oct 2026): arrows along the flow, orange-red
+  // where the water is warmer than its latitude's (a warm current), blue where colder; the gyres circled with their
+  // turning; the great currents named with how strong they are; the equator and the latitudes. From world-ocean.js
+  function currents(WD) {
+    const O = WD.T && WD.T.ocean; if (!O) return "";
+    const [W, H] = WD.size, gc = O.cols, gr = O.rows, st = O.step, dec = b => { const s = atob(b), a = new Int8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = (s.charCodeAt(i) << 24) >> 24; return a; };
+    const U = dec(O.u), V = dec(O.v), Wm = dec(O.warm), r1 = v => Math.round(v * 10) / 10;
+    const f = (A, x, y) => { const gi = x / st - .5, gj = y / st - .5, i = Math.floor(gi), j = Math.floor(gj), tx = gi - i, ty = gj - j, g = (a, b) => a < 0 || b < 0 || a >= gc || b >= gr ? 0 : A[b * gc + a]; return (g(i, j) * (1 - tx) + g(i + 1, j) * tx) * (1 - ty) + (g(i, j + 1) * (1 - tx) + g(i + 1, j + 1) * tx) * ty; };
+    const col = w => { const t = clamp(w / 25, -1, 1); return t >= 0 ? mix([118, 128, 138], [214, 88, 34], smooth(.15, .7, t)) : mix([118, 128, 138], [38, 104, 196], smooth(.15, .7, -t)); };
+    const rgb = c => `rgb(${c.map(v => Math.round(v)).join(",")})`, gapS = Math.max(st * 1.6, Math.min(W, H) / 38), K = Math.max(1, Math.min(W, H) / 900);
+    let s = "";
+    // the equator and the latitudes, every 30°
+    if (O.lat) { const [la, lb] = O.lat, yOf = L => (la - L) / (la - lb) * H;
+      for (let L = -90; L <= 90; L += 30) { if ((L - la) * (L - lb) > 0 || L === la || L === lb) continue; const y = yOf(L), eq = L === 0;
+        s += `<line x1="0" y1="${r1(y)}" x2="${W}" y2="${r1(y)}" stroke="${eq ? "#9c3a22" : "#3c4a58"}" stroke-opacity="${eq ? .55 : .3}" stroke-width="${eq ? 1.1 : .7}" stroke-dasharray="${eq ? "10 5" : "4 6"}"/><text x="8" y="${r1(y - 4)}" font-size="${r1(Math.min(W, H) * .012)}" fill="${eq ? "#9c3a22" : "#3c4a58"}" fill-opacity=".8" font-family="Georgia, serif" font-style="italic">${eq ? "Equator" : Math.abs(L) + "°" + (L > 0 ? "N" : "S")}</text>`; } }
+    // arrows along the flow, from a jittered lattice of starting points
+    const paths = new Map();
+    lattice(W, H, gapS, gapS, 61, (x, y) => {
+      let u = f(U, x, y) / 127, v = f(V, x, y) / 127; const sp0 = Math.hypot(u, v); if (sp0 < .1) return;
+      const pts = [[x, y]]; let px = x, py = y;
+      for (let k = 0; k < 8; k++) { u = f(U, px, py) / 127; v = f(V, px, py) / 127; const sp = Math.hypot(u, v); if (sp < .05) break; px += u / sp * gapS * .1; py -= v / sp * gapS * .1; pts.push([px, py]); }
+      if (pts.length < 4) return;
+      const c = rgb(col(f(Wm, x, y))), w = r1((.6 + 2.2 * Math.min(1, sp0)) * K), n = pts.length, [ax, ay] = pts[n - 1], [bx, by] = pts[n - 2], ang = Math.atan2(ay - by, ax - bx), hl = Math.max(2.4, w * 2.6);
+      const d = pathD(pts, false) + `M${r1(ax + Math.cos(ang) * hl * .4)} ${r1(ay + Math.sin(ang) * hl * .4)}L${r1(ax - Math.cos(ang - .5) * hl)} ${r1(ay - Math.sin(ang - .5) * hl)}M${r1(ax + Math.cos(ang) * hl * .4)} ${r1(ay + Math.sin(ang) * hl * .4)}L${r1(ax - Math.cos(ang + .5) * hl)} ${r1(ay - Math.sin(ang + .5) * hl)}`;
+      const key = c + "|" + w; paths.set(key, (paths.get(key) || "") + d);
+    });
+    for (const [key, d] of paths) { const [c, w] = key.split("|"); s += `<path d="${d}" fill="none" stroke="${c}" stroke-opacity=".85" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`; }
+    // the gyres: a circle with its turning, and its name
+    const fs = Math.min(W, H) * .013;
+    for (const g of O.gyres || []) { const R = Math.min(W, H) * (.035 + .03 * g.strength), [x, y] = g.at, cw = g.spin === "clockwise", a0 = -2.6, a1 = 1.9, p = a => [x + Math.cos(a) * R, y + Math.sin(a) * R], hl0 = 5 * K;
+      const [sx, sy] = p(cw ? a0 : a1), [ex, ey] = p(cw ? a1 : a0), tang = (cw ? a1 : a0) + (cw ? Math.PI / 2 : -Math.PI / 2), hl = hl0;
+      s += `<path d="M${r1(sx)} ${r1(sy)}A${r1(R)} ${r1(R)} 0 1 ${cw ? 1 : 0} ${r1(ex)} ${r1(ey)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(tang - .5) * hl)} ${r1(ey - Math.sin(tang - .5) * hl)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(tang + .5) * hl)} ${r1(ey - Math.sin(tang + .5) * hl)}" fill="none" stroke="#2f3d4c" stroke-opacity=".5" stroke-width="${r1(K)}" stroke-dasharray="${r1(3 * K)} ${r1(3 * K)}"/>`;
+      if (g.name) s += `<text x="${r1(x)}" y="${r1(y + fs * .35)}" text-anchor="middle" font-size="${r1(fs)}" fill="#2f3d4c" fill-opacity=".75" font-family="Georgia, serif" font-style="italic">${A.esc ? A.esc(g.name) : g.name}</text>`; }
+    // the great currents named, along their way, with their warmth and strength
+    for (const c of O.currents || []) { if (!c.name) continue; const [x, y] = c.at, rot = -c.dir, up = rot > 90 || rot < -90, word = c.strength > .6 ? "strong" : c.strength > .35 ? "moderate" : "weak", kind = c.warm > .6 ? "warm" : c.warm < -.6 ? "cold" : "";
+      s += `<text transform="translate(${r1(x)} ${r1(y)}) rotate(${r1(up ? rot + 180 : rot)})" y="${r1(-fs * .6)}" text-anchor="middle" font-size="${r1(fs * .95)}" fill="${rgb(col(c.warm * 10))}" font-family="Georgia, serif" font-style="italic" stroke="#f6f2e8" stroke-width="2.4" stroke-opacity=".7" paint-order="stroke">${A.esc ? A.esc(c.name) : c.name}<tspan font-size="${r1(fs * .7)}" dx="4">(${[kind, word].filter(Boolean).join(", ")})</tspan></text>`; }
+    // the key
+    const kx = W - Math.min(W, H) * .2, ky = H - Math.min(W, H) * .12, kf = fs * .85;
+    s += `<g font-family="Georgia, serif" font-size="${r1(kf)}" fill="#2f3d4c"><rect x="${r1(kx - 8)}" y="${r1(ky - kf * 1.6)}" width="${r1(Math.min(W, H) * .18)}" height="${r1(kf * 4.6)}" rx="4" fill="#f6f2e8" fill-opacity=".85" stroke="#2f3d4c" stroke-opacity=".3"/><path d="M${r1(kx)} ${r1(ky)}h${r1(kf * 2.2)}" stroke="rgb(214,88,34)" stroke-width="2"/><text x="${r1(kx + kf * 2.8)}" y="${r1(ky + kf * .35)}">Warm current</text><path d="M${r1(kx)} ${r1(ky + kf * 1.6)}h${r1(kf * 2.2)}" stroke="rgb(38,104,196)" stroke-width="2"/><text x="${r1(kx + kf * 2.8)}" y="${r1(ky + kf * 1.95)}">Cold current</text></g>`;
+    return `<g class="wm-currents" pointer-events="none">${s}</g>`;
+  }
+  A.worldArt = { LOOKS, looksFor, draw, detail, detailBase, currents };
 })(ATLAS);

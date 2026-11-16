@@ -298,7 +298,7 @@
     if (want && (want === "stars") === starry) look = want;
     const size = Array.isArray(W.size) && W.size[0] > 0 ? W.size.slice(0, 2) : T.w ? [T.w, T.h] : [1000, 700];
     const SH = shapeOf(W, OV);
-    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist), C: unb64(T.cover), B: unb64(T.biome), Cn: unb64(T.canopy), Tc: unb64(T.tempC), Gr: unb64(T.ground) } : null;
+    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist), C: unb64(T.cover), B: unb64(T.biome), Cn: unb64(T.canopy), Tc: unb64(T.tempC), Gr: unb64(T.ground), Sh: unb64(T.shore), Sw: unb64(T.shoreW), Sd: unb64(T.sand) } : null;
     if (!opt.noLand && !G && SH.base && !T.stars && !T.drawing) G = blankLand(size, SH.base);
     if (G) {
       if (!G.M) G.M = new Uint8Array(G.cols * G.rows).fill(128); if (!G.C || G.C.length !== G.cols * G.rows) G.C = new Uint8Array(G.cols * G.rows);
@@ -660,13 +660,14 @@
         <span class="wm-title">${esc(WD.title || "The world")}</span>
         <select class="wm-look keeper" aria-label="How the map is drawn" title="How the map is drawn: the players see it the same way" hidden></select>
         <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
+        <button type="button" class="wm-btn wm-octog" data-w="currents" aria-pressed="false" hidden title="Show the oceans' currents: warm and cold, the gyres, the equator and the latitudes">Ocean currents</button>
         <span class="wm-sp"></span>
         <span class="wm-editbar keeper"></span>
         ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
         <button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-oc"></g><g class="wm-routes"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -696,7 +697,7 @@
           const water = /sea|ocean|lake|bay|gulf|strait|sound|river/.test(L.kind || ""), fs = (L.size || (L.kind === "river" ? 10 : water ? 20 : L.kind === "region" ? 24 : 15)) * 1.15;
           s += `<text class="wm-rl${water ? " w" : ""}" x="${r1(L.at[0])}" y="${r1(L.at[1])}" font-size="${fs}" text-anchor="middle"${L.angle ? ` transform="rotate(${r1(L.angle)} ${r1(L.at[0])} ${r1(L.at[1])})"` : ""}>${esc(L.name)}</text>`;
         }
-        $(".wm-land").innerHTML = s; refine.at = null; clearTimeout(refine.t); refine.t = setTimeout(refine, 350); return;
+        $(".wm-land").innerHTML = s; drawCurrents(); refine.at = null; clearTimeout(refine.t); refine.t = setTimeout(refine, 350); return;
       }
       if (G) {
         const img = paintTerrain(WD), pat = (id, src) => src ? `<pattern id="${uid}-${id}" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${src}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern>` : "";
@@ -905,6 +906,13 @@
     // the sharper land where the map is zoomed in (the shaded reliefs): once the camera rests, the window in view is
     // drawn again as fine as the screen shows it and laid over the land, so a continent of a whole planet holds its
     // valleys and streams up close; zoomed back out, the whole map's own picture is enough
+    // the oceans' currents (world-ocean.js), a layer over the land the referee shows or hides; the choice is kept
+    const OCS = { on: (() => { try { return ctx.store.get("world-currents") === "1"; } catch (e) { return false; } })() };
+    function drawCurrents() {
+      const b = $(".wm-octog"), has = !!(WD.T && WD.T.ocean && A.worldArt && A.worldArt.currents);
+      b.hidden = !has; b.setAttribute("aria-pressed", has && OCS.on);
+      $(".wm-oc").innerHTML = has && OCS.on ? A.worldArt.currents(WD) : "";
+    }
     function refine() {
       const slot = cam.querySelector(".wm-detail"); if (!slot || !A.worldArt || !A.worldArt.detail || gone || anim) return;
       const base = A.worldArt.detailBase(WD, WD.look); if (!base || V.k < base * 1.4) { slot.innerHTML = ""; refine.at = null; return; }
@@ -1134,6 +1142,7 @@
         <label class="wm-nw-loose" hidden>How closely to follow my drawing <span class="wm-lsl"><span class="kn">Exactly as drawn</span><input type="range" name="loose" min="0" max="1" step="0.05" value="${g.loose != null ? g.loose : .5}" aria-label="How closely to follow my drawing: left exactly as drawn, right loosely"><span class="kn">Loosely</span></span><span class="kn wm-lval"></span></label>
         <label>Climate <select name="climate">${opt(clim, g.climate || "varied")}</select></label>
         <label>Where the deserts and rains fall <select name="rules">${opt([["earth", "As on the Earth: the winds, the seas, the mountains decide"], ["classic", "Atlas's older, simpler rules"]], g.rules || "earth")}</select></label>
+        <label><input type="checkbox" name="ocean"${g.ocean ? " checked" : ""}> Simulate the oceans (preview): currents from the winds and the planet's turning, warm and cold seas that shape the coasts' climate, and coasts shaped by waves and sand</label>
         <label>Kind of world <select name="realism">${opt([["fantasy", "Fantasy: its own places (enchanted woods, ...)"], ["realistic", "Realistic: only what the Earth would make"]], g.realism || (WD.T && WD.T.realism) || "fantasy")}</select></label>
         <label>Look <select name="look">${opt(looks, g.look || (looks.some(l => l[0] === "hydro") ? "hydro" : WD.look))}</select></label>
         <label>Seed <input type="number" name="seed" min="1" max="999999" value="${g.seed || 1000 + Math.floor(Math.random() * 9000)}"> <button type="button" class="wm-btn" data-nw="roll">Roll</button></label>
@@ -1203,7 +1212,7 @@
       });
       f.addEventListener("submit", e => {
         if (!e.submitter || e.submitter.value !== "make") return; e.preventDefault();
-        const v = { size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
+        const v = { ocean: f.elements.ocean.checked || undefined, size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
         const whole = v.size === "planet";
         if (f.elements.land.value === "paint" || f.elements.land.value === "sketch") v.loose = +f.elements.loose.value;
         if (f.elements.land.value === "paint") {
@@ -1230,7 +1239,7 @@
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
       const W0 = JSON.parse(JSON.stringify(A.worldData || {})); delete W0.size;
       const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
-      flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
+      flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.ocean) { flags.ocean = "natural"; flags.coast = "natural"; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
       const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
       return new Promise((ok, no) => {
         let w; try { w = new Worker(URL.createObjectURL(new Blob([A.worldGenSrc], { type: "text/javascript" }))); } catch (e) { no(e); return; }
@@ -1597,6 +1606,7 @@
         case "addroute": S.tool = S.tool === "route" ? null : "route"; S.first = null; renderBars(); break;
         case "export": exportJS(); break;
         case "newworld": newWorldDlg(); break;
+        case "currents": OCS.on = !OCS.on; try { ctx.store.set("world-currents", OCS.on ? "1" : ""); } catch (_) {} drawCurrents(); break;
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
         case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }
         case "dlgclose": closeDlg(); break;
