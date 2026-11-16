@@ -113,11 +113,11 @@
         if (rg.cells.length < 2) continue;
         const want = Math.min(rg.cells.length > 40 ? 5 : rg.cells.length > 20 ? 4 : rg.cells.length > 8 ? 3 : 2, Math.round(3 + LV * 3)), got = [];
         for (const q of rg.cells.slice().sort((p1, p2) => PK[p2] - PK[p1])) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 2.2)) continue; got.push(q); }
-        for (const q of got) add({ k: "sym", s: "mountain", at: warpW([cx(q), cy(q)]), size: step * (1.1 + .7 * PK[q]), layer: "geo", st: "c", big: PK[q] > .7 ? 1 : undefined });
+        const pids = got.map(q => add({ k: "sym", s: "mountain", at: warpW([cx(q), cy(q)]), size: step * (1.1 + .7 * PK[q]), layer: "geo", st: "c", big: PK[q] > .7 ? 1 : undefined }).id);
         // (its name, if the world gives it one: the named range nearest its peaks)
         let mx = 0, my = 0; for (const q of got) { mx += cx(q) / got.length; my += cy(q) / got.length; }
         const nm = names.filter(lb => !usedN.has(lb.name)).sort((a, b) => Math.hypot(a.at[0] - mx, a.at[1] - my) - Math.hypot(b.at[0] - mx, b.at[1] - my))[0];
-        if (nm && Math.hypot(nm.at[0] - mx, nm.at[1] - my) < span * .2) { usedN.add(nm.name); add({ k: "text", at: warpW([mx, my + step * 2.2]), label: nm.name, size: span * .022, layer: "text", st: "c" }); }
+        if (nm && Math.hypot(nm.at[0] - mx, nm.at[1] - my) < span * .2 && onLand([mx, my + step * 2.2])) { usedN.add(nm.name); add({ k: "text", at: warpW([mx, my + step * 2.2]), label: nm.name, size: span * .022, layer: "text", st: "c", of: pids }); }
       }
       // (the great forests: the user, "also add the forests and that's it"; the biggest few woods, a small clump of
       // trees each, named if the world names them)
@@ -139,9 +139,9 @@
         // (a wood is drawn as a group: trees close together, then, in a big wood, another group)
         const order = cells.slice().sort((p1, p2) => hash(p1, 3, seed + 41) - hash(p2, 3, seed + 41)), dq = (g, q) => Math.hypot(cx(g) - cx(q), cy(g) - cy(q));
         while (got.length < want) { let best = null; for (const q of order) { if (got.includes(q) || got.some(g => dq(g, q) < step * 1.5)) continue; if (!got.length || got.some(g => dq(g, q) < step * 2.6)) { best = q; break; } } if (best == null) for (const q of order) if (!got.includes(q) && !got.some(g => dq(g, q) < step * 1.5)) { best = q; break; } if (best == null) break; got.push(best); }
-        for (const q of got) add({ k: "sym", s: "forest", at: warpW([cx(q), cy(q)]), size: step * 1.1, layer: "geo", st: "c" });
+        const tids = got.map(q => add({ k: "sym", s: "forest", at: warpW([cx(q), cy(q)]), size: step * 1.1, layer: "geo", st: "c" }).id);
         const nm = fNames.filter(lb => !usedN.has(lb.name)).sort((a, b) => Math.hypot(a.at[0] - mx, a.at[1] - my) - Math.hypot(b.at[0] - mx, b.at[1] - my))[0];
-        if (nm && Math.hypot(nm.at[0] - mx, nm.at[1] - my) < span * .2) { usedN.add(nm.name); let gy = 0, gx = 0; for (const q of got) { gx += cx(q) / got.length; gy = Math.max(gy, cy(q)); } add({ k: "text", at: warpW([gx, gy + step * 1.6]), label: nm.name, size: span * .02, layer: "text", st: "c" }); }
+        if (nm && Math.hypot(nm.at[0] - mx, nm.at[1] - my) < span * .2) { let gy = 0, gx = 0; for (const q of got) { gx += cx(q) / got.length; gy += cy(q) / got.length; } if (onLand([gx, gy + step * 1.6])) usedN.add(nm.name), add({ k: "text", at: warpW([gx, gy + step * 1.6]), label: nm.name, size: span * .02, layer: "text", st: "c", of: tids }); }
       }
       // (the lower uplands: a few small hills where nothing else is drawn, so the land between is not bare)
       const HK = new Uint8Array(gw * gh), taken = els.filter(e => e.at).map(e => e.at);
@@ -391,7 +391,8 @@
       if (!at) continue; nt += e.s === "wave" ? .5 : 1;
       out.push(Object.assign({}, e, { at, size: z, _op: e.s === "mountain" ? .85 : e.s === "wave" ? .45 : e.s === "hill" ? .6 : .75 }));
     }
-    return out;
+    // (a range's or a wood's name goes with its symbols: none of them drawn, no name)
+    const drawn = new Set(out.map(e => e.id)); return out.filter(e => !(e.of && e.gen && !e.of.some(id => drawn.has(id))));
   }
   // the whole sheet. o: { player (leave out the referee's own), sel (the chosen element's id) }
   function render(map, o) {
