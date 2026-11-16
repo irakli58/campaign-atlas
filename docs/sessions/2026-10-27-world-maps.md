@@ -77,6 +77,10 @@ Both are opt-in and change nothing unless asked: `atlas.js world <dir> --ocean n
   5-landmass world and a 6-continent planet; page toggles tested; tutorial step added.
 - Not done (option 2, offered): plates moving over time (continental drift history).
 
+## Dropped (16 Nov 2026)
+- Anything for the old map styles (painted, parchment: drawn trees and symbols), e.g. "polish the trees": the user
+  will not use them.
+
 ## Decided (the user: "okay I like everything now")
 - The Earth climate model is the default for new worlds (a plates world made before keeps the classic rules when made
   again with the same seed; `--climate-model classic|earth` overrides; T.climateModel is written when earth).
