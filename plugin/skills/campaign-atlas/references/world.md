@@ -198,3 +198,5 @@ ATLAS.world({
 - every 3D city: on the world map;
 - every place's `city:` and `location:`;
 - the party.
+
+**Players' maps: readability** (16 Nov 2026; the user asked for clean, uncluttered parchment maps). Each map has a density, `style.density`: `minimal` (the default for a commoner's or an elder's map), `balanced` (traveler, merchant, scout) or `detailed` (cartographer). It is set in the New map form ("How busy") and in The look panel. The generator draws few mountains per range (highest first, spaced) and small wood clusters by density. The renderer lays each map out at draw time (`layout` in atlas-pmap.js), in order of importance: the referee's own elements (never moved, and everything generated keeps clear of them), then lines (all kept), then places (home first, nudged clear or dropped if minor), then their names (below, right, left or above; minor names dropped when they don't fit or the cap is reached; a halo only when an important name has to overlap), then region words, then terrain (spaced, capped). Roads follow the real map's way along the land (`A.worldKit.wayOf`), not a straight line. Rivers are thin and light, coasts bold.

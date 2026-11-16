@@ -44,6 +44,9 @@
   // WD: the world as the page has it (atlas-world.js prepareWorld); o: { maker, home (a place's id), seed, name, accuracy (0 crude .. 1 careful, default the maker's) }
   function generate(WD, o) {
     o = o || {}; const M = Object.assign({}, MAKERS[o.maker] || MAKERS.commoner), seed = o.seed || 1 + Math.floor(Math.random() * 99999);
+    // how much is drawn (the user: "a commoner's map should be sparse and crude"): minimal for those who know little,
+    // detailed for the cartographer, balanced between
+    const density = (o.style && o.style.density) || o.density || (["commoner", "elder"].includes(o.maker || "commoner") ? "minimal" : o.maker === "cartographer" ? "detailed" : "balanced"), DF = GEN_DENS[density] || GEN_DENS.balanced;
     if (o.accuracy != null) M.err = M.err * (1.6 - 1.4 * clamp(+o.accuracy, 0, 1));
     const [W, H] = WD.size, G = WD.G, D = A.worldDraw, kmU = WD.scale && WD.scale.per ? WD.scale.per * (/mile/.test(WD.scale.unit || "") ? 1.609 : /km/.test(WD.scale.unit || "") ? 1 : 1) : 3;
     const R = Math.min(Math.max(W, H) * .75, M.km / kmU);
@@ -74,12 +77,22 @@
       }
       // mountains: high ground they know, and the great ranges seen far off (drawn bigger than they are)
       const S = D.sampler(G), sea = G.sea, step = R / (7 + 8 * M.detail), peaks = [], seeFar = M.km < 150 ? 4 : 1.9;
-      for (let y = step / 2; y < H; y += step) for (let x = step / 2; x < W; x += step) {
-        const jx = x + (hash(x, y, seed) - .5) * step * .8, jy = y + (hash(y, x, seed + 3) - .5) * step * .8, h = S(jx, jy), t = (h - sea) / (255 - sea);
-        if (t > .38 && near([jx, jy], 1) || t > .55 && near([jx, jy], seeFar)) peaks.push([jx, jy, t]);
+      // (the high ground on a grid, gathered into ranges; each range drawn with a few peaks along it, the highest first,
+      // well apart: a suggestion of the range, not every summit)
+      const gw = Math.ceil(W / step), gh = Math.ceil(H / step), PK = new Float32Array(gw * gh);
+      for (let b = 0; b < gh; b++) for (let a = 0; a < gw; a++) { const x = (a + .5) * step, y = (b + .5) * step, t = (S(x, y) - sea) / (255 - sea); if (t > .38 && near([x, y], 1) || t > .55 && near([x, y], seeFar)) PK[b * gw + a] = t; }
+      const seenP = new Uint8Array(gw * gh);
+      for (let q0 = 0; q0 < gw * gh; q0++) {
+        if (!PK[q0] || seenP[q0]) continue; const cells = [q0], stq = [q0]; seenP[q0] = 1;
+        while (stq.length) { const q = stq.pop(), a = q % gw, b = (q / gw) | 0; for (let db = -1; db <= 1; db++) for (let da = -1; da <= 1; da++) { const a2 = a + da, b2 = b + db; if (a2 < 0 || b2 < 0 || a2 >= gw || b2 >= gh) continue; const m = b2 * gw + a2; if (PK[m] && !seenP[m]) { seenP[m] = 1; stq.push(m); cells.push(m); } } }
+        const cx = (q => (q % gw + .5) * step), cy = (q => (((q / gw) | 0) + .5) * step), inside = cells.some(q => near([cx(q), cy(q)], 1));
+        if (!inside && cells.length < 3) continue;
+        const want = inside ? clamp(Math.round(Math.sqrt(cells.length) * DF.mtn), 1, DF.mtnMax) : Math.min(2, DF.mtnMax), got = [];
+        for (const q of cells.slice().sort((p1, p2) => PK[p2] - PK[p1])) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 2.2)) continue; got.push(q); }
+        for (const q of got) { const x = cx(q), y = cy(q), t = PK[q], ins = near([x, y], 1), dx = x - Hc[0], dy = y - Hc[1], d = Math.hypot(dx, dy) || 1, p = ins ? [x, y] : [Hc[0] + dx / d * R * 1.08, Hc[1] + dy / d * R * 1.08];
+          if (t <= .5 && !DF.hills) continue;
+          add({ k: "sym", s: t > .5 ? "mountain" : "hill", at: warp(p), size: step * (.55 + .7 * t), layer: "geo", st: "c", far: ins ? undefined : 1, big: t > .7 ? 1 : undefined }); }
       }
-      // (far mountains, seen from home, drawn at the sheet's edge in their direction: a row on the horizon)
-      for (const [x, y, t] of peaks) { const inside = near([x, y], 1), dx = x - Hc[0], dy = y - Hc[1], d = Math.hypot(dx, dy) || 1, p = inside ? [x, y] : [Hc[0] + dx / d * R * (1.05 + .15 * hash(x, y, seed + 8)), Hc[1] + dy / d * R * (1.05 + .15 * hash(y, x, seed + 8))]; if (!inside && hash(x, y, seed + 9) > .5) continue; add({ k: "sym", s: t > .5 ? "mountain" : "hill", at: warp(p), size: step * (.55 + .7 * t) * (1 + M.err * 2), layer: "geo", st: "c", far: inside ? undefined : 1 }); }
       // forests and fens: a few clumps where the trees are thick
       const B = G.B, C = G.Cn, CODE = A.worldBiomes ? A.worldBiomes.CODE : {}, fs = step * 1.6;
       // (the forest cells on a grid, gathered into woods; each wood drawn as a cluster of trees where it stands, more
@@ -88,7 +101,7 @@
       for (let b = 0; b < gy; b++) for (let a = 0; a < gx; a++) {
         const x = (a + .5) * fs, y = (b + .5) * fs; if (!near([x, y], .95)) continue;
         const i = Math.min(G.cols - 1, Math.floor(x / G.cell)), j = Math.min(G.rows - 1, Math.floor(y / G.cell)), n = j * G.cols + i;
-        if (S(x, y) <= sea) { if (hash(x, y, seed + 12) < .3) { let land = false; for (const [ox, oy] of [[fs, 0], [-fs, 0], [0, fs], [0, -fs]]) if (S(x + ox, y + oy) > sea) land = true; if (land) add({ k: "sym", s: "wave", at: warp([x, y]), size: fs * .35, layer: "geo", st: "c" }); } continue; }
+        if (S(x, y) <= sea) { if (hash(x, y, seed + 12) < DF.waves) { let land = false; for (const [ox, oy] of [[fs, 0], [-fs, 0], [0, fs], [0, -fs]]) if (S(x + ox, y + oy) > sea) land = true; if (land) add({ k: "sym", s: "wave", at: warp([x, y]), size: fs * .35, layer: "geo", st: "c" }); } continue; }
         FK[b * gx + a] = C ? (C[n] > 120 ? 1 : 0) : B && B[n] === CODE.forest ? 1 : 0;
         if (B && B[n] === CODE.swamp) FK[b * gx + a] = 2;
       }
@@ -96,7 +109,8 @@
       for (let q0 = 0; q0 < gx * gy; q0++) {
         if (!FK[q0] || seenF[q0]) continue; const kind = FK[q0], cells = [q0], stq = [q0]; seenF[q0] = 1;
         while (stq.length) { const q = stq.pop(), a = q % gx, b = (q / gx) | 0; for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a2 = a + da, b2 = b + db; if (a2 < 0 || b2 < 0 || a2 >= gx || b2 >= gy) continue; const m = b2 * gx + a2; if (FK[m] === kind && !seenF[m]) { seenF[m] = 1; stq.push(m); cells.push(m); } } }
-        const many = Math.min(cells.length, Math.max(1, Math.round(Math.sqrt(cells.length) * (1.6 + 2 * M.detail))));
+        if (cells.length < DF.woodMin) continue;
+        const many = Math.min(cells.length, DF.treesMax, Math.max(1, Math.round(Math.sqrt(cells.length) * DF.trees)));
         for (let t = 0; t < many; t++) { const q = cells[Math.floor(hash(q0, t, seed + 13) * cells.length)], x = (q % gx + .2 + .6 * hash(t, q, seed + 14)) * fs, y = (((q / gx) | 0) + .2 + .6 * hash(q, t, seed + 15)) * fs; add({ k: "sym", s: kind === 2 ? "swamp" : "forest", at: warp([x, y]), size: fs * (.42 + hash(y, x, seed + 6) * .3) * (1 + M.err), layer: "geo", st: "c" }); }
       }
     }
@@ -127,11 +141,11 @@
     // roads between the places drawn (never a hidden one), straighter than they are
     for (const r of WD.routes) {
       if (r.hidden || !have.has(r.from) || !have.has(r.to) || !(r.kind in { road: 1, trail: 1, pass: 1 })) continue;
-      const a = WD.byId[r.from], b = WD.byId[r.to], path = Array.isArray(r.path) && r.path.length > 1 ? r.path : [a.at, b.at];
+      const a = WD.byId[r.from], b = WD.byId[r.to], path = Array.isArray(r.path) && r.path.length > 1 ? r.path : (A.worldKit && A.worldKit.wayOf && A.worldKit.wayOf(WD, r)) || [a.at, b.at];
       add({ k: "line", t: r.kind === "trail" ? "path" : "road", pts: simp([a.at, ...path.slice(1, -1), b.at], eps * 2.2).map(warp), layer: "roads", st: "c", route: r.id, label: M.labels === "all" && r.name ? r.name : "" });
     }
     // the names they use for the land about them
-    if (M.labels !== "few") for (const lb of WD.labels || []) { if (!lb.name || !Array.isArray(lb.at) || !near(lb.at, .9) || /sea|ocean/.test(lb.kind || "") && M.labels !== "all") continue; add({ k: "text", at: warp(lb.at), label: lb.name, size: R * .035, layer: "text", st: "c" }); }
+    if (M.labels !== "few" && DF.words) for (const lb of WD.labels || []) { if (!lb.name || !Array.isArray(lb.at) || !near(lb.at, .9) || /sea|ocean/.test(lb.kind || "") && M.labels !== "all") continue; add({ k: "text", at: warp(lb.at), label: lb.name, size: R * .035, layer: "text", st: "c" }); }
     // the sheet: what they drew, and a margin
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; const grow = p => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); };
     for (const e of els) (e.pts || [e.at]).forEach(grow); grow([Hc[0] - R * .5, Hc[1] - R * .4]); grow([Hc[0] + R * .5, Hc[1] + R * .4]);
@@ -141,9 +155,11 @@
     // (room at the top for the title, above what was drawn)
     y0 -= (y1 - y0) * .1;
     if (home && M.labels !== "all") add({ k: "text", at: [(x0 + x1) / 2, y0 + (y1 - y0) * .07], label: o.title || `${home.name} and thereabouts`, size: (y1 - y0) * .045, layer: "text", st: "c", title: 1 });
-    const style = Object.assign({ paper: "aged", wear: .5, ink: "brown", width: 1, rough: clamp(.35 + M.err * 2.6, .2, 1), hand: M.err > .1 ? "scrawl" : M.err > .05 ? "hand" : "fair", detail: M.detail }, o.style || {});
+    const style = Object.assign({ density, paper: "aged", wear: .4, ink: "brown", width: 1, rough: clamp(.35 + M.err * 2.6, .2, 1), hand: M.err > .1 ? "scrawl" : M.err > .05 ? "hand" : "fair", detail: M.detail }, o.style || {});
     return { id: o.id || uid(), name: o.name || `${M.name}'s map`, maker: o.maker || "commoner", home: home ? home.id : null, seed, accuracy: o.accuracy, made: Date.now(), frame: [r1(x0), r1(y0), r1(x1 - x0), r1(y1 - y0)], style, given: false, layers: { geo: 1, places: 1, roads: 1, text: 1, notes: 1, dm: 1 }, els, R: r1(R), H: Hc.map(r1) };
   }
+  // how much a map's maker draws, by density
+  const GEN_DENS = { minimal: { mtn: .6, mtnMax: 3, hills: 0, woodMin: 3, trees: .5, treesMax: 2, waves: .06, words: 0 }, balanced: { mtn: .9, mtnMax: 4, hills: 1, woodMin: 2, trees: .8, treesMax: 4, waves: .12, words: 1 }, detailed: { mtn: 1.3, mtnMax: 7, hills: 1, woodMin: 1, trees: 1.2, treesMax: 7, waves: .2, words: 1 } };
   function smooth(a, b, v) { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
 
   // the land about one place, sketched onto a map at its mapmaker's skill (to reveal a region as the party learns it):
@@ -159,6 +175,7 @@
   /* ---- drawing it, in ink on parchment */
   const PAPER = { aged: ["#e9d9b2", "#d8c08a"], pale: ["#f1e7cc", "#e0cfa4"], brown: ["#d9bf8c", "#b9975c"], grey: ["#e2ddd0", "#c8c1af"] };
   const INK = { brown: "#4a3220", black: "#211a14", sepia: "#6b4b2b", iron: "#2b2c3a" };
+  const PAPER_HALO = "#efe2c0";
   const HANDS = { scrawl: "'Caveat', 'Comic Sans MS', cursive", hand: "'Homemade Apple', 'Caveat', cursive", fair: "'IM Fell English', 'Georgia', serif" };
   const FONT_URL = "https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Homemade+Apple&family=IM+Fell+English:ital@0;1&display=swap";
   function loadFonts() { if (typeof document === "undefined" || document.getElementById("atlas-pmap-fonts")) return; const l = document.createElement("link"); l.id = "atlas-pmap-fonts"; l.rel = "stylesheet"; l.href = FONT_URL; document.head.appendChild(l); }
@@ -201,23 +218,23 @@
   const SYMBOLS = [["village", "Village"], ["town", "Town"], ["city", "City"], ["castle", "Castle"], ["tower", "Tower"], ["ruin", "Ruin"], ["temple", "Temple"], ["inn", "Inn"], ["port", "Port"], ["bridge", "Bridge"], ["mountain", "Mountain"], ["hill", "Hill"], ["forest", "Forest"], ["tree", "Tree"], ["lake", "Lake"], ["swamp", "Swamp"], ["cave", "Cave"], ["camp", "Camp"], ["landmark", "Standing stone"], ["danger", "Danger"], ["unknown", "Unknown"], ["x", "X marks the spot"]];
   // one drawn thing as SVG; sc: the sheet's ink unit
   function elSVG(e, sc, st, ink) {
-    const op = e.st === "u" ? .55 : e.far ? .6 : 1, dash = e.st === "r" ? ` stroke-dasharray="${r1(sc * 2.2)} ${r1(sc * 1.6)}"` : "", rg = st.rough, seed = hash(e.id ? e.id.length * 977 + e.id.charCodeAt(0) : 1, e.id ? e.id.charCodeAt(e.id.length - 1) : 3, 5) * 9999 | 0, w = sc * .55 * st.width;
-    const font = HANDS[st.hand] || HANDS.scrawl, lab = (txt, x, y, size, anchor) => `<text x="${r1(x)}" y="${r1(y)}" font-size="${r1(size)}" font-family="${font}" fill="${ink}" text-anchor="${anchor || "middle"}" transform="rotate(${r1((hash(seed, 3, 9) - .5) * 6)} ${r1(x)} ${r1(y)})"${e.st === "x" ? ' text-decoration="line-through"' : ""}>${esc(txt)}${e.st === "r" || e.st === "u" ? "?" : ""}</text>`;
+    const op = (e._op || 1) * (e.st === "u" ? .55 : e.far ? .7 : 1), dash = e.st === "r" ? ` stroke-dasharray="${r1(sc * 2.2)} ${r1(sc * 1.6)}"` : "", rg = st.rough, seed = hash(e.id ? e.id.length * 977 + e.id.charCodeAt(0) : 1, e.id ? e.id.charCodeAt(e.id.length - 1) : 3, 5) * 9999 | 0, w = sc * .55 * st.width;
+    const font = HANDS[st.hand] || HANDS.scrawl, lab = (txt, x, y, size, anchor) => `<text x="${r1(x)}" y="${r1(y)}" font-size="${r1(size)}" font-family="${font}" fill="${ink}" text-anchor="${anchor || "middle"}" transform="rotate(${r1((hash(seed, 3, 9) - .5) * 3)} ${r1(x)} ${r1(y)})"${e.st === "x" ? ' text-decoration="line-through"' : ""}${e._italic ? ' font-style="italic"' : ""}${e._halo ? ` stroke="${PAPER_HALO}" stroke-width="${r1(size * .25)}" stroke-opacity=".8" paint-order="stroke"` : ""}>${esc(txt)}${e.st === "r" || e.st === "u" ? "?" : ""}</text>`;
     let s = "";
     if (e.k === "line") {
-      const t = e.t, W = t === "river" ? w * (1.1 + .25 * (e.w || 1)) : t === "road" ? w * .9 : t === "coast" ? w * 1.25 : t === "border" ? w * .8 : w, d = rough(e.pts, sc, rg * (t === "coast" ? 1.3 : 1), seed);
+      const t = e.t, W = t === "river" ? w * (.5 + .1 * Math.min(3, e.w || 1)) : t === "road" ? w * .7 : t === "coast" ? w * 1.35 : t === "border" ? w * .8 : w, d = rough(e.pts, sc, rg * (t === "coast" ? 1.3 : 1), seed);
       if (t === "coast") s += `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${r1(W)}" stroke-linecap="round" stroke-linejoin="round"${dash}/><path d="${rough(e.pts.map(p => [p[0] + sc * .9, p[1] + sc * .9]), sc, rg * 1.6, seed + 1)}" fill="none" stroke="${ink}" stroke-opacity=".28" stroke-width="${r1(W * .45)}"/>`;
-      else if (t === "river") s += `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${r1(W)}" stroke-linecap="round"${dash}/>`;
-      else if (t === "road") s += `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${r1(W)}" stroke-linecap="round" stroke-dasharray="${r1(sc * 2.4)} ${r1(sc * 1.2)}"/>`;
+      else if (t === "river") s += `<path d="${d}" fill="none" stroke="${ink}" stroke-opacity=".8" stroke-width="${+W.toFixed(2)}" stroke-linecap="round"${dash}/>`;
+      else if (t === "road") s += `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${r1(W)}" stroke-linecap="round" stroke-dasharray="${r1(sc * 2.6)} ${r1(sc * 1.6)}"/>`;
       else if (t === "path") s += `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${r1(W * .8)}" stroke-linecap="round" stroke-dasharray="${r1(sc * .4)} ${r1(sc * 1.3)}"/>`;
       else if (t === "border") s += `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${r1(W)}" stroke-dasharray="${r1(sc * 3)} ${r1(sc)} ${r1(sc * .4)} ${r1(sc)}"/>`;
       else s += `<path d="${d}" fill="none" stroke="${e.c || ink}" stroke-width="${r1(W * (e.ww || 1))}" stroke-linecap="round" stroke-linejoin="round"${dash}/>`;
       if (e.arrow) { const n = e.pts.length, [ax, ay] = e.pts[n - 1], [bx, by] = e.pts[n - 2], a = Math.atan2(ay - by, ax - bx), h = sc * 2.4; s += `<path d="M${r1(ax - Math.cos(a - .5) * h)} ${r1(ay - Math.sin(a - .5) * h)}L${r1(ax)} ${r1(ay)}L${r1(ax - Math.cos(a + .5) * h)} ${r1(ay - Math.sin(a + .5) * h)}" fill="none" stroke="${ink}" stroke-width="${r1(W)}"/>`; }
       if (e.label) { const p = e.pts[Math.floor(e.pts.length / 2)]; s += lab(e.label, p[0], p[1] - sc * 1.6, sc * 3.2); }
     } else if (e.k === "sym") {
-      const [x, y] = e.at, z = e.size || sc * 8, d = SYM[e.s] || SYM.unknown, sw = r1(w / z * 1.25);
-      s += `<g transform="translate(${r1(x)} ${r1(y)}) scale(${r1(z)}) rotate(${r1((hash(seed, 1, 2) - .5) * 8)})"><path d="${d}" fill="none" stroke="${ink}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"${e.st === "r" ? ` stroke-dasharray="${r1(.12)} ${r1(.08)}"` : ""}/>${e.s === "mountain" ? `<path d="M-.15-.4l.55 .75" stroke="${ink}" stroke-opacity=".35" stroke-width="${r1(+sw * 2.5)}"/>` : ""}${e.home ? `<circle r=".75" fill="none" stroke="${ink}" stroke-width="${sw}" stroke-dasharray=".12 .1"/>` : ""}${e.st === "x" ? `<path d="${SYM.x}" transform="scale(1.4)" stroke="#8a2a1a" stroke-width="${sw}" fill="none"/>` : ""}</g>`;
-      if (e.label) s += lab(e.label, x, y + z * .55 + sc * 3, sc * 3.3);
+      const [x, y] = e.at, z = e.size || sc * 8, d = SYM[e.s] || SYM.unknown, sw = +(w / z * 1.25).toFixed(3);
+      s += `<g transform="translate(${r1(x)} ${r1(y)}) scale(${r1(z)}) rotate(${r1((hash(seed, 1, 2) - .5) * 8)})"><path d="${d}" fill="none" stroke="${ink}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"${e.st === "r" ? ` stroke-dasharray="${.12} ${.08}"` : ""}/>${e.s === "mountain" ? `<path d="M-.15-.4l.55 .75" stroke="${ink}" stroke-opacity=".35" stroke-width="${+(sw * 2.5).toFixed(3)}"/>` : ""}${e.home ? `<circle r=".75" fill="none" stroke="${ink}" stroke-width="${sw}" stroke-dasharray=".12 .1"/>` : ""}${e.st === "x" ? `<path d="${SYM.x}" transform="scale(1.4)" stroke="#8a2a1a" stroke-width="${sw}" fill="none"/>` : ""}</g>`;
+      if (e.label && !e._nolabel) s += e._lp ? lab(e.label, e._lp[0], e._lp[1], e._ls, e._lp[2]) : lab(e.label, x, y + z * .55 + sc * 3, sc * 3.8);
       else if ((e.st === "r" || e.st === "u") && e.layer !== "geo") s += lab("", x + z * .45, y - z * .3, sc * 3.6, "start");
     } else if (e.k === "text") {
       const [x, y] = e.at; s += lab(e.label || "", x, y, e.size || sc * 3.6);
@@ -225,6 +242,63 @@
       const [x, y] = e.at; s += `<g transform="translate(${r1(x)} ${r1(y)}) scale(${r1(sc * 3)})"><path d="${SYM.note}" fill="none" stroke="${ink}" stroke-width="${r1(w / (sc * 3))}"/></g>` + (e.label ? lab(e.label, x + sc * 2.4, y + sc * 1.2, sc * 5, "start") : "");
     }
     return `<g class="pm-el${e.dm ? " pm-dm" : ""}" data-pm="${esc(e.id || "")}" opacity="${op}">${s}</g>`;
+  }
+  // the layout (the user: "too cluttered ... use collision detection ... prioritise important information over
+  // decoration"): what the referee drew stays exactly where it is and is drawn first; what was generated is placed in
+  // order of importance (places, then their names, then roads and rivers, the ranges and woods, the small terrain, the
+  // decoration), each needing its own room (more the sparser the map), nudged a little if it must be, else left out;
+  // a name tries below, beside and above its symbol and is left out (an unimportant one) rather than cover anything
+  const DENS = { minimal: { gap: 1.7, terrain: 12, labels: 4, words: 1 }, balanced: { gap: 1.3, terrain: 30, labels: 9, words: 4 }, detailed: { gap: 1.05, terrain: 70, labels: 18, words: 10 } };
+  const SZ = { city: 12, town: 10, port: 9, castle: 9, temple: 8, inn: 7, village: 8, tower: 7, ruin: 7, cave: 7, bridge: 7, mountain: 10, hill: 7, forest: 8, tree: 6, swamp: 8, wave: 5, landmark: 6, danger: 7, camp: 7, unknown: 7, x: 7, lake: 8 };
+  const TERRAIN = { mountain: 3, forest: 3.3, swamp: 3.5, hill: 4, tree: 4, lake: 3.4, wave: 5 };
+  function layout(map, sc, show) {
+    const D = DENS[(map.style || {}).density] || DENS.balanced, boxes = [], out = [], [fx, fy, fw, fh] = map.frame;
+    const hit = b => b[0] < fx + sc || b[1] < fy + sc || b[2] > fx + fw - sc || b[3] > fy + fh - sc || boxes.some(o => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]);
+    const symBox = (at, z, pad) => [at[0] - z * .5 * pad, at[1] - z * .5 * pad, at[0] + z * .5 * pad, at[1] + z * .45 * pad];
+    const tBox = (x, y, size, txt, anchor) => { const w = Math.max(1, (txt || "").length + 1) * size * .5, x0 = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2; return [x0, y - size * .85, x0 + w, y + size * .3]; };
+    const lineBoxes = (pts, r) => { for (let i = 0; i < pts.length - 1; i++) { const [ax, ay] = pts[i], [bx, by] = pts[i + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (r * 1.5))); for (let k = 0; k <= n; k++) { const x = ax + (bx - ax) * k / n, y = ay + (by - ay) * k / n; boxes.push([x - r, y - r, x + r, y + r]); } } };
+    const els = (map.els || []).filter(show), gen = els.filter(e => e.gen), own = els.filter(e => !e.gen);
+    // what the referee drew: as drawn, and in the way of everything generated
+    for (const e of own) { out.push(e); if (e.pts) lineBoxes(e.pts, sc * 1.5); else if (e.at) { const z = e.size || sc * 8; boxes.push(e.k === "sym" ? symBox(e.at, z, 1) : tBox(e.at[0], e.at[1], e.size || sc * 5, e.label, e.k === "note" ? "start" : "middle")); } }
+    // the lines: all kept (the roads and rivers above the terrain), and the terrain kept off them
+    for (const e of gen.filter(e => e.k === "line")) { out.push(e); lineBoxes(e.pts, e.t === "coast" ? sc * 1.2 : sc * 2.2); }
+    // the places, the most important first
+    const pri = e => e.home ? 0 : ["city"].includes(e.s) ? 1 : ["town", "port", "castle"].includes(e.s) ? 1.5 : 2;
+    const places = gen.filter(e => e.k === "sym" && !(e.s in TERRAIN)).sort((a, b) => pri(a) - pri(b));
+    const placed = [];
+    for (const e of places) {
+      const z = sc * (SZ[e.s] || 8) * (e.home ? 1.15 : 1);
+      let at = null; for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) { const p = [e.at[0] + dx * z * .6, e.at[1] + dy * z * .6], b = symBox(p, z, e.home ? 1.6 : 1.1); if (!hit(b)) { at = p; boxes.push(b); break; } }
+      if (!at) { if (pri(e) > 1.5) continue; at = e.at; boxes.push(symBox(at, z, 1.1)); }
+      const x = Object.assign({}, e, { at, size: z, _op: 1 }); out.push(x); placed.push(x);
+    }
+    // their names: the important ones first, each where it fits; the rest only while there is room and number
+    let nl = 0;
+    for (const x of placed.slice().sort((a, b) => pri(a) - pri(b))) {
+      if (!x.label) continue; const z = x.size, imp = pri(x) <= 1.5, size = sc * (imp ? 4.6 : 3.8), lab = x.label + (x.st === "r" || x.st === "u" ? "?" : "");
+      if (!imp && nl >= D.labels) { x._nolabel = 1; continue; }
+      const r = x.home ? 1.4 : 1, cand = [[x.at[0], x.at[1] + z * .55 * r + size * .95, "middle"], [x.at[0] + z * .62 * r, x.at[1] + size * .3, "start"], [x.at[0] - z * .62 * r, x.at[1] + size * .3, "end"], [x.at[0], x.at[1] - z * .6 * r, "middle"]];
+      let ok = null; for (const c of cand) { const b = tBox(c[0], c[1], size, lab, c[2]); if (!hit(b)) { ok = c; boxes.push(b); break; } }
+      if (!ok) { if (!imp) { x._nolabel = 1; continue; } ok = cand[0]; boxes.push(tBox(ok[0], ok[1], size, lab, ok[2])); x._halo = 1; }
+      x._lp = ok; x._ls = size; nl++;
+    }
+    // the names of the land, a few
+    let nw = 0;
+    for (const e of gen.filter(e => e.k === "text")) {
+      const size = e.title ? e.size || sc * 9 : sc * 4.4, b = tBox(e.at[0], e.at[1], size, e.label, "middle");
+      if (e.title) { out.push(Object.assign({}, e, { size })); boxes.push(b); continue; }
+      if (nw >= D.words || hit(b)) continue; boxes.push(b); out.push(Object.assign({}, e, { size, _op: .85, _italic: 1 })); nw++;
+    }
+    // the terrain, ranges before woods before the rest; each with room about it, a little nudged if need be
+    let nt = 0;
+    for (const e of gen.filter(e => e.k === "sym" && e.s in TERRAIN).sort((a, b) => TERRAIN[a.s] - TERRAIN[b.s] || (b.big ? 1 : 0) - (a.big ? 1 : 0))) {
+      if (nt >= D.terrain * (e.s === "wave" ? .25 : 1)) continue;
+      const z = sc * (SZ[e.s] || 8) * (e.big ? 1.25 : 1) * (e.far ? .8 : 1);
+      let at = null; for (const [dx, dy] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) { const p = [e.at[0] + dx * z, e.at[1] + dy * z], b = symBox(p, z, D.gap); if (!hit(b)) { at = p; boxes.push(symBox(p, z, 1)); break; } }
+      if (!at) continue; nt += e.s === "wave" ? .5 : 1;
+      out.push(Object.assign({}, e, { at, size: z, _op: e.s === "mountain" ? .85 : e.s === "wave" ? .45 : e.s === "hill" ? .6 : .75 }));
+    }
+    return out;
   }
   // the whole sheet. o: { player (leave out the referee's own), sel (the chosen element's id) }
   function render(map, o) {
@@ -237,12 +311,13 @@
     const ed = [], n = 60; for (let k = 0; k < n; k++) { const t = k / n, side = Math.floor(t * 4), f = t * 4 - side, j = (hash(k, seed, 11) - .5) * sc * 2.4 * (.5 + st.wear); const P = [[fx + fw * f, fy + j], [fx + fw + j, fy + fh * f], [fx + fw * (1 - f), fy + fh + j], [fx + j, fy + fh * (1 - f)]][side]; ed.push(P); }
     const edge = "M" + ed.map(p => `${r1(p[0])} ${r1(p[1])}`).join("L") + "Z";
     s += `<path d="${edge}" fill="${p0}"/><path d="${edge}" fill="${p0}" filter="url(#${u}-g)"/><path d="${edge}" fill="url(#${u}-v)"/>`;
-    for (let k = 0; k < Math.round(1 + st.wear * 5); k++) { const cx = fx + fw * (.1 + .8 * hash(k, seed, 21)), cy = fy + fh * (.1 + .8 * hash(k, seed, 22)), rr = Math.min(fw, fh) * (.04 + .1 * hash(k, seed, 23)); const ring = []; for (let q = 0; q < 24; q++) { const a = q / 24 * 6.283, rq = rr * (.7 + .5 * vn(Math.cos(a) * 1.5 + k * 3, Math.sin(a) * 1.5, seed + 30)); ring.push([cx + Math.cos(a) * rq, cy + Math.sin(a) * rq * .75]); } const dR = "M" + ring.map(p => `${r1(p[0])} ${r1(p[1])}`).join("L") + "Z"; s += `<path d="${dR}" fill="${p1}" fill-opacity="${r1(.06 + .09 * st.wear)}" stroke="${p1}" stroke-opacity="${r1(.15 + .2 * st.wear)}" stroke-width="${r1(sc * 1.1)}"/>`; }
+    for (let k = 0; k < Math.round(st.wear * 3); k++) { const cx = fx + fw * (.1 + .8 * hash(k, seed, 21)), cy = fy + fh * (.1 + .8 * hash(k, seed, 22)), rr = Math.min(fw, fh) * (.04 + .1 * hash(k, seed, 23)); const ring = []; for (let q = 0; q < 24; q++) { const a = q / 24 * 6.283, rq = rr * (.7 + .5 * vn(Math.cos(a) * 1.5 + k * 3, Math.sin(a) * 1.5, seed + 30)); ring.push([cx + Math.cos(a) * rq, cy + Math.sin(a) * rq * .75]); } const dR = "M" + ring.map(p => `${r1(p[0])} ${r1(p[1])}`).join("L") + "Z"; s += `<path d="${dR}" fill="${p1}" fill-opacity="${r1(.06 + .09 * st.wear)}" stroke="${p1}" stroke-opacity="${r1(.15 + .2 * st.wear)}" stroke-width="${r1(sc * 1.1)}"/>`; }
     s += `<path d="${edge}" fill="none" stroke="${p1}" stroke-width="${r1(sc * 1.2)}" stroke-opacity=".8"/>`;
     // the ink, faded here and there, in the layers' order
     const order = ["geo", "roads", "places", "text", "notes", "dm"];
     let ink$ = "";
-    for (const L of order) for (const e of map.els || []) if ((e.layer || "notes") === L && show(e)) ink$ += elSVG(e, sc, st, ink) + (o.sel && o.sel === e.id ? selBox(e, sc) : "");
+    const laid = layout(map, sc, show);
+    for (const L of order) for (const e of laid) if ((e.layer || "notes") === L) ink$ += elSVG(e, sc, st, ink) + (o.sel && o.sel === e.id ? selBox(e, sc) : "");
     s += `<g filter="url(#${u}-i)" opacity="${r1(.95 - .15 * st.wear)}">${ink$}</g>`;
     return `<svg xmlns="http://www.w3.org/2000/svg" class="pm-svg" viewBox="${r1(fx - sc * 4)} ${r1(fy - sc * 4)} ${r1(fw + sc * 8)} ${r1(fh + sc * 8)}" preserveAspectRatio="xMidYMid meet">${s}</svg>`;
   }
@@ -286,6 +361,7 @@
           <label>Drawn by <select data-pmn="maker">${opt(Object.entries(MAKERS).map(([k, v]) => [k, v.name]), "commoner")}</select></label><p class="kn pm-mk"></p>
           <label>Who lives at <select data-pmn="home">${opt(placesKnown.map(l => [l.id, l.name]), (W.party && W.party.at) || (placesKnown[0] || {}).id)}</select></label>
           <label>How carefully drawn <input type="range" data-pmn="acc" min="0" max="1" step="0.05" value="0.5"></label>
+          <label title="Minimal suits a commoner's sketch; a cartographer draws in detail">How busy <select data-pmn="density">${opt([["", "As the maker would"]].concat([["minimal", "Minimal: only what matters"], ["balanced", "Balanced"], ["detailed", "Detailed"]]), "")}</select></label>
           <label>Name <input type="text" data-pmn="name" placeholder="e.g. Old Marta's map"></label>
           <div class="pm-row"><button type="button" class="wm-btn prim" data-pm="make">Draw it</button><button type="button" class="wm-btn" data-pm="blank">A blank sheet</button><button type="button" class="wm-btn" data-pm="cancelnew">Cancel</button></div></fieldset></div>
         ${m ? `<fieldset class="pm-box"><legend>This map and the players</legend>
@@ -329,6 +405,7 @@
           ${routes.length ? `<label>A road <select data-pmv="revroute">${opt(routes.map(r => [r.id, (r.name ? r.name + ": " : "") + WD_name(W, r.from) + " to " + WD_name(W, r.to) + (r.hidden ? " (secret)" : "")]), routes[0].id)}</select></label><div class="pm-row"><button type="button" class="wm-btn" data-pm="revroad">Sketch it on</button></div>` : ""}
           <p class="kn">Sketched as the map's maker would: roughly, a little out of place.</p></fieldset>
         <fieldset class="pm-box"><legend>The look</legend>
+          <label title="How much is drawn and named. Your own additions always stay.">How busy <select data-pms="density">${opt([["minimal", "Minimal: only what matters"], ["balanced", "Balanced"], ["detailed", "Detailed"]], st.density || "balanced")}</select></label>
           <label>Parchment <select data-pms="paper">${opt([["aged", "Aged"], ["pale", "Pale"], ["brown", "Brown, old"], ["grey", "Grey"]], st.paper)}</select></label>
           <label>Wear <input type="range" data-pms="wear" min="0" max="1" step="0.05" value="${st.wear == null ? .5 : st.wear}"></label>
           <label>Ink <select data-pms="ink">${opt([["brown", "Brown"], ["black", "Black"], ["sepia", "Faded sepia"], ["iron", "Iron-gall"]], st.ink)}</select></label>
@@ -412,8 +489,8 @@
         case "new": $(".pm-new").hidden = false; break;
         case "cancelnew": $(".pm-new").hidden = true; break;
         case "make": case "blank": {
-          const maker = $('[data-pmn="maker"]').value, home = $('[data-pmn="home"]').value, acc = +$('[data-pmn="acc"]').value, name = $('[data-pmn="name"]').value.trim();
-          let d = generate(W, { maker, home, accuracy: acc, name: name || undefined });
+          const maker = $('[data-pmn="maker"]').value, home = $('[data-pmn="home"]').value, acc = +$('[data-pmn="acc"]').value, name = $('[data-pmn="name"]').value.trim(), density = $('[data-pmn="density"]').value || undefined;
+          let d = generate(W, { maker, home, accuracy: acc, name: name || undefined, density });
           if (a === "blank") { d.els = d.els.filter(e => e.title); d.name = name || "A blank sheet"; }
           E.id = d.id; E.sel = null; E.view = null; save(d); break;
         }

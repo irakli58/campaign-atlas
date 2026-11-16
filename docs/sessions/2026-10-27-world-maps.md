@@ -119,3 +119,6 @@ Both are opt-in and change nothing unless asked: `atlas.js world <dir> --ocean n
 - Regional classic and Earth-model outputs at fixed seeds must not change when only drawing changes.
 - Render with Playwright: load engine files + world.js + world-terrain.js, `ATLAS.worldArt.draw(WD, look)`.
 - The page: `atlas.js build <dir>`, open dist/preview.html, World map, Edit map, Make a new world.
+
+### Parchment readability (16 Nov 2026)
+The user asked for cleaner player maps (priority hierarchy, few spaced symbols, no overlaps, density presets, Minimal for commoners, never move the DM's marks). Done in engine/atlas-pmap.js, see references/world.md "Players' maps: readability". Mid-way the user said "the connecting lines between cities look weird" (roads were straight lines across the sea; now routed like the real map's roads) and "i wanted you to use the geological map as reference not the old one" (tests now run on freshly generated plates worlds, not the old painted test campaigns). Also fixed: big symbols (the home city) were drawn with a zero stroke width.
