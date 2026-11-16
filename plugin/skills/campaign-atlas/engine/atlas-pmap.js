@@ -29,11 +29,11 @@
           changes any of it) */
   const MAKERS = {
     commoner: { name: "A village commoner", whole: 1, km: 45, err: .2, roads: false, places: 5, labels: "few", rivers: .9, detail: .45, keep: ["village", "hamlet", "town", "farm", "inn", "manor", "temple", "shrine", "bridge", "mill"], say: "the land as folk tell of it: the rough shape of the whole continent, the capital and the great cities, the great mountains and forests, and home" },
-    elder: { name: "A village elder", km: 70, err: .16, roads: false, places: 8, labels: "some", rivers: 1, detail: .55, keep: ["village", "hamlet", "town", "farm", "inn", "manor", "temple", "shrine", "monastery", "bridge", "ruin", "stones", "grove"], say: "the old country round about, with its old places and tales" },
-    traveler: { name: "A traveler", km: 240, err: .12, roads: true, places: 14, labels: "most", rivers: 1, detail: .6, keep: ["capital", "city", "town", "village", "port", "inn", "castle", "temple", "monastery", "bridge"], say: "the roads walked and the towns along them, the distances roughly" },
-    merchant: { name: "A merchant", km: 420, err: .09, roads: true, places: 16, labels: "most", rivers: 1, detail: .6, keep: ["capital", "city", "town", "port", "inn", "market", "bridge", "mine", "castle"], say: "the trade roads, the market towns and ports, the river crossings" },
-    scout: { name: "A soldier or scout", km: 300, err: .07, roads: true, places: 16, labels: "most", rivers: 1, detail: .7, keep: ["capital", "city", "town", "castle", "keep", "fort", "tower", "camp", "bridge", "port", "village"], say: "roads, forts, bridges, passes and the high ground that matters" },
-    cartographer: { name: "A cartographer", km: 1400, err: .025, roads: true, places: 40, labels: "all", rivers: 1, detail: .9, keep: ["capital", "city", "town", "village", "port", "castle", "keep", "fort", "temple", "monastery", "bridge", "inn", "tower"], say: "far and well: the coasts, the ranges, the rivers and most towns, to a fair scale" }
+    elder: { name: "A village elder", whole: 1, km: 70, err: .16, roads: false, places: 8, labels: "some", rivers: 1, detail: .55, keep: ["village", "hamlet", "town", "farm", "inn", "manor", "temple", "shrine", "monastery", "bridge", "ruin", "stones", "grove"], say: "the land as the old folk tell of it: its shape, its great cities, mountains and forests, and home; a little more than most know" },
+    traveler: { name: "A traveler", whole: 1, km: 240, err: .12, roads: true, places: 14, labels: "most", rivers: 1, detail: .6, keep: ["capital", "city", "town", "village", "port", "inn", "castle", "temple", "monastery", "bridge"], say: "the whole land roughly, more of its towns than most, the distances out of true" },
+    merchant: { name: "A merchant", whole: 1, km: 420, err: .09, roads: true, places: 16, labels: "most", rivers: 1, detail: .6, keep: ["capital", "city", "town", "port", "inn", "market", "bridge", "mine", "castle"], say: "the whole land, its cities, market towns and ports" },
+    scout: { name: "A soldier or scout", whole: 1, km: 300, err: .07, roads: true, places: 16, labels: "most", rivers: 1, detail: .7, keep: ["capital", "city", "town", "castle", "keep", "fort", "tower", "camp", "bridge", "port", "village"], say: "the whole land fairly true, its forts, castles and high ground" },
+    cartographer: { name: "A cartographer", whole: 1, km: 1400, err: .025, roads: true, places: 40, labels: "all", rivers: 1, detail: .9, keep: ["capital", "city", "town", "village", "port", "castle", "keep", "fort", "temple", "monastery", "bridge", "inn", "tower"], say: "the whole land well and truly drawn, its ranges, forests and most towns" }
   };
   // the kinds a map may show without the party knowing of them: ordinary places anyone would; never a lair, a dungeon,
   // a cave, a ruin or anything secret (those only once the party knows them)
@@ -89,7 +89,7 @@
       add({ k: "line", t: "coast", pts: out.map(warpW), layer: "geo", st: "c" });
       const onLand = p => inRing(p, land);
       // (the famous places: the capital, then the great cities and ports; and home)
-      const rank = l => l.kind === "capital" ? 0 : l.kind === "city" ? 1 : l.kind === "port" ? 2 : l.kind === "town" ? 3 : 9;
+      const rank = l => l.kind === "capital" ? 0 : l.kind === "city" ? 1 : l.kind === "port" ? 2 : l.kind === "town" ? 3 : o.maker === "scout" && ["castle", "keep", "fort"].includes(l.kind) ? 1.5 : 9;
       const famous = locs.filter(l => l !== home && rank(l) < 9 && onLand(l.at) && (l.state !== "unknown" || PUBLIC.has(l.kind))).sort((a, b) => rank(a) - rank(b)).slice(0, Math.round(3 + LV * 10));
       for (const l of (home ? [home] : []).concat(famous)) add({ k: "sym", s: SYM_OF[l.kind] || "village", at: warpW(l.at), size: span * (l.kind === "capital" ? .05 : l === home ? .042 : .04), label: l.name, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id, home: l === home ? 1 : undefined });
       // (the great ranges: high ground on a coarse grid, gathered; the biggest few, each a few peaks, named if they have a name)
@@ -153,7 +153,8 @@
     };
     // (the outline's error grows over the whole land, not the few miles about home)
     const warpW = p => { const dx = p[0] - Hc[0], dy = p[1] - Hc[1], RW = wholeR || R, ox = (vn(p[0] / RW * 1.7 + 7, p[1] / RW * 1.7, seed + 1) - .5) * 2, oy = (vn(p[0] / RW * 1.7, p[1] / RW * 1.7 + 9, seed + 2) - .5) * 2, k = 1 + (vn(p[0] / RW, p[1] / RW, seed) - .5) * M.err * .8, wob = M.err * RW * .12; return [Hc[0] + dx * k + ox * wob, Hc[1] + dy * k + oy * wob]; };
-    const whole = M.whole && G && D && wholeLand();
+    // (the whole land or the country about home: as the maker would, unless the referee says, o.scope "land" or "home")
+    const whole = (o.scope ? o.scope === "land" : !!M.whole) && G && D && wholeLand();
     // the coast, as far as they know it: runs of the coastline near home, simplified and wandering
     if (!whole && G && D) {
       const coast = D.coastRings(G);
@@ -179,7 +180,7 @@
         for (const q of cells.slice().sort((p1, p2) => PK[p2] - PK[p1])) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 2.2)) continue; got.push(q); }
         for (const q of got) { const x = cx(q), y = cy(q), t = PK[q], ins = near([x, y], 1), dx = x - Hc[0], dy = y - Hc[1], d = Math.hypot(dx, dy) || 1, p = ins ? [x, y] : [Hc[0] + dx / d * R * 1.08, Hc[1] + dy / d * R * 1.08];
           if (t <= .5 && !DF.hills) continue;
-          add({ k: "sym", s: t > .5 ? "mountain" : "hill", at: warp(p), size: step * (.55 + .7 * t), layer: "geo", st: "c", far: ins ? undefined : 1, big: t > .7 ? 1 : undefined }); }
+          add({ k: "sym", s: "mountain", small: t > .5 ? undefined : 1, at: warp(p), size: step * (.55 + .7 * t), layer: "geo", st: "c", far: ins ? undefined : 1, big: t > .7 ? 1 : undefined }); }
       }
       // forests and fens: a few clumps where the trees are thick
       const B = G.B, C = G.Cn, CODE = A.worldBiomes ? A.worldBiomes.CODE : {}, fs = step * 1.6;
@@ -242,15 +243,17 @@
     if ((x1 - x0) / (y1 - y0) < 1.3) { const w = (y1 - y0) * 1.3, c = (x0 + x1) / 2; x0 = c - w / 2; x1 = c + w / 2; }
     // (room at the top for the title, above what was drawn)
     y0 -= (y1 - y0) * .1;
-    if (home && M.labels !== "all") add({ k: "text", at: [(x0 + x1) / 2, y0 + (y1 - y0) * .07], label: o.title || (whole ? `The land, as folk tell it` : `${home.name} and thereabouts`), size: (y1 - y0) * .045, layer: "text", st: "c", title: 1 });
+    if (home && (whole || M.labels !== "all")) add({ k: "text", at: [(x0 + x1) / 2, y0 + (y1 - y0) * .07], label: o.title || (whole ? WHOLE_TITLE[o.maker || "commoner"] || "The land" : `${home.name} and thereabouts`), size: (y1 - y0) * .045, layer: "text", st: "c", title: 1 });
     const style = Object.assign({ paper: "aged", wear: .4, ink: "brown", width: 1, rough: clamp(.35 + M.err * 2.6, .2, 1), hand: M.err > .1 ? "scrawl" : M.err > .05 ? "hand" : "fair", detail: M.detail }, o.style || {}, { level: LV, density });
     return { id: o.id || uid(), name: o.name || `${M.name}'s map`, whole: whole ? 1 : undefined, maker: o.maker || "commoner", home: home ? home.id : null, seed, accuracy: o.accuracy != null ? +o.accuracy : .5, made: Date.now(), frame: [r1(x0), r1(y0), r1(x1 - x0), r1(y1 - y0)], style, given: false, layers: { geo: 1, places: 1, roads: 1, text: 1, notes: 1, dm: 1 }, els, R: r1(wholeR || R), H: Hc.map(r1) };
   }
   // how much a map's maker draws, by density
   const GEN_DENS = { minimal: { mtn: .6, mtnMax: 3, hills: 0, woodMin: 3, trees: .5, treesMax: 2, waves: .06, words: 0 }, balanced: { mtn: .9, mtnMax: 4, hills: 1, woodMin: 2, trees: .8, treesMax: 4, waves: .12, words: 1 }, detailed: { mtn: 1.3, mtnMax: 7, hills: 1, woodMin: 1, trees: 1.2, treesMax: 7, waves: .2, words: 1 } };
   // the level a maker draws at unless told (0 the least .. 1 the most), and a preset's level
+  // (a whole-land map's title, by who drew it)
+  const WHOLE_TITLE = { commoner: "The land, as folk tell it", elder: "The land, as the old folk tell it", traveler: "The land, as I walked it", merchant: "The land and its markets", scout: "The land, as scouted", cartographer: "A chart of the land" };
   const LEVEL_OF = { minimal: 0, balanced: .5, detailed: 1 };
-  const levelFor = mk => ({ commoner: .3, elder: .1, traveler: .5, merchant: .5, scout: .5, cartographer: 1 })[mk || "commoner"] ?? .5;
+  const levelFor = mk => ({ commoner: .3, elder: .45, traveler: .5, merchant: .5, scout: .5, cartographer: 1 })[mk || "commoner"] ?? .5;
   // (a table's settings between its presets, by level; whole numbers stay whole)
   const lerpD = (tab, L) => { const lo = L < .5 ? tab.minimal : tab.balanced, hi = L < .5 ? tab.balanced : tab.detailed, f = L < .5 ? L * 2 : (L - .5) * 2, out = {}; for (const k in lo) { const v = lo[k] + (hi[k] - lo[k]) * f; out[k] = Number.isInteger(lo[k]) && Number.isInteger(hi[k]) ? Math.round(v) : v; } return out; };
   function smooth(a, b, v) { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
@@ -454,6 +457,7 @@
         <div class="pm-new" hidden><fieldset class="pm-box"><legend>A new map, as one person knows the land</legend>
           <label>Drawn by <select data-pmn="maker">${opt(Object.entries(MAKERS).map(([k, v]) => [k, v.name]), "commoner")}</select></label><p class="kn pm-mk"></p>
           <label>Who lives at <select data-pmn="home">${opt(placesKnown.map(l => [l.id, l.name]), (W.party && W.party.at) || (placesKnown[0] || {}).id)}</select></label>
+          <label title="The whole land in rough outline, or the country about home in more detail">What it shows <select data-pmn="scope">${opt([["", "As the maker would"], ["land", "The whole land, roughly"], ["home", "The country about home"]], "")}</select></label>
           <label title="Few things, or many">How much is drawn<span class="pm-sl"><span class="kn">little</span><input type="range" data-pmn="level" min="0" max="1" step="0.05" value="${levelFor("commoner")}"><span class="kn">much</span></span></label>
           <label title="How far things sit from where they truly are">How accurate<span class="pm-sl"><span class="kn">rough</span><input type="range" data-pmn="acc" min="0" max="1" step="0.05" value="0.5"><span class="kn">true</span></span></label>
           <label>Name <input type="text" data-pmn="name" placeholder="e.g. Old Marta's map"></label>
@@ -574,9 +578,9 @@
       if (t.matches('[data-pmv="given"]') && m) { mutate(d => { d.given = t.checked; }); return; }
       if (t.matches("[data-pmg]") && m) { const k = t.dataset.pmg, v = +t.value; mutate(d => {
         const acc = k === "accuracy" ? v : d.accuracy, lv = k === "level" ? v : (d.style || {}).level, sty = Object.assign({}, d.style, { level: lv }); delete sty.density;
-        const g = generate(ctx.WD(), { maker: d.maker, home: d.home, seed: d.seed, accuracy: acc, name: d.name, style: sty });
+        const g = generate(ctx.WD(), { maker: d.maker, home: d.home, seed: d.seed, accuracy: acc, name: d.name, style: sty, scope: d.whole ? "land" : "home" });
         // (the maker's part drawn again at the new setting; the referee's own additions kept as they are)
-        d.accuracy = acc; d.style = Object.assign({}, d.style, { level: g.style.level, density: g.style.density }); d.els = g.els.concat(d.els.filter(e => !e.gen)); d.frame = g.frame; d.R = g.R; d.H = g.H; if (g.whole) d.whole = 1; }); return; }
+        d.accuracy = acc; d.style = Object.assign({}, d.style, { level: g.style.level, density: g.style.density }); d.els = g.els.concat(d.els.filter(e => !e.gen)); d.frame = g.frame; d.R = g.R; d.H = g.H; d.whole = g.whole; }); return; }
       if (t.matches("[data-pml]") && m) { const k = t.dataset.pml; mutate(d => { d.layers = Object.assign({}, d.layers, { [k]: t.checked ? 1 : 0 }); }); return; }
       if (t.matches("[data-pme]") && m && E.sel) { const k = t.dataset.pme; if (k === "label") return; mutate(d => { const e = elById(d, E.sel); if (!e) return; if (k === "st") e.st = t.value; else if (k === "dm") { e.dm = t.checked ? 1 : undefined; if (!t.checked && e.layer === "dm") e.layer = "notes"; } else if (k === "hide") e.hide = t.checked ? 1 : undefined; else if (k === "lock") e.lock = t.checked ? 1 : undefined; }); }
     });
@@ -589,8 +593,8 @@
         case "new": $(".pm-new").hidden = false; break;
         case "cancelnew": $(".pm-new").hidden = true; break;
         case "make": case "blank": {
-          const maker = $('[data-pmn="maker"]').value, home = $('[data-pmn="home"]').value, acc = +$('[data-pmn="acc"]').value, name = $('[data-pmn="name"]').value.trim(), level = +$('[data-pmn="level"]').value;
-          let d = generate(W, { maker, home, accuracy: acc, name: name || undefined, level });
+          const maker = $('[data-pmn="maker"]').value, home = $('[data-pmn="home"]').value, acc = +$('[data-pmn="acc"]').value, name = $('[data-pmn="name"]').value.trim(), level = +$('[data-pmn="level"]').value, scope = $('[data-pmn="scope"]').value || undefined;
+          let d = generate(W, { maker, home, accuracy: acc, name: name || undefined, level, scope });
           if (a === "blank") { d.els = d.els.filter(e => e.title); d.name = name || "A blank sheet"; }
           E.id = d.id; E.sel = null; E.view = null; save(d); break;
         }
@@ -612,7 +616,7 @@
         }
         case "revland": { if (!m) break; const id = $('[data-pmv="revloc"]').value, wp = warpFn(W, m), add = sketchRegion(W, m, id).map(e => Object.assign(e, { at: e.at && wp(e.at), pts: e.pts && e.pts.map(wp), st: e.st || "c" })); mutate(d => { d.els.push(...add); }); break; }
         case "revroad": { if (!m) break; const r = W.routes.find(x => x.id === $('[data-pmv="revroute"]').value); if (!r) break; const A0 = W.byId[r.from], B0 = W.byId[r.to], wp = warpFn(W, m), path = Array.isArray(r.path) && r.path.length > 1 ? r.path : [A0.at, B0.at]; mutate(d => d.els.push({ id: uid(), k: "line", t: r.kind === "trail" ? "path" : "road", pts: [A0.at, ...path.slice(1, -1), B0.at].map(wp), layer: "roads", st: E.status, route: r.id, label: r.name || "" })); break; }
-        case "regen": if (m) { const g = generate(W, { maker: m.maker, home: m.home, seed: m.seed, accuracy: m.accuracy, name: m.name, style: m.style }); mutate(d => { d.els = g.els.concat(d.els.filter(e => !e.gen)); }); } break;
+        case "regen": if (m) { const g = generate(W, { maker: m.maker, home: m.home, seed: m.seed, accuracy: m.accuracy, name: m.name, style: m.style, scope: m.whole ? "land" : "home" }); mutate(d => { d.els = g.els.concat(d.els.filter(e => !e.gen)); }); } break;
         case "png": case "print": if (m) exportMap(m, a); break;
       }
     });
