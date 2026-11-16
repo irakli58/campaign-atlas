@@ -3197,3 +3197,5 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .pm-empty { color: #eee; padding: 2rem; }
 .ps-pmap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #2b2520; }
 .ps-pmap svg { width: 100%; height: 100%; }
+
+.pm-sl{display:flex;align-items:center;gap:6px;margin-top:2px}.pm-sl input{flex:1;min-width:0}.pm-sl .kn{font-size:.85em}
