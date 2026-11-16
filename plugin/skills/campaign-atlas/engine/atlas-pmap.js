@@ -87,8 +87,8 @@
       add({ k: "line", t: "coast", pts: out.map(warpW), layer: "geo", st: "c" });
       const onLand = p => inRing(p, land);
       // (the famous places: the capital, then the great cities and ports; and home)
-      const rank = l => l.kind === "capital" ? 0 : l.kind === "city" ? 1 : l.kind === "port" ? 2 : 9;
-      const famous = locs.filter(l => l !== home && rank(l) < 9 && onLand(l.at) && (l.state !== "unknown" || PUBLIC.has(l.kind))).sort((a, b) => rank(a) - rank(b)).slice(0, density === "detailed" ? 7 : density === "balanced" ? 5 : 4);
+      const rank = l => l.kind === "capital" ? 0 : l.kind === "city" ? 1 : l.kind === "port" ? 2 : l.kind === "town" ? 3 : 9;
+      const famous = locs.filter(l => l !== home && rank(l) < 9 && onLand(l.at) && (l.state !== "unknown" || PUBLIC.has(l.kind))).sort((a, b) => rank(a) - rank(b)).slice(0, density === "detailed" ? 9 : density === "balanced" ? 7 : 6);
       for (const l of (home ? [home] : []).concat(famous)) add({ k: "sym", s: SYM_OF[l.kind] || "village", at: warpW(l.at), size: span * (l.kind === "capital" ? .05 : l === home ? .042 : .04), label: l.name, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id, home: l === home ? 1 : undefined });
       // (the great ranges: high ground on a coarse grid, gathered; the biggest few, each a few peaks, named if they have a name)
       const S = D.sampler(G), sea = G.sea, step = span / 34, gw = Math.ceil((bx1 - bx0) / step) + 1, gh = Math.ceil((by1 - by0) / step) + 1, PK = new Float32Array(gw * gh);
@@ -101,10 +101,10 @@
       }
       const cx = q => bx0 + (q % gw + .5) * step, cy = q => by0 + (((q / gw) | 0) + .5) * step;
       const names = (WD.labels || []).filter(lb => lb.name && Array.isArray(lb.at) && lb.kind === "range"), usedN = new Set();
-      const nR = density === "detailed" ? 5 : density === "balanced" ? 4 : 3;
+      const nR = density === "detailed" ? 6 : density === "balanced" ? 5 : 4;
       for (const rg of ranges.sort((a, b) => b.score - a.score).slice(0, nR)) {
         if (rg.cells.length < 3) continue;
-        const want = Math.min(rg.cells.length > 30 ? 4 : rg.cells.length > 10 ? 3 : 2, density === "minimal" ? 3 : 4), got = [];
+        const want = Math.min(rg.cells.length > 30 ? 4 : rg.cells.length > 10 ? 3 : 2, density === "detailed" ? 5 : 4), got = [];
         for (const q of rg.cells.slice().sort((p1, p2) => PK[p2] - PK[p1])) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 2.6)) continue; got.push(q); }
         for (const q of got) add({ k: "sym", s: "mountain", at: warpW([cx(q), cy(q)]), size: step * (1.1 + .7 * PK[q]), layer: "geo", st: "c", big: PK[q] > .7 ? 1 : undefined });
         // (its name, if the world gives it one: the named range nearest its peaks)
@@ -120,13 +120,13 @@
       for (let q0 = 0; q0 < gw * gh; q0++) {
         if (!FK[q0] || seenF[q0]) continue; const cells = [q0], st = [q0]; seenF[q0] = 1;
         while (st.length) { const q = st.pop(), a = q % gw, b = (q / gw) | 0; for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a2 = a + da, b2 = b + db; if (a2 < 0 || b2 < 0 || a2 >= gw || b2 >= gh) continue; const m = b2 * gw + a2; if (FK[m] && !seenF[m]) { seenF[m] = 1; st.push(m); cells.push(m); } } }
-        if (cells.length >= 6) woods.push(cells);
+        if (cells.length >= 5) woods.push(cells);
       }
       const fNames = (WD.labels || []).filter(lb => lb.name && Array.isArray(lb.at) && lb.kind === "forest");
       for (const cells of woods.sort((a, b) => b.length - a.length).slice(0, nR)) {
         let mx = 0, my = 0; for (const q of cells) { mx += cx(q) / cells.length; my += cy(q) / cells.length; }
         // (the trees about the wood's heart: the cells nearest its middle, a few apart)
-        const want = cells.length > 40 ? 3 : 2, got = [];
+        const want = cells.length > 40 ? 4 : cells.length > 15 ? 3 : 2, got = [];
         for (const q of cells.slice().sort((p1, p2) => Math.hypot(cx(p1) - mx, cy(p1) - my) - Math.hypot(cx(p2) - mx, cy(p2) - my))) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 1.8)) continue; got.push(q); }
         for (const q of got) add({ k: "sym", s: "forest", at: warpW([cx(q), cy(q)]), size: step * 1.1, layer: "geo", st: "c" });
         const nm = fNames.filter(lb => !usedN.has(lb.name)).sort((a, b) => Math.hypot(a.at[0] - mx, a.at[1] - my) - Math.hypot(b.at[0] - mx, b.at[1] - my))[0];
@@ -363,7 +363,7 @@
     // the terrain, ranges before woods before the rest; each with room about it, a little nudged if need be
     let nt = 0;
     for (const e of gen.filter(e => e.k === "sym" && e.s in TERRAIN).sort((a, b) => TERRAIN[a.s] - TERRAIN[b.s] || (b.big ? 1 : 0) - (a.big ? 1 : 0))) {
-      if (nt >= D.terrain * (e.s === "wave" ? .25 : 1)) continue;
+      if (nt >= (map.whole ? Math.max(D.terrain, 32) : D.terrain) * (e.s === "wave" ? .25 : 1)) continue;
       const z = sc * (SZ[e.s] || 8) * (e.big ? 1.25 : 1) * (e.far ? .8 : 1);
       let at = null; for (const [dx, dy] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) { const p = [e.at[0] + dx * z, e.at[1] + dy * z], b = symBox(p, z, D.gap); if (!hit(b)) { at = p; boxes.push(symBox(p, z, 1)); break; } }
       if (!at) continue; nt += e.s === "wave" ? .5 : 1;
