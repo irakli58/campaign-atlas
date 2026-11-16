@@ -671,6 +671,12 @@
         stage.innerHTML = `<div class="ps-fit"><div class="ps-person">${now.img && /^data:image\//.test(now.img) ? `<img class="ps-face" src="${esc(now.img)}" alt="">` : PERSON_SIL}<h2>${esc(now.name || "A stranger")}</h2>${now.role ? `<p class="ps-role">${esc(now.role)}</p>` : ""}${now.look ? `<p>${esc(now.look)}</p>` : ""}</div></div>`;
       } else if (k === "scene") {
         stage.innerHTML = `<div class="ps-fit"><div class="ps-scene">${now.title ? `<h2>${esc(now.title)}</h2>` : ""}${paras(now.text)}</div></div>`;
+      } else if (k === "pmap" || k === "world" && (st.get("share", "pmset") || {}).mode === "parchment") {
+        // a hand-drawn map the referee gave the players (atlas-pmap.js); in place of the world map, if so chosen
+        const id = k === "pmap" ? now.id : (st.get("share", "pmset") || {}).map, m = id && st.get("share", "pmap:" + id);
+        if (world) { world.dispose(); world = null; }
+        if (A.pmap) A.pmap.loadFonts();
+        stage.innerHTML = m && A.pmap ? `<div class="ps-pmap">${A.pmap.render(m, { player: true })}</div>` : `<div class="ps-fit"><div class="ps-scene"><p>No map yet.</p></div></div>`;
       } else if (k === "world" && A.worldMount && A.worldData) {
         // (the players' copy has the world as the game master's page shared it, the referee's changes already in it)
         const copy = !!A.playersCopy;
@@ -834,7 +840,7 @@
     });
     st.watch("fog", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
     st.watch("board", () => { if (now.kind === "board") render(); if (tab === "board") renderPage(); });
-    st.watch("share", () => { if (now.kind === "galaxy") render(); });
+    st.watch("share", () => { if (now.kind === "galaxy" || now.kind === "pmap" || now.kind === "world" && (st.get("share", "pmset") || {}).mode === "parchment") render(); });
     st.watch("safety", () => { if (now.kind === "safety") render(); });
     for (const c of ["clues", "status"]) st.watch(c, () => { if (now.kind === "board") render(); if (tab === "board" || tab === "places") renderPage(); });
     st.watch("given", () => { badges(); if (tab === "handouts") renderPage(); });

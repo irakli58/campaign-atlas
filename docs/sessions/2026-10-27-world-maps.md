@@ -77,6 +77,21 @@ Both are opt-in and change nothing unless asked: `atlas.js world <dir> --ocean n
   5-landmass world and a 6-continent planet; page toggles tested; tutorial step added.
 - Not done (option 2, offered): plates moving over time (continental drift history).
 
+## Players' parchment maps (16 Nov 2026; request: docs/requests/2026-11-16-player-parchment-maps.md)
+- The user: optional: "if the DM wants the players to see the real map they can see it, if not they get the [hand-drawn] one".
+- Done: engine/atlas-pmap.js (generate from the world by maker preset, home and accuracy; render on parchment; the
+  editor with tools, layers, status, lock, hide, DM-only; reveal place/rumour/land/road; suggestions of places the
+  party learned of, added only on approval; several maps, copy; look options; picture and print of the players'
+  version). atlas-world.js: "Players' maps" button, docs pm-<id> and pmset with undo/redo. atlas-share.js: given maps
+  shared as pmap:<id> without DM layer/hidden/links; in parchment mode the real world is not shared. atlas-table.js:
+  players' screen shows a pmap, and the world map as the parchment map in parchment mode. Tested end to end.
+- To do: phase 5 (DM Copilot suggestions with approval; session events), a list of given maps on the players' copy
+  apart from the screen, perhaps.
+
+## Dropped (16 Nov 2026)
+- Anything for the old map styles (painted, parchment: drawn trees and symbols), e.g. "polish the trees": the user
+  will not use them.
+
 ## Decided (the user: "okay I like everything now")
 - The Earth climate model is the default for new worlds (a plates world made before keeps the classic rules when made
   again with the same seed; `--climate-model classic|earth` overrides; T.climateModel is written when earth).
