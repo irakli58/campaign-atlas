@@ -85,8 +85,9 @@ Both are opt-in and change nothing unless asked: `atlas.js world <dir> --ocean n
   version). atlas-world.js: "Players' maps" button, docs pm-<id> and pmset with undo/redo. atlas-share.js: given maps
   shared as pmap:<id> without DM layer/hidden/links; in parchment mode the real world is not shared. atlas-table.js:
   players' screen shows a pmap, and the world map as the parchment map in parchment mode. Tested end to end.
-- To do: phase 5 (DM Copilot suggestions with approval; session events), a list of given maps on the players' copy
-  apart from the screen, perhaps.
+- Phase 5: the Copilot tab (atlas-copilot.js pmapHTML) offers places the party knows that a given map lacks, "Add it"
+  or "Not now"; nothing added unasked. Still to do: tying additions to session events; perhaps a list of given
+  maps in the players' copy apart from the screen.
 
 ## Dropped (16 Nov 2026)
 - Anything for the old map styles (painted, parchment: drawn trees and symbols), e.g. "polish the trees": the user
