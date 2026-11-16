@@ -92,7 +92,12 @@
       for (const l of (home ? [home] : []).concat(famous)) add({ k: "sym", s: SYM_OF[l.kind] || "village", at: warpW(l.at), size: span * (l.kind === "capital" ? .05 : l === home ? .042 : .04), label: l.name, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id, home: l === home ? 1 : undefined });
       // (the great ranges: high ground on a coarse grid, gathered; the biggest few, each a few peaks, named if they have a name)
       const S = D.sampler(G), sea = G.sea, step = span / 34, gw = Math.ceil((bx1 - bx0) / step) + 1, gh = Math.ceil((by1 - by0) / step) + 1, PK = new Float32Array(gw * gh);
-      for (let b = 0; b < gh; b++) for (let a = 0; a < gw; a++) { const x = bx0 + (a + .5) * step, y = by0 + (b + .5) * step, t = (S(x, y) - sea) / (255 - sea); if (t > .5 && onLand([x, y])) PK[b * gw + a] = t; }
+      // (high for this land: the highest eighth of it, or anything truly high; so a low continent still shows its high ground)
+      const TV = new Float32Array(gw * gh).fill(-1), tl = [];
+      for (let b = 0; b < gh; b++) for (let a = 0; a < gw; a++) { const x = bx0 + (a + .5) * step, y = by0 + (b + .5) * step; if (!onLand([x, y])) continue; const t = (S(x, y) - sea) / (255 - sea); if (t > 0) { TV[b * gw + a] = t; tl.push(t); } }
+      tl.sort((p1, p2) => p1 - p2); const qT = f => tl.length ? tl[Math.min(tl.length - 1, Math.floor(tl.length * f))] : 1;
+      const tM = Math.max(.12, Math.min(.42, qT(.88))), tH = Math.max(.08, Math.min(.3, qT(.75)));
+      for (let q = 0; q < gw * gh; q++) if (TV[q] > tM) PK[q] = TV[q];
       const seen = new Uint8Array(gw * gh), ranges = [];
       for (let q0 = 0; q0 < gw * gh; q0++) {
         if (!PK[q0] || seen[q0]) continue; const cells = [q0], st = [q0]; seen[q0] = 1;
@@ -101,11 +106,11 @@
       }
       const cx = q => bx0 + (q % gw + .5) * step, cy = q => by0 + (((q / gw) | 0) + .5) * step;
       const names = (WD.labels || []).filter(lb => lb.name && Array.isArray(lb.at) && lb.kind === "range"), usedN = new Set();
-      const nR = density === "detailed" ? 6 : density === "balanced" ? 5 : 4;
+      const nR = density === "detailed" ? 9 : density === "balanced" ? 8 : 7;
       for (const rg of ranges.sort((a, b) => b.score - a.score).slice(0, nR)) {
-        if (rg.cells.length < 3) continue;
-        const want = Math.min(rg.cells.length > 30 ? 4 : rg.cells.length > 10 ? 3 : 2, density === "detailed" ? 5 : 4), got = [];
-        for (const q of rg.cells.slice().sort((p1, p2) => PK[p2] - PK[p1])) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 2.6)) continue; got.push(q); }
+        if (rg.cells.length < 2) continue;
+        const want = Math.min(rg.cells.length > 40 ? 5 : rg.cells.length > 20 ? 4 : rg.cells.length > 8 ? 3 : 2, density === "detailed" ? 6 : 5), got = [];
+        for (const q of rg.cells.slice().sort((p1, p2) => PK[p2] - PK[p1])) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 2.2)) continue; got.push(q); }
         for (const q of got) add({ k: "sym", s: "mountain", at: warpW([cx(q), cy(q)]), size: step * (1.1 + .7 * PK[q]), layer: "geo", st: "c", big: PK[q] > .7 ? 1 : undefined });
         // (its name, if the world gives it one: the named range nearest its peaks)
         let mx = 0, my = 0; for (const q of got) { mx += cx(q) / got.length; my += cy(q) / got.length; }
@@ -115,23 +120,33 @@
       // (the great forests: the user, "also add the forests and that's it"; the biggest few woods, a small clump of
       // trees each, named if the world names them)
       const B = G.B, Cn = G.Cn, CODE = A.worldBiomes ? A.worldBiomes.CODE : {}, FK = new Uint8Array(gw * gh);
-      for (let b = 0; b < gh; b++) for (let a = 0; a < gw; a++) { const x = bx0 + (a + .5) * step, y = by0 + (b + .5) * step; if (S(x, y) <= sea || !onLand([x, y]) || PK[b * gw + a]) continue; const n = Math.min(G.rows - 1, Math.floor(y / G.cell)) * G.cols + Math.min(G.cols - 1, Math.floor(x / G.cell)); if (Cn ? Cn[n] > 120 : B && B[n] === CODE.forest) FK[b * gw + a] = 1; }
+      // (forest: thick enough woods, or the leafiest third of this land if it has little thick wood)
+      let fT = 85; if (Cn) { const cl = []; for (let q = 0; q < gw * gh; q++) if (TV[q] >= 0) { const n = Math.min(G.rows - 1, Math.floor(cy(q) / G.cell)) * G.cols + Math.min(G.cols - 1, Math.floor(cx(q) / G.cell)); cl.push(Cn[n]); } cl.sort((p1, p2) => p1 - p2); if (cl.length) fT = Math.max(40, Math.min(85, cl[Math.floor(cl.length * .7)])); }
+      for (let b = 0; b < gh; b++) for (let a = 0; a < gw; a++) { const x = bx0 + (a + .5) * step, y = by0 + (b + .5) * step; if (S(x, y) <= sea || !onLand([x, y]) || PK[b * gw + a]) continue; const n = Math.min(G.rows - 1, Math.floor(y / G.cell)) * G.cols + Math.min(G.cols - 1, Math.floor(x / G.cell)); if (Cn ? Cn[n] > fT : B && B[n] === CODE.forest) FK[b * gw + a] = 1; }
       const seenF = new Uint8Array(gw * gh), woods = [];
       for (let q0 = 0; q0 < gw * gh; q0++) {
         if (!FK[q0] || seenF[q0]) continue; const cells = [q0], st = [q0]; seenF[q0] = 1;
         while (st.length) { const q = st.pop(), a = q % gw, b = (q / gw) | 0; for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a2 = a + da, b2 = b + db; if (a2 < 0 || b2 < 0 || a2 >= gw || b2 >= gh) continue; const m = b2 * gw + a2; if (FK[m] && !seenF[m]) { seenF[m] = 1; st.push(m); cells.push(m); } } }
-        if (cells.length >= 5) woods.push(cells);
+        if (cells.length >= 4) woods.push(cells);
       }
       const fNames = (WD.labels || []).filter(lb => lb.name && Array.isArray(lb.at) && lb.kind === "forest");
       for (const cells of woods.sort((a, b) => b.length - a.length).slice(0, nR)) {
         let mx = 0, my = 0; for (const q of cells) { mx += cx(q) / cells.length; my += cy(q) / cells.length; }
         // (the trees about the wood's heart: the cells nearest its middle, a few apart)
-        const want = cells.length > 40 ? 4 : cells.length > 15 ? 3 : 2, got = [];
-        for (const q of cells.slice().sort((p1, p2) => Math.hypot(cx(p1) - mx, cy(p1) - my) - Math.hypot(cx(p2) - mx, cy(p2) - my))) { if (got.length >= want) break; if (got.some(g => Math.hypot(cx(g) - cx(q), cy(g) - cy(q)) < step * 1.8)) continue; got.push(q); }
+        const want = Math.min(6, Math.max(2, Math.round(Math.sqrt(cells.length) * .9))), got = [];
+        // (a wood is drawn as a group: trees close together, then, in a big wood, another group)
+        const order = cells.slice().sort((p1, p2) => hash(p1, 3, seed + 41) - hash(p2, 3, seed + 41)), dq = (g, q) => Math.hypot(cx(g) - cx(q), cy(g) - cy(q));
+        while (got.length < want) { let best = null; for (const q of order) { if (got.includes(q) || got.some(g => dq(g, q) < step * 1.5)) continue; if (!got.length || got.some(g => dq(g, q) < step * 2.6)) { best = q; break; } } if (best == null) for (const q of order) if (!got.includes(q) && !got.some(g => dq(g, q) < step * 1.5)) { best = q; break; } if (best == null) break; got.push(best); }
         for (const q of got) add({ k: "sym", s: "forest", at: warpW([cx(q), cy(q)]), size: step * 1.1, layer: "geo", st: "c" });
         const nm = fNames.filter(lb => !usedN.has(lb.name)).sort((a, b) => Math.hypot(a.at[0] - mx, a.at[1] - my) - Math.hypot(b.at[0] - mx, b.at[1] - my))[0];
         if (nm && Math.hypot(nm.at[0] - mx, nm.at[1] - my) < span * .2) { usedN.add(nm.name); let gy = 0, gx = 0; for (const q of got) { gx += cx(q) / got.length; gy = Math.max(gy, cy(q)); } add({ k: "text", at: warpW([gx, gy + step * 1.6]), label: nm.name, size: span * .02, layer: "text", st: "c" }); }
       }
+      // (the lower uplands: a few small hills where nothing else is drawn, so the land between is not bare)
+      const HK = new Uint8Array(gw * gh), taken = els.filter(e => e.at).map(e => e.at);
+      for (let b = 0; b < gh; b++) for (let a = 0; a < gw; a++) { const x = bx0 + (a + .5) * step, y = by0 + (b + .5) * step, t = (S(x, y) - sea) / (255 - sea); if (TV[b * gw + a] > tH && TV[b * gw + a] <= tM && !FK[b * gw + a]) HK[b * gw + a] = 1; }
+      const hills = []; for (let q = 0; q < gw * gh; q++) if (HK[q]) hills.push(q);
+      let nh = 0; const hMax = density === "detailed" ? 10 : density === "balanced" ? 8 : 6;
+      for (const q of hills.sort((p1, p2) => hash(p1, 5, seed + 43) - hash(p2, 5, seed + 43))) { if (nh >= hMax) break; const p = warpW([cx(q), cy(q)]); if (taken.some(t => Math.hypot(t[0] - p[0], t[1] - p[1]) < step * 3.2)) continue; taken.push(p); nh++; add({ k: "sym", s: "mountain", at: p, size: step * .8, layer: "geo", st: "c", small: 1 }); }
       return true;
     };
     // (the outline's error grows over the whole land, not the few miles about home)
@@ -362,9 +377,9 @@
     }
     // the terrain, ranges before woods before the rest; each with room about it, a little nudged if need be
     let nt = 0;
-    for (const e of gen.filter(e => e.k === "sym" && e.s in TERRAIN).sort((a, b) => TERRAIN[a.s] - TERRAIN[b.s] || (b.big ? 1 : 0) - (a.big ? 1 : 0))) {
-      if (nt >= (map.whole ? Math.max(D.terrain, 32) : D.terrain) * (e.s === "wave" ? .25 : 1)) continue;
-      const z = sc * (SZ[e.s] || 8) * (e.big ? 1.25 : 1) * (e.far ? .8 : 1);
+    for (const e of gen.filter(e => e.k === "sym" && e.s in TERRAIN).sort((a, b) => TERRAIN[a.s] - TERRAIN[b.s] || (b.big ? 1 : 0) - (a.big ? 1 : 0) || (a.small ? 1 : 0) - (b.small ? 1 : 0))) {
+      if (nt >= (map.whole ? Math.max(D.terrain, 60) : D.terrain) * (e.s === "wave" ? .25 : 1)) continue;
+      const z = sc * (SZ[e.s] || 8) * (e.big ? 1.25 : 1) * (e.far ? .8 : 1) * (e.small ? .72 : 1);
       let at = null; for (const [dx, dy] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) { const p = [e.at[0] + dx * z, e.at[1] + dy * z], b = symBox(p, z, D.gap); if (!hit(b)) { at = p; boxes.push(symBox(p, z, 1)); break; } }
       if (!at) continue; nt += e.s === "wave" ? .5 : 1;
       out.push(Object.assign({}, e, { at, size: z, _op: e.s === "mountain" ? .85 : e.s === "wave" ? .45 : e.s === "hill" ? .6 : .75 }));
