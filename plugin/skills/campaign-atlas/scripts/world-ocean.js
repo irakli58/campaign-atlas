@@ -121,7 +121,7 @@ function ocean(E, cols, rows, o) {
       const x = i - u[n] * sp, y = j + v[n] * sp, x0 = Math.floor(x), y0 = Math.floor(y), tX = x - x0, tY = y - y0;
       const s = (a, b) => { const k = at(a, Math.max(0, Math.min(R - 1, b))); return k >= 0 && sea[k] ? sst[k] : sst[n]; };
       const back = (s(x0, y0) * (1 - tX) + s(x0 + 1, y0) * tX) * (1 - tY) + (s(x0, y0 + 1) * (1 - tX) + s(x0 + 1, y0 + 1) * tX) * tY;
-      nt[n] = back + (Teq(j) - 7 * upw[n] - back) * .045;
+      nt[n] = back + (Teq(j) - 7 * upw[n] - back) * .028;
     }
     sst.set(nt);
   }

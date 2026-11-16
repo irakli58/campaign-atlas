@@ -141,21 +141,23 @@ function coasts(o, L, R, vols, log) {
   const dLand = new Float32Array(N).fill(1e9), lq = [];
   for (let n = 0; n < N; n++) if (land(n)) { dLand[n] = 0; lq.push(n); }
   for (let h = 0; h < lq.length; h++) { const n = lq[h]; for (const m of nb4(n)) if (oc[m] && dLand[m] > dLand[n] + 1) { dLand[m] = dLand[n] + 1; lq.push(m); } }
-  const bw = Math.max(2, Math.round(10 / cellKm + 1.5)), zone = new Uint8Array(N), bq = []; const bdbg = [0, 0, 0, 0];
+  // (the sand to be had along a stretch of coast some hundred km either way: a barrier needs the shore's whole
+  // supply, not only what one stretch keeps)
+  const reg = Float32Array.from(V, (v, k) => Math.log1p(v + qs[k] + mouthS[k]));
+  for (let p = 0; p < Math.round(60 / cellKm) + 4; p++) { const r2 = Float32Array.from(reg); coast.forEach((n, k) => { let s2 = reg[k], c2 = 1; for (const m of nb8(n)) { const j = isC[m]; if (j >= 0) { s2 += reg[j]; c2++; } } r2[k] = s2 / c2; }); reg.set(r2); }
+  const regT = Array.from(reg).sort((a, b) => a - b)[Math.floor(K * .72)];   // (barrier islands line some 10 to 15% of the Earth's coasts: Stutz & Pilkey 2011)
+  const bw = Math.max(3, Math.round(10 / cellKm + 2.5)), zone = new Uint8Array(N), bq = [];
   coast.forEach((n, k) => {
     // (a gentle coastal plain, a shallow shelf, sand to spare, waves neither too weak nor too fierce)
     let shelf = true; for (let s = 1; s <= bw + 1; s++) { let x = Math.round(I(n) + nx[k] * s); const y = Math.round(J(n) + ny[k] * s); if (wrap) x = (x + cols) % cols; if (x < 0 || y < 0 || x >= cols || y >= rows) { shelf = false; break; } const m = y * cols + x; if (!oc[m] || H[m] < 120) { shelf = false; break; } }
-    if (process.env.COASTDBG) { bdbg[0] += shelf ? 1 : 0; bdbg[1] += shelf && relief[k] < 70 ? 1 : 0; bdbg[2] += shelf && relief[k] < 70 && V[k] > vT * 1.8 ? 1 : 0; bdbg[3] += shelf && relief[k] < 70 && V[k] > vT * 1.8 && Ewave[k] > .25 && Ewave[k] < 1.2 ? 1 : 0; }
-    if (shelf && relief[k] < 70 && V[k] > vT * 1.8 && Ewave[k] > .25 && Ewave[k] < 1.2 && open[k] > .35) { zone[n] = 1; bq.push(n); }
+    if (shelf && relief[k] < 220 && reg[k] > regT && Ewave[k] > .2 && Ewave[k] < 1.3 && open[k] > .3) { zone[n] = 1; bq.push(n); }
   });
   const mouths = coast.filter((n, k) => river[k] > vT * 3);
-  if (process.env.COASTDBG) console.log("barrier dbg shelf/low/rich/E", bdbg.join(" "), "bw", bw, "cellKm", cellKm.toFixed(1));
-  if (process.env.COASTDBG) { let c = [0, 0, 0, 0, 0, 0], ends = 0, endq = 0; coast.forEach((n, k) => { if (relief[k] < 60) c[0]++; if (V[k] > vT * 2.2) c[1]++; if (Ewave[k] > .15 && Ewave[k] < 1.1) c[2]++; if (open[k] > .35) c[3]++; if (relief[k] < 60 && V[k] > vT * 2.2 && Ewave[k] > .15 && Ewave[k] < 1.1 && open[k] > .35) c[4]++; if (down[k] < 0 && drift[k]) { ends++; if (qs[k] >= vT * 1.2) endq++; } }); console.log("coast dbg K", K, "low", c[0], "rich", c[1], "E", c[2], "open", c[3], "all", c[4], "zone", bq.length, "ends", ends, endq, "vT", vT.toFixed(3), "Emed", Array.from(Ewave).sort((a,b)=>a-b)[K>>1].toFixed(2)); }
   for (const n of bq) for (let dj = -bw - 1; dj <= bw + 1; dj++) for (let di = -bw - 1; di <= bw + 1; di++) {
     let a = I(n) + di; const b = J(n) + dj; if (wrap) a = (a + cols) % cols; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; const m = b * cols + a; if (!oc[m]) continue;
-    const inlet = mouths.some(c => Math.hypot(I(c) - a, J(c) - b) < 2.5) || noiseAt(a, b, o.seed || 1) < .2;
-    if (dLand[m] >= bw && dLand[m] < bw + 1 && !inlet) { shore[m] = SHORE.barrier; H[m] = 129; width[m] = 64; sandC[m] = SAND.quartz; }
-    else if (dLand[m] < bw && shore[m] !== SHORE.barrier) shore[m] = SHORE.lagoon;
+    const inlet = mouths.some(c => Math.hypot(I(c) - a, J(c) - b) < 2.5) || noiseAt(a * .35, b * .35, o.seed || 1) < .07;
+    if (dLand[m] >= bw - 1 && dLand[m] < bw + 1 && !inlet) { shore[m] = SHORE.barrier; H[m] = 129; width[m] = 64; sandC[m] = SAND.quartz; }
+    else if (dLand[m] < bw - 1 && shore[m] !== SHORE.barrier) shore[m] = SHORE.lagoon;
   }
   // spits: where the drift runs off the end of a coast with sand still moving, a tongue of sand carries on across the
   // water, its tip curving in (recurved) as the waves wrap round it
@@ -184,7 +186,7 @@ function coasts(o, L, R, vols, log) {
   const said = groups.slice(0, 8).map(s => {
     const src = s.river >= s.cliff && s.river >= s.reef ? "sand brought down by rivers" : s.reef > s.cliff ? "white sand from reefs in the warm sea" : "sand worn from the cliffs";
     const where = s.conv ? "where drift from both ways meets and drops its load" : s.open < .5 ? "in a sheltered bay that keeps what the drift brings" : s.E > .6 ? "on an open coast where strong waves pile it up" : "where the longshore drift slows along the coast";
-    const kind = ["", " (black volcanic sand)", "", ""][s.comp.indexOf(Math.max(...s.comp))] || (s.comp[1] > s.comp[0] ? " (white coral sand)" : "");
+    const kind = ["", " (white coral sand from reefs)", " (black volcanic sand)", " (shingle)"][s.comp.indexOf(Math.max(...s.comp))];
     return `Beach of ${Math.round(s.n * cellKm)} km at [${s.at}]: ${src}, ${where}${kind}`;
   });
   let cnt = {}; for (let n = 0; n < N; n++) if (shore[n]) cnt[shore[n]] = (cnt[shore[n]] || 0) + 1;

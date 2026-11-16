@@ -68,7 +68,7 @@ function ecology(L, o, U) {
     // (the sea's own warmth or chill, from its currents, carried onto the coasts: more in winter, when the sea warms a
     // coast most against the land (north-west Europe), a little in summer)
     const sa = L.seaAnom ? L.seaAnom[n] : 0;
-    const cold = PT ? PT[3][n] * 16 : 0, tw = 30 - .0045 * a * a + 2 * cont - lapse - 6 * fg - cold + .6 * sa, tc = 27 - .0085 * a * a - .35 * a * cont - lapse - fg - cold + 1.3 * sa, t = (tw + tc) / 2;
+    const cold = PT ? PT[3][n] * 16 : 0, tw = 30 - .0045 * a * a + 2 * cont - lapse - 6 * fg - cold + .7 * sa, tc = 27 - .0085 * a * a - .35 * a * cont - lapse - fg - cold + 1.8 * sa, t = (tw + tc) / 2;
     T[n] = t; Tw[n] = tw; Tc[n] = tc;
     // the year's rain in mm, and when it falls (the share in the warm half of the year)
     P[n] = Math.max(5, (earth && L.mm ? L.mm[n] : L.rain[n] / (L.want || .55) * med) * (PT ? Math.max(.08, 1 + .9 * PT[0][n] + .8 * PT[2][n] - .85 * PT[1][n]) : 1));

@@ -60,10 +60,12 @@ Both are opt-in and change nothing unless asked: `atlas.js world <dir> --ocean n
   barrier/spit/lagoon; a report of the 8 greatest beaches and why. Calibrated so about a third of coasts are sandy.
   Output T.shore, T.shoreW (width), T.sand (makeup); drawn in both relief looks (old `beaches` strip is used only
   when a world has no T.shore).
-- Open problem being worked on when the session restarted: barrier islands never form. Debug (COASTDBG=1) showed
-  1317 coasts with a shallow shelf, 317 of those low, but 0 also rich in sand: the "rich" test (V > vT*1.8) is too
-  strict where barriers would go. Next: base the barrier test on the sand passing by (qs) and the river supply
-  rather than the laid-down V, and recheck spits (3 formed after normalising wave energy).
+- Barrier islands fixed: judged by the sand to be had along ~100 km of coast (log-averaged), on a shallow shelf, low
+  land behind (relief < 220 m), moderate waves; two cells wide, inlets at river mouths and rarely elsewhere; capped
+  at ~12% of coasts (Stutz & Pilkey 2011). Sandy coasts ~1/3 (Luijendijk et al. 2018). Label bug fixed (coral vs
+  volcanic sand).
+- Measured on a 6-continent planet: coasts by warm currents ~8 °C warmer than coasts by cold currents at the same
+  latitude; a cold eastern-boundary current runs beside a west-coast desert (as Canary/Sahara).
 - Then still to do for these requests: before/after images and the explanations the user asked for (why each beach
   and each current formed, how currents change the nearby climate), docs (references/world.md), tutorial step for
   the currents toggle, and wait for the user's approval before making either the default.
