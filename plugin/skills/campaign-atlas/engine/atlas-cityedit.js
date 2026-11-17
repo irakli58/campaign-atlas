@@ -134,6 +134,7 @@
         ${b && !b.gone ? `<div class="ce-sel"><strong>${esc((KINDS.find(k => k[0] === b.type) || [0, "A building"])[1])}</strong>
           <button type="button" data-ce="move">Move</button><button type="button" data-ce="turn" data-d="-1" title="Turn it left">⟲</button><button type="button" data-ce="turn" data-d="1" title="Turn it right">⟳</button>
           <label>Kind <select data-ce="kind">${opt(KINDS, b.type)}</select></label><label>Floors <input type="number" min="1" max="12" data-ce="floors" value="${Math.max(1, Math.round((b._H || 1.9) / .95))}"></label><label>Roof <select data-ce="roof">${opt([["pitched", "Pitched"], ["flat", "Flat"]], b._pitch ? "pitched" : "flat")}</select></label>
+          ${A.locations && A.locations.fromBuilding ? `<button type="button" data-ce="mkplace" title="Make this building a place of the campaign: its own page, its inside to build, clues and people">Make it a place…</button>` : ""}
           <button type="button" data-ce="remove" class="ce-del">Remove</button></div>` : ""}`;
     }
     // where a step points: the building's centre as it stands now
@@ -185,6 +186,7 @@
       else if (s && k === "move") { U.moving = true; render(); }
       else if (s && k === "turn") push({ op: "move", at: at(s), ang: r1(((s.a || 0) + +b.dataset.d * Math.PI / 12) * 1000) / 1000, look: look(s) });
       else if (s && k === "remove") { push({ op: "remove", at: at(s) }); U.sel = null; ctl.map.mark(null); }
+      else if (s && k === "mkplace" && A.locations && A.locations.fromBuilding) { const bb = Object.assign({}, s); close(); A.locations.fromBuilding(ctl, bb); }
     }
     function onChange(ev) {
       const t = ev.target, k = t.dataset && t.dataset.ce, s = U.sel; if (!k) return;

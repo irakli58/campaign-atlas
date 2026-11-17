@@ -321,6 +321,14 @@
   /* ---- the public part */
   L.create = ctl => { cityCtl = ctl; const K = KIND.tavern; openDialog({ type: "tavern", ext: Object.assign({}, K[2].ext) }, true); };
   L.setCity = ctl => { cityCtl = ctl; };
+  // a building of the city made into a place of the campaign (the city editor's "Make it a place"): the dialog opens
+  // with its kind, size and floors, and it is set down where the building stood (the building makes way for it)
+  const FROM_B = { terrace: "house", shop: "shop", pub: "tavern", church: "temple", chapel: "shrine", school: "school", ware: "warehouse", back: "house" };
+  L.fromBuilding = (ctl, b) => {
+    cityCtl = ctl; const type = FROM_B[b.type] || "house", K = KIND[type] || KIND.other;
+    const floors = Math.max(1, Math.round((b._H || b.H || 1.9) / .95));
+    openDialog({ type, ext: Object.assign({}, K[2].ext, { w: Math.round(b.w * 10) / 10, d: Math.round(b.d * 10) / 10, floors }), at: [b.x, b.y], ang: +b.a || 0, fromBuilding: true }, true);
+  };
   L.save = keep; L.forget = forget; L.place = (id, def) => startPlacing(id, def, !A.customs[id]);
   L.init = (store) => {
     S = store;
