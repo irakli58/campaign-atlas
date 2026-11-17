@@ -359,7 +359,7 @@
   function councilPrompt(q) {
     const c = A.config || {}, d = at(now()), pls = A.order.filter(id => A.meta[id] && !String(id).startsWith("fly-"));
     const clues = []; for (const pl of pls) if (A.maps[pl]) for (const [cid, k] of Object.entries(A.get(pl, 99).clues || {})) clues.push(`${pl}/${cid}: ${k.t || cid}`);
-    const hits = api.lookup([q, "plan intends will next week tonight", ...(A.clocksData || []).map(x => x.name)].filter(Boolean).join(" "), 10);
+    const hits = await (api.lookupBest || api.lookup)([q, "plan intends will next week tonight", ...(A.clocksData || []).map(x => x.name)].filter(Boolean).join(" "), 10);
     const people = Object.entries(A.castData || {}).slice(0, 24).map(([k, p]) => `${p.n}${p.role ? ", " + p.role : ""}${p.want ? "; wants: " + p.want : ""}${p.secret ? "; hides: " + p.secret : ""}`).join("\n");
     const lately = A.copilot && A.copilot.lately ? A.copilot.lately() : "";
     return `You are the story council of the tabletop roleplaying campaign "${c.title || ""}"${c.system ? " (" + c.system + ")" : ""}${c.setting ? ", set in " + c.setting : ""}. The game master asks you to plan what happens in the world whether or not the party acts.${q ? " They ask: " + q : " Suggest what the world does next."}

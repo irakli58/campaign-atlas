@@ -274,7 +274,7 @@ ${text}`;
     const R = readiness(), ce = certain(), H = R.H;
     const facts = `People: ${H.cast.map(([, c]) => c.n).join(", ") || "none"}. Places: ${H.places.map(id => A.meta[id].name).join(", ") || "none"}. Clues: ${H.clues.length}. Story elements: ${H.items.map(i => i.kind + " \"" + i.n + "\"").join(", ") || "none"}. Factions: ${H.facs.map(([, f]) => f.n || f.name).join(", ") || "none"}. Events planned: ${H.evs.length}.`;
     const gaps = R.list.map(r => `${r.name}: ${r.status}${r.req.concat(r.rec).filter(x => !x[0]).map(x => "; lacks " + x[1]).join("")}`).join("\n"), seen = ce.map(([h, L]) => h + ": " + L.join(", ")).join("\n");
-    const pass = api.lookup ? (api.lookup(q, 10) || []).map(p => `[${p.src}] ${p.text}`).join("\n") : "";
+    const pass = api.lookup ? ((await (api.lookupBest || api.lookup)(q, 10)) || []).map(p => `[${p.src}] ${p.text}`).join("\n") : "";
     const prompt = `You are Atlas, helping the game master of the tabletop campaign "${(A.config || {}).title || ""}". Answer their question about the campaign from what it holds. Keep three things apart and label them: what the campaign ESTABLISHES (quote or name it), what is MISSING or unspecified, and any SUGGESTION of yours (clearly marked as only a suggestion). Never present a suggestion as a fact; never contradict what is established. Short and plain.
 WHAT IT HOLDS: ${facts}
 WHAT EACH PART OF ATLAS LACKS:

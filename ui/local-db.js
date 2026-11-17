@@ -53,6 +53,10 @@
     aiWhere: function (kind) {
       return fetch(URL_.replace(/db$/, "aiwhere") + "?kind=" + encodeURIComponent(kind || "answering"), { headers: { "x-atlas-token": TOKEN } }).then(function (r) { return r.ok ? r.json() : { local: false }; }, function () { return { local: false }; });
     },
+    // search by meaning: { vectors } from the embedding model on this computer, or { none } (then words, as before)
+    embed: function (texts) {
+      return fetch(URL_.replace(/db$/, "embed"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ texts: texts }) }).then(function (r) { return r.ok ? r.json() : { none: true }; }, function () { return { none: true }; });
+    },
     ask: function (prompt, meta) {
       return fetch(URL_.replace(/db$/, "ask"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ prompt: prompt, kind: meta && meta.kind || "answering" }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "no answer"); return d.text; }); });

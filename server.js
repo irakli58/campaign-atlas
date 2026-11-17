@@ -330,6 +330,9 @@ async function route(req, res) {
       try { const o = await body(req, 12 << 20); return send(res, 200, { plan: await Ask.readPlan(o.image, o.prompt) }); } catch (e) { return fail(res, 400, e.message); }
     }
     // where a kind of work is answered now: on this computer (a local model, with its small context) or by Claude
+    // search by meaning: the campaign's passages turned into numbers by the embedding model on this computer, when the
+    // local model answers or reads; else none (the page then finds passages by their words, as before)
+    if (m === "POST" && rest === "embed") { if (!authed) return fail(res, 403, "forbidden"); if (!localFor("answering") && !localFor("reading")) return send(res, 200, { none: true, why: "cloud" }); const o = await body(req, 1 << 22); const tag = localConf().embedModel || AILocal.EMBED.tag; try { return send(res, 200, { vectors: await AILocal.embed(tag, Array.isArray(o.texts) ? o.texts : []), model: tag }); } catch (e) { return send(res, 200, { none: true, why: String(e.message || e).slice(0, 200) }); } }
     if (m === "GET" && rest === "aiwhere") { if (!authed) return fail(res, 403, "forbidden"); const kind = url.searchParams.get("kind") || "answering"; return send(res, 200, { local: localFor(kind), model: localFor(kind) ? localConf().model : null }); }
     // "Ask the campaign" and "Previously on...": answered by the game master's own Claude Code, on their own plan
     if (m === "POST" && rest === "ask") {
@@ -369,7 +372,7 @@ async function route(req, res) {
   try {
     if (m === "GET" && p === "/api/state") return send(res, 200, await state(url.searchParams.get("fresh") === "1"));
     // local AI: this computer, Ollama, the recommendations; the choice; a download and a benchmark only when pressed
-    if (m === "GET" && p === "/api/local-ai") { const L = localConf(), hw = await Hardware.detect(DATA); return send(res, 200, { conf: L, hw, ollama: await AILocal.status(), rec: AILocal.recommend(hw, { ramGB: L.ramGB, vramGB: L.vramGB }, L.bench), catalogue: AILocal.CATALOGUE, pulls: AILocal.PULLS }); }
+    if (m === "GET" && p === "/api/local-ai") { const L = localConf(), hw = await Hardware.detect(DATA); return send(res, 200, { conf: L, hw, ollama: await AILocal.status(), rec: AILocal.recommend(hw, { ramGB: L.ramGB, vramGB: L.vramGB }, L.bench), catalogue: AILocal.CATALOGUE, embed: AILocal.EMBED, pulls: AILocal.PULLS }); }
     if (m === "POST" && p === "/api/local-ai/settings") { const o = await body(req, 1 << 12), st = settings.get(), L = localConf(); for (const k of ["mode", "model", "ramGB", "vramGB", "fallback", "careful"]) if (o[k] !== undefined) L[k] = o[k]; if (o.kind && KINDS_AI.includes(o.kind)) L.kinds = Object.assign({}, L.kinds || {}, { [o.kind]: o.where === "local" ? "local" : "cloud" }); if (!["cloud", "local", "hybrid"].includes(L.mode)) L.mode = "cloud"; st.localAI = L; settings.set(st); return send(res, 200, { conf: L }); }
     if (m === "POST" && p === "/api/local-ai/pull") { const o = await body(req, 1 << 10); return send(res, 200, { pull: await AILocal.pull(String(o.tag || "")) }); }
     if (m === "POST" && p === "/api/local-ai/bench") { const o = await body(req, 1 << 10), r = await AILocal.bench(String(o.tag || "")), st = settings.get(), L = localConf(); L.bench = Object.assign({}, L.bench || {}, { [r.tag]: r }); st.localAI = L; settings.set(st); return send(res, 200, { bench: r }); }

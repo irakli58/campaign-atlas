@@ -320,6 +320,41 @@
       .filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, k || 10).map(x => x.d);
   }
 
+  // search by meaning (the local AI plan's phase 4): when the app's embedding model on this computer is there (Local or
+  // Hybrid), each passage is turned into numbers once (kept by its words, so an edit re-reads only what changed) and a
+  // question finds passages by meaning as well as by words, the two rankings joined (reciprocal rank fusion). The index is
+  // built in the background; until it is ready, or with no embedding model, passages are found by their words as before.
+  // Nothing of this leaves the computer: the numbers come from the app's own server, from Ollama on 127.0.0.1.
+  const VEC = { have: new Map(), off: 0, busy: null };
+  const unit = v => { let n = 0; for (const x of v) n += x * x; n = Math.sqrt(n) || 1; return v.map(x => x / n); };
+  const keyOf = d => d.src + "\u0001" + d.text;
+  function vecBuild() {
+    const app = typeof window !== "undefined" && window.ATLAS_APP; if (!app || !app.embed || VEC.busy || Date.now() < VEC.off) return VEC.busy;
+    const C = corpus(), todo = C.docs.filter(d => !VEC.have.has(keyOf(d)));
+    if (!todo.length) return null;
+    VEC.busy = (async () => {
+      for (let i = 0; i < todo.length; i += 48) {
+        const part = todo.slice(i, i + 48), r = await app.embed(part.map(d => (d.src + ": " + d.text).slice(0, 1500)));
+        if (!r || !Array.isArray(r.vectors) || r.vectors.length !== part.length) { VEC.off = Date.now() + 5 * 60e3; return; }
+        part.forEach((d, j) => VEC.have.set(keyOf(d), unit(r.vectors[j])));
+      }
+    })().catch(() => { VEC.off = Date.now() + 5 * 60e3; }).finally(() => { VEC.busy = null; });
+    return VEC.busy;
+  }
+  async function lookupBest(q, k) {
+    k = k || 10; const byWords = lookup(q, 40), C = corpus();
+    const ready = C.docs.length && C.docs.every(d => VEC.have.has(keyOf(d)));
+    if (!ready) { vecBuild(); return byWords.slice(0, k); }
+    let qv = null; try { const r = await window.ATLAS_APP.embed([q]); qv = r && r.vectors && r.vectors[0] ? unit(r.vectors[0]) : null; } catch (e) { qv = null; }
+    if (!qv) return byWords.slice(0, k);
+    const sim = C.docs.map(d => { const v = VEC.have.get(keyOf(d)); let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * qv[i]; return { d, s: s * (d.w || 1) }; }).sort((a, b) => b.s - a.s).slice(0, 40);
+    // (only passages near the best in meaning: an embedding finds everything a little alike)
+    const top = sim.length ? sim[0].s : 0; for (let i = sim.length - 1; i >= 0; i--) if (sim[i].s < top * .8) sim.splice(i, 1);
+    const score = new Map(); byWords.forEach((d, i) => score.set(d, (score.get(d) || 0) + 1 / (60 + i))); sim.forEach((x, i) => score.set(x.d, (score.get(x.d) || 0) + 1 / (60 + i)));
+    return [...score.entries()].sort((a, b) => b[1] - a[1]).slice(0, k).map(([d]) => d);
+  }
+  if (typeof document !== "undefined") setTimeout(async () => { try { const w = window.ATLAS_APP && window.ATLAS_APP.aiWhere ? await window.ATLAS_APP.aiWhere("answering") : null; if (w && w.local) vecBuild(); } catch (e) {} }, 4000);
+
   /* ================================================================ files: the book, maps for online tables */
   async function saveFile(name, data, type) {
     const blob = data instanceof Blob ? data : new Blob([data], { type: type || "text/html" });
@@ -983,7 +1018,7 @@
   const askItem = a => `<article class="t-qa"><h4>${esc(a.q)}</h4>${a.a ? `<div class="t-ans">${esc(a.a).replace(/\n+/g, "<br>")}</div>` : ""}${a.hits && a.hits.length ? `<details${a.a ? "" : " open"}><summary>${a.a ? "The passages it read" : "What the campaign says"}</summary><ol class="t-hits">${a.hits.map(h => `<li><b>${h.go ? goBtn(h.go) + (h.src !== placeName(h.go) ? " · " + esc(h.src.replace(placeName(h.go) + ": ", "")) : "") : esc(h.src)}</b><p>${mark(h.text, a.q)}</p></li>`).join("")}</ol></details>` : a.a ? "" : `<p class="kn">The campaign says nothing about that.</p>`}</article>`;
   function mark(text, q) { const ws = words(q).filter(w => !STOP.has(w)); let s = esc(text); for (const w of ws) s = s.replace(new RegExp("\\b(" + w.replace(/[^a-z0-9']/g, "") + "\\w*)", "gi"), "<mark>$1</mark>"); return s; }
   async function ask(q) {
-    const hits = lookup(q, 12), item = { q, a: "", hits };
+    const hits = await lookupBest(q, 12), item = { q, a: "", hits };
     UI.ask.unshift(item); UI.ask = UI.ask.slice(0, 8);
     const paint = () => { const box = $("#tAsk"), pop = $("#tPopAsk"); if (box) box.innerHTML = UI.ask.map(askItem).join(""); if (pop) pop.innerHTML = askItem(UI.ask[0]); };
     paint();
@@ -1169,7 +1204,7 @@
     twice, onlyTo: hid => onlyTo(hid), showTo: (to, doc) => showTo(to, doc),
     stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab, addDock, addCard,
     // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
-    api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s, m) => askRaw(p, f || (() => {}), s, m), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, tabs: () => TABS.filter(t => shownTab(t[0])).map(t => ({ key: t[0], label: t[1], desc: t[4] })), open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
+    api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s, m) => askRaw(p, f || (() => {}), s, m), lookupBest: (q, k) => lookupBest(q, k), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, tabs: () => TABS.filter(t => shownTab(t[0])).map(t => ({ key: t[0], label: t[1], desc: t[4] })), open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
     init(ctx) {
       X = ctx; S = T.makeStore(ctx.db, cfg().storageKey); found = T.foundIn(S);
       if (A.story && A.story.connect) A.story.connect(S);

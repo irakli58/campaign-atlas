@@ -185,7 +185,7 @@
     const I = UI.imp, c = A.config || {}, k = IMP.find(x => x[0] === I.kind) || IMP[0];
     const who = [I.a, I.b].filter(Boolean).map(ref => { const e = St.ent(ref) || {}, n = npcOf(ref), cast = ref.startsWith("cast:") ? (A.castData || {})[ref.slice(5)] || {} : {}, g = f => n[f] || cast[f] || ""; return `${e.name}${e.role ? ", " + e.role : ""}: ${[g("manner") && "manner: " + g("manner"), g("voice") && "voice: " + g("voice"), g("want") && "wants: " + g("want"), g("secret") && "hides: " + g("secret"), St.knowledgeOf(ref).length ? "knows: " + St.knowledgeOf(ref).map(x => x.text || St.name(x.about)).join("; ") : ""].filter(Boolean).join("; ")}`; }).join("\n");
     const q = [I.text, I.place && placeName(I.place), ...[I.a, I.b].filter(Boolean).map(nameOf)].filter(Boolean).join(" ");
-    const hits = api.lookup(q || k[1], 10); I.hits = hits;
+    const hits = await (api.lookupBest || api.lookup)(q || k[1], 10); I.hits = hits;
     const asks = {
       describe: `Describe ${I.place ? placeName(I.place) : "where the players are"}${I.text ? " (" + I.text + ")" : ""} as the players come in, to be read aloud: what they see, hear and smell, in three to five sentences. Only what is there for anyone to notice: no secrets.`,
       react: `How would ${I.a ? nameOf(I.a) : "this person"} react to this: ${I.text || "(the players' latest action)"}? Their likely reaction in two to four sentences, what they say if anything, and what they do next. Keep to who they are.`,
