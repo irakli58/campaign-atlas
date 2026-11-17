@@ -329,6 +329,8 @@ async function route(req, res) {
       if (localConf().mode === "local" && localConf().model) return fail(res, 400, "Local AI is chosen, and reading a picture needs a model that can see: not offered yet. Draw the rooms by hand, or choose Cloud for this.");
       try { const o = await body(req, 12 << 20); return send(res, 200, { plan: await Ask.readPlan(o.image, o.prompt) }); } catch (e) { return fail(res, 400, e.message); }
     }
+    // where a kind of work is answered now: on this computer (a local model, with its small context) or by Claude
+    if (m === "GET" && rest === "aiwhere") { if (!authed) return fail(res, 403, "forbidden"); const kind = url.searchParams.get("kind") || "answering"; return send(res, 200, { local: localFor(kind), model: localFor(kind) ? localConf().model : null }); }
     // "Ask the campaign" and "Previously on...": answered by the game master's own Claude Code, on their own plan
     if (m === "POST" && rest === "ask") {
       if (!authed) return fail(res, 403, "forbidden");

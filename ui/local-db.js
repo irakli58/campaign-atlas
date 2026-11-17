@@ -49,6 +49,10 @@
   // what the page can ask of the app: the world map's "Make its 3D map now" (the page opens again on the new city)
   window.ATLAS_APP = {
     // a question for the game master's own Claude Code (the app runs it on this computer, on their plan)
+    // where a kind of work is answered now: { local, model }
+    aiWhere: function (kind) {
+      return fetch(URL_.replace(/db$/, "aiwhere") + "?kind=" + encodeURIComponent(kind || "answering"), { headers: { "x-atlas-token": TOKEN } }).then(function (r) { return r.ok ? r.json() : { local: false }; }, function () { return { local: false }; });
+    },
     ask: function (prompt, meta) {
       return fetch(URL_.replace(/db$/, "ask"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ prompt: prompt, kind: meta && meta.kind || "answering" }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "no answer"); return d.text; }); });

@@ -147,7 +147,7 @@
         <form data-knform="ctx">${SECTIONS.map(([k, l, ph, rows]) => `<details class="loc-more"${c[k] || UI.open === k ? " open" : ""}><summary>${esc(l)}${c[k] ? " ✓" : ""}</summary><textarea class="t-in" name="${k}" rows="${rows}" maxlength="60000" placeholder="${esc(ph)}">${esc(c[k] || "")}</textarea></details>`).join("")}
           <details class="loc-more"${c.doc ? " open" : ""}><summary>A whole document${c.docName ? ": " + esc(c.docName) : ""}</summary><textarea class="t-in" name="doc" rows="8" maxlength="3000000" placeholder="Paste your campaign document here, or read it from a file">${esc(c.doc || "")}</textarea>
             <label class="t-btn">Read it from a file (text, Markdown, Word, PDF)<input type="file" accept=".txt,.md,.markdown,.docx,.pdf,text/plain" data-know="file" hidden></label> <span class="kn-fmsg t-small" aria-live="polite"></span></details>
-          <div class="t-row"><button class="t-btn prim">Save</button>${ai ? `<button type="button" class="t-btn" data-know="read"${UI.busy ? " disabled" : ""}>${UI.busy === "read" ? "Reading…" : "Read it into entries"}</button><span class="t-small">Claude proposes the people, places, secrets and plot points it holds; nothing is made but what you tick.</span>` : ""}</div></form>
+          <div class="t-row"><button class="t-btn prim">Save</button>${ai ? `<button type="button" class="t-btn" data-know="read"${UI.busy ? " disabled" : ""}>${String(UI.busy).startsWith("read") ? (UI.busy === "read" ? "Reading…" : "Reading part " + UI.busy.slice(5) + "…") : "Read it into entries"}</button><span class="t-small">Claude proposes the people, places, secrets and plot points it holds; nothing is made but what you tick.</span>` : ""}</div></form>
         ${UI.props ? propsHTML() : ""}</section>
       <section class="t-card"><h4>Is each part of Atlas ready?</h4><p class="t-small">For each part switched on for this campaign: what it needs to work, and what would help it. Each gap opens where it is filled in.</p><div class="kn-rs">${rd}</div></section>
       <section class="t-card"><h4>Ask Atlas what it knows</h4>
@@ -159,7 +159,7 @@
   function propsHTML() {
     const P = UI.props, row = (k, i, title, sub) => `<li><label class="loc-ck"><input type="checkbox" data-kp="${k}:${i}" checked> <b>${esc(title)}</b></label>${sub ? `<p class="kn">${esc(sub)}</p>` : ""}</li>`;
     const blocks = [["people", "People", x => [x.n, [x.role, x.secret && "Secret: " + x.secret, x.want && "Wants: " + x.want].filter(Boolean).join(" · ")]], ["places", "Places", x => [x.name, [x.kind, x.kp].filter(Boolean).join(" · ")]], ["knows", "What people know or hide", x => [`${x.who}: ${x.text}`, [x.type === "false" ? "believes it wrongly" : x.type === "suspicion" ? "suspects it" : "knows it", x.share === "hides" ? "hides it" : x.share === "refuses" ? "will not tell" : ""].filter(Boolean).join(", ")]], ["items", "Secrets, mysteries, plot points, factions", x => [x.n, [x.kind, x.d].filter(Boolean).join(" · ")]]];
-    return `<div class="kn-props"><h5>What Claude found in it</h5><p class="t-small">Its reading of what you wrote, not established yet. Untick what is wrong; what you keep is made as you would make it by hand, and can be changed after.</p>${blocks.map(([k, h, f]) => (P[k] || []).length ? `<h6>${esc(h)}</h6><ul>${P[k].map((x, i) => { const [a, b] = f(x); return row(k, i, a, b); }).join("")}</ul>` : "").join("")}${P.note ? `<p class="kn">${esc(P.note)}</p>` : ""}<div class="t-row"><button type="button" class="t-btn prim" data-know="make">Make the ticked ones</button><button type="button" class="t-mini" data-know="drop">Leave them all</button></div></div>`;
+    return `<div class="kn-props"><h5>What ${UI.reader || "Claude"} found in it</h5><p class="t-small">Its reading of what you wrote, not established yet. Untick what is wrong; what you keep is made as you would make it by hand, and can be changed after.</p>${blocks.map(([k, h, f]) => (P[k] || []).length ? `<h6>${esc(h)}</h6><ul>${P[k].map((x, i) => { const [a, b] = f(x); return row(k, i, a, b); }).join("")}</ul>` : "").join("")}${P.note ? `<p class="kn">${esc(P.note)}</p>` : ""}<div class="t-row"><button type="button" class="t-btn prim" data-know="make">Make the ticked ones</button><button type="button" class="t-mini" data-know="drop">Leave them all</button></div></div>`;
   }
   async function readIn() {
     const c = ctx(), text = SECTIONS.filter(([k]) => c[k]).map(([k, l]) => `## ${l}\n${c[k]}`).join("\n\n") + (c.doc ? "\n\n## The document\n" + c.doc.slice(0, 120000) : "");
@@ -171,7 +171,22 @@ Answer with JSON only: {"people":[{"n":"name","role":"","look":"","want":"","sec
 THE CAMPAIGN:
 ${text}`;
     UI.busy = "read"; api.render();
-    let v = null; try { const raw = await api.askRaw(prompt, null, null, { kind: "reading", what: "your campaign's story", uses: ["what you wrote"] }); const m = String(raw || "").match(/\{[\s\S]*\}/); v = m ? JSON.parse(m[0]) : null; } catch (e) { v = null; }
+    // (a local model reads a long story in parts, about 6,000 letters each, cut at paragraphs; what each part finds is
+    // merged by name, so a person met in two parts is one person; the user's local AI request of 17 Nov 2026. Claude
+    // reads it whole, as before)
+    let where = { local: false }; try { where = window.ATLAS_APP && window.ATLAS_APP.aiWhere ? await window.ATLAS_APP.aiWhere("reading") : where; } catch (e) {}
+    const parts = []; if (where.local && text.length > 7000) { let cur = ""; for (const para of text.split(/\n\s*\n/)) { if (cur && cur.length + para.length > 6000) { parts.push(cur); cur = ""; } cur += (cur ? "\n\n" : "") + para.slice(0, 9000); } if (cur) parts.push(cur); } else parts.push(null);
+    const head = prompt.slice(0, prompt.lastIndexOf("THE CAMPAIGN:")), merged = { people: [], places: [], knows: [], items: [] }, key = x => String(x || "").toLowerCase().replace(/^(the|a|an)\s+/, "").trim();
+    const fold = (k, rec, nameK) => { const L = merged[k], n = key(rec[nameK]); const old = n ? L.find(x => key(x[nameK]) === n) : null; if (old) { for (const [f, val] of Object.entries(rec)) if (val && !old[f]) old[f] = val; } else L.push(rec); };
+    let v = null, okParts = 0;
+    for (let i = 0; i < parts.length; i++) {
+      if (parts.length > 1) { UI.busy = "read " + (i + 1) + "/" + parts.length; api.render(); }
+      const q = parts[i] == null ? prompt : `${head}(This is part ${i + 1} of ${parts.length} of the campaign; list what this part establishes.)\n\nTHE CAMPAIGN, PART ${i + 1}:\n${parts[i]}`;
+      try { const raw = await api.askRaw(q, null, null, { kind: "reading", what: "your campaign's story" + (parts.length > 1 ? `, part ${i + 1} of ${parts.length}` : ""), uses: ["what you wrote"] }); const m = String(raw || "").match(/\{[\s\S]*\}/); const one = m ? JSON.parse(m[0]) : null;
+        if (one && typeof one === "object") { okParts++; for (const r of one.people || []) fold("people", r, "n"); for (const r of one.places || []) fold("places", r, "name"); for (const r of one.knows || []) merged.knows.push(r); for (const r of one.items || []) fold("items", r, "n"); } } catch (e) { /* a part not read: the others still count */ }
+    }
+    UI.reader = where.local ? "your local model" + (where.model ? " (" + where.model + ")" : "") : "Claude";
+    v = okParts ? merged : null; if (okParts && okParts < parts.length) api.note(`${parts.length - okParts} of ${parts.length} parts could not be read; the rest are shown.`);
     UI.busy = ""; UI.props = v && typeof v === "object" ? v : null; if (!v) api.note("Claude could not read it just now. Try again, or make the entries yourself."); api.render();
   }
   async function makeTicked(body) {
