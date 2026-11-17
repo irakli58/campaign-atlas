@@ -662,10 +662,16 @@
       // the harp remembers the tune, far off (it was a celesta, whose high glassy notes were too like the droplets)
       if (quiet && k % 4 === 2 && rnd() < .6) { let tt = t + 6 * u; for (const nt of T.motif.slice(0, 3)) { voice(T, "harp", root + 12 + note(Math.min(9, nt.d + deg)), tt, 1, .055); tt += nt.u * u * .9; } }
     }
+    // the fifth of the scale (the half close); a phrase's loudness, rising to its height in the seventh bar
+    const FIFTH = (() => { for (let i = 0; i < N; i++) if (note(i) === 7) return i; return Math.min(4, N - 1); })(), SHAPE = [.86, .94, 1.02, .9, .88, .98, 1.14, .84];
     let bar = 0, nextBar = t0 + .6;
     T.mods.push({ next: t0, step(until) {
       while (nextBar < until) {
-        const t = nextBar, deg = T.prog[bar % T.prog.length], ch = chord(deg), len = T.barLen;
+        // (a phrase of eight bars, a question and its answer (the music request of 17 Nov 2026: "phrases, motifs, endings
+        // that resolve"): the fourth bar closes half-way, on the fifth; the eighth comes home, on the keynote; the
+        // orchestral dread keeps its own four-bar breathing, below)
+        const ph = bar % 8, shaped = !(F.cine && !M.pulse), t = nextBar, len = T.barLen;
+        const deg = shaped && ph === 7 ? 0 : shaped && ph === 3 && T.prog.length > 2 ? FIFTH : T.prog[bar % T.prog.length], ch = chord(deg);
         // (orchestral style) four bars make a phrase that gathers and lets go; now and then a bar is all but silent
         if (T.mus && !M.pulse) T.mus.gain.linearRampToValueAtTime(Math.min(1.2, [.26, .58, 1.1, .42][bar % 4] * (.85 + rnd() * .3) * (rnd() < .14 ? .4 : 1)), t + len * .5);
         const sw = !!F.cine && !M.pulse;
@@ -673,15 +679,27 @@
         const bassI = F.bass === undefined ? "bass" : F.bass;
         if (bassI && M.pad > .25 && !M.pulse && !F.cine) voice(T, bassI, ch[0] - 24 >= 30 ? ch[0] - 24 : ch[0] - 12, t, len * .8, M.pad * .2);
         if (F.drone && M.drone) for (const [s, lv] of [[-12, 1], [-5, .6]]) voice(T, F.drone, root + s, t, len * 1.04, M.drone * .12 * lv);
-        if (T.lead && rnd() < (M.rate || .5)) {
-          const v = Math.floor(rnd() * 4); let notes = T.motif.slice(); if (v === 2) notes.reverse(); if (v === 3) notes = notes.slice(0, Math.ceil(notes.length / 2));
+        if (T.lead && (shaped && (ph === 3 || ph === 7) ? rnd() < Math.min(.95, (M.rate || .5) + .4) : rnd() < (M.rate || .5))) {
+          // (the tune through the phrase: stated; a step higher (a sequence); its first half, twice, rising; the half
+          // close; stated again; turned back on itself; quicker and higher, the phrase's height; home, held long)
+          let notes = T.motif.slice(), lift = 0;
+          if (!shaped) { const v = Math.floor(rnd() * 4); if (v === 1) lift = 2; if (v === 2) notes.reverse(); if (v === 3) notes = notes.slice(0, Math.ceil(notes.length / 2)); }
+          else if (ph === 1) lift = 1;
+          else if (ph === 2) { const h = notes.slice(0, Math.ceil(notes.length / 2)); notes = h.concat(h.map(x => ({ d: x.d + 1, u: x.u }))); }
+          else if (ph === 5) notes.reverse();
+          else if (ph === 6) { notes = notes.map(x => ({ d: x.d, u: Math.max(1, x.u - 1) })); lift = 2; }
+          else if (ph === 3 || ph === 7) { notes = notes.slice(0, Math.max(2, Math.ceil(notes.length / 2))); notes[notes.length - 1] = { goal: ph === 7 ? 0 : FIFTH, u: Math.max(4, notes[notes.length - 1].u + 2) }; }
           // in the orchestral style the piano states the tune and, two bars on, the cello answers it
           const lead = F.cine && T.lead === "grand" && bar % 4 === 2 ? "cello" : T.lead;
-          let tt = t + T.unit * Math.floor(rnd() * 3); const shift = deg + (v === 1 ? 2 : 0), held = !INST[lead].d, down = lead === "cello" && T.lead !== "cello" ? 12 : 0;
+          let tt = t + T.unit * (shaped && (ph === 3 || ph === 7) ? 0 : Math.floor(rnd() * 3)); const shift = deg + lift, held = !INST[lead].d, down = lead === "cello" && T.lead !== "cello" ? 12 : 0;
+          let prev = null;
           for (const nt of notes) {
             if (tt > t + len * 1.15) break;
-            let dd = nt.d + shift; while (dd > 10) dd -= N;
-            const m = root + 12 * (1 + (M.reg || 0)) + note(dd) - down, dur = nt.u * T.unit * (held ? 1.02 : .92), vel = (held ? .13 : .19) * (.85 + rnd() * .3);
+            // (the closing note is the keynote or the fifth itself, in the octave nearest the note before it)
+            let dd = nt.goal != null ? nt.goal : nt.d + shift;
+            if (nt.goal != null && prev != null) { while (dd < prev - N / 2) dd += N; while (dd > prev + N / 2) dd -= N; }
+            while (dd > 10) dd -= N; prev = dd;
+            const m = root + 12 * (1 + (M.reg || 0)) + note(dd) - down, dur = nt.u * T.unit * (held ? 1.02 : .92), vel = (held ? .13 : .19) * (.85 + rnd() * .3) * (shaped ? SHAPE[ph] : 1);
             // the style's ornaments on the longer notes: a quick note from above (the middle ages, the Arab world), or
             // the note bent up into (Japan: the koto pressed, the shakuhachi's breath)
             const orn = F.orn && nt.u > 1 && rnd() < .3 ? F.orn : "";
