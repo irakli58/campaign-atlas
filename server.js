@@ -8,7 +8,7 @@
 "use strict";
 if (+process.versions.node.split(".")[0] < 18) { console.error("\n  Campaign Atlas needs Node.js 18 or newer; this is " + process.version + ". Get the LTS version from https://nodejs.org/\n"); process.exit(1); }
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto"), { spawn, execFile } = require("child_process");
-const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch"), Ask = require("./lib/ask"), AILocal = require("./lib/ai-local"), Hardware = require("./lib/hardware");
+const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch"), Ask = require("./lib/ask"), AILocal = require("./lib/ai-local"), AICompare = require("./lib/ai-compare"), Hardware = require("./lib/hardware");
 const PlayersLan = require("./lib/players-lan"), RecorderLan = require("./lib/recorder-lan"), Audio = require("./lib/audio"), Voices = require("./lib/voices");
 
 const ROOT = __dirname, PORT = +process.env.ATLAS_PORT || 4747;
@@ -64,6 +64,7 @@ const settings = {
 };
 // the local AI choice (data/settings.json, localAI): Cloud (as before) or Local (Ollama on this computer), the model, the
 // game master's own figures for the computer, the benchmarks, and whether Claude may answer when the local model cannot
+const COMPARE = { running: false, now: null, step: 0, of: 0, err: null };
 const localConf = () => Object.assign({ mode: "cloud", model: "", fallback: false, bench: {} }, settings.get().localAI || {});
 // (Hybrid: each kind of work the pages ask for (answering, reading, suggesting, checking, writing) set Local or Cloud)
 const KINDS_AI = ["answering", "reading", "suggesting", "checking", "writing"];
@@ -372,9 +373,23 @@ async function route(req, res) {
   try {
     if (m === "GET" && p === "/api/state") return send(res, 200, await state(url.searchParams.get("fresh") === "1"));
     // local AI: this computer, Ollama, the recommendations; the choice; a download and a benchmark only when pressed
-    if (m === "GET" && p === "/api/local-ai") { const L = localConf(), hw = await Hardware.detect(DATA); return send(res, 200, { conf: L, hw, ollama: await AILocal.status(), rec: AILocal.recommend(hw, { ramGB: L.ramGB, vramGB: L.vramGB }, L.bench), catalogue: AILocal.CATALOGUE, embed: AILocal.EMBED, pulls: AILocal.PULLS }); }
+    if (m === "GET" && p === "/api/local-ai") { const L = localConf(), hw = await Hardware.detect(DATA); return send(res, 200, { conf: L, hw, ollama: await AILocal.status(), rec: AILocal.recommend(hw, { ramGB: L.ramGB, vramGB: L.vramGB }, L.bench), catalogue: AILocal.CATALOGUE, embed: AILocal.EMBED, pulls: AILocal.PULLS, compare: COMPARE }); }
     if (m === "POST" && p === "/api/local-ai/settings") { const o = await body(req, 1 << 12), st = settings.get(), L = localConf(); for (const k of ["mode", "model", "ramGB", "vramGB", "fallback", "careful"]) if (o[k] !== undefined) L[k] = o[k]; if (o.kind && KINDS_AI.includes(o.kind)) L.kinds = Object.assign({}, L.kinds || {}, { [o.kind]: o.where === "local" ? "local" : "cloud" }); if (!["cloud", "local", "hybrid"].includes(L.mode)) L.mode = "cloud"; st.localAI = L; settings.set(st); return send(res, 200, { conf: L }); }
     if (m === "POST" && p === "/api/local-ai/pull") { const o = await body(req, 1 << 10); return send(res, 200, { pull: await AILocal.pull(String(o.tag || "")) }); }
+    // the quality comparison (lib/ai-compare.js): the chosen models, one after another, in the background; each one's
+    // checks passed kept with the settings (the summary) and in data/ai-compare.json (the answers, to read)
+    if (m === "POST" && p === "/api/local-ai/compare") {
+      const o = await body(req, 1 << 12); if (COMPARE.running) return send(res, 200, { compare: COMPARE });
+      const have = ((await AILocal.status()).models || []).map(x => x.tag), tags = (Array.isArray(o.tags) ? o.tags : []).map(String).filter(t => have.includes(t)).slice(0, 8);
+      const who = tags.map(t => ({ id: t, ask: (q, kind) => AILocal.ask(t, q, { careful: false, kind }) })); if (o.claude) who.push({ id: "claude", ask: q => Ask.ask(q) });
+      if (!who.length) return fail(res, 400, "Choose a downloaded model (or Claude) to compare.");
+      Object.assign(COMPARE, { running: true, now: null, step: 0, of: who.length * AICompare.TESTS.length, err: null });
+      (async () => { const file = path.join(DATA, "ai-compare.json"); let all = {}; try { all = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { all = {}; }
+        for (const w of who) { COMPARE.now = w.id; try { const r = await AICompare.run(w.ask, () => { COMPARE.step++; }); all[w.id] = r; fs.writeFileSync(file, JSON.stringify(all, null, 1)); const st = settings.get(), L = localConf(); L.compare = Object.assign({}, L.compare || {}, { [w.id]: { pass: r.pass, of: r.of, ms: r.ms, t: r.t } }); st.localAI = L; settings.set(st); } catch (e) { COMPARE.err = String(e.message || e).slice(0, 200); } }
+      })().finally(() => { COMPARE.running = false; COMPARE.now = null; });
+      return send(res, 200, { compare: COMPARE });
+    }
+    if (m === "GET" && p === "/api/local-ai/compare") { let all = {}; try { all = JSON.parse(fs.readFileSync(path.join(DATA, "ai-compare.json"), "utf8")); } catch (e) { all = {}; } return send(res, 200, { compare: COMPARE, results: all }); }
     if (m === "POST" && p === "/api/local-ai/bench") { const o = await body(req, 1 << 10), r = await AILocal.bench(String(o.tag || "")), st = settings.get(), L = localConf(); L.bench = Object.assign({}, L.bench || {}, { [r.tag]: r }); st.localAI = L; settings.set(st); return send(res, 200, { bench: r }); }
     if (m === "POST" && p === "/api/connect") {
       const o = await body(req, 1 << 14), prov = o.provider, key = String(o.key || "").trim();

@@ -414,3 +414,8 @@ textarea[name=story] { font-size: 16px; min-height: 260px; }
 
 /* a campaign made by hand (the user's request of 11 Nov 2026): only what an empty campaign needs is asked */
 #newform[data-how="hand"] .ai-only { display: none !important; }
+/* the local AI quality comparison */
+.lai-cmp { margin: 12px 0; }
+.lai-ct { border-collapse: collapse; margin: 6px 0; }
+.lai-ct th, .lai-ct td { text-align: left; padding: 3px 18px 3px 0; }
+.lai-ans { white-space: pre-wrap; font-size: 12px; max-height: 220px; overflow: auto; margin: 4px 0 10px; }
