@@ -130,3 +130,4 @@ Then the user asked to see the most detailed one (commoner at much/true); fixed 
 
 ### Overnight (16-17 Nov)
 The user, going to sleep: "keep working on stuff without asking me for permission", "you know what you have to do and i want you to finish all of it". Done: the elder and then every maker draw the whole land (references/world.md "Every maker draws the whole land"); "What it shows" choice; no hill arcs; an accuracy overlay (rough 48, middle 27, true 6 miles off on average); map additions remember their session (references/world.md "Map additions remember their session"). Tested in the page: sliders, reveal, Copilot add, session tags, no page errors.
+17 Nov: the user, "i told you to make the decisions": ocean currents and natural coasts made the default, coasts tuned (references/world.md "Oceans and natural coasts by default").

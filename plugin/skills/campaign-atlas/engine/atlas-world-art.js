@@ -377,7 +377,7 @@
     const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
       // (a lagoon behind its barrier: shallow, pale water)
       const lagW = SH && h <= sea ? SH.lag(x, y) : 0;
-      if (h <= sea && P) return I.lake ? [128, 170, 192] : lagW > .25 ? mix(P.paper, [150, 190, 200], smooth(.25, .6, lagW)) : P.paper;
+      if (h <= sea && P) return I.lake ? [128, 170, 192] : lagW > .15 ? mix(P.paper, [118, 176, 196], smooth(.15, .45, lagW)) : P.paper;   // (clearer since 17 Nov 2026: "lagoons faint in the hydro look")
       if (h <= sea && lagW > .25) return lit(mix([60, 140, 170], [104, 184, 196], smooth(.25, .7, lagW)), gx, gy, RX * .2);
       if (h <= sea) {
         const d = clamp((sea - h) / 128, 0, 1);

@@ -88,32 +88,39 @@ function coasts(o, L, R, vols, log) {
     else { const k = isC[n] >= 0 ? isC[n] : -1; if (k >= 0) { mouthS[k] += sand[n]; mouthG[k] += grav[n]; river[k] += sand[n] + grav[n]; } }
   }
   // cliffs worn by the waves; reefs in warm, clear seas; the sand's makeup
-  const relief = new Float32Array(K), comp = new Uint8Array(K), reef = new Float32Array(K), cliffS = new Float32Array(K);
+  const relief = new Float32Array(K), comp = new Uint8Array(K), reef = new Float32Array(K), cliffS = new Float32Array(K), shelfS = new Float32Array(K);
+  // (every source on one scale: a typical river mouth's yearly sand. Before, the rivers' sum over whole basins dwarfed
+  // the rest, and every beach was the rivers'; the user then: "i told you to make the decisions", 17 Nov 2026)
+  const U = Math.max(1e-6, mouthS.reduce((a, v) => a + v, 0) / Math.max(1, K));   // (the rivers' sand per km of coast, on average)
   const sst = n => OC && OC.SST ? Math.max(...nb8(n).filter(m => oc[m]).map(m => OC.SST[m]).concat([-9])) : (Tc ? Tc[n] + 2 : 15);
   const volc = (vols || []).map(v => [I(v), J(v)]), vr = Math.max(3, 60 / cellKm);
   coast.forEach((n, k) => {
     let r = 0; const i0 = I(n), j0 = J(n); for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { let a = i0 + di; const b = j0 + dj; if (wrap) a = (a + cols) % cols; if (a >= 0 && b >= 0 && a < cols && b < rows) r = Math.max(r, Em[b * cols + a]); }
-    relief[k] = r; cliffS[k] = Ewave[k] * smooth(40, 400, r) * .6;
-    const warm = sst(n); reef[k] = smooth(22, 26, warm) * (1 - smooth(.5, 3, river[k])) * .5;
-    comp[k] = volc.some(([x, y]) => Math.hypot(x - i0, y - j0) < vr) ? SAND.volcanic : reef[k] > .2 ? SAND.carbonate : SAND.quartz;
+    relief[k] = r; cliffS[k] = U * 1.6 * Ewave[k] * smooth(40, 400, r);
+    // (the shelf: on low, open coasts the swell sweeps the old sand of the shallow sea floor ashore; much of the
+    // Earth's great beaches are this, not the rivers')
+    shelfS[k] = U * 7 * Math.min(1, Ewave[k]) * (1 - smooth(30, 250, r)) * (open ? open[k] : 1);
+    // (reefs: warm, clear water, away from the mud of the rivers)
+    const warm = sst(n); reef[k] = U * .5 * smooth(23, 27, warm) * (1 - smooth(.2, 1.5, river[k] / U));
+    comp[k] = volc.some(([x, y]) => Math.hypot(x - i0, y - j0) < vr) ? SAND.volcanic : SAND.quartz;
   });
   // longshore drift: each coast cell hands its sand on to the next along the drift; laid down where it slows
   const down = new Int32Array(K).fill(-1);
   coast.forEach((n, k) => { if (!drift[k]) return; const tx = -ny[k] * drift[k], ty = nx[k] * drift[k]; let best = -1, bd = .3; for (const m of nb8(n)) { const q = isC[m]; if (q < 0) continue; let dx = I(m) - I(n); if (wrap && Math.abs(dx) > 1) dx = -Math.sign(dx); const dy = J(m) - J(n), d = (dx * tx + dy * ty) / Math.hypot(dx, dy); if (d > bd) { bd = d; best = q; } } down[k] = best; });
   const indeg = new Int32Array(K); for (let k = 0; k < K; k++) if (down[k] >= 0) indeg[down[k]]++;
   const conv = new Int32Array(K); for (let k = 0; k < K; k++) if (down[k] >= 0 && drift[down[k]] && drift[k] !== drift[down[k]]) conv[down[k]]++;
-  const qs = new Float32Array(K), qg = new Float32Array(K), V = new Float32Array(K), G = new Float32Array(K), prov = new Float32Array(K * 3), qp = new Float32Array(K * 3);
+  const qs = new Float32Array(K), qg = new Float32Array(K), V = new Float32Array(K), G = new Float32Array(K), prov = new Float32Array(K * 4), qp = new Float32Array(K * 4);
   const q = []; for (let k = 0; k < K; k++) if (!indeg[k]) q.push(k);
   const done = new Uint8Array(K);
   const step = k => {
     done[k] = 1;
-    const sIn = qs[k] + mouthS[k] + cliffS[k] * .4 + reef[k], gIn = qg[k] + mouthG[k] + cliffS[k] * .6;
-    const pIn = [qp[k * 3] + mouthS[k], qp[k * 3 + 1] + cliffS[k] * .4, qp[k * 3 + 2] + reef[k]], pT = pIn[0] + pIn[1] + pIn[2] || 1;
+    const sIn = qs[k] + mouthS[k] + cliffS[k] * .4 + reef[k] + shelfS[k], gIn = qg[k] + mouthG[k] + cliffS[k] * .6;
+    const pIn = [qp[k * 4] + mouthS[k], qp[k * 4 + 1] + cliffS[k] * .4, qp[k * 4 + 2] + reef[k], qp[k * 4 + 3] + shelfS[k]], pT = pIn[0] + pIn[1] + pIn[2] + pIn[3] || 1;
     // (what the waves can carry on goes on; a sheltered shore keeps a share of all that passes; where drift meets
     // drift from the other way, or the coast ends, all of it stays)
     const keep = .05 + .5 * (1 - open[k]) + (conv[k] ? .6 : 0), sOut = down[k] < 0 ? 0 : Math.min(sIn * (1 - Math.min(.95, keep)), cap[k]), gOut = down[k] < 0 ? 0 : Math.min(gIn * (1 - Math.min(.95, keep)), cap[k] * .25);
-    V[k] += sIn - sOut; G[k] += gIn - gOut; for (let p = 0; p < 3; p++) prov[k * 3 + p] += (sIn - sOut) * pIn[p] / pT;
-    const d = down[k]; if (d >= 0) { qs[d] += sOut + gOut * .03; qg[d] += gOut * .97; for (let p = 0; p < 3; p++) qp[d * 3 + p] += sOut * pIn[p] / pT; if (--indeg[d] === 0) q.push(d); }
+    V[k] += sIn - sOut; G[k] += gIn - gOut; for (let p = 0; p < 4; p++) prov[k * 4 + p] += (sIn - sOut) * pIn[p] / pT;
+    const d = down[k]; if (d >= 0) { qs[d] += sOut + gOut * .03; qg[d] += gOut * .97; for (let p = 0; p < 4; p++) qp[d * 4 + p] += sOut * pIn[p] / pT; if (--indeg[d] === 0) q.push(d); }
   };
   for (let h = 0; h < q.length; h++) step(q[h]);
   for (let k = 0; k < K; k++) if (!done[k]) { let c = k; for (let g = 0; g < K && c >= 0 && !done[c]; g++) { step(c); c = down[c]; } }
@@ -125,13 +132,15 @@ function coasts(o, L, R, vols, log) {
   const AI = L.eco && L.eco.AI;
   coast.forEach((n, k) => {
     const steep = smooth(60, 350, relief[k]), warmAir = Tc ? Tc[n] : 15, lowE = Ewave[k] < .2, mouth = river[k] > vT * 2;
-    let cls = 0, w = 0, c = comp[k];
+    // (white coral sand only where most of the sand laid here came from reefs)
+    const pv = prov[k * 4] + prov[k * 4 + 1] + prov[k * 4 + 2] + prov[k * 4 + 3];
+    let cls = 0, w = 0, c = comp[k] === SAND.quartz && pv > 0 && prov[k * 4 + 2] / pv > .5 ? SAND.carbonate : comp[k];
     if (lowE && relief[k] < 25 && (open[k] < .5 || mouth) && !ice(n)) cls = warmAir > 21 ? SHORE.mangrove : warmAir > -2 ? SHORE.marsh : 0;
     else if (G[k] > V[k] * 1.1 && G[k] > gT) { cls = SHORE.gravel; w = .35 + .4 * Math.min(1, G[k] / (gT * 4)); c = SAND.gravel; }
     else if (V[k] > vT) { cls = SHORE.beach; w = Math.min(2.4, (.35 + .7 * Math.sqrt(V[k] / vT - 1)) / (1 + 2.2 * steep)); }
     else if (steep > .45 && Ewave[k] > .3) cls = SHORE.cliff;
     shore[n] = cls; width[n] = Math.round(Math.min(255, w * 64)); sandC[n] = c;
-    why[k] = { V: V[k], E: Ewave[k], open: open[k], conv: conv[k], river: prov[k * 3], cliff: prov[k * 3 + 1], reef: prov[k * 3 + 2], comp: c };
+    why[k] = { V: V[k], E: Ewave[k], open: open[k], conv: conv[k], river: prov[k * 4], cliff: prov[k * 4 + 1], reef: prov[k * 4 + 2], shelf: prov[k * 4 + 3], comp: c };
   });
   // dunes behind wide beaches, where the wind blows onshore
   const dist = new Float32Array(N).fill(1e9), from = new Int32Array(N).fill(-1), dq = [];
@@ -150,8 +159,11 @@ function coasts(o, L, R, vols, log) {
   coast.forEach((n, k) => {
     // (a gentle coastal plain, a shallow shelf, sand to spare, waves neither too weak nor too fierce)
     let shelf = true; for (let s = 1; s <= bw + 1; s++) { let x = Math.round(I(n) + nx[k] * s); const y = Math.round(J(n) + ny[k] * s); if (wrap) x = (x + cols) % cols; if (x < 0 || y < 0 || x >= cols || y >= rows) { shelf = false; break; } const m = y * cols + x; if (!oc[m] || H[m] < 120) { shelf = false; break; } }
-    if (shelf && relief[k] < 220 && reg[k] > regT && Ewave[k] > .2 && Ewave[k] < 1.3 && open[k] > .3) { zone[n] = 1; bq.push(n); }
+    if (shelf && relief[k] < 220 && reg[k] > regT && Ewave[k] > .2 && Ewave[k] < 1.3 && open[k] > .3) bq.push(n);
   });
+  // (no more than about an eighth of the coast: the sandiest stretches first; Stutz & Pilkey 2011: 10 to 15% of the
+  // Earth's coasts. Needed once the shelf's sand made the low open coasts the sandiest, 17 Nov 2026)
+  bq.sort((a, b) => reg[isC[b]] - reg[isC[a]]); bq.length = Math.min(bq.length, Math.round(K * .13)); for (const n of bq) zone[n] = 1;
   const mouths = coast.filter((n, k) => river[k] > vT * 3);
   for (const n of bq) for (let dj = -bw - 1; dj <= bw + 1; dj++) for (let di = -bw - 1; di <= bw + 1; di++) {
     let a = I(n) + di; const b = J(n) + dj; if (wrap) a = (a + cols) % cols; if (a < 0 || b < 0 || a >= cols || b >= rows) continue; const m = b * cols + a; if (!oc[m]) continue;
@@ -178,20 +190,20 @@ function coasts(o, L, R, vols, log) {
   coast.forEach((n, k) => {
     if (seen[k] || shore[n] !== SHORE.beach) return; const g = [k]; seen[k] = 1;
     for (let h = 0; h < g.length; h++) for (const m of nb8(coast[g[h]])) { const j = isC[m]; if (j >= 0 && !seen[j] && shore[m] === SHORE.beach) { seen[j] = 1; g.push(j); } }
-    let s = { n: g.length, V: 0, river: 0, cliff: 0, reef: 0, conv: 0, open: 0, E: 0, comp: [0, 0, 0, 0], x: 0, y: 0 };
-    for (const j of g) { const w = why[j]; s.V += w.V; s.river += w.river; s.cliff += w.cliff; s.reef += w.reef; s.conv += w.conv ? 1 : 0; s.open += w.open; s.E += w.E; s.comp[w.comp]++; s.x += I(coast[j]); s.y += J(coast[j]); }
+    let s = { n: g.length, V: 0, river: 0, cliff: 0, reef: 0, shelf: 0, conv: 0, open: 0, E: 0, comp: [0, 0, 0, 0], x: 0, y: 0 };
+    for (const j of g) { const w = why[j]; s.V += w.V; s.river += w.river; s.cliff += w.cliff; s.reef += w.reef; s.shelf += w.shelf; s.conv += w.conv ? 1 : 0; s.open += w.open; s.E += w.E; s.comp[w.comp]++; s.x += I(coast[j]); s.y += J(coast[j]); }
     s.open /= g.length; s.E /= g.length; s.at = [Math.round(s.x / g.length * o.cell), Math.round(s.y / g.length * o.cell)]; groups.push(s);
   });
   groups.sort((a, b) => b.V - a.V);
   const said = groups.slice(0, 8).map(s => {
-    const src = s.river >= s.cliff && s.river >= s.reef ? "sand brought down by rivers" : s.reef > s.cliff ? "white sand from reefs in the warm sea" : "sand worn from the cliffs";
+    const top = Math.max(s.river, s.cliff, s.reef, s.shelf), src = top === s.river ? "sand brought down by rivers" : top === s.shelf ? "sand swept ashore from the shallow sea floor" : top === s.reef ? "white sand from reefs in the warm sea" : "sand worn from the cliffs";
     const where = s.conv ? "where drift from both ways meets and drops its load" : s.open < .5 ? "in a sheltered bay that keeps what the drift brings" : s.E > .6 ? "on an open coast where strong waves pile it up" : "where the longshore drift slows along the coast";
     const kind = ["", " (white coral sand from reefs)", " (black volcanic sand)", " (shingle)"][s.comp.indexOf(Math.max(...s.comp))];
     return `Beach of ${Math.round(s.n * cellKm)} km at [${s.at}]: ${src}, ${where}${kind}`;
   });
   let cnt = {}; for (let n = 0; n < N; n++) if (shore[n]) cnt[shore[n]] = (cnt[shore[n]] || 0) + 1;
   const name = Object.fromEntries(Object.entries(SHORE).map(([k, v]) => [v, k]));
-  if (log) log("  the coasts, as waves and sediment made them: " + Object.entries(cnt).map(([k, v]) => `${name[k]} ${Math.round(v * cellKm)} km`).join(", ") + (spits ? `; ${spits} spits` : "") + "\n" + said.map(s => "     " + s).join("\n"));
+  if (log) log("  the coasts, as waves and sediment made them: " + Object.entries(cnt).map(([k, v]) => `${name[k]} ${Math.round(v * cellKm)} km`).join(", ") + (spits ? `; ${spits} spits` : "") + (() => { let t = [0, 0, 0, 0]; coast.forEach((n, k) => { if (shore[n] === SHORE.beach) for (let p = 0; p < 4; p++) t[p] += prov[k * 4 + p]; }); const T = t[0] + t[1] + t[2] + t[3] || 1; return `\n     barrier islands front ${Math.round(bq.length / Math.max(1, K) * 100)}% of the coast (Earth: 10 to 15%); the beaches' sand came from: rivers ${Math.round(t[0] / T * 100)}%, the shelf ${Math.round(t[3] / T * 100)}%, cliffs ${Math.round(t[1] / T * 100)}%, reefs ${Math.round(t[2] / T * 100)}%`; })() + "\n" + said.map(s => "     " + s).join("\n"));
   return { shore, width, sand: sandC, groups: groups.slice(0, 8), said, SHORE, SAND };
 }
 function noiseAt(x, y, seed) { let h = (Math.imul(Math.floor(x / 3), 73856093) ^ Math.imul(Math.floor(y / 3), 19349663) ^ seed) >>> 0; h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; return (h % 10000) / 10000; }
