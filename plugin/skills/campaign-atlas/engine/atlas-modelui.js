@@ -254,6 +254,11 @@
   const SYN = { hydroponics: "hydro plant", greenhouse: "plant", garden: "plant bush", airlock: "airlock spacesuit", gym: "treadmill", laundry: "washing", reactor: "reactor", engine: "reactor", smithy: "anvil forge", forge: "anvil forge", mill: "millstone sack", chapel: "altar pew", shrine: "altar", court: "bush", green: "bush", docking: "crate", hangar: "crate", fuel: "tank barrel" };
   const SKIPW = new Set(["room", "rooms", "deck", "main", "upper", "lower", "the", "and", "with", "first", "second", "third", "great", "small", "large", "little", "ring", "section"]);
   function eraGenres(kit) {
+    // (a place made from a description that named its age, "a 1920s doctor's office", is furnished in that age, whatever
+    // the campaign's or its kind's kit: the asset library request of 17 Nov 2026, "period-appropriate ... not futuristic
+    // consoles")
+    const own = (A.customs && E().id && A.customs[E().id] && A.customs[E().id].era) || "";
+    if (own) return own === "future" ? ["scifi", "futuristic"] : own === "medieval" || own === "fantasy" ? ["fantasy", "medieval"] : own === "modern" ? ["modern"] : ["historical"];
     if (kit && kit.g && kit.g.length) return kit.g;
     const e = String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase();
     return /future|scifi|space/.test(e) ? ["scifi", "futuristic"] : /medieval|fantasy|ancient/.test(e) ? ["fantasy", "medieval"] : /modern|now|today|20(1|2)\d/.test(e) ? ["modern"] : ["historical", "modern"];
@@ -277,6 +282,10 @@
   const roomAt = (x, y) => { let best = null; for (const r of F().R || []) if (x >= r[1] && x <= r[1] + r[3] && y >= r[2] && y <= r[2] + r[4] && (!best || r[3] * r[4] < best[3] * best[4])) best = r; return best; };
   function furnishRooms(ids, clear) {
     const kit = kitFor(); let n = 0, rooms = 0; const none = [], byKit = [];
+    const own = (A.customs && E().id && A.customs[E().id] && A.customs[E().id].era) || ""; A.__placeEra = own === "historical" ? "1920s" : own || null;
+    try { return furnishIn(ids, clear, kit, n, rooms, none, byKit); } finally { A.__placeEra = null; }
+  }
+  function furnishIn(ids, clear, kit, n, rooms, none, byKit) {
     api.change(() => {
       const f = F(), fin = api.finished(f);
       for (const r of (f.R || []).filter(q => ids.includes(q[0]))) {

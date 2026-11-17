@@ -90,7 +90,7 @@
   function interior(kind, ext, o) {
     // (o.rooms: the rooms asked for, { g, u, c } as a kind has them, over the kind's own (atlas-quickplace.js); o.bare:
     // no furniture preset in any room)
-    const K = Object.assign({}, (KIND[kind] || KIND.other)[2], o && o.rooms || {}), [W, H] = GRID[ext.size] || GRID.medium, nUp = Math.max(0, (+ext.floors || 1) - 1), fut = future();
+    const K = Object.assign({}, (KIND[kind] || KIND.other)[2], o && o.rooms || {}), [W, H] = GRID[ext.size] || GRID.medium, nUp = Math.max(0, (+ext.floors || 1) - 1), fut = o && o.era ? o.era === "future" : future(); // (a place's own era, as its description named it, before the campaign's)
     const kindFor = k => fut && ["boards", "flag", "carpet-r", "carpet-g", "carpet-b", "stone", "brick"].includes(k) ? (k === "flag" || k === "stone" || k === "brick" ? "metal" : "lino") : k;
     let rid = 0, sid = 0;
     const floorOf = (n, rooms, hallName) => {

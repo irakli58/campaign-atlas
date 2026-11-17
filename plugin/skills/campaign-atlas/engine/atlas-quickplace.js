@@ -70,7 +70,7 @@
     const head = " " + t.split(/,| with | where | which | that /)[0] + " ";
     let kind = null; for (const [re, k] of KINDS) if (re.test(head)) { kind = k; break; }
     if (!kind) for (const [re, k] of KINDS) if (re.test(t)) { kind = k; break; }
-    const era = /\b(19[0-4]\d|twenties|thirties|victorian|edwardian|prohibition|arkham)\b/.test(t) ? "historical" : /\b(medieval|fantasy|castle|mage|wizard|blacksmith|smithy)\b/.test(t) ? "medieval" : /\b(sci-?fi|space|planet|colony|station|starship|futur\w*|cyber\w*|android)\b/.test(t) ? "future" : /\b(modern|today|convenience|supermarket|apartment|garage)\b/.test(t) ? "modern" : "";
+    const era = /\b(1[89][0-4]\d'?s?|twenties|thirties|victorian|edwardian|prohibition|arkham|gaslight|jazz age)\b/.test(t) ? "historical" : /\b(medieval|fantasy|castle|mage|wizard|blacksmith|smithy)\b/.test(t) ? "medieval" : /\b(sci-?fi|space|planet|colony|station|starship|futur\w*|cyber\w*|android)\b/.test(t) ? "future" : /\b(modern|today|convenience|supermarket|apartment|garage)\b/.test(t) ? "modern" : "";
     if (kind === "house" && era === "modern" && A.locations && A.locations.KINDS.some(k => k[0] === "home")) kind = "home";
     if (/\b(wealthy|rich|grand|lavish|stately|noble'?s?)\b/.test(t) && kind === "house") kind = "mansion";
     let floors = /\b(single[- ]stor(?:e)?y|one[- ]stor(?:e)?y|bungalow|ground floor only)\b/.test(t) ? 1 : null;
@@ -185,9 +185,9 @@
     const size = o.size || R.size || (K[2].ext && K[2].ext.size) || "medium";
     const ext = Object.assign({ size, floors: P.floors, roof: "pitched" }, K[2].ext || {}, { size, floors: P.floors }, R.cond ? { cond: R.cond } : {}, o.ext || {});
     if (o.building) { if (o.building.w) ext.w = Math.round(o.building.w * 10) / 10; if (o.building.d) ext.d = Math.round(o.building.d * 10) / 10; }
-    const map = L.interior(R.kind, ext, { rooms: P.rooms, cellar: P.cellar, bare: o.furnish === false });
+    const map = L.interior(R.kind, ext, { rooms: P.rooms, cellar: P.cellar, bare: o.furnish === false, era: R.era || "" });
     const name = o.name || nameOf(R);
-    const def = { name, type: R.kind, typeName: K[1], pd: "", kp: "", district: "", notes: "Made from a description: " + R.text, locked: false, ext, map, described: R.text };
+    const def = { name, type: R.kind, typeName: K[1], pd: "", kp: "", district: "", notes: "Made from a description: " + R.text, locked: false, ext, map, described: R.text, era: R.era ? (R.era === "historical" ? (/\b(18\d\d|victorian|gaslight|edwardian)\b/i.test(R.text) ? "victorian" : "1920s") : R.era) : undefined };
     // (secret ways and what is met there, as the place's map keeps them (a cave's own fields): each in its room)
     { const X = R.extra || {}; let n = 0;
       for (const x of X.secrets || []) { const r = roomOf(map, x.room, /study|library|cellar|bed|office|hall|crypt/); map.secrets = map.secrets || {}; map.secrets["S" + (++n)] = { at: r ? r.id : undefined, t: x.t, acc: x.acc ? "Hidden " + x.acc + "." : "", dest: x.dest || "", why: "" }; }
