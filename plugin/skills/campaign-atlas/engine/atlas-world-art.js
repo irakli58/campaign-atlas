@@ -29,7 +29,10 @@
   const r1 = v => Math.round(v * 10) / 10;
   const LOOKS = [["hydro", "Hydrographic relief"], ["relief", "Shaded relief"], ["painted", "Fantasy: a painted map"], ["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["planet", "A planet in its own colours"], ["stars", "Science fiction: a star chart"]];
   // the looks a world may wear: a world with land may wear any but the star chart; a star chart only that
-  const looksFor = WD => WD.G && !WD.stars && WD.look !== "stars" ? LOOKS.filter(l => l[0] !== "stars") : LOOKS.filter(l => l[0] === "stars");
+  // (the survey look is science fiction's only: never offered on a fantasy or historical map, the user, 17 Nov 2026: "dont
+  // use this on fantasy maps"; a campaign of space, the future, a planet or a colony keeps it)
+  const scifi = WD => { const c = A.config || {}, t = [c.genre, c.subgenre, c.setting, c.era, c.system].filter(Boolean).join(" ").toLowerCase(); return WD.look === "holo" && /sci|space|future|cyber|planet|star|colony|orbit|traveller/.test(t) || /sci-?fi|science fiction|space|futur|cyber|planet|starship|colony|orbit|traveller|alien world/.test(t) || !!WD.planet; };
+  const looksFor = WD => WD.G && !WD.stars && WD.look !== "stars" ? LOOKS.filter(l => l[0] !== "stars" && (l[0] !== "holo" || scifi(WD))) : LOOKS.filter(l => l[0] === "stars");
 
   /* ---- painting the land and sea: heights on a grid as fine as the picture, light from the north-west */
   function raster(WD, colour, opts) {
