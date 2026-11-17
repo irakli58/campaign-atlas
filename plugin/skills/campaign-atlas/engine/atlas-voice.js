@@ -192,7 +192,7 @@
   const alertNote = m => { if (A.tableUI && A.tableUI.api) A.tableUI.api.note(m); else console.warn(m); };
   async function pollEngines(redraw) {
     if (!AI() || !window.ATLAS_APP || !window.ATLAS_APP.voices) return;
-    try { N.aiAll = await window.ATLAS_APP.voices.list(); N.aiEngines = N.aiAll.filter(e => e.installed).map(e => e.id); } catch (e) { N.aiAll = []; N.aiEngines = []; }
+    try { N.aiAll = (await window.ATLAS_APP.voices.list()).filter(e => e.kind !== "words"); N.aiEngines = N.aiAll.filter(e => e.installed).map(e => e.id); } catch (e) { N.aiAll = []; N.aiEngines = []; }
     // (with an engine installed and no choice made yet, the campaign's own narrator reads)
     if (!N.set.engine && N.aiEngines.length) { const p = AI().PRESETS.find(x => x.type === AI().typeFor() && N.aiEngines.includes(x.engine)); if (p) { N.set.engine = "ai"; N.set.preset = p.id; } }
     const d = document.getElementById("narDlg"); if (redraw && d && d.open) openSettings();
