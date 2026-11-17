@@ -1094,7 +1094,8 @@
 
   /* ================================================================ science fiction: a survey, and a star chart */
   function holo(WD, uid, o) {
-    const [W, H] = WD.size, G = WD.G, sea = G.sea, alien = o.palette === "alien";
+    o = o || {}; if (!o.only) WD._holoPal = o.palette; // (a zoomed tile, below, keeps the map's palette)
+    const [W, H] = WD.size, G = WD.G, sea = G.sea, alien = (o.only ? WD._holoPal : o.palette) === "alien";
     const C = alien ? { bg: hex("#12061a"), lo: hex("#2a0f2e"), hi: hex("#7a2d5a"), line: "#ff9a5a", glow: "#ff6a3a", sea: hex("#0a0414") } : { bg: hex("#020d16"), lo: hex("#05242f"), hi: hex("#0f5a63"), line: "#5ae2f0", glow: "#2fd0e8", sea: hex("#010811") };
     const N = nat(WD), pr = probe(WD);
     const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
@@ -1103,8 +1104,10 @@
       // (each zone of the survey tinted in its own colour, faintly: the hatching and the outline say the rest)
       if (I.mix) c = mix(c, washed("holo", c, I, x, y, nz, t, false, .55), .7);
       return c.map(v => v * sh);
-    }, { detail: 8 });
-    let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
+    }, { detail: 8, rect: o.rect, k: o.k });
+    // (a zoomed tile only: the land painted finer where the game master looks; the user: "paint the land finer on vast maps")
+    if (o.only) return img;
+    let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/><g class="wm-detail"></g>`;
     // contour lines, a brighter one every fourth
     let n = 0; for (let lv = sea + 14; lv < 252; lv += 14, n++) { const d = ringsAt(G, lv, 1.1).map(r => pathD(r, true)).join(""); if (!d) continue; const major = n % 4 === 3; s += `<path${major ? "" : ` class="lod1"`} d="${d}" fill="none" stroke="${C.line}" stroke-opacity="${major ? .55 : .26}" stroke-width="${major ? .7 : .45}"/>`; }
     const cd = coastD(G, .6);
@@ -1225,9 +1228,9 @@
   }
   // the sharper picture of a window of the map, for the page to lay over the land when zoomed in (the shaded reliefs
   // only); base: how many pixels a unit the whole map's own picture has
-  const DETAIL = { hydro: 3200, relief: 2600, painted: 2000, planet: 2600 };
+  const DETAIL = { hydro: 3200, relief: 2600, painted: 2000, planet: 2600, holo: 2000 };
   const detailBase = (WD, look) => DETAIL[look] ? Math.min(2, DETAIL[look] / Math.max(WD.size[0], WD.size[1])) : 0;
-  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; if (look === "painted") return painted(WD, "d", { rect, k, only: true }); return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6, colours: look === "planet" ? planetColours(WD.T && WD.T.planetPalette) : null }, look === "hydro" ? HYDRO : undefined); }
+  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; if (look === "painted") return painted(WD, "d", { rect, k, only: true }); if (look === "holo") return holo(WD, "d", { rect, k, only: true }); return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6, colours: look === "planet" ? planetColours(WD.T && WD.T.planetPalette) : null }, look === "hydro" ? HYDRO : undefined); }
     // the plates (world-tectonics.js), a layer the referee shows or hides: each border drawn in its kind's colour
   // (collision, subduction, island arc, spreading ridge, rift, transform), each plate's heading and speed, its name
   const BORDER_STYLE = { 1: ["#8e1b1b", 2.6, "", "Collision: continents meet, great ranges rise"], 2: ["#c94a1c", 2.2, "", "Subduction: an ocean plate sinks under a continent"], 3: ["#d98a1c", 2, "", "Island arc: ocean sinks under ocean"], 4: ["#1f6fb2", 1.8, "", "Spreading ridge: plates part, new sea floor"], 5: ["#2e9a8a", 2, "6 4", "Rift: a continent tearing apart"], 6: ["#5a5a5a", 1.4, "3 4", "Transform: plates slide past"] };
