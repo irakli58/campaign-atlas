@@ -99,7 +99,7 @@
     const roomCount = (/\b(\w+) rooms?\b/.exec(t) || [])[1], rc = roomCount ? numOf(roomCount) : null;
     if (kind) heard.push(kindName(kind)); if (floors) heard.push(floors + (floors > 1 ? " floors" : " floor")); if (cellar) heard.push("a cellar"); if (size) heard.push(size); if (cond) heard.push(cond); if (era) heard.push({ historical: "the 1920s or thereabouts", medieval: "medieval", future: "the future", modern: "today" }[era]);
     for (const r of list) heard.push((r.n > 1 ? r.n + " × " : "") + r.name.toLowerCase());
-    const extra = extrasOf(t); for (const p of extra.people) heard.push((p.n > 1 ? p.n + " × " : "") + p.role); for (const x of extra.loot) heard.push("loot: " + x.what); for (const x of extra.traps) heard.push("a trap: " + x.name.toLowerCase()); for (const x of extra.clues) heard.push("a clue: " + x.t.toLowerCase());
+    const extra = extrasOf(t); for (const x of extra.secrets) heard.push(x.t.toLowerCase()); for (const x of extra.enc) heard.push("met there: " + x.t.toLowerCase()); for (const p of extra.people) heard.push((p.n > 1 ? p.n + " × " : "") + p.role); for (const x of extra.loot) heard.push("loot: " + x.what); for (const x of extra.traps) heard.push("a trap: " + x.name.toLowerCase()); for (const x of extra.clues) heard.push("a clue: " + x.t.toLowerCase());
     return { kind: kind || "other", known: !!kind, floors, cellar, size, cond, rooms: list, rc, era, heard, extra, text: String(text || "").trim() };
   }
   /* ---- what is in it, only when the description names it (the user's optional-systems request of 17 Nov 2026: people,
@@ -112,7 +112,7 @@
     ["children|child|kids?", "child", /bed|nursery|play|kitchen/], ["widow|widower|old (?:man|woman)|hermit", "resident", /parl|sitting|living|bed|study/], ["bandits?|smugglers?|thieves|thief|gangsters?|bootleggers?", "smuggler", /cellar|back|store|basement|hidden/]];
   const COUNT = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, some: 2, several: 3, few: 2, pair: 2 };
   function extrasOf(t) {
-    const out = { people: [], loot: [], traps: [], clues: [] };
+    const out = { people: [], loot: [], traps: [], clues: [], secrets: [], enc: [] };
     const roomAfter = i => { const m = /^\s*(?:\w+\s+){0,4}?(?:in|inside|behind|under|beneath|within|upstairs in|down in|on|at|by|guarding|watching|minding|tending) (?:the|a|an|its|his|her|their) ([a-z' -]{3,30}?)(?=[,.;]|\s+(?:and|with|that|which|who|where|guarding|hidden|reveal)\b|\s*$)/.exec(t.slice(i, i + 80)); return m ? m[1].trim() : ""; };
     for (const [re, role, fits] of PEOPLE) {
       const g = new RegExp("\\b(?:(a|an|one|two|three|four|five|some|several|few)\\s+(?:\\w+\\s+){0,2}?)?(" + re + ")\\b", "g"); let m;
@@ -130,13 +130,23 @@
     const cr = /\b((?:a |an |some |the )?(?:hidden |secret |torn |bloodstained |burnt |coded |old )?(clue|letter|diary|journal|ledger|note|photograph|telegram|map|key|footprints|bloodstains?|evidence|will|contract|receipt)s?)\b/g;
     while ((m = cr.exec(t))) { const rest = t.slice(m.index + m[0].length, m.index + m[0].length + 140), rv = /^[^.;]*?\b(?:that|which)?\s*(?:reveals?|shows?|points? to|proves?|names?|hints? at|leads? to)\s+([^.;,]{3,90})/.exec(rest); const named = rv || /clue|evidence/.test(m[2]) || /hidden|secret|torn|bloodstained|coded/.test(m[1]);
       if (!named) continue; out.clues.push({ t: m[1].replace(/^(a|an|some|the)\s+/, "").replace(/^./, c => c.toUpperCase()), room: roomAfter(m.index + m[0].length), reveals: rv ? rv[1].trim() : "" }); if (out.clues.length >= 4) break; }
+    // (a secret way: "a secret passage behind the bookcase leading to the crypt")
+    const sr = /\b(secret|hidden|concealed) (passage|door|tunnel|stair(?:case|s)?|way|room|compartment|panel|exit|trapdoor)\b/g;
+    while ((m = sr.exec(t))) { const rest = t.slice(m.index + m[0].length, m.index + m[0].length + 90), acc = /^\s*(?:\w+\s+){0,2}?(behind|under|beneath|in|inside) (?:the|a|an) ([a-z' -]{3,30}?)(?=[,.;]|\s+(?:and|to|leading|that|which|into)\b|\s*$)/.exec(rest), dest = /\b(?:to|into|leading to|down to|up to) (?:the|a|an) ([a-z' -]{3,30}?)(?=[,.;]|\s+(?:and|that|which)\b|\s*$)/.exec(rest);
+      out.secrets.push({ t: "A " + m[1] + " " + m[2], acc: acc ? acc[1] + " the " + acc[2] : "", room: acc && /in|inside/.test(acc[1]) ? acc[2] : acc ? acc[2] : "", dest: dest ? dest[1] : "" }); if (out.secrets.length >= 3) break; }
+    // (creatures there: "rats in the cellar", "a ghost in the attic"; people are read above)
+    const er = /\b((?:a |an |some |two |three |several |a pack of |a swarm of |a nest of )?(?:giant |huge |starving |feral |restless )?(rats?|wolves|wolf|spiders?|bats?|zombies?|ghouls?|skeletons?|ghosts?|spirits?|goblins?|kobolds?|orcs?|wild dogs?|hounds?|snakes?|serpents?|shoggoth|deep ones?|byakhee|mi-go|ghast|wraiths?|vampires?|werewolf|undead|beasts?|monsters?|creatures?|drones?|robots?|androids?|aliens?))\b/g;
+    while ((m = er.exec(t))) { if (/^'s\b/.test(t.slice(m.index + m[0].length))) continue; const ph = m[1].replace(/^(a|an|some)\s+/, "").trim(); out.enc.push({ t: ph.charAt(0).toUpperCase() + ph.slice(1), room: roomAfter(m.index + m[0].length) }); if (out.enc.length >= 3) break; }
     return out;
   }
   // a room of the made place by a word from the description, else one that fits, else the ground floor's first
   function roomOf(map, word, fits) {
     const all = []; (map.floors || []).forEach((F, fi) => (F.R || []).forEach(r => all.push({ id: r[0], name: String(r[5] || "").toLowerCase(), fi })));
     const w = String(word || "").toLowerCase().replace(/s$/, ""), parts = w.split(/\s+/).filter(x => x.length >= 4 && !/^(room|door|floor|back|front|side|main)$/.test(x));
-    return (w && all.find(r => r.name.includes(w))) || parts.map(x => all.find(r => r.name.includes(x))).find(Boolean) || (fits && all.find(r => fits.test(r.name))) || all[0] || null;
+    // (a piece of furniture names its room: a bookcase the library or study, a desk the study or office)
+    const FURN = [[/book ?(?:case|shel)/, /libr|study/], [/desk|safe/, /study|office/], [/bed\b|wardrobe/, /bed/], [/fireplace|hearth/, /hall|drawing|sitting|parlour|taproom/], [/altar|pew/, /chapel|nave|shrine/], [/stove|oven/, /kitchen/], [/barrel|cask|rack/, /cellar|store/]];
+    const furn = FURN.find(([re]) => re.test(w)), byFits = re => re && String(re.source).split("|").map(x => all.find(r => new RegExp(x).test(r.name))).find(Boolean);
+    return (w && all.find(r => r.name.includes(w))) || parts.map(x => all.find(r => r.name.includes(x))).find(Boolean) || (furn && byFits(furn[1])) || byFits(fits) || all[0] || null;
   }
   // what the description named, put into the place once it is kept: loot in its room's description, people placed in it,
   // traps and clues in the investigation's own books (so they show on its map and in the lists, and are undone alike)
@@ -178,6 +188,10 @@
     const map = L.interior(R.kind, ext, { rooms: P.rooms, cellar: P.cellar, bare: o.furnish === false });
     const name = o.name || nameOf(R);
     const def = { name, type: R.kind, typeName: K[1], pd: "", kp: "", district: "", notes: "Made from a description: " + R.text, locked: false, ext, map, described: R.text };
+    // (secret ways and what is met there, as the place's map keeps them (a cave's own fields): each in its room)
+    { const X = R.extra || {}; let n = 0;
+      for (const x of X.secrets || []) { const r = roomOf(map, x.room, /study|library|cellar|bed|office|hall|crypt/); map.secrets = map.secrets || {}; map.secrets["S" + (++n)] = { at: r ? r.id : undefined, t: x.t, acc: x.acc ? "Hidden " + x.acc + "." : "", dest: x.dest || "", why: "" }; }
+      n = 0; for (const x of X.enc || []) { const r = roomOf(map, x.room, /cellar|basement|attic|crypt|store|back/); map.enc = map.enc || {}; map.enc["E" + (++n)] = { at: r ? r.id : undefined, t: x.t, d: x.t + (r ? " in the " + String(r.name).toLowerCase() : "") + "." }; } }
     // (the valuables the description names: in their room's description, hidden ones for the keeper's eyes)
     for (const x of (R.extra || {}).loot || []) { const r = roomOf(map, x.room, /cellar|vault|safe|office|study|bed|store|basement|strong/); if (!r) continue; map.rooms = map.rooms || {}; const rm = map.rooms[r.id] = map.rooms[r.id] || {}; const line = (x.hidden ? "Hidden here: " : "Here: ") + x.what + "."; if (x.hidden) rm.kp = [rm.kp, line].filter(Boolean).join(" "); else rm.obj = [rm.obj, line].filter(Boolean).join(" "); }
     if (o.building) Object.assign(def, { at: [o.building.x, o.building.y], ang: +o.building.a || 0, city: o.city || undefined });
@@ -201,7 +215,7 @@
     const b = ctxOf.building, fl = b ? Math.max(1, Math.round((b._H || 1.9) / .95)) : null;
     dlg.innerHTML = `<form method="dialog" class="qp-form" onsubmit="return false">
       <h3>${b ? "What is inside this building?" : "A building's inside, from a description"}</h3>
-      <p class="t-small">Describe it in a sentence: what it is, its rooms, its floors, and, if you like, who is there, a trap, a clue or valuables. Atlas lays out the rooms and furnishes them for the campaign's age; only what you name is put in it, each in the room you say or the one that fits.</p>
+      <p class="t-small">Describe it in a sentence: what it is, its rooms, its floors, and, if you like, who is there, a trap, a clue, valuables, a secret way or creatures. Atlas lays out the rooms and furnishes them for the campaign's age; only what you name is put in it, each in the room you say or the one that fits.</p>
       <textarea name="d" rows="3" class="t-in" placeholder="e.g. A wealthy doctor's two-story house with a study, a library, bedrooms and a basement; a butler, a hidden safe of banknotes in the study, a diary in the bedroom that reveals the affair"></textarea>
       <div class="qp-heard kn"></div>
       <div class="t-row"><label><input type="radio" name="mode" value="quick" checked> Quick</label><label><input type="radio" name="mode" value="detail"> Detailed</label><label><input type="checkbox" name="furnish" checked> Furnish the rooms</label></div>
