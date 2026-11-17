@@ -320,7 +320,9 @@
     return `<div class="ux-pkh"><span class="ux-ck">A faction</span><h3><i class="fa-dot" style="--fa:${esc(f.color || "#888")}"></i> ${esc(f.n || id)}</h3>${f.kind ? `<p class="kn">${esc(f.kind)}</p>` : ""}</div><dl class="ux-pkd">
       ${f.leader ? row("Led by", personBtn("cast:" + f.leader) || esc(f.leader)) : ""}${members.length ? row("Members", members.join(", ")) : ""}${f.hq ? row("Seat", placeBtn(f.hq)) : ""}${(f.territory || []).length ? row("Holds", f.territory.map(placeBtn).join(", ")) : ""}
       ${f.has ? row("What they have", HAS.filter(([k]) => f.has[k] != null).map(([k, l]) => `<span class="ux-has"><span class="kn">${l}</span> ${pip(+f.has[k] || 0)}</span>`).join(" ")) : ""}
-      ${rowT("Wants", f.wants)}${rowT("Doing now", f.doing)}${rowT("Toward the party", f.party && f.party !== "neutral" ? f.party : "")}</dl>
+      ${rowT("Wants", f.wants)}${rowT("Doing now", f.doing)}${rowT("Toward the party", f.party && f.party !== "neutral" ? f.party : "")}
+      ${(() => { const L = A.lives.standings ? A.lives.standings(id) : []; return L.length ? row("With the other powers", L.map(x => `${facBtn(x.id)}: ${esc([x.stance, ...x.treaties].filter(Boolean).join(", "))}${x.now ? ` <span class="kn">(${esc(x.now)})</span>` : ""}`).join("<br>")) : ""; })()}
+      ${(() => { const L = A.lives.trade ? A.lives.trade(id) : []; return L.length ? row("Trade", esc(L.join(" · "))) : ""; })()}</dl>
       <div class="t-row ux-pka">${A.tableUI ? `<button type="button" class="t-btn prim" data-peekact="factions">In Factions and people</button>` : ""}</div>`;
   }
   function placeHTML(id) {

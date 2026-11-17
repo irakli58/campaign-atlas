@@ -276,8 +276,9 @@
     const by = {}; for (const [k, d] of Object.entries(docs)) if (k.startsWith("l-") && d && d.owner) { const b = by[d.owner] = by[d.owner] || { res: [], imp: [] }; b.res.push(...goodsOf(d.res)); b.imp.push(...goodsOf(d.imp)); }
     return by;
   }
-  function tradeRow(f) {
-    const by = tradeBook(), me = by[f.id]; if (!me || !(me.res.length || me.imp.length)) return "";
+  function tradeRow(f) { const out = tradeLines(f); return out.length ? `<div class="tw-f"><span class="kn">Trade with other powers</span> ${esc(out.join(" · "))}</div>` : ""; }
+  function tradeLines(f) {
+    const by = tradeBook(), me = f && by[f.id]; if (!me || !(me.res.length || me.imp.length)) return [];
     const all = defs(), out = [];
     for (const [o, them] of Object.entries(by)) {
       if (o === f.id || !all[o]) continue;
@@ -287,7 +288,14 @@
       const block = st === "war" ? "blocked: at war" : tr.includes("embargo") ? "blocked: an embargo" : st === "hostile" ? "hard: hostile" : tr.includes("trade") ? "trade partners" : "";
       out.push(`${(all[o] || {}).n || o}: ${[buy.length && "buys " + buy.join(", "), sell.length && "sells " + sell.join(", ")].filter(Boolean).join("; ")}${block ? " (" + block + ")" : ""}`);
     }
-    return out.length ? `<div class="tw-f"><span class="kn">Trade with other powers</span> ${esc(out.join(" · "))}</div>` : "";
+    return out;
+  }
+  // how a power stands with each other one, for its side card: the stance (not neutral) and the treaties
+  function standings(id) {
+    const all = defs(), sOf = r => Array.isArray(r) ? r[0] : r && typeof r === "object" ? r.stance : r, out = [];
+    for (const o of Object.keys(all)) { if (o === id || all[o].off) continue; const st = sOf(((all[id] || {}).rels || {})[o]) || sOf((all[o].rels || {})[id]), d = diplo(id, o), tr = ((d && d.treaties) || []).map(t => ((TREATY.find(x => x[0] === String(t).split(":")[0]) || [0, t])[1]).toLowerCase());
+      if ((!st || st === "neutral") && !tr.length) continue; out.push({ id: o, n: all[o].n || o, stance: st && st !== "neutral" ? stanceOf(st)[1].toLowerCase() : "", treaties: tr, now: d && d.now || "" }); }
+    return out;
   }
   function diploHTML(f, others) {
     const lines = others.map(o => { const d = diplo(f.id, o); if (!d || !((d.treaties || []).length || d.why || d.now)) return ""; const tr = (d.treaties || []).map(t => { const [k, who] = String(t).split(":"), L = (TREATY.find(x => x[0] === k) || [0, k])[1]; return k === "vassal" || k === "tribute" ? `${L}: ${esc((defs()[who] || {}).n || who)} the ${k === "vassal" ? "vassal" : "tributary"}` : L; }); return `<li><b>${esc(defs()[o].n || o)}</b>${tr.length ? ` <span class="fa-tr">${tr.map(esc).join(" · ")}</span>` : ""}${d.why ? `<br><span class="kn">Why:</span> ${esc(d.why)}` : ""}${d.now ? `<br><span class="kn">Now:</span> ${esc(d.now)}` : ""} <button type="button" class="t-mini" data-fa="diplo" data-id="${esc(f.id)}" data-o="${esc(o)}">Change</button></li>`; }).filter(Boolean);
@@ -433,7 +441,7 @@
     const cs = conflicts().map(([, c]) => `${c.n || "A conflict"} (${c.status || "ongoing"}): ${[].concat(c.a || []).map(x => (all[x] || {}).n || x).join(", ")} against ${[].concat(c.b || []).map(x => (all[x] || {}).n || x).join(", ")}${c.cause ? "; cause: " + c.cause : ""}${c.aims ? "; aims: " + c.aims : ""}${c.land ? "; over: " + c.land : ""}`);
     return (out.length ? "THE POWERS (id: name; what they want):\n" + out.join("\n") : "") + (pairs.length ? "\n\nHOW THE POWERS STAND WITH EACH OTHER (keep to it: no alliance broken, war declared or treaty ignored without a cause the campaign gives):\n" + pairs.join("\n") : "") + (cs.length ? "\n\nCONFLICTS:\n" + cs.join("\n") : "");
   }
-  A.lives = { whereNow, factionsOf, about, fac, ids, all: defs, diplomacy: diplo, TREATY, conflicts, relationsText };
+  A.lives = { whereNow, factionsOf, about, fac, ids, all: defs, diplomacy: diplo, TREATY, conflicts, relationsText, standings, trade: id => tradeLines(fac(id) || defs()[id]) };
   if (St && St.extraEntities) St.extraEntities.push(() => ids().map(id => { const d = defs()[id]; return { ref: "faction:" + id, kind: "item", ik: "faction", name: d.n || id, sub: "A faction" + (d.kind ? ": " + d.kind : ""), text: [d.n, d.kind, d.wants, d.doing, [].concat(d.plan || []).join(" "), d.knows, d.inner, d.past].filter(Boolean).join(" "), facts: [d.wants && "Wants: " + d.wants, d.doing && "Doing: " + d.doing].filter(Boolean) }; }));
   if (A.consistency) A.consistency.add("factions", () => {
     const out = [], cast = A.castData || {}, pl = p => !!A.meta[p], push = (sev, kind, id, title, why, suggest) => out.push({ area: "people", sev, kind, id, title, why, evidence: [{ text: "table.js: " + id.split(/[>@~]/)[0] }], refs: [], suggest });

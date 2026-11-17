@@ -1388,7 +1388,7 @@
         <div class="eyebrow"><span>${esc((KINDS[L.kind] || [0, L.kind])[1])}</span>${L.region ? `<span>${esc(L.region)}</span>` : ""}${realm && (keeper || !realm.hidden) && realm.name !== L.region ? `<button type="button" class="wm-rlink" data-wfeat="${esc(realm.id)}">${esc(realm.name || "A realm")}</button>` : ""}${here ? `<span class="wm-here">The party is here</span>` : ""}</div>
         <h3>${esc(L.name)}</h3>
         ${keeper && A.ux && (L.added || L.edited) ? `<p>${A.ux.hand(L.added ? "Your own place: never redrawn" : "Changed by you: kept when the map is made again")}</p>` : ""}
-        ${L.owner && keeper ? `<p class="kn">Held by ${esc(facName(L.owner))}</p>` : ""}${L.res || L.imp ? `<p class="kn">${L.res ? "Produces " + esc(L.res) : ""}${L.res && L.imp ? "; " : ""}${L.imp ? "brings in " + esc(L.imp) : ""}</p>` : ""}
+        ${L.owner && keeper ? `<p class="kn">Held by ${A.nav && A.lives && A.lives.fac && A.lives.fac(L.owner) ? `<button type="button" class="t-link" data-uxpeek="faction:${esc(L.owner)}">${esc(facName(L.owner))}</button>` : esc(facName(L.owner))}</p>` : ""}${L.res || L.imp ? `<p class="kn">${L.res ? "Produces " + esc(L.res) : ""}${L.res && L.imp ? "; " : ""}${L.imp ? "brings in " + esc(L.imp) : ""}</p>` : ""}
         ${keeper ? `<div class="wm-stseg" role="group" aria-label="What the party knows">${STATES.map(([v, l]) => `<button type="button" data-wstate="${v}" aria-pressed="${L.state === v}" title="${esc(l)}"><span class="sd st-w-${v}"></span>${esc(l.split(" ")[0])}</button>`).join("")}</div>` : L.state !== "known" ? `<p class="kn">${esc(stName)}</p>` : ""}
         ${acts.length ? `<div class="meta">${acts.map(a => `<span class="tag">Act ${a}</span>`).join("")}</div>` : ""}
         ${L.desc ? `<p class="wm-desc">${esc(L.desc)}</p>` : ""}
@@ -1458,7 +1458,7 @@
       return `<button type="button" class="wm-x" data-w="close" aria-label="Close">×</button>
         <div class="eyebrow"><span>${esc(k === "realm" ? (REALM_KINDS.find(x => x[0] === f.kind) || [0, "Realm"])[1] : k === "river" ? "River" : "A name on the map")}</span>${f.hidden ? `<span>Hidden from the players</span>` : ""}</div>
         <h3>${esc(title)}</h3>
-        ${k === "realm" && f.owner ? `<p><span class="kn">Held by</span> ${esc(facName(f.owner))}</p>` : ""}
+        ${k === "realm" && f.owner ? `<p><span class="kn">Held by</span> ${A.nav && A.lives && A.lives.fac && A.lives.fac(f.owner) ? `<button type="button" class="t-link" data-uxpeek="faction:${esc(f.owner)}" title="Its card: how it stands with the others, its treaties, its towns, what it trades">${esc(facName(f.owner))}</button>` : esc(facName(f.owner))}</p>` : ""}
         ${f.desc ? `<p class="wm-desc">${esc(f.desc)}</p>` : ""}
         ${keeper && f.gm ? `<div class="sec secret"><p>${esc(f.gm)}</p></div>` : ""}
         ${inside.length ? `<h4>Places in it</h4><ul class="wm-rl2">${inside.slice(0, 40).map(L => `<li><button type="button" class="wm-rt" data-wloc="${esc(L.id)}"><span class="wm-rn">${esc(L.name)}</span><span class="wm-rf">${esc((KINDS[L.kind] || [0, L.kind])[1])}</span></button></li>`).join("")}</ul>` : ""}
