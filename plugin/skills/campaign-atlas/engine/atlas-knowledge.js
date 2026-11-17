@@ -147,18 +147,24 @@
         <form data-knform="ctx">${SECTIONS.map(([k, l, ph, rows]) => `<details class="loc-more"${c[k] || UI.open === k ? " open" : ""}><summary>${esc(l)}${c[k] ? " ✓" : ""}</summary><textarea class="t-in" name="${k}" rows="${rows}" maxlength="60000" placeholder="${esc(ph)}">${esc(c[k] || "")}</textarea></details>`).join("")}
           <details class="loc-more"${c.doc ? " open" : ""}><summary>A whole document${c.docName ? ": " + esc(c.docName) : ""}</summary><textarea class="t-in" name="doc" rows="8" maxlength="3000000" placeholder="Paste your campaign document here, or read it from a file">${esc(c.doc || "")}</textarea>
             <label class="t-btn">Read it from a file (text, Markdown, Word, PDF)<input type="file" accept=".txt,.md,.markdown,.docx,.pdf,text/plain" data-know="file" hidden></label> <span class="kn-fmsg t-small" aria-live="polite"></span></details>
-          <div class="t-row"><button class="t-btn prim">Save</button>${ai ? `<button type="button" class="t-btn" data-know="read"${UI.busy ? " disabled" : ""}>${String(UI.busy).startsWith("read") ? (UI.busy === "read" ? "Reading…" : "Reading part " + UI.busy.slice(5) + "…") : "Read it into entries"}</button><span class="t-small">Claude proposes the people, places, secrets and plot points it holds; nothing is made but what you tick.</span>` : ""}</div></form>
-        ${UI.props ? propsHTML() : ""}</section>
+          <div class="t-row"><button class="t-btn prim">Save</button>${ai ? `<button type="button" class="t-btn" data-know="read"${UI.busy ? " disabled" : ""}>${String(UI.busy).startsWith("read") ? (UI.busy === "read" ? "Reading…" : "Reading part " + UI.busy.slice(5) + "…") : "Read it into entries"}</button><button type="button" class="t-btn" data-know="whole"${UI.busy ? " disabled" : ""} title="Read the story, make all it finds (the places furnished from their descriptions, the clues where they are found, the handouts as drafts), join each clue to what it reveals, then check the clue trail">Make the campaign from it</button><span class="t-small">Claude proposes the people, places, secrets and plot points it holds; nothing is made but what you tick.</span>` : ""}</div></form>
+        ${UI.props ? propsHTML() : ""}${UI.trail ? trailHTML() : ""}</section>
       <section class="t-card"><h4>Is each part of Atlas ready?</h4><p class="t-small">For each part switched on for this campaign: what it needs to work, and what would help it. Each gap opens where it is filled in.</p><div class="kn-rs">${rd}</div></section>
       <section class="t-card"><h4>Ask Atlas what it knows</h4>
         ${ce.length ? `<details class="loc-more" open><summary>What can be seen for certain</summary>${ce.map(([h, L]) => `<p class="kn-l"><span>${esc(h)}:</span> ${L.slice(0, 24).map(esc).join(" · ")}${L.length > 24 ? " …" : ""}</p>`).join("")}</details>` : ""}
         ${ai ? `<form data-knform="ask" class="ic-form ic-inl"><input class="t-in" name="q" maxlength="400" placeholder="What do you know about my campaign? What does the copilot need for the next session?"><button class="t-btn"${UI.busy ? " disabled" : ""}>${UI.busy === "ask" ? "Thinking…" : "Ask"}</button></form>${UI.ans ? `<div class="ic-say kn-ans">${esc(UI.ans).replace(/\n/g, "<br>")}</div>` : ""}` : `<p class="kn">Claude's help is switched off for this campaign.</p>`}</section>
     </div>`;
   }
+  // the clue trail, checked after a campaign is made from its story: each place the story made is reached by something
+  // (a clue leading to it, a person pointing to it), each clue joined to the story, and the investigation's own warnings
+  function trailHTML() {
+    const T = UI.trail, li = s => `<li>${esc(s)}</li>`;
+    return `<div class="kn-props kn-trail"><h5>The clue trail</h5>${T.ok.length ? `<p class="kn">${T.ok.map(esc).join(" · ")}</p>` : ""}${T.bad.length ? `<p class="t-small">To look at (the investigation's own checks, on what was just made):</p><ul>${T.bad.map(li).join("")}</ul>` : `<p class="kn">Nothing found wanting: each place made is reached, each clue joined to the story.</p>`}<div class="t-row"><button type="button" class="t-mini" data-know="go" data-go="clue">Open the clues</button><button type="button" class="t-mini" data-know="untrail">Close</button></div></div>`;
+  }
   // Claude's proposals from the story, each to tick
   function propsHTML() {
     const P = UI.props, row = (k, i, title, sub) => `<li><label class="loc-ck"><input type="checkbox" data-kp="${k}:${i}" checked> <b>${esc(title)}</b></label>${sub ? `<p class="kn">${esc(sub)}</p>` : ""}</li>`;
-    const blocks = [["people", "People", x => [x.n, [x.role, x.secret && "Secret: " + x.secret, x.want && "Wants: " + x.want].filter(Boolean).join(" · ")]], ["places", "Places", x => [x.name, [x.kind, x.kp].filter(Boolean).join(" · ")]], ["knows", "What people know or hide", x => [`${x.who}: ${x.text}`, [x.type === "false" ? "believes it wrongly" : x.type === "suspicion" ? "suspects it" : "knows it", x.share === "hides" ? "hides it" : x.share === "refuses" ? "will not tell" : ""].filter(Boolean).join(", ")]], ["items", "Secrets, mysteries, plot points, factions", x => [x.n, [x.kind, x.d].filter(Boolean).join(" · ")]]];
+    const blocks = [["people", "People", x => [x.n, [x.role, x.secret && "Secret: " + x.secret, x.want && "Wants: " + x.want].filter(Boolean).join(" · ")]], ["places", "Places", x => [x.name, [x.kind, x.kp].filter(Boolean).join(" · ")]], ["knows", "What people know or hide", x => [`${x.who}: ${x.text}`, [x.type === "false" ? "believes it wrongly" : x.type === "suspicion" ? "suspects it" : "knows it", x.share === "hides" ? "hides it" : x.share === "refuses" ? "will not tell" : ""].filter(Boolean).join(", ")]], ["items", "Secrets, mysteries, plot points, factions", x => [x.n, [x.kind, x.d].filter(Boolean).join(" · ")]], ["clues", "Clues", x => [x.t, [x.where && "found at " + x.where, x.reveals && "reveals: " + x.reveals].filter(Boolean).join(" · ")]], ["handouts", "Handouts (kept as drafts until you give them)", x => [x.title || x.kind, [x.kind, String(x.text || "").slice(0, 90)].filter(Boolean).join(" · ")]]];
     return `<div class="kn-props"><h5>What ${UI.reader || "Claude"} found in it</h5><p class="t-small">Its reading of what you wrote, not established yet. Untick what is wrong; what you keep is made as you would make it by hand, and can be changed after.</p>${blocks.map(([k, h, f]) => (P[k] || []).length ? `<h6>${esc(h)}</h6><ul>${P[k].map((x, i) => { const [a, b] = f(x); return row(k, i, a, b); }).join("")}</ul>` : "").join("")}${P.note ? `<p class="kn">${esc(P.note)}</p>` : ""}<div class="t-row"><button type="button" class="t-btn prim" data-know="make">Make the ticked ones</button><button type="button" class="t-mini" data-know="drop">Leave them all</button></div></div>`;
   }
   async function readIn() {
@@ -166,7 +172,7 @@
     if (!text.trim()) { api.note("Write something of the campaign's story first."); return; }
     const have = Object.values(A.castData || {}).map(p => p.n).filter(Boolean).slice(0, 80).join(", "), placesHave = (A.order || []).map(id => (A.meta[id] || {}).name).filter(Boolean).slice(0, 80).join(", ");
     const prompt = `You help a game master organise the campaign they wrote. Read it and list what it ESTABLISHES, in its own words: people, places, what particular people know, believe wrongly or hide, and the secrets, mysteries, plot points and factions it describes. Invent nothing; leave out anything it does not say. People already made: ${have || "none"}. Places already made: ${placesHave || "none"}; do not list those again.
-Answer with JSON only: {"people":[{"n":"name","role":"","look":"","want":"","secret":"","place":"a place's name if it says where they are"}],"places":[{"name":"","kind":"house|shop|tavern|hospital|church|office|warehouse|other","pd":"what the players see","kp":"what it really is, its secrets"}],"knows":[{"who":"a person's name","text":"what they know, in a few words","type":"fact|false|suspicion","share":"shares|pressed|hides|refuses"}],"items":[{"kind":"mystery|plot|secret|faction|event|quest","n":"","d":""}],"note":"anything unclear, in a sentence"}
+Answer with JSON only: {"people":[{"n":"name","role":"","look":"","want":"","secret":"","place":"a place's name if it says where they are"}],"places":[{"name":"","kind":"house|shop|tavern|hospital|church|office|warehouse|other","pd":"what the players see","kp":"what it really is, its secrets"}],"knows":[{"who":"a person's name","text":"what they know, in a few words","type":"fact|false|suspicion","share":"shares|pressed|hides|refuses"}],"items":[{"kind":"mystery|plot|secret|faction|event|quest","n":"","d":""}],"clues":[{"t":"a short title","where":"the name of the place it is found in","what":"what the players find, as they see it","reveals":"what it shows or points to"}],"handouts":[{"kind":"letter|newspaper|diary|note|telegram|report|book","title":"","text":"the words as the players would read them, only if the story gives them"}],"note":"anything unclear, in a sentence"}
 
 THE CAMPAIGN:
 ${text}`;
@@ -176,22 +182,30 @@ ${text}`;
     // reads it whole, as before)
     let where = { local: false }; try { where = window.ATLAS_APP && window.ATLAS_APP.aiWhere ? await window.ATLAS_APP.aiWhere("reading") : where; } catch (e) {}
     const parts = []; if (where.local && text.length > 7000) { let cur = ""; for (const para of text.split(/\n\s*\n/)) { if (cur && cur.length + para.length > 6000) { parts.push(cur); cur = ""; } cur += (cur ? "\n\n" : "") + para.slice(0, 9000); } if (cur) parts.push(cur); } else parts.push(null);
-    const head = prompt.slice(0, prompt.lastIndexOf("THE CAMPAIGN:")), merged = { people: [], places: [], knows: [], items: [] }, key = x => String(x || "").toLowerCase().replace(/^(the|a|an)\s+/, "").trim();
+    const head = prompt.slice(0, prompt.lastIndexOf("THE CAMPAIGN:")), merged = { people: [], places: [], knows: [], items: [], clues: [], handouts: [] }, key = x => String(x || "").toLowerCase().replace(/^(the|a|an)\s+/, "").trim();
     const fold = (k, rec, nameK) => { const L = merged[k], n = key(rec[nameK]); const old = n ? L.find(x => key(x[nameK]) === n) : null; if (old) { for (const [f, val] of Object.entries(rec)) if (val && !old[f]) old[f] = val; } else L.push(rec); };
     let v = null, okParts = 0;
     for (let i = 0; i < parts.length; i++) {
       if (parts.length > 1) { UI.busy = "read " + (i + 1) + "/" + parts.length; api.render(); }
       const q = parts[i] == null ? prompt : `${head}(This is part ${i + 1} of ${parts.length} of the campaign; list what this part establishes.)\n\nTHE CAMPAIGN, PART ${i + 1}:\n${parts[i]}`;
       try { const raw = await api.askRaw(q, null, null, { kind: "reading", what: "your campaign's story" + (parts.length > 1 ? `, part ${i + 1} of ${parts.length}` : ""), uses: ["what you wrote"] }); const m = String(raw || "").match(/\{[\s\S]*\}/); const one = m ? JSON.parse(m[0]) : null;
-        if (one && typeof one === "object") { okParts++; for (const r of one.people || []) fold("people", r, "n"); for (const r of one.places || []) fold("places", r, "name"); for (const r of one.knows || []) merged.knows.push(r); for (const r of one.items || []) fold("items", r, "n"); } } catch (e) { /* a part not read: the others still count */ }
+        if (one && typeof one === "object") { okParts++; for (const r of one.people || []) fold("people", r, "n"); for (const r of one.places || []) fold("places", r, "name"); for (const r of one.knows || []) merged.knows.push(r); for (const r of one.items || []) fold("items", r, "n"); for (const r of one.clues || []) fold("clues", r, "t"); for (const r of one.handouts || []) fold("handouts", r, "title"); } } catch (e) { /* a part not read: the others still count */ }
     }
     UI.reader = where.local ? "your local model" + (where.model ? " (" + where.model + ")" : "") : "Claude";
     v = okParts ? merged : null; if (okParts && okParts < parts.length) api.note(`${parts.length - okParts} of ${parts.length} parts could not be read; the rest are shown.`);
     UI.busy = ""; UI.props = v && typeof v === "object" ? v : null; if (!v) api.note("Claude could not read it just now. Try again, or make the entries yourself."); api.render();
   }
+  // one button: read the story (in parts for a local model), make all it finds, join the clues, check the trail
+  async function makeWhole(body) {
+    UI.trail = null; await readIn(); if (!UI.props) return;
+    // (the page draws the proposals afresh: wait a frame, then take the one on show)
+    await new Promise(r => setTimeout(r, 60));
+    const el = [...document.querySelectorAll(".know")].find(k => k.querySelector("[data-kp]") && k.offsetParent !== null) || [...document.querySelectorAll(".know")].find(k => k.querySelector("[data-kp]")) || body; if (!el) return;
+    await makeTicked(el);
+  }
   async function makeTicked(body) {
     const P = UI.props || {}, on = k => [...body.querySelectorAll(`[data-kp^="${k}:"]`)].filter(x => x.checked).map(x => P[k][+x.dataset.kp.split(":")[1]]).filter(Boolean);
-    const byName = {}, ppl = on("people"), pls = on("places"), kns = on("knows"), its = on("items"); let made = 0;
+    const byName = {}, ppl = on("people"), pls = on("places"), kns = on("knows"), its = on("items"), cls = on("clues"), hos = on("handouts"); let made = 0; const madeClues = [], madeItems = [];
     for (const p of pls) { if (!A.locations || !A.locations.save) break; const id = "c-" + String(p.name || "place").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 24) + "-" + Math.random().toString(36).slice(2, 6); // (its inside laid out and furnished from what the story says of it, by the description reader (atlas-quickplace.js),
       // no AI needed: a hospital gets its wards, a tavern its taproom; else a plain building, as before)
       let def = { name: p.name || "A place", type: "other", typeName: p.kind || "A place", pd: p.pd || "", kp: p.kp || "", ext: {}, from: "the campaign's story" };
@@ -200,7 +214,29 @@ ${text}`;
     for (const p of ppl) { if (!A.people) break; const at = p.place ? (A.order || []).find(id => ((A.meta[id] || {}).name || "").toLowerCase() === String(p.place).toLowerCase()) : null; const rec = { n: p.n || "Someone" }; for (const k of ["role", "look", "want", "secret"]) if (p[k]) rec[k] = p[k]; if (at) rec.at = { pl: at }; const id = await A.people.save("h-" + String(rec.n).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 20) + "-" + Math.random().toString(36).slice(2, 5), rec); byName[rec.n.toLowerCase()] = id; made++; }
     const find = nm => { nm = String(nm || "").toLowerCase(); if (byName[nm]) return byName[nm]; const e = Object.entries(A.castData || {}).find(([, c]) => (c.n || "").toLowerCase() === nm || (c.n || "").toLowerCase().includes(nm)); return e ? e[0] : null; };
     for (const k of kns) { const who = find(k.who); if (!who || !St) continue; St.know({ who: "cast:" + who, text: k.text, type: ["fact", "false", "suspicion"].includes(k.type) ? k.type : "fact", share: ["shares", "pressed", "hides", "refuses"].includes(k.share) ? k.share : "pressed", how: "assigned" }, { note: "from the campaign's story" }); made++; }
-    for (const it of its) { if (!St) break; St.put("items", St.uid("I"), { kind: ["mystery", "plot", "secret", "faction", "event", "quest"].includes(it.kind) ? it.kind : "other", n: it.n || "Untitled", d: it.d || "", src: "dm" }, { note: "from the campaign's story" }); made++; }
+    for (const it of its) { if (!St) break; St.put("items", (() => { const iid = St.uid("I"); madeItems.push({ ref: "item:" + iid, it }); return iid; })(), { kind: ["mystery", "plot", "secret", "faction", "event", "quest"].includes(it.kind) ? it.kind : "other", n: it.n || "Untitled", d: it.d || "", src: "dm" }, { note: "from the campaign's story" }); made++; }
+    // (a clue in the place the story names, made as the clue editor makes one; a place not found: the first place of
+    // the campaign with a map, its title saying where it was meant to be)
+    const placeId = nm => { nm = String(nm || "").toLowerCase().replace(/^(the|a|an)\s+/, ""); return (A.order || []).find(id => { const n = String((A.meta[id] || {}).name || "").toLowerCase().replace(/^(the|a|an)\s+/, ""); return n && (n === nm || n.includes(nm) || nm.includes(n)); }) || null; };
+    for (const c of cls) { if (!St || !St.putClue) break; let pl = placeId(c.where); if (pl && !A.maps[pl]) pl = null; pl = pl || (A.order || []).find(id => A.maps[id] && !A.maps[id].alias); if (!pl) continue; const id = St.nextClueId(pl); St.putClue(pl, id, { t: String(c.t || "A clue").slice(0, 80), k: "physical", pd: c.what || "", rev: c.reveals || "", kp: c.where && !placeId(c.where) ? "Meant to be at " + c.where : "" }, { note: "from the campaign's story" }); made++;  madeClues.push({ ref: "clue:" + pl + "/" + id, c }); }
+    for (const h of hos) { if (!A.handoutWriter || !A.handoutWriter.make) break; const kind = ["letter", "newspaper", "diary", "note", "telegram", "report", "book"].includes(h.kind) ? h.kind : "page"; await A.handoutWriter.make(Object.assign({ kind, title: h.title || "A handout", text: h.text || "" }, kind === "newspaper" ? { headline: h.title || "" } : {})); made++; }
+    // (each clue joined to what it reveals, where its words name it: a place it leads to, a person it points to, a
+    // mystery it helps solve; one mystery made: every clue helps solve it. Then the trail checked)
+    if (St && St.link && madeClues.length) {
+      const said = n => { n = String(n || "").toLowerCase().replace(/^(the|a|an)\s+/, "").trim(); return n.length >= 4 ? n : null; }, hit = (t, n) => { n = said(n); return n && String(t || "").toLowerCase().includes(n); };
+      const myst = madeItems.filter(x => x.it.kind === "mystery");
+      for (const { ref, c } of madeClues) { const t = [c.reveals, c.what].join(" ");
+        for (const id of A.order || []) if (hit(c.reveals, (A.meta[id] || {}).name) && !ref.startsWith("clue:" + id + "/")) St.link(ref, "place:" + id, "leads to", {}, { note: "from the campaign's story" });
+        for (const [cid, p] of Object.entries(A.castData || {})) if (hit(t, p.n)) St.link(ref, "cast:" + cid, "points to", {}, { note: "from the campaign's story" });
+        for (const m of myst) if (myst.length === 1 || hit(t, m.it.n)) St.link(ref, m.ref, "helps solve", {}, { note: "from the campaign's story" }); }
+    }
+    if (St && St.warnings && (madeClues.length || pls.length)) {
+      const mine = new Set([...madeClues.map(x => x.ref), ...madeItems.map(x => x.ref)]); for (const id of A.order || []) if (pls.some(p => String((A.meta[id] || {}).name || "") === String(p.name || ""))) mine.add("place:" + id);
+      const bad = St.warnings().filter(w => mine.has(w.ref) || (w.refs || []).some(r => mine.has(r))).map(w => w.text);
+      // a place made from the story that nothing leads to (unless it is where the campaign starts)
+      for (const r of mine) if (r.startsWith("place:")) { const id = r.slice(6), m = A.meta[id] || {}; const reached = St.linksOf(r).some(l => l.dir === -1 && (l.rel === "leads to" || l.rel === "points to")); if (!reached && !m.start) bad.push(`Nothing made from the story leads to ${m.name || id}: no clue points there yet. The players reach it only if they are sent there.`); }
+      UI.trail = { ok: [madeClues.length && `${madeClues.length} clue${madeClues.length === 1 ? "" : "s"} placed`, madeItems.length && `${madeItems.length} secret${madeItems.length === 1 ? " or mystery" : "s or mysteries"}`, hos.length && `${hos.length} handout${hos.length === 1 ? "" : "s"} kept as drafts`].filter(Boolean), bad: [...new Set(bad)] };
+    }
     UI.props = null; api.note(made ? `${made} made from the campaign's story. Change any of them where they are kept.` : "Nothing was ticked."); api.render();
   }
   function go(where) {
@@ -229,7 +265,7 @@ ${text}`;
     init(store) {
       S = store;
       document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-know]"); if (!b || b.dataset.know === "file") return; const a = b.dataset.know;
-        if (a === "go") { e.preventDefault(); go(b.dataset.go); } else if (a === "read") readIn(); else if (a === "make") makeTicked(b.closest(".know")); else if (a === "drop") { UI.props = null; api.render(); } });
+        if (a === "go") { e.preventDefault(); go(b.dataset.go); } else if (a === "read") readIn(); else if (a === "whole") makeWhole(b.closest(".know")); else if (a === "make") makeTicked(b.closest(".know")); else if (a === "drop") { UI.props = null; api.render(); } else if (a === "untrail") { UI.trail = null; api.render(); } });
       if (S.watch) S.watch("context", () => { document.dispatchEvent(new CustomEvent("atlas-context")); if (api.tab() === "know") api.render(); });
     }
   });

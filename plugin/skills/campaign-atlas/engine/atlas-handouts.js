@@ -155,6 +155,8 @@
     msg.textContent = "Written in the box: change anything. Nothing is kept until you save.";
   }
   H.list = () => Object.entries(A.handbook).filter(([, h]) => h && !h.off).map(([id, h]) => ({ id, title: label(id), kind: h.kind, state: h.state || "ready", place: h.place || "" }));
+  // a handout made from elsewhere (What Atlas knows reading the campaign's story): kept as a draft, the Keeper's until given
+  H.make = rec => save(newId(), Object.assign({ state: "draft" }, rec || {}));
   H.fromLibrary = it => save(newId(), Object.assign(JSON.parse(JSON.stringify(it.data || {})), { state: "draft" }));
   H.init = store => {
     S = store; const all = S.get("handbook") || {};
