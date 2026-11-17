@@ -76,9 +76,11 @@
     // surgery)
     const ROOMW = { speakeasy: "bar club jazz tavern", doctor: "surgery clinic medical physician hospital ward operating", physician: "surgery clinic medical hospital", nurse: "hospital ward", alchemist: "alchemy laboratory potion", detective: "office desk filing", jazz: "club bar", saloon: "bar tavern", inn: "tavern", pub: "tavern", smithy: "forge blacksmith", blacksmith: "forge smithy", bridge: "command console", engineering: "reactor engine", cryo: "cryogenic sleep", morgue: "autopsy", chapel: "church altar", temple: "altar shrine", lair: "cult ritual", study: "library office desk" };
     // (each word counts the more the fewer kits it matches: "doctor" says more than "office")
-    const kitIds = new Map(); if (rest.length) { const txt = KITS.map(k => (k.n + " " + (k.d || "") + " " + k.id).toLowerCase()), hitW = w => { const xs = [w].concat((ROOMW[w] || "").split(" ").filter(Boolean)); return txt.map(t => xs.some(x => t.includes(x))); };
+    const kitIds = new Map(), kitPos = new Map(); if (rest.length) { const txt = KITS.map(k => (k.n + " " + (k.d || "") + " " + k.id).toLowerCase()), hitW = w => { const xs = [w].concat((ROOMW[w] || "").split(" ").filter(Boolean)).map(x => new RegExp("\\b" + x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:s|es)?\\b")); return txt.map(t => xs.some(re => re.test(t))); }; // (whole words: a "warder" is not a "ward")
       const GEN = new Set(["office", "room", "rooms", "house", "hall", "shop", "place", "building", "area"]), ws = rest.filter(w => w.length >= 4), per = ws.map(hitW), sc = KITS.map((k, i) => per.reduce((s, h) => { const df = h.filter(Boolean).length; return s + (h[i] && df ? (GEN.has(ws[per.indexOf(h)]) ? .5 : 1) / df : 0); }, 0)), decay = /abandon|derelict|ruin|haunt|burn/.test(String(q).toLowerCase()); KITS.forEach((k, i) => { if (!decay && /abandon|derelict|ruin|haunt/.test(txt[i])) sc[i] *= .45; }); const best = Math.max(0, ...sc);
-      if (best > 0) KITS.forEach((k, i) => { if (sc[i] >= best * .5) for (const id of k.ids || []) kitIds.set(id, Math.max(kitIds.get(id) || 0, sc[i] / best)); }); }
+      // (and where each piece stands: its kit's rank among those found, then its place in the kit, which lists the
+      // pieces that make the room first: a surgery's examination couch before its waste bin)
+      if (best > 0) KITS.map((k, i) => [k, sc[i]]).filter(([, v]) => v >= best * .5).sort((a, b) => b[1] - a[1]).forEach(([k, v], rank) => (k.ids || []).forEach((id, j) => { if (!kitIds.has(id) || kitIds.get(id) < v / best) kitIds.set(id, v / best); if (!kitPos.has(id)) kitPos.set(id, rank * 1000 + j); })); }
     for (const e of ENTRIES.concat(M.custom || [])) {
       if (e.hidden) continue;
       // 3D models or 2D drawings (atlas-sprites.js): the library shows one or the other
@@ -102,7 +104,7 @@
       out.push({ e, score, cond: want.cond || f.cond || null });
     }
     const sort = f.sort || "best";
-    out.sort((a, b) => sort === "name" ? a.e.n.localeCompare(b.e.n) : sort === "size" ? M.dims(b.e).reduce((x, y) => x * y, 1) - M.dims(a.e).reduce((x, y) => x * y, 1) : (b.score - a.score) || a.e.n.localeCompare(b.e.n));
+    out.sort((a, b) => sort === "name" ? a.e.n.localeCompare(b.e.n) : sort === "size" ? M.dims(b.e).reduce((x, y) => x * y, 1) - M.dims(a.e).reduce((x, y) => x * y, 1) : (b.score - a.score) || ((kitPos.has(a.e.id) ? kitPos.get(a.e.id) : 1e9) - (kitPos.has(b.e.id) ? kitPos.get(b.e.id) : 1e9)) || a.e.n.localeCompare(b.e.n));
     return out;
   };
 
