@@ -356,7 +356,7 @@
   }
 
   /* ---- the council's suggestions (Claude, from the campaign's own words; kept only when the game master adds them) */
-  function councilPrompt(q) {
+  async function councilPrompt(q) {
     const c = A.config || {}, d = at(now()), pls = A.order.filter(id => A.meta[id] && !String(id).startsWith("fly-"));
     const clues = []; for (const pl of pls) if (A.maps[pl]) for (const [cid, k] of Object.entries(A.get(pl, 99).clues || {})) clues.push(`${pl}/${cid}: ${k.t || cid}`);
     const hits = await (api.lookupBest || api.lookup)([q, "plan intends will next week tonight", ...(A.clocksData || []).map(x => x.name)].filter(Boolean).join(" "), 10);
@@ -407,7 +407,7 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
   }
   async function askCouncil(q) {
     UI.busy = true; UI.err = ""; UI.focus = q; paint();
-    let r = null; try { r = await api.askRaw(councilPrompt(q), () => {}, null, { kind: "suggesting", what: "what the world does next" + (q ? ": " + (q.length > 40 ? q.slice(0, 38) + "…" : q) : ""), uses: ["the villains' plans", "people's motives", "what the party did"] }); } catch (e) { r = null; }
+    let r = null; try { r = await api.askRaw(await councilPrompt(q), () => {}, null, { kind: "suggesting", what: "what the world does next" + (q ? ": " + (q.length > 40 ? q.slice(0, 38) + "…" : q) : ""), uses: ["the villains' plans", "people's motives", "what the party did"] }); } catch (e) { r = null; }
     UI.busy = false;
     if (!r) { UI.err = "Claude is not reachable from this page. Plan an event yourself: it works the same."; paint(); return; }
     let got = []; try { const t = String(r), a = t.indexOf("["), b = t.lastIndexOf("]"); got = JSON.parse(t.slice(a, b + 1)); } catch (e) { got = []; }
@@ -485,7 +485,7 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
       case "sgdrop": UI.sugg = []; break;
       case "sgagain": askCouncil(UI.focus || ""); return;
       // (one suggestion asked for again: the council gives one event in its place)
-      case "sgone": { const i = +b.dataset.i, x = (UI.sugg || [])[i]; if (!x) break; b.disabled = true; b.textContent = "Asking…"; (async () => { let r = null; try { r = await api.askRaw(councilPrompt(UI.focus || "") + `\n\nGive ONE event only, in the same shape (a JSON array of one), in place of this one, which the game master did not want as it was: "${x.title}".`, () => {}, null, { kind: "suggesting", what: "one event again, in place of “" + x.title + "”", uses: ["the campaign"] }); } catch (e) { r = null; } let got = []; try { const t = String(r || ""), a = t.indexOf("["), z = t.lastIndexOf("]"); got = JSON.parse(t.slice(a, z + 1)); } catch (e) { got = []; } const nx = (Array.isArray(got) ? got : []).map(cleanSugg).filter(Boolean)[0]; const j = (UI.sugg || []).indexOf(x); if (nx && j >= 0) UI.sugg[j] = nx; else api.note("The council gave nothing new for that one: it is as it was."); paint(); })(); return; }
+      case "sgone": { const i = +b.dataset.i, x = (UI.sugg || [])[i]; if (!x) break; b.disabled = true; b.textContent = "Asking…"; (async () => { let r = null; try { r = await api.askRaw(await councilPrompt(UI.focus || "") + `\n\nGive ONE event only, in the same shape (a JSON array of one), in place of this one, which the game master did not want as it was: "${x.title}".`, () => {}, null, { kind: "suggesting", what: "one event again, in place of “" + x.title + "”", uses: ["the campaign"] }); } catch (e) { r = null; } let got = []; try { const t = String(r || ""), a = t.indexOf("["), z = t.lastIndexOf("]"); got = JSON.parse(t.slice(a, z + 1)); } catch (e) { got = []; } const nx = (Array.isArray(got) ? got : []).map(cleanSugg).filter(Boolean)[0]; const j = (UI.sugg || []).indexOf(x); if (nx && j >= 0) UI.sugg[j] = nx; else api.note("The council gave nothing new for that one: it is as it was."); paint(); })(); return; }
       case "calreset": S().set("clock", "cal", null); setTimeout(() => setNow(now()), 60); break;
       case "wifkeep": if (UI.wif) { api.note(`Kept: it is now ${at(now()).short}. The moment before is under The world's history, Saved moments.`); UI.wif = null; } break;
       case "wifdrop": if (UI.wif && A.history) { const sid = UI.wif.snap, back = at(UI.wif.m0).short; UI.wif = null; Promise.resolve(A.history.restore(sid)).then(() => { S().set("snaps", sid, null); api.note(`Thrown away: the world is back at ${back}.`); setTimeout(paint, 120); }); } break;

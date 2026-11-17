@@ -181,7 +181,7 @@
   function paintTalk(liveD) { document.querySelectorAll(".cp-turns").forEach(box => { const ref = UI.who, turns = liveD.turns, sm = !!box.closest(".cp-sm"); box.innerHTML = turns.slice(sm ? -3 : -12).map((t, i, a) => turnHTML(ref, t, turns.length - a.length + i, i === a.length - 1)).join(""); }); }
 
   /* ---- Improvise: a prompt from the campaign's passages */
-  function impPrompt(again) {
+  async function impPrompt(again) {
     const I = UI.imp, c = A.config || {}, k = IMP.find(x => x[0] === I.kind) || IMP[0];
     const who = [I.a, I.b].filter(Boolean).map(ref => { const e = St.ent(ref) || {}, n = npcOf(ref), cast = ref.startsWith("cast:") ? (A.castData || {})[ref.slice(5)] || {} : {}, g = f => n[f] || cast[f] || ""; return `${e.name}${e.role ? ", " + e.role : ""}: ${[g("manner") && "manner: " + g("manner"), g("voice") && "voice: " + g("voice"), g("want") && "wants: " + g("want"), g("secret") && "hides: " + g("secret"), St.knowledgeOf(ref).length ? "knows: " + St.knowledgeOf(ref).map(x => x.text || St.name(x.about)).join("; ") : ""].filter(Boolean).join("; ")}`; }).join("\n");
     const q = [I.text, I.place && placeName(I.place), ...[I.a, I.b].filter(Boolean).map(nameOf)].filter(Boolean).join(" ");
@@ -214,7 +214,7 @@ ${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n") || "(nothing
   }
   async function improvise(again) {
     UI.busy = true; UI.err = ""; const I = UI.imp, prev = again ? I.out : ""; I.out = ""; paint();
-    let r = null; try { r = await api.askRaw(impPrompt(prev), t => { I.out = t; document.querySelectorAll(".cp-out .cp-a").forEach(x => { x.value = t; }); }, null, { kind: "writing", what: "an idea for the scene", uses: ["where the party is", "what has happened lately"] }); } catch (e) { r = null; }
+    let r = null; try { r = await api.askRaw(await impPrompt(prev), t => { I.out = t; document.querySelectorAll(".cp-out .cp-a").forEach(x => { x.value = t; }); }, null, { kind: "writing", what: "an idea for the scene", uses: ["where the party is", "what has happened lately"] }); } catch (e) { r = null; }
     I.out = r ? String(r).replace(/\*\*([^*]+)\*\*/g, "$1").trim() : ""; if (!r) UI.err = "Claude is not reachable from this page: here is what the campaign says.";
     UI.busy = false; paint();
   }
