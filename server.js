@@ -65,7 +65,10 @@ const settings = {
 // the local AI choice (data/settings.json, localAI): Cloud (as before) or Local (Ollama on this computer), the model, the
 // game master's own figures for the computer, the benchmarks, and whether Claude may answer when the local model cannot
 const localConf = () => Object.assign({ mode: "cloud", model: "", fallback: false, bench: {} }, settings.get().localAI || {});
-const localMode = () => { const L = localConf(); return L.mode === "local" && !!L.model; };
+// (Hybrid: each kind of work the pages ask for (answering, reading, suggesting, checking, writing) set Local or Cloud)
+const KINDS_AI = ["answering", "reading", "suggesting", "checking", "writing"];
+const localFor = kind => { const L = localConf(); if (!L.model) return false; if (L.mode === "local") return true; if (L.mode === "hybrid") return (L.kinds || {})[KINDS_AI.includes(kind) ? kind : "answering"] === "local"; return false; };
+const localMode = () => { const L = localConf(); return (L.mode === "local" || L.mode === "hybrid") && !!L.model; };
 const runners = { claude: require("./lib/run-claude"), openai: require("./lib/run-codex"), own: { MODELS: {}, DEFAULT_MODEL: null } };
 const hint = k => k ? k.slice(0, 7) + "…" + k.slice(-4) : "";
 
@@ -323,17 +326,17 @@ async function route(req, res) {
     if (m === "POST" && rest === "trace") {
       if (!authed) return fail(res, 403, "forbidden");
       // (in Local mode nothing goes to Claude: reading a picture needs a model that sees, not offered yet)
-      if (localMode()) return fail(res, 400, "Local AI is chosen, and reading a picture needs a model that can see: not offered yet. Draw the rooms by hand, or choose Cloud for this.");
+      if (localConf().mode === "local" && localConf().model) return fail(res, 400, "Local AI is chosen, and reading a picture needs a model that can see: not offered yet. Draw the rooms by hand, or choose Cloud for this.");
       try { const o = await body(req, 12 << 20); return send(res, 200, { plan: await Ask.readPlan(o.image, o.prompt) }); } catch (e) { return fail(res, 400, e.message); }
     }
     // "Ask the campaign" and "Previously on...": answered by the game master's own Claude Code, on their own plan
     if (m === "POST" && rest === "ask") {
       if (!authed) return fail(res, 403, "forbidden");
-      const prompt = String((await body(req, 1 << 17)).prompt || "");
+      const qb = await body(req, 1 << 17), prompt = String(qb.prompt || ""), kind = String(qb.kind || "answering");
       // (Local AI chosen: the chosen model on this computer answers, and nothing is sent anywhere; to Claude only if the
       // game master turned the fallback on themselves: the user, 17 Nov 2026, "Never silently send campaign data to a
       // cloud service when Local AI mode is selected")
-      if (localMode()) { const L = localConf(); try { return send(res, 200, { text: await AILocal.ask(L.model, prompt), by: "local" }); } catch (e) { if (!L.fallback) return fail(res, 400, "Local AI could not answer (" + e.message + "). Is Ollama running, and the model downloaded? (Connections, Local AI)"); } }
+      if (localFor(kind)) { const L = localConf(); try { return send(res, 200, { text: await AILocal.ask(L.model, prompt, { kind, careful: L.careful !== false && ["writing", "checking"].includes(kind) }), by: "local" }); } catch (e) { if (!L.fallback) return fail(res, 400, "Local AI could not answer (" + e.message + "). Is Ollama running, and the model downloaded? (Connections, Local AI)"); } }
       try { return send(res, 200, { text: await Ask.ask(prompt) }); } catch (e) { return fail(res, 400, e.message); }
     }
     // the players on their own phones: the campaign's link on this computer's network, switched on or off (players-lan.js)
@@ -365,7 +368,7 @@ async function route(req, res) {
     if (m === "GET" && p === "/api/state") return send(res, 200, await state(url.searchParams.get("fresh") === "1"));
     // local AI: this computer, Ollama, the recommendations; the choice; a download and a benchmark only when pressed
     if (m === "GET" && p === "/api/local-ai") { const L = localConf(), hw = await Hardware.detect(DATA); return send(res, 200, { conf: L, hw, ollama: await AILocal.status(), rec: AILocal.recommend(hw, { ramGB: L.ramGB, vramGB: L.vramGB }, L.bench), catalogue: AILocal.CATALOGUE, pulls: AILocal.PULLS }); }
-    if (m === "POST" && p === "/api/local-ai/settings") { const o = await body(req, 1 << 12), st = settings.get(), L = localConf(); for (const k of ["mode", "model", "ramGB", "vramGB", "fallback"]) if (o[k] !== undefined) L[k] = o[k]; if (!["cloud", "local"].includes(L.mode)) L.mode = "cloud"; st.localAI = L; settings.set(st); return send(res, 200, { conf: L }); }
+    if (m === "POST" && p === "/api/local-ai/settings") { const o = await body(req, 1 << 12), st = settings.get(), L = localConf(); for (const k of ["mode", "model", "ramGB", "vramGB", "fallback", "careful"]) if (o[k] !== undefined) L[k] = o[k]; if (o.kind && KINDS_AI.includes(o.kind)) L.kinds = Object.assign({}, L.kinds || {}, { [o.kind]: o.where === "local" ? "local" : "cloud" }); if (!["cloud", "local", "hybrid"].includes(L.mode)) L.mode = "cloud"; st.localAI = L; settings.set(st); return send(res, 200, { conf: L }); }
     if (m === "POST" && p === "/api/local-ai/pull") { const o = await body(req, 1 << 10); return send(res, 200, { pull: await AILocal.pull(String(o.tag || "")) }); }
     if (m === "POST" && p === "/api/local-ai/bench") { const o = await body(req, 1 << 10), r = await AILocal.bench(String(o.tag || "")), st = settings.get(), L = localConf(); L.bench = Object.assign({}, L.bench || {}, { [r.tag]: r }); st.localAI = L; settings.set(st); return send(res, 200, { bench: r }); }
     if (m === "POST" && p === "/api/connect") {

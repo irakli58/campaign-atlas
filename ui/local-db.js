@@ -49,8 +49,8 @@
   // what the page can ask of the app: the world map's "Make its 3D map now" (the page opens again on the new city)
   window.ATLAS_APP = {
     // a question for the game master's own Claude Code (the app runs it on this computer, on their plan)
-    ask: function (prompt) {
-      return fetch(URL_.replace(/db$/, "ask"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ prompt: prompt }) })
+    ask: function (prompt, meta) {
+      return fetch(URL_.replace(/db$/, "ask"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ prompt: prompt, kind: meta && meta.kind || "answering" }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "no answer"); return d.text; }); });
     },
     // the map editor: keep a redrawn map in the campaign (null puts the drawn one back), and read a floor plan into rooms

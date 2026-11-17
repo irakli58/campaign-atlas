@@ -51,3 +51,8 @@ How Atlas asks today: a campaign page asks through one function, `askRaw` (engin
 
 - A real model download for testing (Qwen3 4B, 2.6 GB, the smallest good one), to test with a real model rather than the stand-in.
 - Phases 2–6, and above all phase 3 (a second campaign maker).
+
+## Done since (17 Nov, the user: "make executive decisions")
+
+- **Phase 2, built**: Hybrid (Local or Claude chosen for each kind of work the pages ask for: answering, suggesting, reading, checking, writing; the page now sends the kind with each question); **careful** (on by default for writing and checking when local: a draft, then the model reads it against the question and the campaign's facts and mends it; answers at the table stay quick); **JSON kept valid** (a question asking for JSON gets Ollama's JSON format). In Hybrid, reading a picture goes to Claude (the cloud part); in Local it refuses. Tested with the stand-in.
+- **Not done here**: a test with a real model. This cloud session's network refuses ollama.com, registry.ollama.ai, github.com and huggingface.co, so no model can come here; the test belongs on the user's computer (the card's Download, then Use this, then a question on a campaign page).

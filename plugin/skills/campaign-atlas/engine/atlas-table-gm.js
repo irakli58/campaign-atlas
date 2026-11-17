@@ -268,7 +268,7 @@
     try {
       let sample = null; try { sample = window.claude && window.claude.use ? await window.claude.use("sample") : null; } catch (e) { sample = null; }
       if (sample) { const job = sample(prompt, { onText: e => onText(e.text), signal: sig, cache: false }), r = run ? await Promise.race([job, run.stopped]) : await job; ok = true; return r.text; }
-      if (window.ATLAS_APP && window.ATLAS_APP.ask) { const job = window.ATLAS_APP.ask(prompt), t = run ? await Promise.race([job, run.stopped]) : await job; onText(t); ok = true; return t; }
+      if (window.ATLAS_APP && window.ATLAS_APP.ask) { const job = window.ATLAS_APP.ask(prompt, { kind: (meta && meta.kind) || "answering" }), t = run ? await Promise.race([job, run.stopped]) : await job; onText(t); ok = true; return t; }
       return null;
     } finally { if (run) A.ux.aiEnd(run, ok); }
   }
