@@ -81,8 +81,12 @@
   }
   // a laid-down kind's outline, as rings (for the survey's zones and the atlas's)
   function coverRings(WD, N, code) {
-    const G = WD.G, n = G.cols * G.rows, F = new Uint8Array(n); for (let i = 0; i < n; i++) F[i] = N.C[i] === code ? 200 : 0;
-    return coastRings({ cols: G.cols, rows: G.rows, cell: G.cell, H: F, sea: 100 }).filter(r => r.length > 5).map(r => chaikin(rdpRing(r, .9), 2, true));
+    const G = WD.G, n = G.cols * G.rows, W = G.cols, Hh = G.rows; let F = new Float32Array(n); for (let i = 0; i < n; i++) F[i] = N.C[i] === code ? 200 : 0;
+    // (the cells blurred twice before the outline is traced, so a zone's edge follows a curve, not the grid's stair-steps
+    // straightened into long lines; the user: the survey look's zones were "still harsh")
+    for (let pass = 0; pass < 2; pass++) { const O = new Float32Array(n); for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) { let t = 0, c = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= Hh) continue; t += F[yy * W + xx]; c++; } O[y * W + x] = t / c; } F = O; }
+    const U = new Uint8Array(n); for (let i = 0; i < n; i++) U[i] = Math.round(F[i]);
+    return coastRings({ cols: G.cols, rows: G.rows, cell: G.cell, H: U, sea: 100 }).filter(r => r.length > 5).map(r => chaikin(rdpRing(r, .5), 3, true));
   }
 
   /* ---- the colour of the ground under each cover, in each family of looks: [painted, atlas, survey] */
@@ -639,7 +643,9 @@
       const d = rings.map(r => pathD(r, true)).join(""), hc = "#" + c[2].map(q => Math.round(clamp(q, 0, 255)).toString(16).padStart(2, "0")).join("");
       if (look === "holo") {
         defs += `<pattern id="${uid}-z${code}" patternUnits="userSpaceOnUse" width="4" height="4"><path d="${HATCH[code % HATCH.length]}" stroke="${hc}" stroke-width=".45" stroke-opacity=".55"/></pattern>`;
-        s += `<path class="lod1" d="${d}" fill="url(#${uid}-z${code})" stroke="none"/><path d="${d}" fill="none" stroke="${hc}" stroke-opacity=".75" stroke-width=".7" stroke-dasharray="3 1.5"/>`;
+        // (the hatching fades at its edge and the outline is a fine dotted trace, as a survey's overlay)
+        if (!defs.includes(`${uid}-zsoft`)) defs += `<filter id="${uid}-zsoft" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="1.1"/></filter>`;
+        s += `<path class="lod1" d="${d}" fill="url(#${uid}-z${code})" fill-opacity=".8" stroke="none" filter="url(#${uid}-zsoft)"/><path d="${d}" fill="none" stroke="${hc}" stroke-opacity=".45" stroke-width=".5" stroke-dasharray="1 2" stroke-linecap="round"/>`;
       } else if (look === "atlas" && ["glacier", "saltflat", "drylake", "reef", "marsh", "bog", "volcanic", "crater", "ice"].includes(b.id)) {
         s += `<path d="${d}" fill="none" stroke="${{ glacier: "#7ab0d0", ice: "#7ab0d0", reef: "#5aaac8", marsh: "#4a8ac0", bog: "#4a8ac0" }[b.id] || "#a08a6a"}" stroke-opacity=".7" stroke-width=".5" stroke-dasharray="${b.id === "glacier" || b.id === "ice" ? "" : "2 1.4"}"/>`;
       }
