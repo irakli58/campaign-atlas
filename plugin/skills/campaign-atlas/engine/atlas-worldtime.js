@@ -380,7 +380,7 @@ ${pls.map(id => `${id}: ${placeName(id)}`).join("\n")}
 CLUES (place/id: title):
 ${clues.slice(0, 80).join("\n") || "(none)"}
 
-${people ? "PEOPLE:\n" + people + "\n\n" : ""}WHAT HAS HAPPENED AT THE TABLE LATELY:
+${people ? "PEOPLE:\n" + people + "\n\n" : ""}${A.lives && A.lives.relationsText ? (t => t ? t + "\n\n" : "")(A.lives.relationsText()) : ""}WHAT HAS HAPPENED AT THE TABLE LATELY:
 ${lately || "(nothing recorded)"}
 
 THE CAMPAIGN'S OWN WORDS:

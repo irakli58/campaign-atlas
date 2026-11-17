@@ -831,6 +831,7 @@
         <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
         <button type="button" class="wm-btn wm-pltog" data-w="plates" aria-pressed="false" hidden title="Show the tectonic plates: their borders, what happens at each, which way each plate moves">Plates</button>
         <button type="button" class="wm-btn wm-rktog" data-w="rocks" aria-pressed="false" hidden title="Show the rocks of each region, and the ores, gems, coal, oil, salt, hot springs and caves in them, with why each is there">Rocks and resources</button>
+        <button type="button" class="wm-btn wm-dptog keeper" data-w="diplo" aria-pressed="false" hidden title="Show how the powers stand: a line between their seats, coloured from war to alliance, with their treaties (keeper only)">Relations</button>
         <button type="button" class="wm-btn wm-trtog" data-w="trade" aria-pressed="false" hidden title="Show the trade routes: their goods, how much moves along them and whether war or an embargo stands in the way">Trade</button>
         <span class="wm-sp"></span>
         <span class="wm-editbar keeper"></span>
@@ -842,7 +843,7 @@
         ${A.ux ? `<span class="keeper wm-uxs">${A.ux.saveMark()}${A.ux.keysBtn("world")}</span>` : ""}<button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false" title="Edit the map (E)">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-rk"></g><g class="wm-pl"></g><g class="wm-trd"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-rk"></g><g class="wm-pl"></g><g class="wm-trd"></g><g class="wm-dip"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -1260,7 +1261,7 @@
     // the sharper land where the map is zoomed in (the shaded reliefs): once the camera rests, the window in view is
     // drawn again as fine as the screen shows it and laid over the land, so a continent of a whole planet holds its
     // valleys and streams up close; zoomed back out, the whole map's own picture is enough
-    const LAY = { trade: (() => { try { return ctx.store.get("world-trade") === "1"; } catch (e) { return false; } })(), plates: (() => { try { return ctx.store.get("world-plates") === "1"; } catch (e) { return false; } })(), rocks: (() => { try { return ctx.store.get("world-rocks") === "1"; } catch (e) { return false; } })() };
+    const LAY = { trade: (() => { try { return ctx.store.get("world-trade") === "1"; } catch (e) { return false; } })(), plates: (() => { try { return ctx.store.get("world-plates") === "1"; } catch (e) { return false; } })(), rocks: (() => { try { return ctx.store.get("world-rocks") === "1"; } catch (e) { return false; } })(), diplo: (() => { try { return ctx.store.get("world-diplo") === "1"; } catch (e) { return false; } })() };
     function drawGeoLayers() {
       const art = A.worldArt, hasP = !!(WD.T && WD.T.tect && art && art.plateLayer), hasR = !!(WD.T && WD.T.rocks && art && art.rockLayer);
       const bp = $(".wm-pltog"), br = $(".wm-rktog"); bp.hidden = !hasP; br.hidden = !hasR; bp.setAttribute("aria-pressed", hasP && LAY.plates); br.setAttribute("aria-pressed", hasR && LAY.rocks);
@@ -1269,11 +1270,46 @@
       // closed, marked where war or an embargo stands in the way; the trade route's name and goods at its middle)
       const tr = WD.routes.filter(r => r.trade && !r.gone && (gm() || !r.hidden)), bt = $(".wm-trtog");
       if (bt) { bt.hidden = !tr.length; bt.setAttribute("aria-pressed", !!(tr.length && LAY.trade)); }
+      drawDiplo();
       const g = $(".wm-trd"); if (!g) return;
       if (!tr.length || !LAY.trade) { g.innerHTML = ""; return; }
       const K = Math.max(1, Math.min(WD.size[0], WD.size[1]) / 900), named = new Set();
       g.innerHTML = tr.map(r => { const way = typeof wayFor === "function" ? wayFor(r) : [WD.byId[r.from].at, WD.byId[r.to].at], w = ({ low: 2, medium: 3.4, high: 5 }[r.trade.vol] || 2.6) * K, off = ["suspended", "closed"].includes(r.trade.status), trouble = gm() && tradeTrouble(r), mid = way[Math.floor(way.length / 2)], first = r.trade.name && !named.has(r.trade.name); if (first) named.add(r.trade.name);
         return `<path d="${pathD(way)}" fill="none" stroke="${trouble ? "#b0161b" : "#c99a1e"}" stroke-opacity=".85" stroke-width="${w}" stroke-linecap="round"${off ? ` stroke-dasharray="${8 * K} ${6 * K}"` : ""}><title>${esc([r.trade.name, r.trade.goods, r.trade.vol, r.trade.status, trouble].filter(Boolean).join(" · "))}</title></path>${first ? `<text x="${mid[0]}" y="${mid[1] - 8 * K}" text-anchor="middle" font-size="${13 * K}" fill="#6b4e0a" stroke="#fbf5e3" stroke-width="${3 * K}" paint-order="stroke" font-style="italic">${esc(r.trade.name)}${r.trade.goods ? ": " + esc(r.trade.goods) : ""}</text>` : ""}`; }).join("");
+    }
+    // how the powers stand, on the map (the manual civilization editor's request of 17 Nov 2026; keeper only): each
+    // power's seat (its capital; else its largest place; else the middle of its realm), and between two seats a line
+    // coloured from war to alliance, bowed so two lines between the same seats do not lie on each other; the treaties
+    // (atlas-factions.js, "diplomacy") in its title and a short mark at its middle. Neutral powers with no treaty: no line
+    function drawDiplo() {
+      const g = $(".wm-dip"), bt = $(".wm-dptog"); if (!g) return;
+      const L = A.lives, all = L && L.all ? L.all() : {}, RANK = { capital: 0, city: 1, port: 2, town: 3, castle: 4, keep: 4, fort: 5, village: 6 };
+      const seat = {};
+      for (const fid of Object.keys(all)) {
+        const own = WD.locs.filter(l => l.owner === fid && l.at).sort((a, b) => (RANK[a.kind] ?? 9) - (RANK[b.kind] ?? 9));
+        if (own.length) { seat[fid] = own[0].at; continue; }
+        const rg = (WD.realms || []).find(x => x.owner === fid && Array.isArray(x.pts) && x.pts.length > 2);
+        if (rg) { let cx = 0, cy = 0; for (const p of rg.pts) { cx += p[0]; cy += p[1]; } seat[fid] = [cx / rg.pts.length, cy / rg.pts.length]; }
+      }
+      const ids = Object.keys(seat), show = gm() && ids.length >= 2;
+      if (bt) { bt.hidden = !show; bt.setAttribute("aria-pressed", !!(show && LAY.diplo)); }
+      if (!show || !LAY.diplo) { g.innerHTML = ""; return; }
+      const COL = { war: ["#b0161b", 5, ""], hostile: ["#d0602a", 3.6, ""], wary: ["#8a8478", 2.4, "7 6"], neutral: ["#8a8478", 2, "2 6"], friendly: ["#4f8a3a", 3, ""], allied: ["#2f6fb0", 4.6, ""] };
+      const WORD = { war: "war", hostile: "hostile", wary: "wary", neutral: "", friendly: "friendly", allied: "allied" };
+      const K = Math.max(1, Math.min(WD.size[0], WD.size[1]) / 900); let s = "";
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i], b = ids[j], sOf = r => Array.isArray(r) ? r[0] : r && typeof r === "object" ? r.stance : r, ra = sOf((all[a].rels || {})[b]), rb = sOf((all[b].rels || {})[a]), st = ra || rb || "neutral", d = L.diplomacy ? L.diplomacy(a, b) : null, tr = (d && d.treaties) || [];
+        if (st === "neutral" && !tr.length) continue;
+        const [col, w, dash] = COL[st] || COL.neutral, p = seat[a], q = seat[b], mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2, dx = q[0] - p[0], dy = q[1] - p[1], len = Math.hypot(dx, dy) || 1, bow = len * .12;
+        const cx = mx - dy / len * bow, cy = my + dx / len * bow, lx = (p[0] + 2 * cx + q[0]) / 4, ly = (p[1] + 2 * cy + q[1]) / 4;
+        const trs = tr.map(t => { const [k] = String(t).split(":"); return ((L.TREATY || []).find(x => x[0] === k) || [0, k])[1]; });
+        const title = `${all[a].n || a} and ${all[b].n || b}: ${st}${ra && rb && ra !== rb ? ` (${all[a].n || a} ${ra}, ${all[b].n || b} ${rb})` : ""}${trs.length ? "; " + trs.join(", ") : ""}${d && d.now ? "; now: " + d.now : ""}`;
+        const mark = [WORD[st], ...trs.map(x => x.split(" ")[0].toLowerCase())].filter(Boolean).slice(0, 2).join(" · ");
+        s += `<path d="M${p[0].toFixed(1)} ${p[1].toFixed(1)}Q${cx.toFixed(1)} ${cy.toFixed(1)} ${q[0].toFixed(1)} ${q[1].toFixed(1)}" fill="none" stroke="${col}" stroke-opacity=".8" stroke-width="${(w * K).toFixed(2)}" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash.split(" ").map(x => (x * K).toFixed(1)).join(" ")}"` : ""}><title>${esc(title)}</title></path>`;
+        if (mark) s += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" font-size="${(13 * K).toFixed(1)}" fill="${col}" stroke="#fff" stroke-width="${(3 * K).toFixed(1)}" paint-order="stroke" font-family="Georgia, serif" font-style="italic">${esc(mark)}</text>`;
+      }
+      for (const fid of ids) { const [x, y] = seat[fid], c = all[fid].color || "#444"; s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(7 * K).toFixed(1)}" fill="${esc(c)}" stroke="#fff" stroke-width="${(2 * K).toFixed(1)}"><title>${esc((all[fid].n || fid) + "'s seat")}</title></circle>`; }
+      g.innerHTML = s;
     }
     function refine() {
       const slot = cam.querySelector(".wm-detail"); if (!slot || !A.worldArt || !A.worldArt.detail || gone || anim) return;
@@ -2191,7 +2227,7 @@
         case "coasts": COA.on = !COA.on; try { ctx.store.set("world-coasts", COA.on ? "1" : "0"); } catch (_) {} drawCoasts(); renderBars(); break;
         case "curnames": CUR.names = !CUR.names; try { ctx.store.set("world-curnames", CUR.names ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
         case "pmaps": openPmaps(); break;
-        case "plates": case "rocks": case "trade": { const k = b.dataset.w; LAY[k] = !LAY[k]; try { ctx.store.set("world-" + k, LAY[k] ? "1" : ""); } catch (_) {} drawGeoLayers(); break; }
+        case "plates": case "rocks": case "trade": case "diplo": { const k = b.dataset.w; LAY[k] = !LAY[k]; try { ctx.store.set("world-" + k, LAY[k] ? "1" : ""); } catch (_) {} drawGeoLayers(); break; }
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
         case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }
         case "dlgclose": closeDlg(); break;
