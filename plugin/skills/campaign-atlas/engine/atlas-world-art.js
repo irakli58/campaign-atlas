@@ -67,13 +67,19 @@
     // what the colour is told of the land at each point: its laid-down kind (b) and how deep inside it (d), how warm it
     // is (tm), whether it is a lake, and the kind of its mountains (mk)
     const NA = nat(WD), I = { b: null, d: 0, tm: .5, lake: false, mk: "rock", N: NA, mix: null };
+    // (the preset tints: each palette colour with its own brightness, so a tint keeps the ground's light and shade)
+    // (the light and shade is read from the ground's brightness against a middle grey, so a dark preset stays dark)
+    const TW = G.TW && G.TP && G.TP.length > 1 ? G.TW : null, TC = TW ? G.TP.map(h => { if (!h) return null; const v = parseInt(h.slice(1), 16); return [v >> 16 & 255, v >> 8 & 255, v & 255, 140]; }) : null;
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
       const i = py * cw + px, l = px > 0 ? sv[i - 1] : sv[i], r = px < cw - 1 ? sv[i + 1] : sv[i], u = py > 0 ? sv[i - cw] : sv[i], b = py < ch - 1 ? sv[i + cw] : sv[i];
       const gx = (r - l) * z, gy = (b - u) * z, x = ox + (px + .5) / k, y = oy + (py + .5) / k;
       // (mix: each laid-down kind near the point and how strongly it shows there, its edge soft and broken; b: the one
       // that holds the point, if one does)
       if (NA) { const bl = NA.blend(x, y); let cc = 0, ca = .5; if (bl) for (const [q, a] of bl) if (a > ca) { ca = a; cc = q; } I.mix = bl; I.b = cc ? BIO.BY[BIO.LIST[cc][0]] : null; I.d = bl ? NA.depth(x, y) : 0; I.tm = NA.temp(x, y); I.lake = hv[i] <= sea && NA.lake(x, y); I.mk = hv[i] > sea + 40 ? NT.mtnKind(NA, x, y) : "rock"; }
-      const c = colour(hv[i], mv[i], gx, gy, x, y, nz, I), o = i * 4;
+      let c = colour(hv[i], mv[i], gx, gy, x, y, nz, I); const o = i * 4;
+      // (a terrain preset's colour (atlas-terrain-presets.js) where the game master painted one: the colour given the
+      // light and shade the look gave the ground, its edge as soft as the brush's)
+      if (TW) { const tw = S(x, y, TW) / 255; if (tw > .02) { const ci = Math.min(G.cols - 1, Math.max(0, Math.floor(x / G.cell))), cj = Math.min(G.rows - 1, Math.max(0, Math.floor(y / G.cell))), tc = TC[G.TI[cj * G.cols + ci]]; if (tc) { const lum = Math.max(.35, Math.min(1.6, (c[0] * .3 + c[1] * .59 + c[2] * .11) / tc[3])), a = Math.min(1, tw * 1.15) * .82; c = [c[0] + (tc[0] * lum - c[0]) * a, c[1] + (tc[1] * lum - c[1]) * a, c[2] + (tc[2] * lum - c[2]) * a]; } } }
       d[o] = clamp(c[0], 0, 255); d[o + 1] = clamp(c[1], 0, 255); d[o + 2] = clamp(c[2], 0, 255); d[o + 3] = 255;
     }
     cx.putImageData(img, 0, 0);

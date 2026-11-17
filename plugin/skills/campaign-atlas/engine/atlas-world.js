@@ -246,7 +246,7 @@
   // (27 Oct 2026: the brush also lays any kind of land of atlas-world-biomes.js: a jungle, a glacier, a volcano, a
   // glowing lake... kept in the land's cover; "natural" clears what was laid, back to what the climate makes)
   const coverKind = m => !BRUSH[m] && A.worldBiomes && A.worldBiomes.BY[m] || null;
-  const brushName = m => BRUSH[m] || (coverKind(m) ? coverKind(m).name : m);
+  const brushName = m => BRUSH[m] || (coverKind(m) ? coverKind(m).name : /^p:/.test(m || "") && A.terrainPresets && A.terrainPresets.BY[m] ? A.terrainPresets.BY[m].name : /^my:/.test(m || "") ? "your preset" : m);
   function stroke(G, s) {
     const { cols, rows, cell, sea } = G, r = Math.max(4, Math.min(240, +s.r || 30)), pts = (s.p || []).filter(q => Array.isArray(q));
     const bio = coverKind(s.m);
@@ -255,11 +255,14 @@
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
     const i0 = clamp(Math.floor((x0 - r) / cell), 0, cols - 1), i1 = clamp(Math.ceil((x1 + r) / cell), 0, cols - 1), j0 = clamp(Math.floor((y0 - r) / cell), 0, rows - 1), j1 = clamp(Math.ceil((y1 + r) / cell), 0, rows - 1);
     const line = pts.length > 1 ? pts : [pts[0], pts[0]], Hh = G.H, M = G.M;
+    // (a preset's colour (atlas-terrain-presets.js), laid with its kind as a tint the map's look reads: its own palette
+    // entry; a stroke without one clears the tint where it lays its kind)
+    let tint = -1; if (bio && /^#[0-9a-f]{6}$/i.test(s.tint || "")) { if (!G.TW) { G.TW = new Uint8Array(cols * rows); G.TI = new Uint16Array(cols * rows); G.TP = [null]; } tint = G.TP.indexOf(s.tint.toLowerCase()); if (tint < 0) { tint = G.TP.length; G.TP.push(s.tint.toLowerCase()); } }
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const x = (i + .5) * cell, y = (j + .5) * cell, d = lineDist(x, y, line); if (d >= r) continue;
       // full strength over the brush's inner half, softening to nothing at its edge
       const t = Math.min(1, (1 - d / r) * 1.8), w = t * t * (3 - 2 * t), n = j * cols + i, h = Hh[n], land = h > sea, toward = (v, tg) => Math.round(v + (tg - v) * w);
-      if (bio) { coverCell(G, bio, n, i, j, w, h, land, d / r, toward); continue; }
+      if (bio) { coverCell(G, bio, n, i, j, w, h, land, d / r, toward); if (tint >= 0 || G.TW) tintCell(G, n, w, tint, bio, land, i, j); continue; }
       switch (s.m) {
         case "land": if (h < sea + 16) Hh[n] = toward(h, sea + 18); break;
         case "sea": if (h > sea - 40) Hh[n] = toward(h, sea - 42); break;
@@ -272,6 +275,12 @@
         case "grass": M[n] = toward(M[n], 128); break;
       }
     }
+  }
+  // a preset's tint on a cell the brush laid its kind on (where it is laid: on land, or on water for a liquid)
+  function tintCell(G, n, w, tint, bio, land, i, j) {
+    if (!(bio.water || land) || !(w > .3 + hash(i, j, 13) * .35)) return;
+    if (tint < 0 || bio.id === "natural") { G.TW[n] = 0; return; }
+    G.TW[n] = 255; G.TI[n] = tint;
   }
   // one cell under the brush of a kind of land: laid where the brush is strong (its edge ragged), the height changed as
   // the kind asks (mountains raised, a volcano's cone, lowland for a marsh, water for a lake of any liquid)
@@ -1435,7 +1444,7 @@
         + (A.pmap && WD.look !== "stars" ? tb("pmaps", "Players' maps", false, "Hand-drawn parchment maps for the players: what their characters know, drawn as they would draw it; you draw and reveal on them as the game goes") : "")
         + tb("export", "Copy as world.js")
         + (vers() && vers().list(WID).length ? tb("vers", "Earlier versions", S.panelV, "The map as it was before each visit's changes, to look at and bring back") : "")
-        + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
+        + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>${presetBar()}` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
       $('[data-w="edit"]').setAttribute("aria-pressed", S.edit);
       const dw = $('[data-w="drawn"]'); if (dw) { dw.setAttribute("aria-pressed", !!drawn()); dw.hidden = WD.look === "stars" || !DRAW.trace; }
       // how the map is drawn: the game master chooses among the looks this world can wear
@@ -1780,6 +1789,34 @@
       const K2 = A.worldBiomes, sh = [["land", BRUSH.land], ["sea", PW && PW.brush ? PW.brush : BRUSH.sea], ["mountains", BRUSH.mountains], ["hills", BRUSH.hills], ["flat", BRUSH.flat]], wet = [["forest", nl("Wetter (forest grows)")], ["swamp", nl("Wettest (swamp)")], ["grass", nl("Middling (grassland)")], ["desert", "Drier (desert)"]];
       let h = `<optgroup label="The shape of the land">${opt(sh, S.brush)}</optgroup><optgroup label="How wet the land is">${opt(wet, S.brush)}</optgroup>`;
       if (K2) { h += `<optgroup label="Clear">${opt([["natural", "As the climate makes it (erase what was painted)"]], S.brush)}</optgroup>`; for (const [label, list] of K2.brushKinds(K2.settingOf(WD.look))) h += `<optgroup label="${esc(label)}">${opt(list, S.brush)}</optgroup>`; }
+      // (an alien world's terrain presets, by category, filtered and searched; and the game master's own)
+      if (presetsOn()) {
+        const TP = A.terrainPresets, q = (S.pq || "").trim().toLowerCase(), f = S.pf || "all", ok = p => (f === "all" || (f === "sci") === p.sci) && (!q || (p.name + " " + p.why + " " + (p.ref || "")).toLowerCase().includes(q));
+        const mine = myPresets().filter(p => !q || p.name.toLowerCase().includes(q));
+        if (mine.length && f !== "sci") h += `<optgroup label="My presets">${opt(mine.map(p => [p.id, p.name]), S.brush)}</optgroup>`;
+        for (const [c, label] of TP.CATS) { const l = TP.LIST.filter(p => p.cat === c && ok(p)); if (l.length) h += `<optgroup label="Presets: ${esc(label)}">${opt(l.map(p => [p.id, p.name + (p.ref ? " (" + p.ref.split(/[;,(]/)[0].trim() + ")" : "")]), S.brush)}</optgroup>`; }
+      }
+      return h;
+    }
+    /* ---- terrain presets on an alien world (atlas-terrain-presets.js; the user, 17 Nov 2026): a look over a kind of
+            land that exists, painted with its colour; scientific ones say why they look so and where they are plausible.
+            The game master's own presets are kept in this browser, for every world and campaign. */
+    const futureCampaign = () => { try { return String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase() === "future"; } catch (e) { return false; } };
+    const presetsOn = () => !!(A.terrainPresets && A.worldBiomes && WD.G && (A.worldBiomes.settingOf(WD.look) === "scifi" || planetNow() || (WD.T && WD.T.env) || futureCampaign()));
+    const MYP = "atlas-terrain-presets-mine";
+    const myPresets = () => { try { return JSON.parse(localStorage.getItem(MYP) || "[]"); } catch (e) { return []; } };
+    const presetOf = id => !id ? null : String(id).startsWith("my:") ? myPresets().find(p => p.id === id) || null : A.terrainPresets && A.terrainPresets.BY[id] || null;
+    const planetFacts = () => { const PL = planetNow(); if (!PL || !PL.p) return null; const p = PL.p, env = PL.env || {}, liq = env.liquid && env.liquid.kind || (WD.T && WD.T.env && WD.T.env.liquid); return { tempC: p.tempC != null ? +p.tempC : null, pressure: p.pressure != null ? +p.pressure : null, liquid: liq || null, volcanic: p.volcanic != null ? !!p.volcanic : undefined }; };
+    function presetBar() {
+      if (!presetsOn()) return "";
+      const TP = A.terrainPresets, p = presetOf(S.brush), col = S.pcol || (p && p.col) || "#888888", [hh, ss, ll] = TP.toHsl(col);
+      let h = `<label class="wm-pf"><span class="kn">Show</span> <select data-wb="pf">${opt([["all", "All presets"], ["sci", "Scientific only"], ["creative", "Creative only"]], S.pf || "all")}</select></label><label class="wm-pq"><span class="kn">Find</span> <input type="search" data-wb="pq" value="${esc(S.pq || "")}" placeholder="sulfur, ice, Mars…" aria-label="Find a terrain preset"></label>`;
+      if (!p) return h;
+      const warn = p.sci ? TP.advise(p, planetFacts()) : "", out = p.sci && !TP.inRange(p, col);
+      h += `<span class="wm-psw" style="background:${esc(col)}" title="The colour it paints"></span><label><span class="kn">Colour</span> <input type="color" data-wb="pcol" value="${esc(col)}"></label>`
+        + `<label class="wm-hsl"><span class="kn">Hue</span> <input type="range" data-wb="ph" min="0" max="359" value="${hh}"></label><label class="wm-hsl"><span class="kn">Saturation</span> <input type="range" data-wb="ps" min="0" max="100" value="${ss}"></label><label class="wm-hsl"><span class="kn">Brightness</span> <input type="range" data-wb="pl" min="5" max="95" value="${ll}"></label>`
+        + `<button type="button" class="wm-btn" data-w="psave" title="Keep this colour and kind as your own preset, for every world">Save as my preset</button>`
+        + `<span class="wm-pinfo">${p.sci ? `<b>${esc(p.name)}</b>: ${esc(p.why)}${p.where ? ` <i>Plausible on: ${esc(p.where)}</i>` : ""}${p.ref ? ` Like ${esc(p.ref)}.` : ""} Paints as ${esc(brushName(p.base))}.${out ? ` <span class="wm-pcre">This colour is outside what its materials usually show: a creative choice.</span>` : ""}${warn ? ` <span class="wm-pwarn">${esc(warn)}</span>` : ""}` : `<b>${esc(p.name)}</b>: ${esc(p.why || "your own")} Creative: any colour. Paints as ${esc(brushName(p.base))}.`}</span>`;
       return h;
     }
     /* "Ask for a change" on a place of the world map (atlas-ask.js; the user's master plan: "Add a road connecting these
@@ -1951,7 +1988,7 @@
       if (ptr.size === 1) {
         gest = { p0: p, t0: [V.tx, V.ty], loc: S.edit && gm() && !S.tool && m ? m.dataset.loc : null };
         // the brush paints from the first touch; a river, a realm or a name is picked up to be moved, or by a corner
-        if (S.edit && gm() && S.tool === "brush" && WD.G) { S.stroke = { m: S.brush, r: S.size, p: [world(p[0], p[1]).map(Math.round)] }; gest.brush = true; drawFx(); }
+        if (S.edit && gm() && S.tool === "brush" && WD.G) { const pp = presetOf(S.brush); S.stroke = pp ? { m: pp.base, r: S.size, p: [world(p[0], p[1]).map(Math.round)], tint: S.pcol || pp.col, pre: pp.id } : { m: S.brush, r: S.size, p: [world(p[0], p[1]).map(Math.round)] }; gest.brush = true; drawFx(); }
         else if (S.edit && gm() && !S.tool && !m) {
           const vx = e.target.closest("[data-vx]"), fe = e.target.closest(".wm-fx [data-feat], .wm-rk");
           const id = vx ? S.selFeat : fe ? fe.dataset.feat : null, [k, f] = id ? featOf(id) : [null, null];
@@ -2091,6 +2128,7 @@
         case "devreset": { const R = netData(); if (R) setDev(R.level); break; }
         case "netenter": { const p = NET.R && NET.R.places[NET.sel]; if (!p) break; const NL = { id: "net-" + p.id, name: p.name, kind: p.tier === "city" ? (p.port ? "port" : "city") : p.tier === "town" ? (p.port ? "port" : "town") : "village", at: p.at, netRoads: netRoadsAt(p.at) || [] }; const cid = A.worldCity.can(WD) ? A.worldCity.make(WD, NL) : null; if (cid && ctx.hasCity(cid)) ctx.enter(cid, null); break; }
         case "brush": case "river": case "realm": case "label": { const w = b.dataset.w; S.tool = S.tool === w ? null : w; S.first = null; S.draft = null; S.cur = null; if (S.tool) { S.sel = null; S.selRoute = null; S.selFeat = null; renderPanel(); } renderBars(); drawFx(); break; }
+        case "psave": { const pp = presetOf(S.brush); if (!pp) break; const nm = prompt("Name your preset", pp.name + (S.pcol && S.pcol !== pp.col ? " (mine)" : "")); if (!nm) break; const list = myPresets(); const id = "my:" + Date.now().toString(36); list.push({ id, name: nm.slice(0, 60), base: pp.base, col: S.pcol || pp.col, why: pp.sci ? "From " + pp.name + "." : pp.why || "", sci: false }); try { localStorage.setItem(MYP, JSON.stringify(list)); } catch (e) {} S.brush = id; renderBars(); note("Saved: " + nm + ", in your presets for every world."); break; }
         case "base": save("shape", { base: b.dataset.base, strokes: (OV.shape && OV.shape.strokes) || [] }); break;
         case "finish": finishDraft(); break;
         case "undo": undo(true); break;
@@ -2143,7 +2181,16 @@
       const t = e.target;
       // the map drawn another way: kept with the world (the players' screen and copy follow)
       if (t.matches(".wm-look")) { if (gm()) save("style", { look: t.value }); return; }
-      if (t.matches("[data-wb]")) { if (t.dataset.wb === "m") { S.brush = t.value; renderBars(); const lw = lifeWarn(S.brush); if (lw) note(lw); } else S.size = +t.value || 30; drawFx(); return; }
+      if (t.matches("[data-wb]")) {
+        const k = t.dataset.wb;
+        if (k === "m") { S.brush = t.value; const pp = presetOf(S.brush); S.pcol = pp ? pp.col : null; renderBars(); const lw = lifeWarn(pp ? pp.base : S.brush); if (lw) note(lw); }
+        else if (k === "pf") { S.pf = t.value; renderBars(); }
+        else if (k === "pq") { S.pq = t.value; renderBars(); const q = root.querySelector('[data-wb="pq"]'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+        else if (k === "pcol") { S.pcol = t.value; renderBars(); }
+        else if (k === "ph" || k === "ps" || k === "pl") { const TP = A.terrainPresets, [h0, s0, l0] = TP.toHsl(S.pcol || (presetOf(S.brush) || {}).col || "#888888"); S.pcol = TP.fromHsl(k === "ph" ? +t.value : h0, k === "ps" ? +t.value : s0, k === "pl" ? +t.value : l0); renderBars(); }
+        else S.size = +t.value || 30;
+        drawFx(); return;
+      }
       if (t.matches("[data-fk]")) filt.kinds[t.dataset.fk] = t.checked;
       else if (t.matches("[data-fr]")) filt.routes[t.dataset.fr] = t.checked;
       else if (t.matches("[data-fknow]")) filt.know = t.value;
