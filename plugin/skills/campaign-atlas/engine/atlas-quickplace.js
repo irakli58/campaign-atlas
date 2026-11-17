@@ -77,8 +77,10 @@
     const fm = /\b(one|two|three|four|five|six|\d+)[- ](?:stor(?:e)?y|stor(?:e)?ies|floors?|levels?|decks?)\b/.exec(t); if (fm) floors = numOf(fm[1]);
     if (!floors && /\b(upstairs|upper floor|first floor|second floor|above the|on top)\b/.test(t)) floors = 2;
     const cellar = BELOW.test(t);
-    let size = /\b(tiny|cramped|little|small|modest|narrow)\b/.test(t) ? "small" : /\b(huge|enormous|vast|sprawling|massive)\b/.test(t) ? "huge" : /\b(large|big|grand|wealthy|spacious|great)\b/.test(t) ? "large" : null;
-    const cond = /\b(ruined|burn(?:ed|t)[- ]out|collapsed|gutted)\b/.test(t) ? "ruined" : /\b(abandoned|derelict|disused|deserted|boarded)\b/.test(t) ? "abandoned" : /\b(old|run-?down|shabby|damaged|decrepit|weathered|dilapidated)\b/.test(t) ? "worn" : "";
+    // (the building's own size and state: not words about what a clue points to, "the old mill")
+    const own = t.replace(/\b(?:reveals?|shows?|points? to|leads? to|proves?|names?|hints? at)\b[^.;,]*/g, " ");
+    let size = /\b(tiny|cramped|little|small|modest|narrow)\b/.test(own) ? "small" : /\b(huge|enormous|vast|sprawling|massive)\b/.test(own) ? "huge" : /\b(large|big|grand|wealthy|spacious|great)\b/.test(own) ? "large" : null;
+    const cond = /\b(ruined|burn(?:ed|t)[- ]out|collapsed|gutted)\b/.test(own) ? "ruined" : /\b(abandoned|derelict|disused|deserted|boarded)\b/.test(own) ? "abandoned" : /\b(old|run-?down|shabby|damaged|decrepit|weathered|dilapidated)\b/.test(own) ? "worn" : "";
     // (the rooms: each named one, with how many when a number stands before it; a room said to be upstairs goes up)
     const rooms = [], words = t.split(/\s+/);
     for (const [re, name, mat, fx, where] of ROOMS) {
