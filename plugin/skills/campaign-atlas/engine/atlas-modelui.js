@@ -14,7 +14,7 @@
   // the library's state, remembered in this browser: what is searched and filtered, which model is open
   const L = Object.assign({ q: "", cat: "", sub: "", genre: [], fam: [], cond: "", env: "", sort: "best", view: "all", shown: 60, kind: "3d" }, store("ui", {}));
   L.pick = null; L.imp = null;
-  let favs = store("fav", []), recent = store("recent", []), api = null, preview = null, previewFor = "", observer = null;
+  let cols = store("cols", {}), favs = store("fav", []), recent = store("recent", []), api = null, preview = null, previewFor = "", observer = null;
   const saveUI = () => keep("ui", { q: L.q, cat: L.cat, sub: L.sub, genre: L.genre, fam: L.fam, cond: L.cond, env: L.env, sort: L.sort, view: L.view, kind: L.kind });
   const IC = {
     furnish: `<path d="M6 11V6.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2V11"/><path d="M4 11.5h16v4H4zM6 15.5V20M18 15.5V20"/>`,
@@ -357,7 +357,7 @@
   const kitsNow = () => M.kits().filter(k => (k.kind || "3d") === (L.kind === "2d" ? "2d" : "3d"));
   function results() {
     const f = filters();
-    if (L.view === "fav") f.ids = favs.slice(); else if (L.view === "recent") f.ids = recent.slice(); else if (L.view === "mine") f.ids = M.custom.filter(x => !x.hidden).map(x => x.id); else if (L.view.startsWith("kit:")) { const k = M.kits().find(x => "kit:" + x.id === L.view); f.ids = k ? k.ids : []; }
+    if (L.view === "fav") f.ids = favs.slice(); else if (L.view === "recent") f.ids = recent.slice(); else if (L.view === "mine") f.ids = M.custom.filter(x => !x.hidden).map(x => x.id); else if (L.view.startsWith("col:")) f.ids = (cols[L.view.slice(4)] || []).slice(); else if (L.view.startsWith("kit:")) { const k = M.kits().find(x => "kit:" + x.id === L.view); f.ids = k ? k.ids : []; }
     let list = M.find(L.q, f);
     if (L.view === "recent" && !L.q) list.sort((a, b) => recent.indexOf(a.e.id) - recent.indexOf(b.e.id));
     return list;
@@ -368,6 +368,7 @@
     const item = (view, cat, sub, label, n, cls) => `<button type="button" class="ml-nv ${cls || ""}" data-nv="${esc(view)}" data-cat="${esc(cat || "")}" data-sub="${esc(sub || "")}" aria-pressed="${L.view === view && (L.cat || "") === (cat || "") && (L.sub || "") === (sub || "")}">${label}<i>${n}</i></button>`;
     const mine = M.custom.filter(x => !x.hidden).length;
     let h = item("all", "", "", "Everything", base.length) + item("fav", "", "", `${icon("star")} Favourites`, favs.filter(id => M.entry(id)).length) + item("recent", "", "", "Used lately", recent.filter(id => M.entry(id)).length) + item("kits", "", "", `${icon("cube")} ${L.kind === "2d" ? "Sets" : "Kits"}`, kitsNow().length) + (mine ? item("mine", "", "", "Your own models", mine) : "");
+    const cn = Object.keys(cols); if (cn.length) { h += `<div class="ml-nvh">My collections</div>`; for (const n of cn) h += item("col:" + n, "", "", esc(n), (cols[n] || []).filter(id => M.entry(id)).length); }
     h += `<div class="ml-nvh">Categories</div>`;
     for (const [c, ss] of M.cats()) {
       if (!by[c] && L.cat !== c) continue;
@@ -421,7 +422,7 @@
         <dt>In 3D</dt><dd>${esc(inThree(e, sp))}</dd><dt>Made by</dt><dd>${esc(e.src)}</dd><dt>Licence</dt><dd>${esc(e.lic)}</dd></dl>
       ${e.colour ? `<label class="me-f me-colour"><span>Colour</span><input type="color" data-pk="col" value="${esc(sp.col || e.colour)}"></label>` : ""}
       <details class="me-more"><summary>Its size</summary><div class="me-nums">${["w", "d"].map(k => `<label class="me-num"><span>${k === "w" ? "Wide" : "Deep"} (m)</span><input type="number" data-pk="${k}" value="${Math.round(Object.assign({}, e.p, sp.p || {})[k] * 100) / 100}" step=".05" min=".05"></label>`).join("")}</div></details>
-      <div class="me-row ml-go"><button type="button" class="prim" data-ml="place">Put it on the map</button><button type="button" data-fav="${esc(e.id)}" aria-pressed="${favs.includes(e.id)}" title="Favourite">${icon("star")}</button></div>`;
+      <div class="me-row ml-go"><button type="button" class="prim" data-ml="place">Put it on the map</button><button type="button" data-colto="${esc(e.id)}" title="Put it in one of your collections (a tavern's set, a villain's lair…)">To a collection…</button><button type="button" data-fav="${esc(e.id)}" aria-pressed="${favs.includes(e.id)}" title="Favourite">${icon("star")}</button></div>`;
   }
   function drawingPanel(p, e) {
     const [w, d] = M.dims(e, p), s = p.s || 1;
@@ -456,7 +457,7 @@
       ${e.custom ? "" : `<label class="me-f me-colour"><span>Colour</span><span class="me-row"><input type="color" data-pk="col" value="${esc(sp.col || "#a08060")}"><button type="button" data-ml="nocol"${sp.col ? "" : " disabled"}>As made</button></span></label>
       <details class="me-more"><summary>Its shape</summary><div class="me-nums">${["w", "d", "h"].map(k => `<label class="me-num"><span>${{ w: "Wide", d: "Deep", h: "High" }[k]} (m)</span><input type="number" data-pk="${k}" value="${Math.round(Object.assign({}, e.p, sp.p || {})[k] * 100) / 100}" step=".05" min=".01"></label>`).join("")}</div>
         ${"text" in e.p ? `<label class="me-f"><span>Its words</span><input data-pk="text" value="${esc(Object.assign({}, e.p, sp.p || {}).text || "")}" maxlength="40"></label>` : ""}</details>`}
-      <div class="me-row ml-go"><button type="button" class="prim" data-ml="place">Put it on the map</button><button type="button" data-fav="${esc(e.id)}" aria-pressed="${favs.includes(e.id)}" title="Favourite">${icon("star")}</button>${e.custom ? `<button type="button" class="me-del" data-ml="forget">Forget this model</button>` : ""}</div>`;
+      <div class="me-row ml-go"><button type="button" class="prim" data-ml="place">Put it on the map</button><button type="button" data-colto="${esc(e.id)}" title="Put it in one of your collections (a tavern's set, a villain's lair…)">To a collection…</button><button type="button" data-fav="${esc(e.id)}" aria-pressed="${favs.includes(e.id)}" title="Favourite">${icon("star")}</button>${e.custom ? `<button type="button" class="me-del" data-ml="forget">Forget this model</button>` : ""}</div>`;
     startPreview(sp);
   }
   async function startPreview(sp) {
@@ -669,6 +670,7 @@
       // choosing Furnish on a floor with nothing on it yet opens the library
       const tb = t.closest("button[data-tool]"); if (tb) { ed.place = null; setSel([]); if (tb.dataset.tool === "furnish" && !P().length) setTimeout(() => openLib(), 0); return false; }
       if (t.closest("[data-mf]")) { setSel([]); ed.place = ed.place && ed.place.spec ? ed.place : null; return false; }
+      const ct = t.closest("[data-colto]"); if (ct) { const id = ct.dataset.colto, names = Object.keys(cols), n = prompt(names.length ? `Which collection? (${names.join(", ")}, or a new name)` : "A name for the new collection", names[0] || "My set"); if (!n || !n.trim()) return; const k = n.trim().slice(0, 40), l = cols[k] || []; cols[k] = l.includes(id) ? l.filter(x => x !== id) : l.concat(id); if (!cols[k].length) delete cols[k]; keep("cols", cols); ct.textContent = (cols[k] || []).includes(id) ? "In " + k : "To a collection…"; return; }
       const fav = t.closest("[data-fav]"); if (fav) { const id = fav.dataset.fav; favs = favs.includes(id) ? favs.filter(x => x !== id) : [id].concat(favs); keep("fav", favs); document.querySelectorAll(`#meDlg [data-fav="${CSS.escape(id)}"]`).forEach(b => b.setAttribute("aria-pressed", favs.includes(id))); if (L.view === "fav") paintList(); paintNav(); return true; }
       const qa = t.closest("[data-qadd]"); if (qa) { const sp = { a: qa.dataset.qadd }; if (qa.dataset.c) sp.c = qa.dataset.c; startPlacing(sp); return true; }
       const ks = t.closest("[data-kitset]"); if (ks) { const k = M.kits().find(x => x.id === ks.dataset.kitset); if (k) startPlacing({ set: k.set }, k.n + " set"); return true; }

@@ -61,7 +61,7 @@
   // one square of the map, in metres
   M.sq = () => { const g = (A.config && A.config.grid) || { unit: 5, name: "ft" }, n = String(g.name || "ft").toLowerCase(), u = +g.unit || 5; return /^m/.test(n) ? u : /^(yd|yard)/.test(n) ? u * .9144 : /^(in|inch)/.test(n) ? u * .0254 : u * .3048; };
   // what the search understands: words for families, conditions and genres
-  const SYN = { wooden: "wood", timber: "wood", stone: "stone", metal: "metal", metallic: "metal", iron: "metal", steel: "metal", plastic: "plastic", glass: "glass", fabric: "fabric", cloth: "fabric", leather: "leather", paper: "paper", organic: "organic", glowing: "glow", lit: "glow", neon: "glow", scifi: "scifi", "sci-fi": "scifi", space: "scifi", futuristic: "futuristic", cyber: "cyberpunk", cyberpunk: "cyberpunk", medieval: "medieval", fantasy: "fantasy", modern: "modern", military: "military", army: "military", horror: "horror", creepy: "horror", apocalyptic: "postapoc", "post-apocalyptic": "postapoc", wasteland: "postapoc", historical: "historical", victorian: "historical", old: "worn", broken: "damaged", damaged: "damaged", rusty: "rusty", rusted: "rusty", dirty: "dirty", worn: "worn", ruined: "ruined", burned: "burned", burnt: "burned", new: "new", used: "used" };
+  const SYN = { "1920s": "historical", "1930s": "historical", "1910s": "historical", "1890s": "historical", twenties: "historical", thirties: "historical", edwardian: "historical", prohibition: "historical", cthulhu: "historical", wooden: "wood", timber: "wood", stone: "stone", metal: "metal", metallic: "metal", iron: "metal", steel: "metal", plastic: "plastic", glass: "glass", fabric: "fabric", cloth: "fabric", leather: "leather", paper: "paper", organic: "organic", glowing: "glow", lit: "glow", neon: "glow", scifi: "scifi", "sci-fi": "scifi", space: "scifi", futuristic: "futuristic", cyber: "cyberpunk", cyberpunk: "cyberpunk", medieval: "medieval", fantasy: "fantasy", modern: "modern", military: "military", army: "military", horror: "horror", creepy: "horror", apocalyptic: "postapoc", "post-apocalyptic": "postapoc", wasteland: "postapoc", historical: "historical", victorian: "historical", old: "worn", broken: "damaged", damaged: "damaged", rusty: "rusty", rusted: "rusty", dirty: "dirty", worn: "worn", ruined: "ruined", burned: "burned", burnt: "burned", new: "new", used: "used" };
   const words = s => String(s || "").toLowerCase().replace(/sci-fi/g, "scifi").match(/[a-z0-9]+/g) || [];
   // the catalogue searched and filtered: returns entries with the condition the query asks for (a search for "damaged
   // barrel" shows the barrels as damaged)
@@ -70,6 +70,15 @@
     const qs = words(q), want = { fam: [], cond: null, genre: [] }, rest = [];
     for (const w of qs) { const s = SYN[w] || SYN[w.replace(/s$/, "")]; if (s && M.FAMILIES.some(x => x[0] === s)) want.fam.push(s); else if (s && M.CONDS.some(x => x[0] === s)) want.cond = s; else if (s && M.GENRES.some(x => x[0] === s)) want.genre.push(s); else rest.push(w.replace(/(ies)$/, "y").replace(/([^s])s$/, "$1")); }
     const out = [];
+    // (a room or a place searched for, "a 1920s doctor's office", "speakeasy": the ready-made kits that speak of it lend
+    // their pieces, so a search by the room finds what furnishes it; the user, 17 Nov 2026, the asset library request)
+    // (the kits that match the most of its words, a room's other names counted: a speakeasy is a bar, a doctor's office a
+    // surgery)
+    const ROOMW = { speakeasy: "bar club jazz tavern", doctor: "surgery clinic medical physician hospital ward operating", physician: "surgery clinic medical hospital", nurse: "hospital ward", alchemist: "alchemy laboratory potion", detective: "office desk filing", jazz: "club bar", saloon: "bar tavern", inn: "tavern", pub: "tavern", smithy: "forge blacksmith", blacksmith: "forge smithy", bridge: "command console", engineering: "reactor engine", cryo: "cryogenic sleep", morgue: "autopsy", chapel: "church altar", temple: "altar shrine", lair: "cult ritual", study: "library office desk" };
+    // (each word counts the more the fewer kits it matches: "doctor" says more than "office")
+    const kitIds = new Map(); if (rest.length) { const txt = KITS.map(k => (k.n + " " + (k.d || "") + " " + k.id).toLowerCase()), hitW = w => { const xs = [w].concat((ROOMW[w] || "").split(" ").filter(Boolean)); return txt.map(t => xs.some(x => t.includes(x))); };
+      const GEN = new Set(["office", "room", "rooms", "house", "hall", "shop", "place", "building", "area"]), ws = rest.filter(w => w.length >= 4), per = ws.map(hitW), sc = KITS.map((k, i) => per.reduce((s, h) => { const df = h.filter(Boolean).length; return s + (h[i] && df ? (GEN.has(ws[per.indexOf(h)]) ? .5 : 1) / df : 0); }, 0)), decay = /abandon|derelict|ruin|haunt|burn/.test(String(q).toLowerCase()); KITS.forEach((k, i) => { if (!decay && /abandon|derelict|ruin|haunt/.test(txt[i])) sc[i] *= .45; }); const best = Math.max(0, ...sc);
+      if (best > 0) KITS.forEach((k, i) => { if (sc[i] >= best * .5) for (const id of k.ids || []) kitIds.set(id, Math.max(kitIds.get(id) || 0, sc[i] / best)); }); }
     for (const e of ENTRIES.concat(M.custom || [])) {
       if (e.hidden) continue;
       // 3D models or 2D drawings (atlas-sprites.js): the library shows one or the other
@@ -88,7 +97,7 @@
       if (rest.length) {
         const name = words(e.n).map(w => w.replace(/([^s])s$/, "$1")), hay = words([e.s, e.c, e.tags.join(" "), e.f].join(" ")).map(w => w.replace(/([^s])s$/, "$1"));
         for (const w of rest) { if (name.includes(w)) score += 6; else if (name.some(x => x.startsWith(w))) score += 4; else if (hay.includes(w)) score += 2; else if (hay.some(x => x.startsWith(w))) score += 1; else { score = -1; break; } }
-        if (score < 0) continue;
+        if (score < 0) { if (kitIds.has(e.id)) score = 1 + 2 * kitIds.get(e.id); else continue; }
       }
       out.push({ e, score, cond: want.cond || f.cond || null });
     }
