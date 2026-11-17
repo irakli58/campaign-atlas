@@ -1349,7 +1349,7 @@
         <div class="eyebrow"><span>${esc((KINDS[L.kind] || [0, L.kind])[1])}</span>${L.region ? `<span>${esc(L.region)}</span>` : ""}${realm && (keeper || !realm.hidden) && realm.name !== L.region ? `<button type="button" class="wm-rlink" data-wfeat="${esc(realm.id)}">${esc(realm.name || "A realm")}</button>` : ""}${here ? `<span class="wm-here">The party is here</span>` : ""}</div>
         <h3>${esc(L.name)}</h3>
         ${keeper && A.ux && (L.added || L.edited) ? `<p>${A.ux.hand(L.added ? "Your own place: never redrawn" : "Changed by you: kept when the map is made again")}</p>` : ""}
-        ${L.owner && keeper ? `<p class="kn">Held by ${esc(facName(L.owner))}</p>` : ""}
+        ${L.owner && keeper ? `<p class="kn">Held by ${esc(facName(L.owner))}</p>` : ""}${L.res || L.imp ? `<p class="kn">${L.res ? "Produces " + esc(L.res) : ""}${L.res && L.imp ? "; " : ""}${L.imp ? "brings in " + esc(L.imp) : ""}</p>` : ""}
         ${keeper ? `<div class="wm-stseg" role="group" aria-label="What the party knows">${STATES.map(([v, l]) => `<button type="button" data-wstate="${v}" aria-pressed="${L.state === v}" title="${esc(l)}"><span class="sd st-w-${v}"></span>${esc(l.split(" ")[0])}</button>`).join("")}</div>` : L.state !== "known" ? `<p class="kn">${esc(stName)}</p>` : ""}
         ${acts.length ? `<div class="meta">${acts.map(a => `<span class="tag">Act ${a}</span>`).join("")}</div>` : ""}
         ${L.desc ? `<p class="wm-desc">${esc(L.desc)}</p>` : ""}
@@ -1873,8 +1873,10 @@
         <label><span>What it is (the players may read this)</span><textarea name="desc" rows="3" maxlength="1200">${esc(L && L.desc || "")}</textarea></label>
         <label><span>For the referee only</span><textarea name="gm" rows="3" maxlength="2000">${esc(L && L.gm || "")}</textarea></label>
         <label><span>Its 3D map</span><select name="city">${opt([["", "None"], ...cities], L && L.city || "")}</select></label>
-        ${facList().length ? `<label><span>Held by</span><select name="owner">${opt([["", "No one in particular"], ...facList()], L && L.owner || "")}</select></label>` : ""}`, v => {
-        const body = { name: v.name.slice(0, 80), kind: v.kind, state: v.state, region: v.region, desc: v.desc, gm: v.gm, city: v.city || undefined };
+        ${facList().length ? `<label><span>Held by</span><select name="owner">${opt([["", "No one in particular"], ...facList()], L && L.owner || "")}</select></label>` : ""}
+        <label><span>What it produces (optional)</span><input name="res" maxlength="160" value="${esc(L && L.res || "")}" placeholder="e.g. iron, timber, fish"></label>
+        <label><span>What it must bring in (optional)</span><input name="imp" maxlength="160" value="${esc(L && L.imp || "")}" placeholder="e.g. grain, salt"></label>`, v => {
+        const body = { name: v.name.slice(0, 80), kind: v.kind, state: v.state, region: v.region, desc: v.desc, gm: v.gm, city: v.city || undefined, res: v.res || null, imp: v.imp || null };
         if (v.owner != null) body.owner = v.owner || null;
         if (L) save("l-" + L.id, Object.assign(ownOf("l", L.id), body, L.added ? { at: L.at } : {}));
         else {
@@ -1969,7 +1971,7 @@
     function exportJS() {
       const W0 = wData() || {}, keep = (o, ks) => { const x = {}; for (const k of ks) if (o[k] != null && o[k] !== "") x[k] = o[k]; return x; };
       const out = Object.assign(keep(W0, ["title", "look", "size", "scale", "speeds"]), {
-        locations: WD.locs.map(l => keep(Object.assign({}, l, { at: [r1(l.at[0]), r1(l.at[1])] }), ["id", "name", "kind", "at", "city", "state", "region", "owner", "desc", "gm", "people", "events", "tags"])),
+        locations: WD.locs.map(l => keep(Object.assign({}, l, { at: [r1(l.at[0]), r1(l.at[1])] }), ["id", "name", "kind", "at", "city", "state", "region", "owner", "desc", "gm", "people", "events", "tags", "res", "imp"])),
         routes: WD.routes.map(r => keep(r, ["id", "from", "to", "kind", "name", "via", "days", "danger", "blocked", "hidden", "desc", "gm", "enc", "cls", "state", "trade"])),
         party: WD.party
       });
