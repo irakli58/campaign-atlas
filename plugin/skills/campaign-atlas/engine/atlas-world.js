@@ -26,7 +26,7 @@
   // the look of the map: a parchment map (fantasy, and the past), an atlas (the modern world) or a star map (the future)
   // (27 Oct 2026: the past has its own look, an engraved atlas plate; a planet in science fiction a survey; the game
   // master may choose another, kept as the world's "style": atlas-world-art.js draws each)
-  // (27 Oct 2026: fantasy is painted in colour by default, as the user asked; parchment stays one choice)
+  // (17 Nov 2026: fantasy wears the geological look, hydro, by default, as the user asked; painted and parchment stay choices)
   const LOOK_OF = { hydro: "hydro", hydrographic: "hydro", print: "hydro", relief: "relief", shaded: "relief", natural: "relief", painted: "painted", fantasy: "hydro", colour: "painted", color: "painted", parchment: "parchment", medieval: "parchment",
     engraved: "engraved", old: "engraved", antique: "engraved", industrial: "engraved", historical: "engraved", victorian: "engraved", "1920s": "engraved",
     atlas: "atlas", modern: "atlas", political: "atlas", planet: "planet", holo: "holo", survey: "holo", alien: "holo",

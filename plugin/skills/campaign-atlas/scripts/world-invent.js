@@ -876,8 +876,8 @@ function invent(A, flags, log) {
   return { T, summary: `${look === "stars" ? "a star map" : `the land: ${land}, ${sea}% sea,${gi ? ` ${gi.plates} tectonic plates (${gi.continental} continental), highest peak about ${gi.peak} m, ${gi.lakes ? "lakes, " : ""}${realism},` : ""} ${T.rivers.length} rivers,${T.craters ? ` ${T.craters} impact craters,` : ""}${T.features ? ` ${Object.entries(T.features).map(([k, v]) => v + " " + k).join(", ")},` : ""} climate: ${BIO.CLIMATES[climate][3].toLowerCase()}${planetWord ? `, a ${planetWord} planet` : ""}${CV && CV.fjords ? `, ${CV.fjords} fjords` : ""}${regionsSaid.length ? `; regions: ${regionsSaid.join(", ")}` : ""}`}, ${w} by ${h} (seed ${seed}); ${T.labels.length} named features; ${placedN} location${placedN === 1 ? "" : "s"} placed${Object.keys(keepOld).length ? `, ${Object.keys(T.spots).length - placedN} kept where they stood` : ""}${routesN ? `; ${routesN} routes suggested (world.js has none of its own)` : ""}` };
 }
 // the look a campaign's world wears by itself (the game master may choose another on the page): a planet's surface a
-// survey, space a star chart, the modern world an atlas, the past an engraved plate, fantasy a painted map (27 Oct
-// 2026, as the user asked) and the middle ages parchment
+// survey, space a star chart, the modern world an atlas, the past an engraved plate, fantasy the geological look (hydro;
+// the user, 17 Nov 2026: "use the geological one", painted kept as a choice) and the middle ages parchment
 function lookOfCity(A) {
   const c = A.cityData || {}, lk = typeof c.look === "string" ? c.look : c.look && c.look.base, setting = String((A.config || {}).setting || "") + " " + String((A.config || {}).system || "");
   const era = A.table && A.table.era ? A.table.era() : "";
@@ -885,7 +885,7 @@ function lookOfCity(A) {
   if (lk === "scifi" || lk === "future" || era === "future" || /space|star|orbit|planet|mothership|traveller/i.test(setting)) return "stars";
   if (lk === "modern" || era === "modern") return "atlas";
   if (era === "victorian" || era === "1920s" || lk === "victorian" || lk === "industrial") return "engraved";
-  // (fantasy has been shaded relief since 27 Oct 2026, as the user asked; painted and parchment remain choices)
+  // (fantasy wears the geological look, hydro: the user, 17 Nov 2026; painted and parchment remain choices)
   if (lk === "fantasy" || (A.config || {}).genre === "fantasy" || /fantas|sorcer|dragon|elv|elf|dwar|wizard|dungeons/i.test(setting)) return "hydro";
   return "parchment";
 }
