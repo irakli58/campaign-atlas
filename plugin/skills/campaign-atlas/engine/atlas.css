@@ -3222,3 +3222,4 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .fa-dip { margin-top: .5rem; }
 .fa-dipl { margin: .25rem 0; padding-left: 1.1rem; }
 .fa-tr { font-size: .85em; padding: 0 .35rem; border-radius: 4px; background: rgba(120, 90, 40, .12); }
+.wm-trf { display: grid; gap: .3rem; border: 1px solid var(--line, #c9b98f); border-radius: 6px; padding: .4rem .6rem; }

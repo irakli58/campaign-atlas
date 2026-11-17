@@ -831,6 +831,7 @@
         <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
         <button type="button" class="wm-btn wm-pltog" data-w="plates" aria-pressed="false" hidden title="Show the tectonic plates: their borders, what happens at each, which way each plate moves">Plates</button>
         <button type="button" class="wm-btn wm-rktog" data-w="rocks" aria-pressed="false" hidden title="Show the rocks of each region, and the ores, gems, coal, oil, salt, hot springs and caves in them, with why each is there">Rocks and resources</button>
+        <button type="button" class="wm-btn wm-trtog" data-w="trade" aria-pressed="false" hidden title="Show the trade routes: their goods, how much moves along them and whether war or an embargo stands in the way">Trade</button>
         <span class="wm-sp"></span>
         <span class="wm-editbar keeper"></span>
         ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
@@ -841,7 +842,7 @@
         ${A.ux ? `<span class="keeper wm-uxs">${A.ux.saveMark()}${A.ux.keysBtn("world")}</span>` : ""}<button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false" title="Edit the map (E)">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-rk"></g><g class="wm-pl"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-rk"></g><g class="wm-pl"></g><g class="wm-trd"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -1259,11 +1260,20 @@
     // the sharper land where the map is zoomed in (the shaded reliefs): once the camera rests, the window in view is
     // drawn again as fine as the screen shows it and laid over the land, so a continent of a whole planet holds its
     // valleys and streams up close; zoomed back out, the whole map's own picture is enough
-    const LAY = { plates: (() => { try { return ctx.store.get("world-plates") === "1"; } catch (e) { return false; } })(), rocks: (() => { try { return ctx.store.get("world-rocks") === "1"; } catch (e) { return false; } })() };
+    const LAY = { trade: (() => { try { return ctx.store.get("world-trade") === "1"; } catch (e) { return false; } })(), plates: (() => { try { return ctx.store.get("world-plates") === "1"; } catch (e) { return false; } })(), rocks: (() => { try { return ctx.store.get("world-rocks") === "1"; } catch (e) { return false; } })() };
     function drawGeoLayers() {
       const art = A.worldArt, hasP = !!(WD.T && WD.T.tect && art && art.plateLayer), hasR = !!(WD.T && WD.T.rocks && art && art.rockLayer);
       const bp = $(".wm-pltog"), br = $(".wm-rktog"); bp.hidden = !hasP; br.hidden = !hasR; bp.setAttribute("aria-pressed", hasP && LAY.plates); br.setAttribute("aria-pressed", hasR && LAY.rocks);
       $(".wm-pl").innerHTML = hasP && LAY.plates ? art.plateLayer(WD) : ""; $(".wm-rk").innerHTML = hasR && LAY.rocks ? art.rockLayer(WD) : "";
+      // (the trade routes: each route with trade, in gold, thicker the more moves along it; dashed where suspended or
+      // closed, marked where war or an embargo stands in the way; the trade route's name and goods at its middle)
+      const tr = WD.routes.filter(r => r.trade && !r.gone && (gm() || !r.hidden)), bt = $(".wm-trtog");
+      if (bt) { bt.hidden = !tr.length; bt.setAttribute("aria-pressed", !!(tr.length && LAY.trade)); }
+      const g = $(".wm-trd"); if (!g) return;
+      if (!tr.length || !LAY.trade) { g.innerHTML = ""; return; }
+      const K = Math.max(1, Math.min(WD.size[0], WD.size[1]) / 900), named = new Set();
+      g.innerHTML = tr.map(r => { const way = typeof wayFor === "function" ? wayFor(r) : [WD.byId[r.from].at, WD.byId[r.to].at], w = ({ low: 2, medium: 3.4, high: 5 }[r.trade.vol] || 2.6) * K, off = ["suspended", "closed"].includes(r.trade.status), trouble = gm() && tradeTrouble(r), mid = way[Math.floor(way.length / 2)], first = r.trade.name && !named.has(r.trade.name); if (first) named.add(r.trade.name);
+        return `<path d="${pathD(way)}" fill="none" stroke="${trouble ? "#b0161b" : "#c99a1e"}" stroke-opacity=".85" stroke-width="${w}" stroke-linecap="round"${off ? ` stroke-dasharray="${8 * K} ${6 * K}"` : ""}><title>${esc([r.trade.name, r.trade.goods, r.trade.vol, r.trade.status, trouble].filter(Boolean).join(" · "))}</title></path>${first ? `<text x="${mid[0]}" y="${mid[1] - 8 * K}" text-anchor="middle" font-size="${13 * K}" fill="#6b4e0a" stroke="#fbf5e3" stroke-width="${3 * K}" paint-order="stroke" font-style="italic">${esc(r.trade.name)}${r.trade.goods ? ": " + esc(r.trade.goods) : ""}</text>` : ""}`; }).join("");
     }
     function refine() {
       const slot = cam.querySelector(".wm-detail"); if (!slot || !A.worldArt || !A.worldArt.detail || gone || anim) return;
@@ -1388,6 +1398,9 @@
           <div><dt>Travel</dt><dd>${tv.days != null ? `${esc(daysText(tv.days))} <span class="kn">(${esc(tv.basis)})</span>` : `<span class="kn">Not known${keeper ? ": set the days in Edit map" : ""}.</span>`}</dd></div>
           ${r.danger ? `<div><dt>Danger</dt><dd class="wm-dgr">${esc(r.danger === true ? "A dangerous way." : r.danger)}</dd></div>` : ""}
           ${r.blocked ? `<div><dt>Blocked</dt><dd class="wm-bad">${esc(r.blocked === true ? "The way is shut." : r.blocked)}</dd></div>` : ""}
+          ${r.cls ? `<div><dt>Road</dt><dd>${esc((roadClasses().concat([["highway", "A highway or motorway"], ["maglev", "A maglev or transit line"]]).find(x => x[0] === r.cls) || [0, r.cls])[1])}</dd></div>` : ""}
+          ${r.state ? `<div><dt>State</dt><dd class="wm-bad">${esc(r.state === "damaged" ? "Damaged" : "Abandoned")}</dd></div>` : ""}
+          ${r.trade ? `<div><dt>Trade</dt><dd>${esc([r.trade.name, r.trade.goods, r.trade.vol ? r.trade.vol + " volume" : "", r.trade.status && r.trade.status !== "active" ? r.trade.status : ""].filter(Boolean).join("; "))}${keeper && tradeTrouble(r) ? `<br><span class="wm-dgr">${esc(tradeTrouble(r))}</span>` : ""}</dd></div>` : ""}
         </dl>
         ${r.desc ? `<p class="wm-desc">${esc(r.desc)}</p>` : ""}
         ${keeper && r.gm ? `<div class="sec secret"><p>${esc(r.gm)}</p></div>` : ""}
@@ -1871,6 +1884,22 @@
         }
       });
     }
+    // (the kinds of road, by the campaign's age: no motorway in a medieval kingdom; the user, 17 Nov 2026)
+    function roadClasses() {
+      let e = ""; try { e = String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase(); } catch (_) {}
+      const base = [["dirt", "A dirt road"], ["paved", "A paved road"], ["trade", "A trade road"], ["military", "A military road"], ["causeway", "A causeway"], ["bridge", "A bridge"]];
+      if (/modern|now|today|19|20|historical|victorian|future/.test(e)) base.push(["highway", "A highway or motorway"]);
+      if (/future/.test(e)) base.push(["maglev", "A maglev or transit line"]);
+      return base;
+    }
+    // (trade along a route, and what stands in its way: the powers at its two ends at war, or an embargo or blockade
+    // between them; said, never acted on: the route and its trade stay as the game master made them)
+    function tradeTrouble(r) {
+      const a = WD.byId[r.from], b = WD.byId[r.to], oa = a && a.owner, ob = b && b.owner; if (!oa || !ob || oa === ob || !A.lives || !A.lives.fac) return "";
+      const fa = A.lives.fac(oa), st = fa && fa.rels ? fa.rels[ob] : "", d = A.lives.diplomacy ? A.lives.diplomacy(oa, ob) : null, tr = (d && d.treaties) || [];
+      const say = []; if (st === "war") say.push("their holders are at war"); if (tr.includes("embargo")) say.push("an embargo stands between them"); if (tr.includes("blockade")) say.push("a blockade stands between them");
+      return say.length ? `${facName(oa)} and ${facName(ob)}: ${say.join("; ")}. Trade may well be disrupted (nothing is changed unless you change it).` : "";
+    }
     function routeForm(r, from, to) {
       const a = WD.byId[r ? r.from : from], b = WD.byId[r ? r.to : to];
       const kinds = Object.entries(ROUTES).filter(([k]) => WD.look === "stars" ? !["road", "trail", "pass", "river", "rail"].includes(k) : !["lane", "jump"].includes(k));
@@ -1880,10 +1909,18 @@
         <label><span>Days to travel (leave empty to work it out from the map)</span><input name="days" type="number" min="0" step="0.5" value="${r && typeof r.days === "number" ? r.days : ""}"></label>
         <label><span>Danger (leave empty if none)</span><input name="danger" maxlength="200" value="${esc(r && typeof r.danger === "string" ? r.danger : r && r.danger ? "A dangerous way" : "")}"></label>
         <label><span>Blocked: why (leave empty if open)</span><input name="blocked" maxlength="200" value="${esc(r && typeof r.blocked === "string" ? r.blocked : r && r.blocked ? "The way is shut" : "")}"></label>
+        ${WD.look === "stars" ? "" : `<label><span>What kind of road (for a road)</span><select name="cls">${opt([["", "Not said"]].concat(roadClasses()), r && r.cls || "")}</select></label>`}
+        <label><span>Its state</span><select name="state">${opt([["", "In use"], ["damaged", "Damaged"], ["abandoned", "Abandoned"]], r && r.state || "")}</select></label>
+        <fieldset class="wm-trf"><legend>Trade along it (optional)</legend>
+          <label><span>Trade route's name (the same name on several routes makes one trade route)</span><input name="tname" maxlength="80" value="${esc(r && r.trade && r.trade.name || "")}" placeholder="e.g. The Silver Road"></label>
+          <label><span>Goods</span><input name="goods" maxlength="160" value="${esc(r && r.trade && r.trade.goods || "")}" placeholder="e.g. silver, grain and textiles"></label>
+          <label><span>How much</span><select name="vol">${opt([["", "—"], ["low", "Low"], ["medium", "Medium"], ["high", "High"]], r && r.trade && r.trade.vol || "")}</select></label>
+          <label><span>Status</span><select name="tstat">${opt([["", "Active"], ["reduced", "Reduced"], ["suspended", "Suspended"], ["closed", "Closed"]], r && r.trade && r.trade.status || "")}</select></label></fieldset>
         <label class="wm-ck"><input type="checkbox" name="hidden"${r && r.hidden ? " checked" : ""}> Hidden from the players (a secret way)</label>
         <label><span>For the referee only</span><textarea name="gm" rows="2" maxlength="1500">${esc(r && r.gm || "")}</textarea></label>`, v => {
-        const body = { kind: v.kind, name: v.name || undefined, days: v.days === "" ? undefined : Math.max(0, +v.days), danger: v.danger || undefined, blocked: v.blocked || undefined, hidden: v.hidden || undefined, gm: v.gm || undefined };
-        if (r) { const own = ownOf("r", r.id); for (const k of ["name", "days", "danger", "blocked", "hidden", "gm"]) if (body[k] === undefined) own[k] = null; save("r-" + r.id, Object.assign(own, JSON.parse(JSON.stringify(body)), r.added ? { from: r.from, to: r.to } : {})); }
+        const trade = v.tname || v.goods || v.vol ? JSON.parse(JSON.stringify({ name: v.tname || undefined, goods: v.goods || undefined, vol: v.vol || undefined, status: v.tstat || undefined })) : undefined;
+        const body = { kind: v.kind, name: v.name || undefined, days: v.days === "" ? undefined : Math.max(0, +v.days), danger: v.danger || undefined, blocked: v.blocked || undefined, hidden: v.hidden || undefined, gm: v.gm || undefined, cls: v.cls || undefined, state: v.state || undefined, trade };
+        if (r) { const own = ownOf("r", r.id); for (const k of ["name", "days", "danger", "blocked", "hidden", "gm", "cls", "state", "trade"]) if (body[k] === undefined) own[k] = null; save("r-" + r.id, Object.assign(own, JSON.parse(JSON.stringify(body)), r.added ? { from: r.from, to: r.to } : {})); }
         else { const id = "x" + Date.now().toString(36); S.selRoute = id; S.sel = null; save("r-" + id, Object.assign({ from, to }, JSON.parse(JSON.stringify(body)))); }
       });
     }
@@ -1933,7 +1970,7 @@
       const W0 = wData() || {}, keep = (o, ks) => { const x = {}; for (const k of ks) if (o[k] != null && o[k] !== "") x[k] = o[k]; return x; };
       const out = Object.assign(keep(W0, ["title", "look", "size", "scale", "speeds"]), {
         locations: WD.locs.map(l => keep(Object.assign({}, l, { at: [r1(l.at[0]), r1(l.at[1])] }), ["id", "name", "kind", "at", "city", "state", "region", "owner", "desc", "gm", "people", "events", "tags"])),
-        routes: WD.routes.map(r => keep(r, ["id", "from", "to", "kind", "name", "via", "days", "danger", "blocked", "hidden", "desc", "gm", "enc"])),
+        routes: WD.routes.map(r => keep(r, ["id", "from", "to", "kind", "name", "via", "days", "danger", "blocked", "hidden", "desc", "gm", "enc", "cls", "state", "trade"])),
         party: WD.party
       });
       // the land as reshaped, and the rivers and names: those the land came with (world-terrain.js) stay there, so the
@@ -2152,7 +2189,7 @@
         case "coasts": COA.on = !COA.on; try { ctx.store.set("world-coasts", COA.on ? "1" : "0"); } catch (_) {} drawCoasts(); renderBars(); break;
         case "curnames": CUR.names = !CUR.names; try { ctx.store.set("world-curnames", CUR.names ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
         case "pmaps": openPmaps(); break;
-        case "plates": case "rocks": { const k = b.dataset.w; LAY[k] = !LAY[k]; try { ctx.store.set("world-" + k, LAY[k] ? "1" : ""); } catch (_) {} drawGeoLayers(); break; }
+        case "plates": case "rocks": case "trade": { const k = b.dataset.w; LAY[k] = !LAY[k]; try { ctx.store.set("world-" + k, LAY[k] ? "1" : ""); } catch (_) {} drawGeoLayers(); break; }
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
         case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }
         case "dlgclose": closeDlg(); break;
