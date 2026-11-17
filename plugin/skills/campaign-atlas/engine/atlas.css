@@ -3213,3 +3213,12 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .qp-form textarea { width: 100%; box-sizing: border-box; }
 .qp-heard { min-height: 1.3em; margin: .3rem 0 .5rem; font-size: .88em; }
 .qp-detail { display: grid; gap: .35rem; margin: .5rem 0; }
+
+/* ---- powers made by hand and their diplomacy (atlas-factions.js, 17 Nov 2026) */
+.fa-pf, .fa-dipf { display: grid; gap: .35rem; margin: .5rem 0; padding: .6rem; border: 1px solid var(--line, #c9b98f); border-radius: 6px; }
+.fa-pf label, .fa-dipf label { display: grid; gap: .15rem; }
+.fa-setl, .fa-tbox { display: flex; flex-wrap: wrap; gap: .25rem .8rem; border: 0; padding: 0; }
+.fa-setl label, .fa-tbox label { display: inline-flex; gap: .3rem; align-items: center; }
+.fa-dip { margin-top: .5rem; }
+.fa-dipl { margin: .25rem 0; padding-left: 1.1rem; }
+.fa-tr { font-size: .85em; padding: 0 .35rem; border-radius: 4px; background: rgba(120, 90, 40, .12); }
