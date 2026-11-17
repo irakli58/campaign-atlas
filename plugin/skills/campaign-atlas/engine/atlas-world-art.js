@@ -300,7 +300,7 @@
     }
     // (the lagoons as rounded water, not the grid's squares: their cells eased together and traced)
     if (LG) { const Q = new Float32Array(LG.length); for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { let a = 0, c = 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const x = i + di, y = j + dj; if (x >= 0 && y >= 0 && x < cols && y < rows) { a += LG[y * cols + x]; c++; } } Q[j * cols + i] = a / c; }
-      const d = coastRings({ cols, rows, cell, H: Q, sea: 70 }).map(r => pathD(chaikin(rdpRing(r, .6), 2, true), true)).join(""); if (d) s += `<path d="${d}" fill="#bcdcd8" fill-opacity=".6"/>`; }
+      const d = coastRings({ cols, rows, cell, H: Q, sea: 70 }).map(r => pathD(chaikin(rdpRing(r, .6), 2, true), true)).join(""); if (d) s += `<path d="${d}" fill="#8ccbcc" fill-opacity=".82"/><path d="${d}" fill="none" stroke="#5f9ea6" stroke-opacity=".55" stroke-width="${r1(Math.max(.4, cell * .08))}"/>`; } // (a lagoon's clear shallow turquoise with a fine edge: it was too faint on the hydrographic look's pale sea)
     if (dune) s += `<filter id="${clip}-dn" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="${r1(cell * .6)}"/></filter><path d="${dune}" fill="#e6d3a2" fill-opacity=".55" filter="url(#${clip}-dn)" clip-path="url(#${clip})"/>`;
     if (rip) s += `<path class="lod1" d="${rip}" fill="none" stroke="#b89d62" stroke-opacity=".35" stroke-width="${r1(cell * .1)}" stroke-linecap="round" clip-path="url(#${clip})"/>`;
     return s;
