@@ -186,6 +186,24 @@
   const handleNear = p => { const s = E().sel, r = s && s.kind === "room" && F().R[s.i]; return !!r && [[r[1], r[2]], [r[1] + r[3], r[2]], [r[1], r[2] + r[4]], [r[1] + r[3], r[2] + r[4]]].some(([x, y]) => Math.abs(x - p.x) < .4 && Math.abs(y - p.y) < .4); };
 
   /* ---- changing what is chosen */
+  // a placed model given another look (the asset library request of 17 Nov 2026: "material variants ... to expand
+  // variety without storing thousands of nearly identical files"): another material of the same family for its main
+  // part, its condition a step or two either way, a colour already given shifted a little in hue and lightness, its
+  // size within a tenth; a model brought in by the game master keeps its look and changes size only
+  function vary(p) {
+    const e = M.entry(p.a); if (!e) return; const r = Math.random;
+    p.s = Math.round((p.s || 1) * (.92 + r() * .16) * 100) / 100;
+    if (e.custom) return;
+    const main = Object.keys((e.p || {}).m || {})[0], cur = p.m || (main ? e.p.m[main] : ""), rich = /^(gold|silver|platinum|crystal|gem|jade|marble|ivory|pearl)/, alts = main ? M.alts(e.p.m[main]).filter(k => k !== cur && (rich.test(cur) || !rich.test(k))) : []; // (no gold crate: a precious material only for what is already one)
+    if (alts.length && r() < .75) p.m = alts[Math.floor(r() * alts.length)];
+    if ((e.k || []).length > 1 && r() < .6) { const i = Math.max(0, e.k.indexOf(p.c || "new")), j = Math.max(0, Math.min(e.k.length - 1, i + [-2, -1, 1, 1, 2][Math.floor(r() * 5)])); p.c = e.k[j]; if (p.c === "new") delete p.c; }
+    if (p.col && /^#[0-9a-f]{6}$/i.test(p.col)) { const n = parseInt(p.col.slice(1), 16), rgb = [n >> 16, (n >> 8) & 255, n & 255].map(v => v / 255), mx = Math.max(...rgb), mn = Math.min(...rgb), l = (mx + mn) / 2, d = mx - mn;
+      let h = 0, sa = 0; if (d) { sa = d / (1 - Math.abs(2 * l - 1)); h = mx === rgb[0] ? ((rgb[1] - rgb[2]) / d) % 6 : mx === rgb[1] ? (rgb[2] - rgb[0]) / d + 2 : (rgb[0] - rgb[1]) / d + 4; h *= 60; }
+      const H = (h + (r() - .5) * 24 + 360) % 360, L = Math.max(.08, Math.min(.92, l + (r() - .5) * .14)), C = (1 - Math.abs(2 * L - 1)) * sa, X = C * (1 - Math.abs((H / 60) % 2 - 1)), m0 = L - C / 2;
+      const [a, b, c] = H < 60 ? [C, X, 0] : H < 120 ? [X, C, 0] : H < 180 ? [0, C, X] : H < 240 ? [0, X, C] : H < 300 ? [X, 0, C] : [C, 0, X];
+      p.col = "#" + [a, b, c].map(v => Math.round((v + m0) * 255).toString(16).padStart(2, "0")).join(""); }
+  }
+  M.vary = vary;
   function edit(fn) { const l = sel(); if (!l.length) return; api.change(() => { for (const i of l) fn(P()[i], i); for (const i of l) P()[i] = clean(P()[i]); }); }
   function removeSel() { const l = sel(); if (!l.length) return; api.change(() => { const f = F(); f.P = P().filter((_, i) => !l.includes(i)); setSel([]); }); }
   function copySel(cut) {
@@ -292,7 +310,7 @@
     if (l.length > 1) return `<section class="me-fur"><h4>${icon("furnish")} ${l.length} models chosen</h4>
       <div class="me-row"><button type="button" data-pf="turn-15">⟲ 15°</button><button type="button" data-pf="turn15">⟳ 15°</button><button type="button" data-pf="turn90">⟳ 90°</button></div>
       <label class="me-ck"><input type="checkbox" data-pv="h"${l.every(i => P()[i].h) ? " checked" : ""}> Hidden from the players</label>
-      <div class="me-row"><button type="button" data-pf="dup">Duplicate</button><button type="button" data-pf="copy">Copy</button><button type="button" class="me-del" data-pf="del">Take them away</button></div>
+      <div class="me-row"><button type="button" data-pf="dup">Duplicate</button><button type="button" data-pf="copy">Copy</button><button type="button" data-pf="vary" title="Give it another look: another fitting material, a little more or less worn, its colour shifted a little, a touch bigger or smaller. Each chosen one differently, so a row of chairs is not all alike">Vary it</button><button type="button" class="me-del" data-pf="del">Take them away</button></div>
       <p class="me-help">Drag any of them to move them all. Shift+click adds or takes one from the choice.</p></section>`;
     // nothing chosen: how it works, the library, what was used lately
     const rec = recent.filter(id => M.entry(id)).slice(0, 12);
@@ -326,7 +344,7 @@
         ${cols.map(k => `<label class="me-f me-colour"><span>${k === "col" ? "Its light" : k === "c1" ? "Main colour" : k === "c2" ? "Second colour" : "Third colour"}</span><input type="color" data-pq="${k}" value="${esc(pp[k])}"></label>`).join("")}
         ${p.p ? `<button type="button" data-pf="reshape">As the library has it</button>` : ""}</details>`}
       <label class="me-ck"><input type="checkbox" data-pv="h"${p.h ? " checked" : ""}> Hidden from the players</label>
-      <div class="me-row"><button type="button" data-pf="dup">Duplicate</button><button type="button" data-pf="copy">Copy</button><button type="button" data-pf="fav" aria-pressed="${favs.includes(p.a)}">${icon("star")}</button><button type="button" class="me-del" data-pf="del">Take it away</button></div></section>`;
+      <div class="me-row"><button type="button" data-pf="dup">Duplicate</button><button type="button" data-pf="copy">Copy</button>${e.custom ? "" : `<button type="button" data-pf="vary" title="Give it another look: another fitting material, a little more or less worn, its colour shifted a little, a touch bigger or smaller. Each chosen one differently, so a row of chairs is not all alike">Vary it</button>`}<button type="button" data-pf="fav" aria-pressed="${favs.includes(p.a)}">${icon("star")}</button><button type="button" class="me-del" data-pf="del">Take it away</button></div></section>`;
   }
 
   /* ---- thumbnails, drawn as they come into view, a few at a time */
@@ -705,6 +723,7 @@
           case "copy": copySel(); break;
           case "del": removeSel(); break;
           case "nocol": edit(p => { delete p.col; }); break;
+          case "vary": edit(vary); api.tip("Varied. Again for another look; Ctrl+Z to undo."); break;
           case "reshape": edit(p => { delete p.p; }); break;
           case "fav": { const l = sel(); if (l.length === 1) { const id = P()[l[0]].a; favs = favs.includes(id) ? favs.filter(x => x !== id) : [id].concat(favs); keep("fav", favs); pf.setAttribute("aria-pressed", favs.includes(id)); } break; }
           case "pickrooms": ed.place = null; setSel([]); ed.pickRooms = []; ed.tool = "furnish"; api.paint(); api.tip("Click the rooms to furnish, then Furnish them. Esc stops."); break;
