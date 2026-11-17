@@ -54,6 +54,11 @@
     industrial:    { label: "Industrial age, gaslight", light: "harmonic", dark: "phrygian", root: 48, keys: "upright", wind: "clarinet", pad: "quartet", bell: "musicbox", ost: "upright", bass: "cbass", drone: "harmonium",
                      swap: { choir: "choirF" }, kit: { dance: "waltz", frame: "barrel", march: "band", drum: "band", chase: "galop" },
                      moods: { tavern: { lead: "violin" }, market: { lead: "barrel" }, street: { lead: "barrel" }, sorrow: { lead: "violin", padInst: "harmonium" }, base: { lead: "cornet" }, battle: { lead: "cornet" } } },
+    // the jazz age, the 1920s and 30s: a small hot band in a speakeasy or a dance hall: clarinet and cornet on the tune,
+    // the upright piano comping, the double bass walking, brushes and the ride cymbal; chords in sevenths, swung
+    jazzage:       { label: "Jazz age, the 1920s and 30s", light: "mixolydian", dark: "dorian", root: 46, keys: "upright", wind: "clarinet", pad: "quartet", bell: "vibes", ost: "upright", bass: "cbass", drone: "harmonium", seventh: true,
+                     kit: { dance: "swing", frame: "swing", march: "swing", drum: "swing", chase: "hotswing" },
+                     moods: { tavern: { lead: "clarinet", rhythm: "swing" }, market: { lead: "cornet" }, street: { lead: "cornet" }, sorrow: { lead: "clarinet", padInst: "quartet", rhythm: "ballad" }, base: { lead: "clarinet" }, battle: { lead: "cornet" } } },
     // the world wars, 1914 to 1945: a lone violin over a string orchestra, an old upright piano, a cello in the dark
     // places, the double bass; an accordion and a clarinet in the cafés and streets, tango and polka; the military
     // snare and bass drum; men's voices; a field harmonium for the chaplain
@@ -118,6 +123,11 @@
     tango:      { div: 4, beats: 4, lanes: ["a..fc.c."], bass: "pizz" },
     polka:      { lanes: ["a.c.f.c.", "..s...s."], bass: "tuba" },
     funeral:    { lanes: ["K.......k......."] },
+    // (jazz: the ride cymbal's "ding, ding-a ding", the hi-hat's foot on two and four, brushes on the snare, a feathered
+    // bass drum, the walking bass on every beat (w), the piano comping the Charleston figure)
+    swing:      { swing: .3, lanes: ["R.RrR.RrR.RrR.Rr", "..h...h...h...h.", "..U...U...U...U.", "k...k...k...k...", "w.w.w.w.w.w.w.w.", "c..c....c..c...."], bass: "cbass", chord: "upright" },
+    hotswing:   { swing: .26, speed: 1.35, lanes: ["R.RrR.RrR.RrR.Rr", "..h...h...h...h.", "..S...S...S...SS", "k...k...k...k...", "w.w.w.w.w.w.w.w.", "c..c..c.c..c..c."], bass: "cbass", chord: "upright" },
+    ballad:     { swing: .3, speed: .7, lanes: ["U.......U.......", "r...r...r...r...", "w...w...w...w...", "c.......c......."], bass: "cbass", chord: "upright" },
     lofi:       { swing: .14, lanes: ["K.....K.K..K....", "....S.......S...", "h.h.h.h.h.h.h.h.", "c.......c......."], chord: "rhodes" },
     hybrid:     { lanes: ["V..V..V.V..V..VV", "....C.......C...", "1.1.1.1.1.1.1.1."] },
     electro:    { div: 4, beats: 4, lanes: ["K...K...K...K...", "..h...h...h...h.", "1131112311311123"] },
@@ -223,7 +233,10 @@
   function themeFor(id) {
     const m = A.meta[id] || {}, own = m.music, mood = (own && typeof own === "object" ? own.mood : own) || guess(m), fl = (own && typeof own === "object" && FLAVOURS[own.flavour]) ? own.flavour : flavour();
     const M = MOODS[mood] ? mood : "mystery";
-    return { mood: M, flavour: fl, seed: hashStr(id + "|" + M), label: MOODS[M].label, guessed: !own, place: id };
+    // (the 1920s of the dark mystery: its speakeasies, clubs, dance halls and taverns play the jazz age; the user, 17 Nov 2026)
+    const nm = String((m.name || "") + " " + (m.tagline || "")).toLowerCase(), jazzy = /speakeasy|jazz|night ?club|dance hall|cabaret|juke|ballroom|\bbar\b|saloon/.test(nm);
+    const fl2 = fl === "arkham" && (jazzy || M === "tavern") && FLAVOURS.jazzage && !(own && typeof own === "object" && own.flavour) ? "jazzage" : fl;
+    return { mood: M, flavour: fl2, seed: hashStr(id + "|" + M), label: MOODS[M].label, guessed: !own, place: id };
   }
   // A place's songs: the one suggested for it, and the moments there that call for another. A place says
   // music: { mood: "prison", also: { "The spot count": "dread", "After the gong": "night" } }; every song is one of the
@@ -605,6 +618,8 @@
       N: t => { ping(T, t, 165, 120, .34, .38); burst(T, t, .05, .12, "lowpass", 800); }, n: t => ping(T, t, 180, 135, .22, .2),
       O: t => { ping(T, t, 84, 44, .9, .6); burst(T, t, .14, .24, "lowpass", 280, 0, E.brown); }, o: t => { ping(T, t, 150, 98, .3, .28); burst(T, t, .05, .09, "lowpass", 600); },
       W: t => burst(T, t, .018, .2, "bandpass", 1900, 9),
+      R: t => { burst(T, t, .26, .045, "bandpass", 5200, 2.2); burst(T, t, .02, .03, "highpass", 9000); }, r: t => burst(T, t, .18, .028, "bandpass", 5400, 2.2),
+      U: t => { burst(T, t, .14, .05, "bandpass", 2400, .7, E.brown); burst(T, t + .02, .1, .03, "highpass", 4200); },
       M: t => { ping(T, t, 120, 74, .24, .4); burst(T, t, .05, .09, "lowpass", 1000); }, m: t => ping(T, t, 135, 88, .14, .2),
       P: t => { const f = hz(root - 12); ping(T, t, f * 1.03, f, 1.3, .5); burst(T, t, .07, .16, "lowpass", 320, 0, E.brown); },
       Q: t => { ping(T, t, 175, 88, .3, .36); burst(T, t, .06, .1, "lowpass", 1500); }
@@ -618,6 +633,7 @@
           const c = lane[j % lane.length];
           if (c === ".") continue;
           if (DR[c]) DR[c](tt);
+          else if (c === "w") { const b = Math.floor(j / div) % 4, iv = [0, (ch[1] - ch[0]), (ch[2] - ch[0]), b === 3 && (Math.floor(j / div) % 8) === 7 ? -1 : (ch[3] != null ? ch[3] - ch[0] : 9)][b]; voice(T, bi, lo + iv, tt, step * div * .9, .16); }
           else if (c === "a" || c === "f") voice(T, bi, c === "a" ? lo : lo - 5 >= 31 ? lo - 5 : lo + 7, tt, step * 1.8, .15);
           else if (c === "c") ch.forEach((m, i) => voice(T, ci, m, tt + i * .012, step * 1.5, .05));
           else voice(T, oi, c === "4" ? ch[0] : ch[+c - 1] - 12, tt, step * .9, j % div === 0 ? .13 : .1);

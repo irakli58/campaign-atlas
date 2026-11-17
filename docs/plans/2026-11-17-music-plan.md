@@ -73,3 +73,9 @@ CC0 freely; CC-BY with credits in each pack and in Atlas's credits screen; nothi
 - The listening test's download (phase 1), its size shown first.
 - Leaving out Sampling Plus and ShareAlike material, or accepting their terms.
 - SpessaSynth as the sampler.
+
+## Done since (17 Nov; the user: "make executive decisions")
+
+- **The jazz age**, a new style ("Jazz age, the 1920s and 30s", atlas-music.js FLAVOURS.jazzage): clarinet and cornet on the tune, the upright piano comping, the double bass walking, vibraphone for the bell, chords in sevenths, mixolydian and dorian. New grooves: **swing** (the ride cymbal's ding, ding-a ding, hi-hat foot on two and four, brushes, a feathered bass drum, the walking bass on every beat, Charleston comping, the off-beats about a third late), **hotswing** (faster, a snare instead of brushes), **ballad** (slow, brushes). New sounds: the ride cymbal (R, r) and brushes (U). The walking bass (`w`): the chord's root, third, fifth and seventh, a half step leading into the next bar every second bar.
+- **The dark mystery's 1920s**: in the default Call of Cthulhu style ("arkham"), a place named as a speakeasy, jazz club, nightclub, dance hall, cabaret, bar or saloon, or a tavern, now plays the jazz age; investigation and dread stay orchestral.
+- Rendered and measured offline (atlas-music.js `render`/`measure`): the speakeasy, a jazz ballad and the older tavern for comparison, no silence and no clipping. Still synthesised: recorded instruments need the samples, which this cloud session cannot download (versilian-studios.com, github.com refused); they come from the user's computer.
