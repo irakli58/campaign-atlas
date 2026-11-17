@@ -28,7 +28,13 @@
   // civilization-editor.md): collection "factiondefs", one document a power, laid over the written one of that id or
   // standing alone; a removed one of their own is marked off, never deleted, so nothing joined to it breaks)
   const ownDefs = () => { try { return (S() && S().get("factiondefs")) || {}; } catch (e) { return {}; } };
-  const defs = () => { const out = Object.assign({}, A.factionsData || {}); for (const [id, d] of Object.entries(ownDefs())) { if (!d) continue; if (d.off) { if (!(A.factionsData || {})[id]) delete out[id]; continue; } out[id] = Object.assign({}, out[id] || {}, d); } return out; };
+  // (the powers the galaxy grew, in a science fiction campaign, are powers of the campaign too: in the factions' tab, with
+  // diplomacy, treaties and history like any other (the manual civilization editor's request, sections 12 and 14: "reuse
+  // the existing galaxy", "generated worlds must also be editable"). The galaxy reads the factions to know who holds what,
+  // so it is asked only when it is not itself asking)
+  let inGx = false;
+  const gxPowers = () => { if (inGx || !A.galaxyApi || !A.galaxyApi.G) return {}; inGx = true; try { const g = A.galaxyApi.G(), out = {}; for (const p of (g && g.powers) || []) if (p && p.id && p.name && !(A.factionsData || {})[p.id]) out[p.id] = { n: p.name, kind: "Interstellar power", fromGalaxy: true }; return out; } catch (e) { return {}; } finally { inGx = false; } };
+  const defs = () => { const out = Object.assign(gxPowers(), A.factionsData || {}); for (const [id, d] of Object.entries(ownDefs())) { if (!d) continue; if (d.off) { if (!(A.factionsData || {})[id]) delete out[id]; continue; } out[id] = Object.assign({}, out[id] || {}, d); } return out; };
   // the kinds of power, by the campaign's age (science fiction has its own; none is forced on any campaign)
   const KINDS_OLD = ["Kingdom", "Empire", "Country", "City-state", "Republic", "Principality", "Duchy", "Tribal confederation", "Theocracy", "Merchant guild", "Religious order", "Church", "Criminal organisation", "Noble house", "Rebel movement", "Secret society", "Political party", "Mercenary company", "Other"];
   const KINDS_NEW = ["Interstellar empire", "Planetary government", "Federation", "Independent colony", "Corporation", "Corporate territory", "Star-system alliance", "Trade consortium", "Military junta", "Rebel movement", "Criminal syndicate", "Religious order", "Political party", "Secret society", "Other"];
