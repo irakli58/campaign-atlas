@@ -914,8 +914,19 @@
     return mood === "own" ? !!c.own : mood.startsWith("mix:") ? !c.own && c.mixId === mood.slice(4) : !c.own && !c.mix && c.mood === mood;
   };
   function tick() { if (!P.eng) return; const until = P.ac.currentTime + (typeof document !== "undefined" && document.hidden ? 70 : 2.8); P.eng.advance(until); if (P.bed) P.bed.advance(until); }
+  // the game master's push, over whatever plays (the music request of 17 Nov 2026: adaptive music "driven by the game master
+  // only", never by itself): calm takes the tension out and the drums away; tense darkens it, slows the tune, deepens
+  // the drone; fight plays the style's battle music. Crossfaded on change, like a change of place
+  function pushed(th) {
+    if (!th || !P.push) return th;
+    if (P.push === "fight") return Object.assign({}, th, { mood: "battle", mix: undefined, seed: (th.seed || 1) + 7 });
+    const F = FLAVOURS[th.flavour] || FLAVOURS.industrial, base = th.mix ? Object.assign({}, th.mix) : Object.assign({}, MOODS[th.mood] || MOODS.mystery, F.moods && F.moods[th.mood]);
+    if (P.push === "calm") { base.tension = Math.min(base.tension || 0, .15); base.rate = (base.rate || .5) * .75; base.drone = (base.drone || 0) * .5; delete base.pulse; delete base.rhythm; }
+    if (P.push === "tense") { base.tension = Math.max(base.tension || 0, .78); base.rate = Math.min(base.rate || .5, .35); base.drone = Math.max(base.drone || 0, .45); }
+    return Object.assign({}, th, { mood: "mix", mix: base });
+  }
   function apply() {
-    const th = current(), synth = th && (th.mix || (MOODS[th.mood] && !MOODS[th.mood].off)) ? th : null;
+    const th0 = current(), th = th0 && P.on ? pushed(th0) : th0, synth = th && (th.mix || (MOODS[th.mood] && !MOODS[th.mood].off)) ? th : null;
     if (P.on && P.eng) { P.eng.setTheme(synth, P.ac.currentTime + .05); tick(); }
     audioTo(P.on && th && th.own && (th.own.kind === "file" || th.own.kind === "rec" || linkPlays(th.own)) ? th.own.url : "");
     paint();
@@ -936,7 +947,7 @@
     if (P.root) {
       const b = P.root.querySelector("#mus-play"), now = P.root.querySelector("#mus-now"), sb = P.root.querySelector("#mus-songs");
       if (b) { b.setAttribute("aria-pressed", String(P.on)); b.title = P.on ? "Stop the music" : "Play the music"; }
-      if (now) now.innerHTML = nowLine(th);
+      if (now) now.innerHTML = nowLine(th) + (P.on && P.push ? ` <b class="mus-push">· ${({ calm: "calmed", tense: "tense", fight: "fight" })[P.push]}</b>` : "");
       if (sb) sb.setAttribute("aria-expanded", String(P.open));
       if (P.open) renderPanel();
     }
@@ -1353,7 +1364,7 @@
     MOODS, FLAVOURS, guess, flavour, themeFor, songsOf, describe, moment: momentMood,
     html() {
       if (off()) return "";
-      return `<div class="music" role="group" aria-label="Music"><button type="button" id="mus-play" aria-pressed="false" title="Play the music"><span aria-hidden="true">♪</span> Music</button><button type="button" id="mus-songs" aria-expanded="false" aria-controls="mus-panel">Songs <span aria-hidden="true">▾</span></button><label><span class="vh">Volume</span><input type="range" id="mus-vol" min="0" max="100" step="1"></label><span id="mus-now" class="musnow" aria-live="polite"></span></div><div id="mus-panel" class="mus-panel" role="dialog" aria-label="Choose the music" hidden></div>`;
+      return `<div class="music" role="group" aria-label="Music"><button type="button" id="mus-play" aria-pressed="false" title="Play the music"><span aria-hidden="true">♪</span> Music</button><button type="button" id="mus-songs" aria-expanded="false" aria-controls="mus-panel">Songs <span aria-hidden="true">▾</span></button><label><span class="vh">Volume</span><input type="range" id="mus-vol" min="0" max="100" step="1"></label><select id="mus-push" class="keeper" aria-label="How the music feels now" title="Push the music: calmer, tenser, or into a fight; As the scene follows the place again"><option value="">As the scene</option><option value="calm">Calm</option><option value="tense">Tense</option><option value="fight">Fight</option></select><span id="mus-now" class="musnow" aria-live="polite"></span></div><div id="mus-panel" class="mus-panel" role="dialog" aria-label="Choose the music" hidden></div>`;
     },
     // the card at the top right of a place: the referee's own song if they gave it one, its suggested song, a way to
     // choose one's own, and (for the referee) a song for each moment there
@@ -1379,6 +1390,7 @@
       if (off()) return; P.root = root;
       P.tab = mem.get("tab") || "";
       const v = parseFloat(mem.get("vol")); if (v >= 0 && v <= 1) P.vol = v; else if (A.config.music && A.config.music.volume >= 0) P.vol = Math.min(1, A.config.music.volume);
+      const push = root.querySelector("#mus-push"); if (push) { push.value = P.push || ""; push.addEventListener("change", () => { P.push = push.value; apply(); }); }
       const vol = root.querySelector("#mus-vol"); if (vol) { vol.value = Math.round(P.vol * 100); vol.addEventListener("input", () => { P.vol = vol.value / 100; mem.set("vol", String(P.vol)); if (P.eng) P.eng.master.gain.setTargetAtTime(P.vol * (P.duck || 1), P.ac.currentTime, .05); if (P.audio) { clearInterval(P.audio._fade); P.audio.volume = Math.min(1, P.vol * AUDIO_LEVEL * (P.duck || 1)); } }); }
       const b = root.querySelector("#mus-play"); if (b) b.addEventListener("click", () => (P.on ? pause() : play()));
       const sb = root.querySelector("#mus-songs"); if (sb) sb.addEventListener("click", () => openPanel(!P.open));

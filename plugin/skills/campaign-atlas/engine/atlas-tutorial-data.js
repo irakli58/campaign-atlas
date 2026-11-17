@@ -427,6 +427,7 @@
       { id: "bible", title: "The story and its music", summary: "The council's story bible, and the music made for every place.", features: ["bible", "music"], steps: [
         { say: "The story: the council's bible, the judge's grades, and the story as you gave it.", sel: "#v-story", act: "look", optional: true },
         { say: "Every place has its own music, made by the page itself. Play it from here.", sel: ".musicbar, #v-music", act: "look" },
+        { say: "Beside its volume, push it yourself when the scene turns: Calm takes the tension and drums out, Tense darkens it, Fight plays the style's battle music. It never changes by itself; As the scene follows the place again.", sel: ["#mus-push", ".musicbar"], act: "look", optional: true },
         { say: "That is Atlas. Help and tutorials is always here for any lesson again.", sel: ".tu-helpbtn", act: "look" }
       ] },
       { id: "sounds", title: "Sounds at the table", summary: "Real recordings for a scene: rain, a tavern, an engine's hum, a door, a scream; scenes of several at once, your own sounds, and the narrator's cues.", features: ["sounds"], needs: has("#snd-btn"), steps: [
@@ -434,7 +435,7 @@
         { say: "Search by what the scene is. Type a storm, a tavern, or an abandoned spaceship, and it finds the scenes and the sounds for it.", sel: ".snd-q", act: "type", value: "storm", try: "Type a word into the search." },
         { say: "", sel: ".snd-q", act: "type", value: "", auto: true },
         { say: "A scene starts several sounds at once. Its ambience loops with no seam, and its occasional sounds come now and then: a different take each time, a little to the left or the right.", sel: [".snd-sec .snd-grid", ".snd-panel"], act: "look" },
-        { say: "Every sound is here too: those that loop, to start and stop, and those that play once, at a click. What is playing is listed with its own volume, and Stop all fades everything out.", sel: [".snd-bar", ".snd-panel"], act: "look" },
+        { say: "Every sound is here too: those that loop, to start and stop, and those that play once, at a click. What is playing is listed with its own volume, Ambience and Effects each have their own level beside the overall Volume (the music and the narrator have theirs), and Stop all fades everything out.", sel: [".snd-bar", ".snd-panel"], act: "look" },
         { say: "Keep what is playing as a scene of your own: in this campaign, and in your library for every campaign. Add your own sound files too: they stay in this browser.", sel: [".snd-foot", ".snd-panel"], act: "look" },
         { say: "Each place can start its scene when it is opened, and the day's weather adds its rain, wind and thunder. While the narrator reads, the sounds step back; and in the text he reads, a cue in square brackets, sound and the sound's name, plays it where it is written.", sel: [".snd-foot", ".snd-panel"], act: "look" },
         { say: "Credits lists every recording, where it comes from and its licence. In the Atlas app, the sound packs install from here with a click.", sel: ["[data-snd='credits']", ".snd-panel"], act: "look" },
