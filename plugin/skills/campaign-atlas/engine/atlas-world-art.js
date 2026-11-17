@@ -1237,6 +1237,43 @@
     // the plates (world-tectonics.js), a layer the referee shows or hides: each border drawn in its kind's colour
   // (collision, subduction, island arc, spreading ridge, rift, transform), each plate's heading and speed, its name
   const BORDER_STYLE = { 1: ["#8e1b1b", 2.6, "", "Collision: continents meet, great ranges rise"], 2: ["#c94a1c", 2.2, "", "Subduction: an ocean plate sinks under a continent"], 3: ["#d98a1c", 2, "", "Island arc: ocean sinks under ocean"], 4: ["#1f6fb2", 1.8, "", "Spreading ridge: plates part, new sea floor"], 5: ["#2e9a8a", 2, "6 4", "Rift: a continent tearing apart"], 6: ["#5a5a5a", 1.4, "3 4", "Transform: plates slide past"] };
+  // the plates run backward (an idea offered to the user on 27 Oct, built 17 Nov on their "make executive decisions"):
+  // each plate's land moved back along today's heading at today's speed (1 cm a year is 10 km a million years), to show
+  // roughly where the land lay so many million years ago. A sketch, said so on the map: real plates turn, speed up,
+  // break and join; this runs today's motions straight back. Each plate's land is traced once and kept; the slider only
+  // moves it. The coast of today stays as a dashed line
+  const PCOL = ["#b9895a", "#8fa66a", "#c7a46a", "#9d7f5f", "#a8b07a", "#c08f6e", "#7f9a7a", "#b4976a", "#a0886a", "#c2ad7c", "#8d9f6a", "#b88a72"];
+  const kmPerUnit = WD => { const sc = WD.scale || (WD.T && WD.T.scale) || { unit: "km", per: 1 }; return (+sc.per || 1) * ({ mile: 1.609, miles: 1.609, km: 1, league: 4.83, leagues: 4.83 }[String(sc.unit || "").toLowerCase()] || 1); };
+  // how far back the slider goes: until the fastest plate has crossed about two fifths of the map (a regional map shows
+  // only a few million years before its land has moved off it; a whole world, a hundred and more), and its step
+  const driftRange = WD => { const L = WD.T && WD.T.tect; if (!L) return null; const v = Math.max(1, ...L.plates.map(p => +p.speed || 0)), m = .4 * WD.size[0] * kmPerUnit(WD) / (v * 10);
+    const nice = [1, 2, 5, 10, 20, 30, 50, 100, 150, 200, 300], max = nice.reduce((b, x) => x <= m ? x : b, 1); return { max, step: max <= 10 ? .5 : max <= 30 ? 1 : max <= 100 ? 5 : 10 }; };
+  function driftLayer(WD, myr) {
+    const L = WD.T && WD.T.tect, G = WD.G; if (!L || !G || !myr) return "";
+    const [W, H] = WD.size, K = Math.max(1, Math.min(W, H) / 900), r1 = v => Math.round(v * 10) / 10;
+    if (!WD._driftRings) {
+      const s0 = atob(L.plate), P = new Uint8Array(s0.length); for (let i = 0; i < s0.length; i++) P[i] = s0.charCodeAt(i);
+      const at = (x, y) => P[Math.min(L.rows - 1, Math.max(0, Math.floor(y / L.step))) * L.cols + Math.min(L.cols - 1, Math.max(0, Math.floor(x / L.step)))];
+      const ids = new Uint8Array(G.cols * G.rows).fill(255); for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { const n = j * G.cols + i; if (G.H[n] > G.sea) ids[n] = at((i + .5) * G.cell, (j + .5) * G.cell); }
+      WD._driftRings = {};
+      const gw = G.cols, gh = G.rows, blur = F0 => { let F = F0; for (let pass = 0; pass < 2; pass++) { const O = new Float32Array(F.length); for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { let t = 0, c = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= gw || yy >= gh) continue; t += F[yy * gw + xx]; c++; } O[y * gw + x] = t / c; } F = O; } return Uint8Array.from(F, v => Math.round(v)); };
+      for (const p of L.plates) { const F = new Float32Array(ids.length); let any = 0; for (let n = 0; n < ids.length; n++) if (ids[n] === p.id) { F[n] = 200; any++; } if (any < 4) continue;
+        // (blurred before it is traced: the plate grid is coarse, and its steps would show as square edges)
+        WD._driftRings[p.id] = coastRings({ cols: G.cols, rows: G.rows, cell: G.cell, H: blur(F), sea: 100 }).filter(r => r.length > 4).map(r => pathD(chaikin(rdpRing(r, .8), 2, true), true)).join(""); }
+    }
+    const kmU = kmPerUnit(WD);
+    // (today's map veiled in sea blue, so the land of the past reads on its own; today's coast dashed over it)
+    let s = `<rect width="${W}" height="${H}" fill="#41708e" fill-opacity=".82"/><path d="${ringsAt(G, G.sea, .8).map(r => pathD(r, true)).join("")}" fill="none" stroke="#3b2f22" stroke-opacity=".5" stroke-width="${r1(1 * K)}" stroke-dasharray="${r1(5 * K)} ${r1(4 * K)}"/>`;
+    const fs = Math.min(W, H) * .014;
+    for (const p of L.plates) { const d = WD._driftRings[p.id]; if (!d) continue;
+      const a = -p.dir * Math.PI / 180, dist = (+p.speed || 0) * 10 * myr / kmU, dx = -Math.cos(a) * dist, dy = -Math.sin(a) * dist, col = PCOL[p.id % PCOL.length];
+      // (a map of the whole world wraps east to west: land carried over one edge comes back at the other)
+      const wrap = WD.T && /world/.test(String(WD.T.sizeName || "")) || W * kmU > 30000, x0 = wrap ? ((dx % W) + W * 1.5) % W - W / 2 : dx;
+      for (const ox of wrap ? [x0 - W, x0, x0 + W] : [x0]) s += `<g transform="translate(${r1(ox)} ${r1(dy)})"><path d="${d}" fill="${col}" fill-opacity=".72" stroke="#3b2f22" stroke-opacity=".7" stroke-width="${r1(.9 * K)}"/>${p.name && ox === x0 ? `<text x="${r1(p.at[0])}" y="${r1(p.at[1])}" text-anchor="middle" font-size="${r1(fs)}" font-family="Georgia, serif" font-variant="small-caps" fill="#3b2f22" stroke="#f6f2e8" stroke-width="${r1(2.4 * K)}" paint-order="stroke">${A.esc ? A.esc(p.name) : p.name}</text>` : ""}</g>`; }
+    s += `<path d="${ringsAt(G, G.sea, .8).map(r => pathD(r, true)).join("")}" fill="none" stroke="#f6f2e8" stroke-opacity=".75" stroke-width="${r1(1.1 * K)}" stroke-dasharray="${r1(5 * K)} ${r1(4 * K)}"/>`;
+    s += `<text x="${r1(W * .5)}" y="${r1(H * .06)}" text-anchor="middle" font-size="${r1(fs * 1.4)}" font-family="Georgia, serif" fill="#3b2f22" stroke="#f6f2e8" stroke-width="${r1(3 * K)}" paint-order="stroke">The land ${myr} million years ago: today's plate motions run back (a sketch; the dashed line is today's coast)</text>`;
+    return s;
+  }
   function plateLayer(WD) {
     const L = WD.T && WD.T.tect; if (!L) return "";
     const [W, H] = WD.size, gc = L.cols, gr = L.rows, st = L.step, dec = b => { const s = atob(b), a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; };
@@ -1283,5 +1320,5 @@
     rows2.forEach(([c, l, dash, sw], i) => { const yy = y + lh * (i + 2); s += sw ? `<rect x="${r1(x + fs * .8)}" y="${r1(yy - fs * .75)}" width="${r1(fs * 1.6)}" height="${r1(fs * .9)}" fill="${c}"/>` : `<path d="M${r1(x + fs * .8)} ${r1(yy - fs * .3)}h${r1(fs * 1.8)}" stroke="${c}" stroke-width="${r1(2.2 * K)}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`; s += `<text x="${r1(x + fs * 3.2)}" y="${r1(yy)}" font-size="${r1(fs * .85)}" font-family="Georgia, serif" fill="#3b2f22">${l}</text>`; });
     return s;
   }
-  A.worldArt = { LOOKS, looksFor, draw, detail, detailBase, plateLayer, rockLayer };
+  A.worldArt = { LOOKS, looksFor, draw, detail, detailBase, plateLayer, rockLayer, driftLayer, driftRange };
 })(ATLAS);

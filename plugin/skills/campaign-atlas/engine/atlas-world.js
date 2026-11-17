@@ -830,6 +830,7 @@
         <select class="wm-look keeper" aria-label="How the map is drawn" title="How the map is drawn: the players see it the same way" hidden></select>
         <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
         <button type="button" class="wm-btn wm-pltog" data-w="plates" aria-pressed="false" hidden title="Show the tectonic plates: their borders, what happens at each, which way each plate moves">Plates</button>
+        <label class="wm-drift" hidden title="Run the plates back: where the land lay so many million years ago, today's motions run backward (a sketch)">Ago <input type="range" min="0" max="100" step="5" value="0" aria-label="Million years ago"> <span class="wm-drift-v">today</span></label>
         <button type="button" class="wm-btn wm-rktog" data-w="rocks" aria-pressed="false" hidden title="Show the rocks of each region, and the ores, gems, coal, oil, salt, hot springs and caves in them, with why each is there">Rocks and resources</button>
         <button type="button" class="wm-btn wm-dptog keeper" data-w="diplo" aria-pressed="false" hidden title="Show how the powers stand: a line between their seats, coloured from war to alliance, with their treaties (keeper only)">Relations</button>
         <button type="button" class="wm-btn wm-trtog" data-w="trade" aria-pressed="false" hidden title="Show the trade routes: their goods, how much moves along them and whether war or an embargo stands in the way">Trade</button>
@@ -1265,7 +1266,9 @@
     function drawGeoLayers() {
       const art = A.worldArt, hasP = !!(WD.T && WD.T.tect && art && art.plateLayer), hasR = !!(WD.T && WD.T.rocks && art && art.rockLayer);
       const bp = $(".wm-pltog"), br = $(".wm-rktog"); bp.hidden = !hasP; br.hidden = !hasR; bp.setAttribute("aria-pressed", hasP && LAY.plates); br.setAttribute("aria-pressed", hasR && LAY.rocks);
-      $(".wm-pl").innerHTML = hasP && LAY.plates ? art.plateLayer(WD) : ""; $(".wm-rk").innerHTML = hasR && LAY.rocks ? art.rockLayer(WD) : "";
+      // (with the plates on, the slider runs them back; at 0, today's plates)
+      const dl = $(".wm-drift"); if (dl) { dl.hidden = !(hasP && LAY.plates && art.driftLayer); const inp = dl.querySelector("input"), rg = art.driftRange && art.driftRange(WD); if (inp && rg && inp.max !== String(rg.max)) { inp.max = rg.max; inp.step = rg.step; if (+inp.value > rg.max) { inp.value = 0; LAY.drift = 0; } } if (inp && !inp._bound) { inp._bound = 1; inp.addEventListener("input", () => { LAY.drift = +inp.value; dl.querySelector(".wm-drift-v").textContent = LAY.drift ? LAY.drift + " million years" : "today"; drawGeoLayers(); }); } }
+      $(".wm-pl").innerHTML = hasP && LAY.plates ? (LAY.drift && art.driftLayer ? art.driftLayer(WD, LAY.drift) : art.plateLayer(WD)) : ""; $(".wm-rk").innerHTML = hasR && LAY.rocks ? art.rockLayer(WD) : "";
       // (the trade routes: each route with trade, in gold, thicker the more moves along it; dashed where suspended or
       // closed, marked where war or an embargo stands in the way; the trade route's name and goods at its middle)
       const tr = WD.routes.filter(r => r.trade && !r.gone && (gm() || !r.hidden)), bt = $(".wm-trtog");
