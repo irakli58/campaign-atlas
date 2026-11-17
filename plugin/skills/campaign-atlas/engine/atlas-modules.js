@@ -38,7 +38,7 @@
     { id: "copilot", group: "story", name: "Copilot", say: "Talk, Improvise and Ask the campaign; then reminders while you play", levels: [["off", "Off"], ["asked", "When asked"], ["unasked", "Also unasked"]] },
     { id: "consistency", group: "story", name: "Consistency check", say: "Finds what contradicts what in the campaign", levels: [["off", "Off"], ["on", "On"]] },
     { id: "fights", group: "table", name: "Fights and dice", say: "Initiative, wounds, sanity, dice, stat blocks", levels: [["off", "Off"], ["on", "On"]] },
-    { id: "makeup", group: "table", name: "Make it up", say: "A person or a place on the spot, random tables, small happenings", levels: [["off", "Off"], ["on", "On"]], parts: [["encounters", "Random encounters on journeys and jumps"]] },
+    { id: "makeup", group: "table", name: "Make it up", say: "A person or a place on the spot, random tables, small happenings", levels: [["off", "Off"], ["on", "On"]], parts: [["encounters", "Random encounters on journeys and jumps"], ["describe", "Inside a building from a description"]] },
     { id: "survival", group: "table", name: "Survival", say: "Food and supplies on a journey, the days they last; a world's cold, heat and air as dangers", levels: [["off", "Off"], ["on", "On"]] },
     { id: "recorded", group: "table", name: "Recorded sessions", say: "Recording the table, the words, what the table remembers", levels: [["off", "Off"], ["words", "The words"], ["sound", "The words and the sound"]] },
     { id: "print", group: "table", name: "Print and export", say: "The book, handouts on paper, maps for online tables", levels: [["off", "Off"], ["on", "On"]] },

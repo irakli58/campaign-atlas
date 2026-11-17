@@ -142,10 +142,10 @@
       const ib = ctl.map.pickBuilding(e.clientX, e.clientY), b = ib != null ? ctl.ce.C.buildings[ib] : null;
       if (!b || b.gone || !(A.locations && A.locations.fromBuilding)) { hide(); return; }
       const c = card(), r = host.getBoundingClientRect(), fl = Math.max(1, Math.round((b._H || 1.9) / .95));
-      c.innerHTML = `<b>${esc((KINDS.find(k => k[0] === b.type) || [0, "A building"])[1])}</b><span class="kn">${fl} floor${fl > 1 ? "s" : ""}</span><button type="button" class="t-btn prim" data-peek="place">Make it a place: its rooms and floors</button><button type="button" class="t-mini" data-peek="x" aria-label="Close">×</button>`;
+      c.innerHTML = `<b>${esc((KINDS.find(k => k[0] === b.type) || [0, "A building"])[1])}</b><span class="kn">${fl} floor${fl > 1 ? "s" : ""}</span><button type="button" class="t-btn prim" data-peek="place">Make it a place: its rooms and floors</button>${A.quickPlace && (!A.modules || A.modules.on("makeup.describe")) ? `<button type="button" class="t-btn" data-peek="describe" title="Say in a sentence what is inside; Atlas lays it out and furnishes it">Describe its inside…</button>` : ""}<button type="button" class="t-mini" data-peek="x" aria-label="Close">×</button>`;
       c.style.left = Math.min(r.width - 250, Math.max(8, e.clientX - r.left + 12)) + "px"; c.style.top = Math.min(r.height - 120, Math.max(8, e.clientY - r.top + 12)) + "px"; c.hidden = false;
       ctl.map.mark(b);
-      c.onclick = ev => { const k = ev.target.closest("[data-peek]"); if (!k) return; hide(); if (k.dataset.peek === "place") A.locations.fromBuilding(ctl, b); };
+      c.onclick = ev => { const k = ev.target.closest("[data-peek]"); if (!k) return; hide(); if (k.dataset.peek === "place") A.locations.fromBuilding(ctl, b); else if (k.dataset.peek === "describe" && A.quickPlace) { if (A.locations.setCity) A.locations.setCity(ctl); A.quickPlace.open({ building: Object.assign({}, b), city: ctl.city }); } };
     });
   }
 

@@ -911,7 +911,7 @@
         ${p ? personCard(p) : ""}
         ${kept.filter(k => k.kind === "person").length ? `<h4 class="t-h4">Kept</h4><ul class="t-ul">${kept.filter(k => k.kind === "person").map(k => `<li><b>${esc(k.person.name)}</b>, ${esc(k.person.trade)} <span class="kn">${esc(k.person.look)}</span> <button type="button" class="t-mini" data-t="flydel" data-id="${esc(k.id)}" aria-label="Forget them">×</button></li>`).join("")}</ul>` : ""}</section>
       ${diceHTML()}</div>
-      <div><section class="t-card"><h3>${T.icon("make")} A place, now</h3><p class="t-small">A small place with its map, someone in it and something to find${X.TR.ready ? " that points where the party needs to go" : ""}.</p>
+      <div><section class="t-card"><h3>${T.icon("make")} A place, now</h3>${A.quickPlace && (!A.modules || A.modules.on("makeup.describe")) ? `<div class="t-row"><button type="button" class="t-btn" data-t="qpdesc" title="Describe a building in a sentence; Atlas lays out its rooms and furnishes them, and adds nothing else">A building from a description…</button></div>` : ""}<p class="t-small">A small place with its map, someone in it and something to find${X.TR.ready ? " that points where the party needs to go" : ""}.</p>
         <div class="t-row"><select data-t="flykind" aria-label="What kind of place"><option value="">Any kind</option>${FLY_KINDS[g].map(k => `<option value="${k}">${esc(KIND_WORD[g][k])}</option>`).join("")}</select><button type="button" class="t-btn prim" data-t="fly">Make a place</button></div>${fly}
         ${kept.filter(k => k.kind !== "person").length ? `<h4 class="t-h4">Places made at the table</h4><ul class="t-ul">${kept.filter(k => k.kind !== "person").map(k => `<li><button type="button" class="t-go" data-t="flyopen" data-id="${esc(k.id)}">${esc(k.name)}</button> <span class="kn">${esc((KIND_WORD[k.g] || {})[k.kind] || "")}</span> <button type="button" class="t-mini" data-t="flydel" data-id="${esc(k.id)}" aria-label="Forget it">×</button></li>`).join("")}</ul>` : ""}</section></div>
       <div><section class="t-card t-rt"><h3>${T.icon("tables")} Random tables</h3>${ctab.map(([n, l]) => tableRow("c:" + n, n, l)).join("")}${gtab.map(([n, l]) => tableRow("g:" + n, n, l)).join("")}<p class="t-small">Each place's own tables are in its dossier.</p></section></div></div>`;
@@ -1065,6 +1065,7 @@
       case "personkeep": if (UI.person) { const id = uid("p"); S.set("fly", id, { id, kind: "person", person: UI.person, t: Date.now() }); note(`${UI.person.name} is kept.`); } break;
       case "fly": UI.fly = makeFly((boxOf(b).querySelector('[data-t="flykind"]') || {}).value); renderTab(); break;
       case "flykeep": if (UI.fly) S.set("fly", UI.fly.id, UI.fly); break;
+      case "qpdesc": if (A.quickPlace) A.quickPlace.open({}); break;
       case "flyshow": if (UI.fly) { flyPlace(UI.fly); UI.fogPlace = UI.fly.id; UI.fogFloor = 0; if (!S.get("fly", UI.fly.id)) S.set("fly", UI.fly.id, UI.fly); show({ kind: "map", place: UI.fly.id, floor: 0, fly: UI.fly, view: fogView() }); } break;
       case "flyopen": { const f = S.get("fly", d.id); if (f) { UI.fly = f; renderTab(); } break; }
       case "flydel": twice(b, () => { S.set("fly", d.id, null); if (UI.fly && UI.fly.id === d.id) UI.fly = null; }); break;

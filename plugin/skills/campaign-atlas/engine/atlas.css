@@ -3207,3 +3207,9 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .wm-brushbar .wm-pinfo { display: block; flex-basis: 100%; font-size: .82em; line-height: 1.35; margin-top: .25rem; max-width: 70ch; }
 .wm-brushbar .wm-pwarn { color: #9a4a12; }
 .wm-brushbar .wm-pcre { color: #6a4a8a; }
+
+/* ---- a building's inside from a description (atlas-quickplace.js) */
+.qp-dlg { max-width: 560px; width: calc(100% - 32px); }
+.qp-form textarea { width: 100%; box-sizing: border-box; }
+.qp-heard { min-height: 1.3em; margin: .3rem 0 .5rem; font-size: .88em; }
+.qp-detail { display: grid; gap: .35rem; margin: .5rem 0; }
