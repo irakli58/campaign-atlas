@@ -127,3 +127,6 @@ Then: "okay can you slightly fill out the map like slighlty more so its less emp
 Then: "fill out the map with some more mountains and forests so its not as empty", and "the small hill looking stuff looks so weird remove that": heights and woods judged per continent, more ranges and woods, woods drawn as groups, small mountains (not hill arcs) on the lower uplands.
 Then: "i want a slider on how detailed the map is and how accurate it is": How much is drawn and How accurate, in the New map form and The look (references/world.md, "Two sliders").
 Then the user asked to see the most detailed one (commoner at much/true); fixed a forest name left in the sea: names now sit under the middle of their symbols, only on land, and are dropped with their symbols.
+
+### Overnight (16-17 Nov)
+The user, going to sleep: "keep working on stuff without asking me for permission", "you know what you have to do and i want you to finish all of it". Done: the elder and then every maker draw the whole land (references/world.md "Every maker draws the whole land"); "What it shows" choice; no hill arcs; an accuracy overlay (rough 48, middle 27, true 6 miles off on average); map additions remember their session (references/world.md "Map additions remember their session"). Tested in the page: sliders, reveal, Copilot add, session tags, no page errors.
