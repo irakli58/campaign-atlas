@@ -400,7 +400,7 @@
   // the whole sheet. o: { player (leave out the referee's own), sel (the chosen element's id) }
   function render(map, o) {
     o = o || {}; const st = Object.assign({ paper: "aged", wear: .5, ink: "brown", width: 1, rough: .5, hand: "scrawl" }, map.style || {}), [fx, fy, fw, fh] = map.frame, sc = Math.max(fw, fh) / 320, ink = INK[st.ink] || st.ink || INK.brown, [p0, p1] = PAPER[st.paper] || PAPER.aged, seed = map.seed || 1, u = "pm" + (seed % 100000);
-    const show = e => (!o.player || (!e.dm && e.layer !== "dm" && !e.hide)) && (map.layers || {})[e.layer || "notes"] !== 0;
+    const show = e => (!o.player || (!e.dm && e.layer !== "dm" && !e.hide)) && (map.layers || {})[e.layer || "notes"] !== 0 && !(o.upTo && e.sn && e.sn > o.upTo);
     let s = `<defs><filter id="${u}-g" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="${r1(1.2 / sc) / 10}" numOctaves="4" seed="${seed % 97}"/><feColorMatrix values="0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .12 0 0 0 ${r1(.18 + .2 * st.wear)} 0"/><feComposite in2="SourceGraphic" operator="in"/></filter>`
       + `<radialGradient id="${u}-v" cx=".5" cy=".5" r=".72"><stop offset=".55" stop-color="${p0}" stop-opacity="0"/><stop offset="1" stop-color="${p1}" stop-opacity="${r1(.55 + .4 * st.wear)}"/></radialGradient>`
       + `<filter id="${u}-i"><feTurbulence type="fractalNoise" baseFrequency="${r1(4 / sc) / 10}" numOctaves="2" seed="${(seed + 7) % 97}" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="${r1(sc * .5)}"/></filter></defs>`;
@@ -441,7 +441,9 @@
       <div class="pm-body"><aside class="pm-left"></aside><div class="pm-mid"><div class="pm-tools"></div><div class="pm-stage" tabindex="0"></div><div class="pm-hint kn"></div></div><aside class="pm-right"></aside></div></div>`;
     const $ = q => host.querySelector(q), stage = $(".pm-stage");
     const save = doc => { ctx.save(doc.id, doc); };
-    const mutate = fn => { const m = cur(); if (!m) return; const d = JSON.parse(JSON.stringify(m)); fn(d); save(d); };
+    // (each thing the referee adds remembers the session it was added in: the user, "linking map additions to session events")
+    const sessNow = () => { try { return +(ctx.session && ctx.session()) || 0; } catch (e) { return 0; } };
+    const mutate = fn => { const m = cur(); if (!m) return; const d = JSON.parse(JSON.stringify(m)), had = new Set((m.els || []).map(e => e.id)); fn(d); const n = sessNow(); if (n) for (const e of d.els || []) if (!e.gen && !had.has(e.id) && !e.sn) e.sn = n; save(d); };
     const elById = (m, id) => (m.els || []).find(e => e.id === id);
     function first() { const ids = Object.keys(maps()); if (!E.id || !maps()[E.id]) E.id = ids[0] || null; }
     // the left: which map, making one, copying, giving it to the players; and what the players see as their world map
@@ -488,7 +490,7 @@
       const routes = W.routes.filter(r => !m.els.some(x => x.route === r.id) && WD_name(W, r.from) && WD_name(W, r.to));
       $(".pm-right").innerHTML = `
         ${learned.length ? `<fieldset class="pm-box pm-sugg"><legend>The party has learned of</legend><p class="kn">Not on this map yet. Nothing is added until you say so.</p>${learned.slice(0, 8).map(l => `<div class="pm-row"><span>${esc(l.name)} <i class="kn">(${esc(l.state)})</i></span><button type="button" class="wm-btn" data-pm="addloc" data-loc="${esc(l.id)}" data-st="${l.state === "rumoured" ? "r" : "c"}">Add</button></div>`).join("")}</fieldset>` : ""}
-        ${e ? `<fieldset class="pm-box"><legend>The chosen ${e.k === "sym" ? "symbol" : e.k === "line" ? e.t || "line" : e.k}</legend>
+        ${e ? `<fieldset class="pm-box"><legend>The chosen ${e.k === "sym" ? "symbol" : e.k === "line" ? e.t || "line" : e.k}</legend>${e.sn ? `<p class="kn">Added in session ${esc(e.sn)}.</p>` : e.gen ? `<p class="kn">Drawn by the map's maker.</p>` : ""}
           ${e.k !== "line" || e.t === "river" || e.t === "road" ? `<label>Words <input type="text" data-pme="label" value="${esc(e.label || "")}"></label>` : ""}
           <label>How sure <select data-pme="st">${opt(STATUS, e.st || "c")}</select></label>
           <label><input type="checkbox" data-pme="dm"${e.dm || e.layer === "dm" ? " checked" : ""}> Only for me</label>
@@ -496,6 +498,7 @@
           <label><input type="checkbox" data-pme="lock"${e.lock ? " checked" : ""}> Locked</label>
           ${e.k === "note" ? `<label>The note <textarea data-pme="label" rows="3">${esc(e.label || "")}</textarea></label>` : ""}
           <div class="pm-row"><button type="button" class="wm-btn" data-pm="delsel"${e.lock ? " disabled" : ""}>Rub it out</button></div></fieldset>` : ""}
+        ${(() => { const ns = [...new Set(m.els.filter(x => x.sn).map(x => +x.sn))].sort((a, b) => a - b); return ns.length ? `<fieldset class="pm-box"><legend>By session</legend><label>Show the map as it was after <select data-pmv="upto">${opt([["0", "every session (now)"]].concat(ns.map(n => [String(n), "session " + n])), String(E.upTo || 0))}</select></label><p class="kn">Only here, to look back; the players see the map as it is now.</p></fieldset>` : ""; })()}
         <fieldset class="pm-box"><legend>Layers</legend>${LAYERS.map(([k, l]) => `<label><input type="checkbox" data-pml="${k}"${(m.layers || {})[k] === 0 ? "" : " checked"}> ${l}</label>`).join("")}</fieldset>
         <fieldset class="pm-box"><legend>Reveal from the world</legend>
           <label>A place <select data-pmv="revloc">${opt(others.map(l => [l.id, l.name + (l.state === "unknown" ? " (unknown to the party)" : "")]), others[0] && others[0].id)}</select></label>
@@ -517,7 +520,7 @@
     // the sheet
     function draw() {
       const m = cur(); if (!m) { stage.innerHTML = `<p class="pm-empty">No map chosen.</p>`; return; }
-      stage.innerHTML = render(m, { sel: E.sel });
+      stage.innerHTML = render(m, { sel: E.sel, upTo: E.upTo || 0 });
       const svg = stage.querySelector("svg"); if (!E.view) { const vb = svg.getAttribute("viewBox").split(" ").map(Number); E.view = vb; }
       svg.setAttribute("viewBox", E.view.map(r1).join(" "));
       if (E.draft && E.draft.pts && E.draft.pts.length > 1) svg.insertAdjacentHTML("beforeend", `<path d="M${E.draft.pts.map(p => `${r1(p[0])} ${r1(p[1])}`).join("L")}" fill="none" stroke="#b03a20" stroke-width="${r1(E.view[2] / 400)}" stroke-dasharray="${r1(E.view[2] / 200)} ${r1(E.view[2] / 300)}"/>`);
@@ -573,6 +576,7 @@
       if (t.matches('[data-pmv="showmap"]')) { ctx.saveSetting(Object.assign({}, ctx.setting() || {}, { map: t.value })); return; }
       if (t.matches('[data-pmv="pick"]')) { E.id = t.value; E.sel = null; E.view = null; all(); return; }
       if (t.matches('[data-pmv="status"]')) { E.status = t.value; return; }
+      if (t.matches('[data-pmv="upto"]')) { E.upTo = +t.value || 0; draw(); return; }
       if (t.matches('[data-pmv="forme"]')) { E.forMe = t.checked; return; }
       if (t.matches('[data-pmv="sym"]')) { E.sym = t.value; return; }
       if (t.matches('[data-pmv="given"]') && m) { mutate(d => { d.given = t.checked; }); return; }

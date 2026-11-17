@@ -143,11 +143,15 @@
     if (!maps.length) return null;
     const WD = A.worldPrepare(A.worldData, A.worldTerrainData, OV, { noLand: true }), out = [];
     for (const m of maps) { const on = new Set((m.els || []).filter(e => e.loc).map(e => e.loc)); for (const l of WD.locs) if (Array.isArray(l.at) && ["known", "visited", "done", "rumoured"].includes(l.state) && !on.has(l.id) && !(UI.pmSkip || {})[m.id + "|" + l.id]) out.push({ m, l, WD }); }
-    return out;
+    // (tonight's places first: the session's plan; the user, "linking map additions to session events")
+    const n = pmSession(), plan = ((A.sessionsData || []).find(x => +x.n === n) || {}).places, tonight = new Set(Array.isArray(plan) ? plan : plan ? String(plan).split(/[,\s]+/) : []);
+    for (const x of out) x.tonight = tonight.has(x.l.id);
+    return out.sort((p, q) => (q.tonight ? 1 : 0) - (p.tonight ? 1 : 0));
   }
+  function pmSession() { try { const v = +((S().get("log", "now") || {}).n); if (v) return v; const ss = (A.sessionsData || []).map(x => +x.n).filter(Boolean).sort((p, q) => p - q); return ss[0] || 0; } catch (e) { return 0; } }
   function pmapHTML() {
     let st = null; try { st = pmapState(); } catch (e) { st = null; } if (!st || !st.length) return "";
-    return `<div class="cp-pm t-small"><b>The players' maps</b>: the party knows of places a map given to them lacks. Add them? ${st.slice(0, 4).map(({ m, l }) => `<span class="t-row"><span>${esc(l.name)}${l.state === "rumoured" ? " (a rumour)" : ""} on ${esc(m.name)}</span><button type="button" class="t-mini" data-cp="pmadd" data-map="${esc(m.id)}" data-loc="${esc(l.id)}">Add it</button><button type="button" class="t-mini" data-cp="pmskip" data-map="${esc(m.id)}" data-loc="${esc(l.id)}">Not now</button></span>`).join("")}</div>`;
+    return `<div class="cp-pm t-small"><b>The players' maps</b>: the party knows of places a map given to them lacks. Add them? ${st.slice(0, 4).map(({ m, l, tonight }) => `<span class="t-row"><span>${esc(l.name)}${l.state === "rumoured" ? " (a rumour)" : ""}${tonight ? " <i>(tonight)</i>" : ""} on ${esc(m.name)}</span><button type="button" class="t-mini" data-cp="pmadd" data-map="${esc(m.id)}" data-loc="${esc(l.id)}">Add it</button><button type="button" class="t-mini" data-cp="pmskip" data-map="${esc(m.id)}" data-loc="${esc(l.id)}">Not now</button></span>`).join("")}</div>`;
   }
   function panelHTML(compact, liveD) {
     return `<div class="cp${compact ? " cp-sm" : ""}"><div class="cp-modes" role="tablist"><button type="button" role="tab" data-cp="mode" data-m="talk" aria-selected="${UI.mode === "talk"}">Talk</button><button type="button" role="tab" data-cp="mode" data-m="imp" aria-selected="${UI.mode === "imp"}">Improvise</button></div>
@@ -206,7 +210,7 @@ ${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n") || "(nothing
       case "mode": UI.mode = b.dataset.m; UI.err = ""; paint(); break;
       case "pmskip": UI.pmSkip = Object.assign(UI.pmSkip || {}, { [b.dataset.map + "|" + b.dataset.loc]: 1 }); paint(); break;
       case "pmadd": { const st = pmapState() || [], hit = st.find(x => x.m.id === b.dataset.map && x.l.id === b.dataset.loc); if (!hit) break; const { m, l, WD } = hit, d = JSON.parse(JSON.stringify(m)), sc = Math.max(d.frame[2], d.frame[3]) / 320, SYMK = { capital: "city", city: "city", town: "town", village: "village", hamlet: "village", port: "port", castle: "castle", keep: "castle", fort: "castle", tower: "tower", ruin: "ruin", temple: "temple", shrine: "temple", monastery: "temple", inn: "inn", bridge: "bridge", cave: "cave", dungeon: "cave", lair: "danger" };
-        d.els.push({ id: A.pmap.uid(), k: "sym", s: SYMK[l.kind] || "village", at: A.pmap.warpFn(WD, d)(l.at), size: sc * 11, label: l.name, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id });
+        d.els.push({ id: A.pmap.uid(), k: "sym", s: SYMK[l.kind] || "village", at: A.pmap.warpFn(WD, d)(l.at), size: sc * 11, label: l.name, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id, sn: pmSession() || undefined });
         S().set("world", "pm-" + d.id, d); paint(); break; }
       case "talkto": A.copilot.talkTo(b.dataset.who); break;
       case "kind": UI.imp.kind = b.dataset.k; UI.imp.out = ""; UI.imp.hits = null; paint(); break;

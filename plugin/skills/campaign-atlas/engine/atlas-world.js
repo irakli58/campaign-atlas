@@ -1251,11 +1251,12 @@
       if (!A.pmap || !gm()) return;
       let host = root.querySelector(".pm-host"); if (!host) { host = document.createElement("div"); host.className = "pm-host"; root.appendChild(host); }
       host.hidden = false;
-      PM = A.pmap.editor(host, { WD: () => WD, maps: () => OV.pm, setting: () => OV.pmset, save: (id, d) => save("pm-" + id, d), saveSetting: d => save("pmset", d), undo: () => undo(true), redo: () => undo(false), show: id => showOnScreen({ kind: "pmap", id }), close: () => { host.hidden = true; PM = null; } });
+      PM = A.pmap.editor(host, { session: () => { let st = null; try { st = A.tableUI && A.tableUI.api && A.tableUI.api.store ? A.tableUI.api.store() : null; } catch (e) { st = null; } st = st || scr(); const n = st ? +((st.get("log", "now") || {}).n) : 0; if (n) return n; const ss = (A.sessionsData || []).map(x => +x.n).filter(Boolean).sort((p, q) => p - q); return ss[0] || 1; }, WD: () => WD, maps: () => OV.pm, setting: () => OV.pmset, save: (id, d) => save("pm-" + id, d), saveSetting: d => save("pmset", d), undo: () => undo(true), redo: () => undo(false), show: id => showOnScreen({ kind: "pmap", id }), close: () => { host.hidden = true; PM = null; } });
       PM.open();
     }
     // (the players' screen is the table's: its store, as the table keeps it)
     let SCR = null;
+    const scr = () => { try { if (!SCR && A.table && A.table.makeStore && ctx.db) SCR = A.table.makeStore(ctx.db, (A.config || {}).storageKey || "atlas"); } catch (e) { SCR = null; } return SCR; };
     function showOnScreen(doc) { try { if (!SCR && A.table && A.table.makeStore && ctx.db) SCR = A.table.makeStore(ctx.db, (A.config || {}).storageKey || "atlas"); if (SCR) { SCR.set("screen", "now", Object.assign({ t: Date.now() }, doc)); note("On the players' screen now."); } } catch (e) { console.warn("world map: the players' screen could not be reached", e); } }
     function genRun(g) {
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
