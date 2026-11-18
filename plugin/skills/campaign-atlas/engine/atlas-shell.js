@@ -321,13 +321,14 @@
       ${A.locations && A.customs && A.customs[p.id] ? A.locations.panel(p) : ""}
       ${M.ext ? `<section class="sec readaloud"><h3>First impressions · read aloud${A.narrateBtn ? `<span class="nar-h">${A.narrateBtn(M.ext, "first impressions")}${A.narrateSet()}</span>` : ""}</h3><p class="lead">${esc(M.ext)}</p></section>` : ""}
       ${A.ux && state.mode === "gm" && (A.mapEdits && A.mapEdits[p.id] && !A.mapEdits[p.id].off || (A.customs && A.customs[p.id])) ? `<p class="keeper ux-handp">${A.ux.hand(A.customs && A.customs[p.id] ? "A place of your own: nothing Atlas makes again draws over it" : "Its map is yours, as you drew it: never redrawn")}</p>` : ""}
-      ${p.M ? A.section(p.id) : `<section class="sec"><h3>Maps of the location</h3><p class="empty">This place has not been mapped yet.</p></section>`}
+      ${p.M ? A.section(p.id) : ""}
       ${M.ov ? `<section class="sec secret keeper"><h3>What's really going on</h3><p>${esc(M.ov)}</p></section>` : ""}
       <section class="sec keeper" id="peopleSlot"><h3>People here${FOLDALL}</h3>${peopleList(p)}</section>
       <div class="keeper" id="clueSlot">${clueSection(p)}</div>
       ${A.tableUI ? A.tableUI.dossierExtra(p) : ""}
       ${hooks.length ? `<section class="sec keeper"><h3>Scenes and hooks${FOLDALL}</h3><ul class="hks">${hooks.join("")}</ul></section>` : ""}
-      <section class="sec"><h3>Connected places</h3><div class="links">${links || `<span class="kn">None.</span>`}</div></section>
+      <section class="sec"><h3>Connected places</h3><div class="links">${links || `<span class="kn sec-none">None.</span>`}</div></section>
+      ${p.M ? "" : `<section class="sec"><h3>Maps of the location</h3><p class="empty sec-none">This place has not been mapped yet.</p></section>`}
       ${connWhy(p)}
       <div id="leadsSlot">${leadsPanel(p.id)}</div>
       <nav class="pager" aria-label="Previous and next place">
@@ -673,7 +674,7 @@
   }
   function peopleList(p) {
     const np = Object.entries((p.M || {}).npcs || {});
-    if (!np.length) return `<p class="kn">Nobody is posted here.</p>`;
+    if (!np.length) return `<p class="kn sec-none">Nobody is posted here.</p>`;
     return `<ul class="ppl">${np.map(([k, n]) => { const [name, role] = who(n), ref = A.story && A.story.personRef ? A.story.personRef(p.id, k) : n.who ? "cast:" + n.who : "npc:" + p.id + "/" + k; return `<li><details class="npc" id="pp-${esc(p.id)}-${esc(k)}"><summary><span class="npn">${esc(name)}</span>${role ? `<span class="npr"> — ${esc(role)}</span>` : ""}${A.nav && state.mode === "gm" ? `<button type="button" class="t-mini ux-pkb" data-uxpeek="person:${esc(ref)}" title="Everything Atlas knows of them, without leaving this page">Their card</button>` : ""}</summary>${profile(p.id, k, n)}</details></li>`; }).join("")}</ul>`;
   }
   function syncCharNotes() {

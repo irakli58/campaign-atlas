@@ -3292,3 +3292,9 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .t-dock.min .t-dmin { min-width: 58px; color: var(--ink); }
 .t-dock.min .t-dmin .ic, .t-dock.min .t-dmin .t-dmin-l { display: block; }
 .t-dock.min .t-dmin b { display: none; }
+/* (the UI overhaul, 18 Nov 2026: a place's empty sections are one quiet line each, and the map that is not made yet comes
+   last, so what the place has comes first) */
+.dossier .sec:has(> .sec-none), .dossier .sec:has(> .links > .sec-none) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 14px; margin-bottom: 14px; }
+.dossier .sec:has(> .sec-none) > h3, .dossier .sec:has(> .links > .sec-none) > h3 { margin: 0; padding: 0; border: 0; opacity: .75; }
+.dossier .sec-none { margin: 0; font-size: 14px; opacity: .8; }
+.dossier .sec:has(> .sec-none) .fold-all { display: none; }

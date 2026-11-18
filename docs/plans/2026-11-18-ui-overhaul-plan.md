@@ -48,10 +48,11 @@ screenshot of each main view, plus a count of the buttons on screen):
   already there.
 - **The table toolbar at the bottom right** folds to one button, Tools, with the › at its end. This frees the corner of
   a map, and the page remembers the choice. The tour opens it again for its own steps and teaches the fold.
+- **A place's page**: its empty sections (nobody posted here, no connected places, not mapped yet) are one quiet line
+  each, with no Open all. The map section, when the place has no map yet, moves below the connected places. What the
+  place does have (its people, clues and hooks) now comes on the first screen.
 
 ## Still to do in the overhaul
 
-- **A place's page**: review the order of its sections (what the GM needs during play first), the same way as At the
-  table.
 - **After each change**: smoke-all.js (all 58 tabs, no errors) on the realm and Kestrel examples, uiaudit.js at both
   sizes, and the tour updated.
