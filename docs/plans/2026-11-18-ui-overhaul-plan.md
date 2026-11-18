@@ -88,3 +88,44 @@ docs/requests/2026-11-18-uncluttered.md). This pass made these changes:
    - On a starting place: 15 controls without Edit, 20 with it.
 4. **The party's journey on the world map** is one line: the way, how far it is, and Travel a day. Rest a day, Arrived,
    Call it off and The road so far are under More.
+
+## The third pass: consistency and ease of use (18 Nov 2026)
+
+The user: "i want consistency and also ease of use" (docs/requests/2026-11-18-consistency-and-ease.md).
+
+**Consistency: one design system** (the end of engine/atlas.css). There are four kinds of control, and each looks the
+same in every view:
+1. **Navigation and switches**: a mono, upper-case pill.
+2. **Actions**: the body's serif, plain case, a 6 px rounded rectangle. At most one **main** action per area, filled
+   dark (`.prim`); the others have a border.
+3. **Links**: the accent colour, underlined.
+4. **Icon buttons**: 32 px.
+
+All of them share one keyboard focus ring and steady gaps. The palette and fonts are the Gazetteer's own, as before.
+Measured: 37 distinct button styles before, 26 after. The rest are list rows, the table toolbar and the map's own zoom
+buttons.
+
+**Ease of use:**
+- **At the table's list** shows the 11 core tools. The 14 that other parts add are under **More tools**: the world at a
+  glance, recorded sessions, the world's time and history, factions, consequences, money, rumours, the copilot, the
+  investigation and the rest. The fold is remembered. It opens by itself for the tool in use and for Find a tool, and
+  the tour teaches it.
+- **An accessibility audit with axe-core (WCAG 2 A and AA)**, run on the Gazetteer, World map, At the table and Music
+  views of both examples, in the light and dark themes. Fixed:
+  - text contrast: the grey text, the gold of the key items and the brown of the clue marks are a little darker;
+  - the faded empty lines;
+  - the page's language;
+  - the maps' role (a group, not a picture, since they hold buttons);
+  - the tool list's false tab roles;
+  - buttons inside fold headings: a person's "Their card" now sits beside the fold, and a clue's handout mark is a
+    label (its buttons are inside the open clue).
+
+  Now there are no violations in any of those views. Re-run it with the scratchpad's axe.js, which loads axe-core
+  4.10.2 into the page.
+
+**Still to do, for millions of users:**
+- testing with real game masters;
+- loading the heavy parts only when they are opened (the example page is about 6 MB);
+- checking on Safari and Firefox;
+- testing the 3D views on real graphics hardware;
+- a screen-reader walk-through by a person.

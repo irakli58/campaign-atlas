@@ -2036,7 +2036,7 @@ function createMap3D(host, C, planCanvas, hooks) {
   /* ---- the flat map: what a device without 3D gets instead. Places, water, main roads, district names. */
   function flatSVG(D, PL, st) {
     const P = LOOK.plan, w = D.sheet.w, h = D.sheet.h, line = pts => pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
-    let s = `<svg class="cityflat" viewBox="0 0 ${w} ${h}" role="img" aria-label="Map${D.title ? ": " + A.esc(D.title) : ""}"><rect width="${w}" height="${h}" fill="${P.PAPER}"/><rect width="${w}" height="${h}" fill="${P.BLOCK}" opacity=".6"/>`;
+    let s = `<svg class="cityflat" viewBox="0 0 ${w} ${h}" role="group" aria-label="Map${D.title ? ": " + A.esc(D.title) : ""}"><rect width="${w}" height="${h}" fill="${P.PAPER}"/><rect width="${w}" height="${h}" fill="${P.BLOCK}" opacity=".6"/>`;
     for (const p of D.parks) s += `<polygon points="${line(p.pts)}" fill="${P.PARKC}"/>`;
     for (const b of D.basins) s += `<path d="${[b.pts, ...(b.holes || [])].map(r => "M" + line(r).split(" ").join("L") + "Z").join("")}" fill-rule="evenodd" fill="${P.WATERC}" stroke="${P.INK}" stroke-width=".3"/>`;
     for (const r of D.rivers) if (!r.ghost) s += `<polyline points="${line(r.pts)}" fill="none" stroke="${P.WATERC}" stroke-width="${r.hw * 2}" stroke-linecap="round" stroke-linejoin="round"/>`;

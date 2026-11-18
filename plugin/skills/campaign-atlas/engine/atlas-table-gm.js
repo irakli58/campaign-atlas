@@ -494,7 +494,7 @@
   const modOn = r => !r || !A.modules || (Array.isArray(r[0]) ? r.every(x => A.modules.on(x[0], x[1])) : A.modules.on(r[0], r[1]));
   const shownTab = k => modOn(KMOD[k]), shownDock = k => modOn(DMOD[k]);
   const pins = () => { try { return (JSON.parse(pref.get("pins") || "[]") || []).filter(k => TABS.some(t => t[0] === k) && shownTab(k)); } catch (e) { return []; } };
-  const navBtn = ([k, l, ic, , desc]) => `<span class="tvn-it"><button type="button" role="tab" data-t="tab" data-tab="${k}" aria-selected="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>${k === "home" ? "" : `<button type="button" class="tvn-pin" data-t="pin" data-tab="${k}" aria-pressed="${pins().includes(k)}" title="${pins().includes(k) ? "Unpin: back among all the tools" : "Pin it: your pinned tools come first"}" aria-label="${pins().includes(k) ? "Unpin" : "Pin"} ${esc(l)}">${pins().includes(k) ? "★" : "☆"}</button>`}</span>`;
+  const navBtn = ([k, l, ic, , desc]) => `<span class="tvn-it"><button type="button" data-t="tab" data-tab="${k}" aria-current="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>${k === "home" ? "" : `<button type="button" class="tvn-pin" data-t="pin" data-tab="${k}" aria-pressed="${pins().includes(k)}" title="${pins().includes(k) ? "Unpin: back among all the tools" : "Pin it: your pinned tools come first"}" aria-label="${pins().includes(k) ? "Unpin" : "Pin"} ${esc(l)}">${pins().includes(k) ? "★" : "☆"}</button>`}</span>`;
   // the list of tools: Start here, the pinned (the UX review of 5 Nov 2026, item 15), then all of them by group, folded
   // when some are pinned (open when the tool shown is among them)
   function navHTML() {
@@ -521,7 +521,7 @@
     nav.querySelectorAll(".tvn-it").forEach(it => { const t = it.textContent.toLowerCase() + " " + ((it.querySelector("[data-tab]") || {}).dataset || {}).tab, ok = ws.every(w => t.includes(w)); it.hidden = !ok; if (ok) any++; });
     nav.querySelectorAll(".tvn-grp, .tvn-more, .tvn-extra").forEach(d => { const n = [...d.querySelectorAll(".tvn-it")].filter(x => !x.hidden).length; d.hidden = !n;
       if (ws.length) { if (!d.dataset.was) d.dataset.was = d.open ? "1" : "0"; d.dataset.filtering = "1"; d.open = true; setTimeout(() => { delete d.dataset.filtering; }, 0); }
-      else if (d.dataset.was) { d.dataset.filtering = "1"; d.open = d.dataset.was === "1" || !!d.querySelector('[aria-selected="true"]'); delete d.dataset.was; setTimeout(() => { delete d.dataset.filtering; }, 0); } });
+      else if (d.dataset.was) { d.dataset.filtering = "1"; d.open = d.dataset.was === "1" || !!d.querySelector('[aria-current="true"]'); delete d.dataset.was; setTimeout(() => { delete d.dataset.filtering; }, 0); } });
     nav.querySelectorAll(":scope > .tvn-g, .tvn-hint").forEach(g => { g.hidden = !!ws.length; });
     const none = nav.querySelector(".tvn-none"); if (none) none.hidden = !ws.length || !!any;
   }
@@ -535,10 +535,10 @@
         <div class="tv-head"><div><div class="st-kicker">${esc(gmName())} only</div><h2 class="tv-h">At the table</h2><p class="tv-lead">Everything for game night: what your players see, tonight's sheet, the villains' clocks, fights and dice, people and places made up on the spot.</p></div>
           <div class="tv-acts"><button type="button" class="t-btn prim" data-t="openscreen">${T.icon("open")}Open the players' screen</button><button type="button" class="t-btn" data-t="tablet" aria-pressed="${app().dataset.tablet === "1"}" title="Bigger buttons, and the tools along the bottom: for a tablet beside you at the table">${app().dataset.tablet === "1" ? "Table-side view: on" : "Table-side view"}</button></div></div>
         <label class="tv-pick"><span class="kl">Tool</span><select class="t-in" data-t="tabpick" aria-label="Which of the table's tools">${pickHTML()}</select></label>
-        <div class="tv-wrap"><nav class="tv-nav" role="tablist" aria-label="At the table">${navHTML()}</nav>
-        <div class="tv-main"><div class="tv-body" id="tvBody" role="tabpanel"></div><p class="tv-note" id="tvNote" aria-live="polite"></p></div></div></div>`;
+        <div class="tv-wrap"><nav class="tv-nav" aria-label="At the table's tools">${navHTML()}</nav>
+        <div class="tv-main"><div class="tv-body" id="tvBody" role="region" aria-label="The tool"></div><p class="tv-note" id="tvNote" aria-live="polite"></p></div></div></div>`;
     }
-    box.querySelectorAll(".tv-nav [data-t='tab'][data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === UI.tab));
+    box.querySelectorAll(".tv-nav [data-t='tab'][data-tab]").forEach(b => b.setAttribute("aria-current", b.dataset.tab === UI.tab));
     { const pk = box.querySelector("[data-t='tabpick']"); if (pk && pk.value !== UI.tab) pk.value = UI.tab; }
     for (const mo of box.querySelectorAll(".tvn-more, .tvn-extra, .tvn-grp")) if (!mo.open && mo.querySelector(`[data-tab="${UI.tab}"]`)) { if (mo.classList.contains("tvn-extra")) mo.dataset.auto = "1"; mo.open = true; }
     renderTab();

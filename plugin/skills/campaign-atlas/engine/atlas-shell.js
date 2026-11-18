@@ -92,6 +92,7 @@
   document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("#audio-btn"), pop = document.getElementById("audio-pop"); if (!pop) return;
     if (b) { const open = !pop.classList.contains("open"); pop.classList.toggle("open", open); b.setAttribute("aria-expanded", open); return; }
     if (!e.target.closest("#audio-pop") && !e.target.closest(".mus-panel, .snd-panel, dialog")) { pop.classList.remove("open"); const bb = document.getElementById("audio-btn"); if (bb) bb.setAttribute("aria-expanded", "false"); } });
+  if (!document.documentElement.lang) document.documentElement.lang = "en";   // (the page's language, for screen readers)
   app.dataset.mode = state.mode;
   app.innerHTML = `
   <header class="mast">
@@ -547,7 +548,7 @@
     const rows = ROWS[p.id] || [];
     const lead = (r, done) => r.to.length ? `<div class="cl-to"><span class="kn">${TR.ready ? (done ? "Opened" : "Would open") : "Leads to"}</span>${r.to.map(t => `<span class="pc">${accBadge(t)}<button type="button" class="pcg" data-go="${esc(t)}">${esc(placeName(t))}</button></span>`).join("")}</div>` : "";
     const hint = r => r.hint ? `<details class="chint"><summary>${r.to.length === 1 ? "How to hint at " + esc(placeName(r.to[0])) : r.to.length ? "How to hint where it leads" : "If it is missed"}</summary><p>${esc(r.hint)}</p></details>` : "";
-    const fold = (r, done) => `<details class="clf"><summary>${esc(r.short)}${r.roll && A.tableUI ? " " + A.tableUI.roll(r.roll) : ""}${r.handout && A.tableUI ? ` <button type="button" class="ho-b" data-t="hview" data-id="${esc(r.handout)}" title="Read this handout, or give it to the players">${A.table.icon("handout")}Handout</button>` : ""}</summary><p class="clx">${esc(r.text)}</p>${lead(r, done)}${hint(r)}${r.rescue ? `<details class="chint"><summary>If they're stuck</summary><p>${esc(r.rescue)}</p></details>` : ""}${r.handout && A.tableUI ? `<p class="cl-ho">${A.tableUI.handoutBtns(r.handout)}</p>` : ""}</details>`;
+    const fold = (r, done) => `<details class="clf"><summary>${esc(r.short)}${r.roll && A.tableUI ? " " + A.tableUI.roll(r.roll) : ""}${r.handout && A.tableUI ? ` <span class="ho-b ho-tag" title="This clue has a handout: open the clue to read it or give it to the players">${A.table.icon("handout")}Handout</span>` : ""}</summary><p class="clx">${esc(r.text)}</p>${lead(r, done)}${hint(r)}${r.rescue ? `<details class="chint"><summary>If they're stuck</summary><p>${esc(r.rescue)}</p></details>` : ""}${r.handout && A.tableUI ? `<p class="cl-ho">${A.tableUI.handoutBtns(r.handout)}</p>` : ""}</details>`;
     if (!TR.ready) return `<section class="sec sec-clues"><h3>Clues to find${rows.length ? FOLDALL : ""}</h3>${rows.length ? `<ul class="cls">${rows.map(r => `<li class="cl"><span class="ckx"></span>${fold(r)}</li>`).join("")}</ul>` : `<p class="kn">None here.</p>`}</section>`;
     const ro = TR.canWrite ? "" : " disabled";
     const main = rows.map(r => { const done = clueDone(p.id, r.k); return `<li class="cl${done ? " done" : ""}"><input type="checkbox" data-clue="${esc(p.id)}" data-ck="${esc(r.k)}" aria-label="Found: ${esc(r.short)}"${done ? " checked" : ""}${ro}>${fold(r, done)}</li>`; }).join("");
@@ -680,7 +681,7 @@
   function peopleList(p) {
     const np = Object.entries((p.M || {}).npcs || {});
     if (!np.length) return `<p class="kn sec-none">Nobody is posted here.</p>`;
-    return `<ul class="ppl">${np.map(([k, n]) => { const [name, role] = who(n), ref = A.story && A.story.personRef ? A.story.personRef(p.id, k) : n.who ? "cast:" + n.who : "npc:" + p.id + "/" + k; return `<li><details class="npc" id="pp-${esc(p.id)}-${esc(k)}"><summary><span class="npn">${esc(name)}</span>${role ? `<span class="npr"> — ${esc(role)}</span>` : ""}${A.nav && state.mode === "gm" ? `<button type="button" class="t-mini ux-pkb" data-uxpeek="person:${esc(ref)}" title="Everything Atlas knows of them, without leaving this page">Their card</button>` : ""}</summary>${profile(p.id, k, n)}</details></li>`; }).join("")}</ul>`;
+    return `<ul class="ppl">${np.map(([k, n]) => { const [name, role] = who(n), ref = A.story && A.story.personRef ? A.story.personRef(p.id, k) : n.who ? "cast:" + n.who : "npc:" + p.id + "/" + k; return `<li><details class="npc" id="pp-${esc(p.id)}-${esc(k)}"><summary><span class="npn">${esc(name)}</span>${role ? `<span class="npr"> — ${esc(role)}</span>` : ""}</summary>${profile(p.id, k, n)}</details>${A.nav && state.mode === "gm" ? `<button type="button" class="t-mini ux-pkb ux-pkb-out" data-uxpeek="person:${esc(ref)}" title="Everything Atlas knows of them, without leaving this page">Their card</button>` : ""}</li>`; }).join("")}</ul>`;
   }
   function syncCharNotes() {
     document.querySelectorAll("textarea[data-cnote]").forEach(t => {
