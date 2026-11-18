@@ -1407,7 +1407,7 @@ switch (cmd) {
   case "wild": cmdWild(pos[0], pos[1]); break;
   case "check": cmdCheck(pos[0], pos.slice(1)); break;
   // importing an adventure the game master owns (references/import.md)
-  case "import": case "import-status": case "import-mark": case "adventure": case "from-adventure": case "ready": require("./atlas-import.js").run(cmd, pos, flags).catch(e => die(e.message)); break;
+  case "import": case "import-status": case "import-mark": case "adventure": case "from-adventure": case "ready": require("./atlas-import.js").run(cmd, pos, flags, { load }).catch(e => die(e.message)); break;
   case "ascii": cmdAscii(pos[0], pos[1], pos[2]); break;
   case "dump": cmdDump(pos[0], pos.slice(1)); break;
   case "status": cmdStatus(pos[0]); break;

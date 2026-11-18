@@ -103,3 +103,77 @@ it is built until the user approves.
 - **Where it runs**: the extraction and the build need the user's computer (the workspace app with Claude Code, or a
   local model large enough). From this cloud session, the importer can be built and tested on material that is free to
   use (an original test adventure written for the purpose), but not on Curse of Strahd until the source is provided.
+
+## Built (18 Nov 2026, after the user's approval: "go ahead with the first one")
+
+**Command line** (scripts/atlas-import.js, wired into atlas.js):
+- `import`: PDF through pdftotext, or pdf.js fetched beside the app; text; Markdown; several parts joined page after
+  page; Atlas's own JSON. It needs `--i-own-this`, and lists the unreadable pages.
+- `import-status`.
+- `import-mark`: each chunk's reading is checked for its sections, a name on every entry, and a book reference on every
+  entry.
+- `adventure`: merges by id and by name, keeping every reference. It checks every link, including the mechanics'
+  options down to a place's area, and any unique item that appears twice, and records coverage.
+- `from-adventure`:
+  - `imported.js`: the cast, factions, events, tables, handouts, clocks, knowledge, quests as story elements, and links;
+  - each place with the book's keyed areas;
+  - `adventure.js`;
+  - the baseline. A file changed since the import is never written over without `--force`.
+- `ready`: ten checks, plus the campaign as it stands against the book (a person or place taken away, and what needed
+  it). Each is Ready to play, Needs review or Incomplete, and it writes `story/report.md` and `ready.js`.
+
+**The page** (engine/atlas-adventure.js):
+- **The adventure's card on Start here:**
+  - the readiness check, with links to the editors;
+  - where it starts;
+  - **the adventure's own mechanics**: drawn by Atlas, or entered as played (a draw refuses the same card twice), then
+    **locked**. They place the items in the item store, never as a second copy, and are told to the Copilot. A redraw
+    asks first;
+  - objectives that are open, done, failed or ignored (the adventure need not be played in order);
+  - the people who matter, and the endings;
+  - **What depends on…** and **Changed since the import**;
+  - **Start the campaign**, enabled only when nothing is incomplete and the mechanics are set up.
+- **Each place:** the book's keyed areas, with their references and what was placed there.
+- **The book's items:** placed once in the item store.
+- **The Copilot:** the book's facts are among its passages, named with their pages, and it keeps "The adventure says
+  (p. …)" apart from "A suggestion".
+
+**The workspace app:**
+- New campaign has **Import an adventure I own**: files, the confirmation, and smaller chunks for a local model.
+- The files are streamed straight to disk (up to 2 GB each), so a whole book is no problem.
+- The job is briefed to follow references/import.md, with Convert faithfully (level 0).
+- `workspace/` and `.deps/` are git-ignored, so an imported book is never committed.
+
+## Tested (18 Nov 2026) on an original test adventure
+
+The test adventure is "The Lantern of Greyhollow", plugin/skills/campaign-atlas/example-import/: four pages, with a
+card-reading mechanic. The scratchpad's test scripts are adv.js, adv2.js, adv3.js, advcp.js, items*.js, cploot.js and
+kesit.js.
+
+| # | Test | Result |
+|---|---|---|
+| 1 | Importing | Markdown; the same as a PDF (pdftotext, and pdf.js with pdftotext hidden); in two parts, with continuous pages; refused without `--i-own-this`; through the app's API (create, stream the PDF, import-start, brief) |
+| 2 | Extracting the structure | Three chunks read and checked; the merge joined people and places met in several chapters; three deliberately broken links were all caught (a person at a missing place, a holder who is nobody, a mechanic option naming a missing area) |
+| 3 | The world and its places | 5 places with their keyed areas. Their maps are not drawn yet, which is honestly marked Needs review. |
+| 4 | People and relationships | 6 people, their knowledge, factions and ties. The Abbess has no look in the book, and that is flagged, not invented. |
+| 5 | Encounters and monsters | 4 encounters with SRD stat references |
+| 6 | Loot and artifacts | The book's items placed where the book puts them. The Lantern and the Book are placed by the reading, one copy each. |
+| 7 | Special mechanics | Drawn, locked, kept after a reload, redraw asks first. An entered reading takes precedence, and a card repeated in a draw is refused. |
+| 8 | Story links and triggers | All resolve. The quests' dependencies and "What depends on" for Prior Hollis list an encounter, an item, two people's knowledge, the faction he leads and the reading's Key. |
+| 9 | The opening session | It opens at the Hanged Goose with Mara Tell. Start the campaign stays disabled until the reading is set up. |
+| 10 | Simulated decisions | A quest ignored and another failed (kept after a reload); the reading entered differently (the Key: the Prior carries the Lantern); the Copilot was told the result and the book's facts for "the players go down into the wheel pit at night". |
+| 11 | Changes by hand | Mara Tell taken out of imported.js: from-adventure kept the change and did not restore her. ready named what needed her (the quest Find Ansel, the Mother card), and the page listed her as removed. |
+| 12 | Changes persist | The page's mechanics, objectives and items survive a reload, and file changes survive a re-import. |
+| 13 | No secrets to the players | The players' copy holds none of the book's secrets, its knowledge base, or the reading. Player view hides the adventure's sections. |
+
+axe-core reports no violations. smoke-all.js opens 61 tabs on the test campaign with no errors, and the realm and
+Kestrel examples are unchanged.
+
+## Still to do
+
+- **The Curse of Strahd test**, with the user's own copy. It is too big to attach to the chat: split it into parts, or
+  use the app's Import on their computer.
+- **Tracing a book's own maps into place maps.** The images in a PDF are not extracted yet; the game master can give
+  them as pictures.
+- **Comparing and reverting one field of a page edit** against the baseline. Today a whole file is reverted with
+  `--force`, and Changed since the import lists the differences.

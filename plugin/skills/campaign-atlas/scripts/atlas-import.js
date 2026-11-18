@@ -248,7 +248,17 @@ function cmdFromAdventure(dir, flags) {
 }
 
 /* ---- the readiness check and the completion report */
-function cmdReady(dir) {
+// what in the adventure leans on a thing (the same as the page's "What depends on…")
+function dependsOn(kb, id) {
+  const by = index(kb), is = v => { const x = resolve(by, v); return x && x.id === id; }, out = [];
+  for (const q of kb.quests) if (is(q.giver) || is(q.place) || (q.needs || []).some(is)) out.push("quest " + q.name);
+  for (const e of kb.encounters) if (is(e.place) || (e.participants || []).some(p => is(p.name))) out.push("encounter " + e.name);
+  for (const c of kb.clues) if (is(c.place) || [].concat(c.points || []).some(is)) out.push("clue " + (c.name || c.text || "").slice(0, 40));
+  for (const it of kb.items) if (is(it.place) || is(it.holder)) out.push("item " + it.name);
+  for (const m of kb.mechanics || []) for (const s of m.slots || []) for (const o of s.options || []) if (String(o.value || "").split(":")[1] && String(o.value).split(":")[1].split("/")[0] === id) out.push(`${m.name} (${o.card || o.range || "a result"})`);
+  return [...new Set(out)];
+}
+function cmdReady(dir, ctx) {
   const kb = rd(path.join(dir, "story", "adventure.json"), null); if (!kb) die("No story/adventure.json yet.");
   for (const k of KINDS) kb[k] = kb[k] || [];
   const by = index(kb), has = f => fs.existsSync(path.join(dir, f)), rep = { t: new Date().toISOString(), checks: [], counts: {}, review: [] };
@@ -273,6 +283,14 @@ function cmdReady(dir) {
   add("opening", "The opening session", startP && kb.people.some(p => resolve(by, p.at) === startP) ? "ready" : startP ? "review" : "incomplete", startP ? (kb.people.some(p => resolve(by, p.at) === startP) ? `opens at ${startP.name}, with ${kb.people.filter(p => resolve(by, p.at) === startP).map(p => p.name).join(", ")}` : `opens at ${startP.name}, with nobody placed there`) : "no start", "start");
   // the DM's secrets stay the DM's: nothing secret written into what the players are given
   const leaks = kb.items.filter(i => i.handout && i.gm && String(i.handout).includes(String(i.gm).slice(0, 30)));
+  // the campaign as it stands now, against the book: a person or a place the game master took away, and what leaned on it
+  let A = null; try { A = ctx && ctx.load ? ctx.load(dir) : null; } catch (e) { A = null; }
+  if (A) {
+    const gone = [...kb.people.filter(p => !(A.castData || {})[p.id]).map(p => ["person", p]), ...kb.places.filter(p => !A.meta[p.id]).map(p => ["place", p])];
+    const startGone = startP && !A.meta[startP.id];
+    add("changes", "Changes since the import", startGone ? "incomplete" : gone.some(([, p]) => dependsOn(kb, p.id).length) ? "review" : "ready",
+      !gone.length ? "nothing the adventure needs has been taken away" : gone.map(([k, p]) => { const d = dependsOn(kb, p.id); return `${k} ${p.name} removed${d.length ? "; it was needed by " + d.slice(0, 6).join(", ") + (d.length > 6 ? "…" : "") : ""}`; }).join(". ") + (startGone ? ". The starting place is gone: choose another start." : ""), "changes");
+  }
   add("secrets", "Secrets kept from the players", leaks.length ? "incomplete" : "ready", leaks.length ? `${leaks.length} handouts carry the game master's notes: ${leaks.map(i => i.name).join(", ")}` : "handouts carry only what the players may read; the page's player view and the players' copy hold no secrets (checked when built: node atlas.js check)", "secrets");
   for (const k of KINDS) rep.counts[k] = kb[k].length;
   for (const k of KINDS) for (const e of kb[k]) if (e.added) rep.review.push({ kind: k, id: e.id, name: e.name || e.title, why: "Atlas's addition, not the book's" });
@@ -290,12 +308,12 @@ function cmdReady(dir) {
   console.log("story/report.md, and ready.js for the page.");
 }
 
-async function run(cmd, pos, flags) {
+async function run(cmd, pos, flags, ctx) {
   if (cmd === "import") return cmdImport(pos[0], pos.slice(1), flags);
   if (cmd === "import-status") return cmdStatus(pos[0]);
   if (cmd === "import-mark") return cmdMark(pos[0], pos[1]);
   if (cmd === "adventure") return cmdAdventure(pos[0]);
   if (cmd === "from-adventure") return cmdFromAdventure(pos[0], flags);
-  if (cmd === "ready") return cmdReady(pos[0]);
+  if (cmd === "ready") return cmdReady(pos[0], ctx);
 }
-module.exports = { run, FORMAT, KINDS, merge, crossCheck, buildFiles, checkPart, headingsOf, textPages };
+module.exports = { run, FORMAT, KINDS, merge, crossCheck, buildFiles, checkPart, headingsOf, textPages, dependsOn };

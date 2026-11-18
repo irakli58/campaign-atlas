@@ -344,16 +344,42 @@
   });
   let launchNote = null;
   // how it is made: with the council (a story, the AI's work), or by hand from an empty campaign
-  const howNow = () => (form.querySelector("input[name=how]:checked") || {}).value === "hand" ? "hand" : "council";
+  const howNow = () => { const v = (form.querySelector("input[name=how]:checked") || {}).value; return v === "hand" || v === "import" ? v : "council"; };
   const paintHow = () => {
-    const hand = howNow() === "hand"; form.dataset.how = hand ? "hand" : "council"; form.story.required = !hand;
+    const hand = howNow() === "hand", imp = howNow() === "import"; form.dataset.how = howNow(); form.story.required = !hand && !imp;
+    if (imp) { const b = $("#gobtn"); if (b) b.textContent = "Import the adventure"; }
     if (hand && genreNow() === "auto") { const g = form.querySelector("input[name=genre][value=modern]"); if (g) g.checked = true; }
-    const b = $("#gobtn"); if (b) b.textContent = hand ? "Make the empty campaign" : "Make my campaign";
+    const b = $("#gobtn"); if (b && !imp) b.textContent = hand ? "Make the empty campaign" : "Make my campaign";
   };
   form.addEventListener("change", e => { if (e.target.name === "how") paintHow(); });
   paintHow();
+  // one file of an imported adventure, sent as it is (no size limit of a form); the app writes it straight to disk
+  async function sendFile(slug, f, note) {
+    const r = await fetch(`/api/campaigns/${slug}/source?name=${encodeURIComponent(f.name)}`, { method: "PUT", headers: { "x-atlas-token": TOKEN, "content-type": "application/octet-stream" }, body: f });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || "The file could not be sent (" + r.status + ").");
+    if (note) note(f.name); return d;
+  }
+  form.addEventListener("change", e => { if (e.target.name === "impfiles") { const fs = [...e.target.files]; $("#impnote").textContent = fs.length ? fs.map(f => `${f.name} (${(f.size / 1e6).toFixed(1)} MB)`).join(" + ") : ""; if (fs.length && !form.title.value.trim()) form.title.value = fs[0].name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/\s+part\s*\d+$/i, ""); } });
   form.addEventListener("submit", async e => {
     e.preventDefault();
+    if (howNow() === "import") {
+      const err = $("#newerr"); err.textContent = ""; const fl = [...(form.impfiles.files || [])];
+      if (!fl.length) { err.textContent = "Choose the adventure's files."; return; }
+      if (!form.rights.checked) { err.textContent = "Tick that it is your own copy, for your own table."; return; }
+      const p = prov(), own = isOwn(p);
+      if (own && !S.tools[toolOf(p)].found) { err.textContent = "Put " + S.tools[toolOf(p)].label + " on this computer first: the steps are above."; return; }
+      if (!own && !S.connectors[p].connected) { err.textContent = "Connect " + PROV[p] + " first: paste your key above."; return; }
+      const o = { import: true, rights: true, provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value || fl[0].name, system: form.system.value, genre: genreNow() === "auto" ? "" : genreNow(), kind: kindNow() === "auto" ? "" : kindNow(), maps: (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d", chunk: +form.impchunk.value || 0, model: form.model ? form.model.value : undefined, budget: form.budget ? +form.budget.value : undefined };
+      const btn = $("#gobtn"); btn.disabled = true;
+      try {
+        const r = await api("/api/campaigns", o), slug = r.job.slug;
+        for (let i = 0; i < fl.length; i++) { btn.textContent = `Sending ${i + 1} of ${fl.length}…`; await sendFile(slug, fl[i]); }
+        btn.textContent = "Reading it…"; const s2 = await api(`/api/campaigns/${slug}/import-start`, {}); setS(s2.state);
+        if (own) { try { await api(`/api/campaigns/${slug}/launch`, { tool: o.tool }); } catch (x) { launchNote = x.message; } }
+        form.impfiles.value = ""; $("#impnote").textContent = ""; location.hash = "c/" + slug;
+      } catch (x) { err.textContent = x.message; }
+      btn.disabled = false; paintHow(); return;
+    }
     if (howNow() === "hand") {
       const err = $("#newerr"); err.textContent = "";
       const o = { blank: true, title: form.title.value, genre: genreNow() === "auto" ? "" : genreNow(), kind: kindNow() === "auto" ? "" : kindNow(), period: genreNow() === "modern" ? form.period.value.trim() : "", system: form.system.value, maps: (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d", uses: form.uses ? form.uses.value : "everything" };

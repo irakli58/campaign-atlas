@@ -163,6 +163,8 @@
     const f = e.target; if (!f.dataset || f.dataset.adv !== "enter") return; e.preventDefault();
     const m = list("mechanics").find(x => x.id === f.dataset.id); if (!m) return;
     const res = {}; for (const s of m.slots || []) { const o = (s.options || [])[+((f.elements[s.id] || {}).value || 0)] || {}; res[s.id] = { card: o.card || o.range || "", value: o.value || "", text: o.text || "" }; }
+    // (a draw takes each card once, as a reading from a deck does: the same card twice is a mistake to put right)
+    if (m.kind === "draw" && !m.repeat) { const cards = Object.values(res).map(r => r.card).filter(Boolean), twice = cards.find((c, i) => cards.indexOf(c) !== i); if (twice) { api.note && api.note(`${twice} is there twice: in ${m.name} each card is drawn once. Change one of them.`); return; } }
     UI.enter = ""; save(m, res, "entered"); api.render();
   });
   // the item store is seeded with the book's items once the page's store is open, on the game master's side only

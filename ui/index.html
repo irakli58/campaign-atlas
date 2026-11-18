@@ -35,10 +35,18 @@
           <span>How it is made</span>
           <div class="bopts" role="radiogroup" aria-label="How it is made">
             <label class="bopt"><input type="radio" name="how" value="council" checked><span><b>With the council.</b> Paste your story: the council of writers fills it out, maps every place and makes it ready to play.</span></label>
+            <label class="bopt"><input type="radio" name="how" value="import"><span><b>Import an adventure I own.</b> A published adventure or your own long notes (a PDF, text or Markdown, whole or in parts): read and run as written, nothing reinvented, every fact keeping where in the book it is. Then change anything you like.</span></label>
             <label class="bopt"><input type="radio" name="how" value="hand"><span><b>By hand, from an empty campaign.</b> Nothing is invented: you make its people, places, clues, handouts and story on its page, a piece at a time. Claude helps only when you ask, and shows what it suggests before anything changes.</span></label>
           </div>
         </div>
         <label class="field"><span>Title</span><input name="title" required maxlength="120" placeholder="Write your campaign's name here"></label>
+        <div class="field imp-only" id="f-import">
+          <span>The adventure's files</span>
+          <label class="btn ghost file">Choose the files…<input type="file" name="impfiles" multiple accept=".pdf,.txt,.md,.markdown,.json" hidden></label>
+          <small class="hint" id="impnote">A PDF, or text or Markdown; several parts are read in the order chosen (a book split into chapters works). Any size: it is read from this computer and stays in the campaign's folder.</small>
+          <label class="rights"><input type="checkbox" name="rights"> This is my own copy, for my own table. Atlas keeps it in the campaign's folder and never publishes it; the page made from it holds the campaign, not the book.</label>
+          <label class="hint">Smaller pieces for a local model <input name="impchunk" type="number" min="2000" max="40000" step="1000" placeholder="14000" aria-label="Characters a chunk"></label>
+        </div>
         <label class="field ai-only"><span>The story <small id="words"></small></span>
           <textarea name="story" required rows="14" placeholder="Paste the whole story here: the plot, the people, the places, as much or as little as you have. The council will fill out the rest."></textarea></label>
         <div class="row ai-only"><label class="btn ghost file">Open a file instead…<input type="file" id="storyfile" accept=".txt,.md,.markdown,.text" hidden></label><span class="hint">A .txt or .md file. From Word, use File › Save As › Plain Text.</span></div>

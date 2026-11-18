@@ -43,6 +43,10 @@ one piece is given.
   listed as unreadable.
 - **Text and Markdown** keep their own page marks (`<!-- page 12 -->`, `[p. 12]`).
 
+`<!-- page N -->` counts the pages of the files as given, so a second part goes on from where the first ended. In a
+`ref`, cite the book's own printed page number where the page shows one. Atlas's count is only for finding the page in
+`text.md`.
+
 The text is in `story/source/text.md`, and the chunks are in `story/source/chunks/NNN.md`. Each chunk is whole pages,
 cut at a chapter where one is near. A local model gets smaller chunks (`--chunk 6000`).
 

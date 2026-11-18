@@ -404,6 +404,11 @@ async function route(req, res) {
     }
     if (m === "POST" && p === "/api/disconnect") { const o = await body(req, 1 << 12), s = settings.get(); delete s[o.provider]; settings.set(s); return send(res, 200, await state()); }
     if (m === "POST" && p === "/api/campaigns") { const j = await jobs.add(await body(req, 16 << 20)); return send(res, 200, { job: j, state: await state() }); }
+    // an imported adventure's files, each streamed straight to disk; then the import starts (lib/jobs.js addImport)
+    if ((mm = p.match(/^\/api\/campaigns\/([a-z0-9-]+)\/(source|import-start)$/))) {
+      if (m === "PUT" && mm[2] === "source") return send(res, 200, await jobs.source(mm[1], url.searchParams.get("name"), req));
+      if (m === "POST" && mm[2] === "import-start") return send(res, 200, { job: await jobs.importStart(mm[1]), state: await state() });
+    }
     if ((mm = p.match(/^\/api\/campaigns\/([a-z0-9-]+)\/(events|stop|continue|report|open|launch)$/))) {
       const slug = mm[1], j = jobs.get(slug); if (!j) return fail(res, 404, "No such campaign.");
       if (m === "GET" && mm[2] === "events") { res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive" }); const ping = setInterval(() => res.write(": ping\n\n"), 20000); res.on("close", () => clearInterval(ping)); return jobs.subscribe(slug, res); }
