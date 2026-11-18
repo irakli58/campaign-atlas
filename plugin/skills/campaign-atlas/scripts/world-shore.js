@@ -301,7 +301,9 @@ function seafloor(E, o, SH, U) {
     const e = Math.max(0, Math.min(d - W, ISL[n] > .5 || o.crust[n] === 1 ? 1e9 : dCr[n])), zOut = e < sw ? -130 - e / sw * 3200 : -3330 - Math.min(1500, (e - sw) * 1.4);
     const sea = SF[n] * (1 - smooth(600, 900, d)), zSea = -(70 + 90 * nB(x * 5 + 7, y * 5)) - 40 * smooth(400, 900, d);
     let z = d <= W ? -(12 + 118 * Math.pow(d / W, 1.15)) : zOut * (1 - sea) + zSea * sea;
-    z += (o.ridge[n] || 0) * 1800 * Math.min(1, d / 300) - (o.trench[n] || 0) * 2600;
+    // (a mid-ocean ridge is a broad swell whose crest lies some 2.5 km down, not a wall reaching for the surface: the user,
+    // 18 Nov 2026, "white streaks in the ocean"; so its rise is capped below the shelf's depths)
+    z += Math.min(1, o.ridge[n] || 0) * 1100 * Math.min(1, d / 300) - (o.trench[n] || 0) * 2600; if ((o.ridge[n] || 0) > .05) z = Math.min(z, -2300);
     // (the deep floor's unevenness, growing with the depth rather than starting at one)
     z += (nC(x * 12, y * 12) - .5) * 300 * smooth(-400, -1500, z);
     // banks on a broad shelf: low swells of sand and gravel, the shallower for being on the shelf

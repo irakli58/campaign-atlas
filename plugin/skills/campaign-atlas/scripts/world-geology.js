@@ -118,7 +118,11 @@ function geology(o, U) {
         for (const [di, dj] of NB8) { let a = i + di; const b = j + dj; if (b < 0 || b >= cr) continue; if (wrap) a = ((a % cc) + cc) % cc; else if (a < 0 || a >= cc) continue; const m = b * cc + a; if (done[m]) continue;
           const d = dd[n] + cost(m) * Math.hypot(di, dj); if (d < dd[m]) { dd[m] = d; if (!(P2[m] >= 0) || dd[m] > 0) P2[m] = P2[n]; hp.push(m, d); } } } }
     // (the coast eased, as a continent's is when it is grown: the carried crust's edges are the grid's)
-    const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = C2[n] ? 1 : 0; boxBlur(F, cc, cr, 2, 2);
+    // (and roughened at several scales, as a grown continent's coast is: the carried edges were the plate grid's straight
+    // cuts, and a range rising along one stood as a ruled line: the user, 18 Nov 2026, "mountain ranges look weird on the
+    // coastlines")
+    const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = C2[n] ? 1 : 0; boxBlur(F, cc, cr, 3, 3);
+    for (let n = 0; n < CN; n++) F[n] += (U.fbm(nB, X(n) * 6 * zs + 17, Y(n) * 6 * zs + 3, 4) - .5) * .7 + (U.fbm(nD, X(n) * 18 * zs, Y(n) * 18 * zs, 3) - .5) * .25;
     for (let n = 0; n < CN; n++) { plate[n] = P2[n] < 0 ? 0 : P2[n]; crust[n] = F[n] > .5 ? 1 : 0; }
   }
 
@@ -160,7 +164,7 @@ function geology(o, U) {
     } else if (b.conv < -.1) {
       const c = Math.min(1.4, -b.conv) * along;
       if (cHere) { up[n] += c * (zs > 1 ? .12 : 1) * (-.2 * gauss(d / 35 / BW) + .4 * bump(d, 70 * BW, 40 * BW)); if (d < ckm && rnd() < .02) volc.push(n); }
-      else ridge[n] += c * gauss(d / 100);
+      else ridge[n] += c * gauss(d / 220);
     }
   }
   // (the mountains the sketch shows: raised where they were drawn, the plates' own belts kept faint beside them so the
@@ -324,7 +328,7 @@ function geology(o, U) {
     if (isLand[n]) continue; const d = dLand[n] * cellKm;
     let z = d < 80 ? -40 - d * 1.6 : d < 260 ? -170 - (d - 80) / 180 * 3300 : -3470 - Math.min(800, (d - 260) * 1.5);
     if (Cf[n]) z = Math.max(z, -(seaLvl - Hf[n]) * 30 - 15);
-    E[n] = z + ridgeF[n] * 1800 * Math.min(1, d / 300) - trenchF[n] * 2600 + (U.fbm(nC, (n % cols) / cols * 12 * zs, ((n / cols) | 0) / cols * 12 * zs, 3) - .5) * 260;
+    E[n] = z + Math.min(1, ridgeF[n]) * 1100 * Math.min(1, d / 300) - trenchF[n] * 2600 + (U.fbm(nC, (n % cols) / cols * 12 * zs, ((n / cols) | 0) / cols * 12 * zs, 3) - .5) * 260; if (ridgeF[n] > .05 && E[n] > -2300) E[n] = -2300;
     if (E[n] > -5) E[n] = -5;
   }
 
