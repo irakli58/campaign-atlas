@@ -183,6 +183,26 @@ layout is Atlas's interpretation (`src.layout: "atlas"`).
 Items go into the item store as the book places them. A unique artifact appears once, where the book or its mechanic
 puts it, and is never placed at random.
 
+### 5b. Choose what to generate: `locations`, `generate`
+
+Reading the book and drawing its places are separate steps. After `from-adventure`, the whole adventure is known (the
+knowledge base, every place's words and keyed areas, the Copilot's passages), but nothing need be drawn yet.
+- `locations` shows the places as the book nests them (a region, its settlements, their buildings), each Not generated,
+  Partly generated, Generated, Failed, or In words only.
+- `generate <place> …` draws only those:
+  - **a settlement:** its streets, at its own size (`--population` from the book, else its kind or its name);
+  - **with `--depth playable`** (the default): also its buildings that have people, encounters or the start in them;
+  - **with `--depth complete`:** every building the book keys;
+  - **with `--depth exterior`:** the streets only;
+  - **a building:** its rooms;
+  - **with `--rooms K20,K21`:** just those rooms and the ones they open onto.
+- `--start` draws where it opens; `--all` draws everything.
+- State is kept in `story/generation.json`. A failed place is tried again on its own. A place the game master changed
+  is kept unless `--force`.
+
+On the page, the adventure's card has **Choose locations to generate** with the same choices; from the app it runs
+`generate` one place at a time and shows each as it is done.
+
 ### 6. Readiness: `ready`
 
 `ready` checks:

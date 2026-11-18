@@ -232,6 +232,20 @@ async function route(req, res) {
         catch (e) { return fail(res, 400, e.message); }
       }
     }
+    // an imported adventure's locations: what is generated, and generating the ones the game master chooses (atlas.js
+    // locations / generate, then a build), one place a call so the page shows each as it is done
+    if (rest === "locations" || rest === "generate") {
+      if (!authed) return fail(res, 403, "forbidden");
+      const dir = path.join(CAMPS, mm[1]); if (!fs.existsSync(path.join(dir, "story", "adventure.json"))) return fail(res, 404, "This campaign has no imported adventure.");
+      const run = args => new Promise((ok, no) => execFile(process.execPath, [ATLAS_JS, ...args], { windowsHide: true, timeout: 1800000, maxBuffer: 1 << 26 }, (err, so, se) => err ? no(new Error(String(se || err.message).trim().split("\n").pop())) : ok(String(so))));
+      try {
+        if (m === "GET" && rest === "locations") return send(res, 200, { places: JSON.parse((await run(["locations", dir, "--json"])).trim().split("\n").pop()) });
+        if (m === "POST" && rest === "generate") { const o = await body(req, 1 << 14), ids = (Array.isArray(o.ids) ? o.ids : []).map(String).filter(x => /^[\w-]{1,80}$/.test(x)).slice(0, 40);
+          const args = ["generate", dir, ...ids].concat(["exterior", "playable", "complete"].includes(o.depth) ? ["--depth", o.depth] : [], o.rooms && /^[\w ,.-]{1,400}$/.test(o.rooms) ? ["--rooms", o.rooms] : [], o.start ? ["--start"] : [], o.all ? ["--all"] : [], o.force ? ["--force"] : []);
+          const out = await run(args); if (o.build !== false) { await run(["build", dir]); await run(["ready", dir]).catch(() => ""); }
+          return send(res, 200, { out: out.trim().split("\n").filter(l => /^[✓✗]/.test(l)), places: JSON.parse((await run(["locations", dir, "--json"])).trim().split("\n").pop()) }); }
+      } catch (e) { return fail(res, 400, e.message); }
+    }
     // the world map's "Make its 3D map now"
     if (m === "POST" && rest === "make-city") {
       if (!authed) return fail(res, 403, "forbidden");

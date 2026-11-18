@@ -86,6 +86,42 @@
     return out;
   }
 
+  /* ---- choosing the locations to generate (the user, 18 Nov 2026: docs/requests/2026-11-18-selective-location-
+     generation.md). The whole adventure is known whether or not a place is drawn; the game master draws the ones they
+     want, when they want: from the app (atlas.js generate, one place at a time, each shown as it is done), or with the
+     command it shows. A failed one is tried again alone; one they changed is kept. */
+  const LOC = { list: null, err: "", sel: new Set(), depth: "playable", busy: false, prog: {}, loading: false };
+  const APP = () => window.ATLAS_APP && window.ATLAS_APP.locations ? window.ATLAS_APP : null;
+  // the state, read here when the app cannot say: drawn rooms against the book's keyed areas, a settlement's streets
+  function localList() {
+    const kids = {}, ps = list("places"), par = p => { for (const v of [p.parent, p.region]) { const x = v && find(v); if (x && x.id !== p.id && x._k === "places") return x.id; } return ""; };
+    for (const p of ps) (kids[par(p)] = kids[par(p)] || []).push(p);
+    const out = [], st = p => { const M = A.maps[p.id], keys = new Set(Object.values((M || {}).rooms || {}).map(r => r && r.key).filter(Boolean)), areas = (p.areas || []).map(a => a.id).filter(Boolean), settle = /\b(hamlet|village|town|city|capital|port|settlement)\b/i.test((p.kind || "") + " " + p.name), city = !!((A.cities || {})[p.id]);
+      const have = areas.filter(k => keys.has(k)).length; return { settle, rooms: areas.length, roomsDrawn: have, status: settle ? (city ? "generated" : "not generated") : areas.length ? (M ? (have >= areas.length ? "generated" : "partial") : "not generated") : "words" }; };
+    const walk = (p, d) => { out.push(Object.assign({ id: p.id, name: p.name, depth: d, start: !!(KB().start && find(KB().start.place) && find(KB().start.place).id === p.id) }, st(p))); for (const c of kids[p.id] || []) walk(c, d + 1); };
+    for (const r of kids[""] || []) walk(r, 0); return out;
+  }
+  async function loadLocations() { if (LOC.loading) return; LOC.loading = true; try { LOC.list = APP() ? await APP().locations() : localList(); LOC.err = ""; } catch (e) { LOC.list = localList(); LOC.err = e.message; } LOC.loading = false; api.render(); }
+  const LW = { generated: ["Generated", "adv-ok"], partial: ["Partly generated", "adv-rv"], "not generated": ["Not generated", ""], generating: ["Generating…", "adv-rv"], failed: ["Failed", "adv-no"], words: ["In words only", ""], queued: ["Queued", ""], done: ["Done", "adv-ok"] };
+  function locHTML() {
+    const L = LOC.list; if (!L) { setTimeout(loadLocations, 0); return `<p class="kn">Reading the adventure's places…</p>`; }
+    const app = !!APP(), sel = [...LOC.sel];
+    return `<p class="t-small">The whole adventure is known, drawn or not: the Copilot and every page know each place's people, story and secrets. Draw only the places you want, now or later.${app ? "" : " (From the Campaign Atlas app, Generate does it here; elsewhere, run the command shown.)"}</p>
+      <ul class="adv-locs">${L.map(x => { const pr = LOC.prog[x.id], w = LW[pr || x.status] || [x.status, ""]; return `<li style="padding-left:${x.depth * 18}px"><label><input type="checkbox" data-adv="locsel" data-id="${esc(x.id)}"${LOC.sel.has(x.id) ? " checked" : ""}${x.status === "words" ? " disabled" : ""}> <b>${esc(x.name)}</b></label> <span class="adv-state ${w[1]}">${esc(w[0])}</span>${x.rooms ? ` <span class="kn">${x.roomsDrawn || 0} of ${x.rooms} rooms</span>` : ""}${x.start ? ` <span class="kn">where it starts</span>` : ""}${x.error ? ` <span class="t-small adv-no">${esc(x.error)}</span>` : ""}${x.status !== "not generated" && x.status !== "words" && !pr ? ` <button type="button" class="t-link" data-go="${esc(x.id)}">Open</button>` : ""}</li>`; }).join("")}</ul>
+      <div class="t-row"><label class="t-small">How much <select class="t-in" data-adv="depth"><option value="exterior"${LOC.depth === "exterior" ? " selected" : ""}>Exterior only: streets and buildings</option><option value="playable"${LOC.depth === "playable" ? " selected" : ""}>Playable: and the interiors with people or encounters</option><option value="complete"${LOC.depth === "complete" ? " selected" : ""}>Complete: every room the book keys</option></select></label></div>
+      <div class="t-row"><button type="button" class="t-btn prim" data-adv="gensel"${!sel.length || LOC.busy ? " disabled" : ""}>Generate selected (${sel.length})</button><button type="button" class="t-btn" data-adv="genstart"${LOC.busy ? " disabled" : ""}>The starting locations</button><button type="button" class="t-btn" data-adv="genall"${LOC.busy ? " disabled" : ""}>Everything</button><span class="t-small kn">Or later: nothing has to be drawn to start.</span></div>
+      ${!app ? `<p class="t-small">The command: <code>node atlas.js generate &lt;campaign&gt; ${esc(sel.join(" ") || "<place>")} --depth ${esc(LOC.depth)}</code></p>` : ""}${LOC.err ? `<p class="t-small adv-no">${esc(LOC.err)}</p>` : ""}
+      <p class="t-small kn">A place you changed is kept as it is (its own Generate again replaces it, after asking). A failed one is tried again on its own.</p>`;
+  }
+  async function generate(ids, o) {
+    if (!APP() || LOC.busy) return; LOC.busy = true; for (const id of ids) LOC.prog[id] = "queued"; api.render();
+    const all = o && o.all ? LOC.list.filter(x => x.status !== "words").map(x => x.id) : ids;
+    for (const [i, id] of all.entries()) { LOC.prog[id] = "generating"; api.render();
+      try { const r = await APP().generate({ ids: [id], depth: LOC.depth, build: i === all.length - 1 }); LOC.prog[id] = (r.out || []).some(l => l.startsWith("✗")) ? "failed" : "done"; LOC.list = r.places || LOC.list; }
+      catch (e) { LOC.prog[id] = "failed"; LOC.err = e.message; } api.render(); }
+    LOC.busy = false; api.note && api.note("Generated. The page reloads with them."); setTimeout(() => location.reload(), 1200);
+  }
+
   /* ---- the card on Start here */
   const UI = { enter: "", redraw: "", dep: "" };
   const W = { ready: ["Ready to play", "adv-ok"], review: ["Needs review", "adv-rv"], incomplete: ["Incomplete", "adv-no"] };
@@ -111,6 +147,7 @@
       ${list("quests").length ? `<h4 class="tw-sub">Objectives</h4><ul class="adv-q">${list("quests").map(q => { const s = qs[q.id] || "open"; return `<li class="adv-q-${esc(s)}"><select class="t-in" data-adv="quest" data-id="${esc(q.id)}" aria-label="${esc(q.name)}">${[["open", "Open"], ["done", "Done"], ["failed", "Failed"], ["ignored", "Ignored"]].map(([v, l]) => `<option value="${v}"${v === s ? " selected" : ""}>${l}</option>`).join("")}</select> <b>${esc(q.name)}</b>${q.optional ? " <span class=\"kn\">(optional)</span>" : ""}: ${esc(q.goal || "")} ${refChip(q)}</li>`; }).join("")}</ul>` : ""}
       ${important.length ? `<h4 class="tw-sub">The people who matter</h4><ul class="adv-p">${important.map(p => `<li><b>${esc(p.name)}</b>${p.role ? ", " + esc(p.role) : ""}${p.at ? ` · <button type="button" class="t-link" data-go="${esc((find(p.at) || {}).id || p.at)}">${esc(placeLabel((find(p.at) || {}).id || p.at))}</button>` : ""} ${refChip(p)}</li>`).join("")}</ul>` : ""}
       ${list("endings").length ? `<details><summary>How it can end (${list("endings").length})</summary><ul>${list("endings").map(e => `<li><b>${esc(e.name)}</b>: ${esc(e.text || "")} ${refChip(e)}</li>`).join("")}</ul></details>` : ""}
+      <details class="adv-loc"${list("places").length && !list("places").some(p => A.maps[p.id] || (A.cities || {})[p.id]) ? " open" : ""}><summary>Choose locations to generate (${list("places").length})</summary>${locHTML()}</details>
       <details><summary>What depends on…</summary><p class="t-small">Before you remove or change a person, a place or an item: what in the adventure leans on it. Nothing is changed for you.</p><select class="t-in" data-adv="dep" aria-label="Which"><option value="">Choose…</option>${["people", "places", "items", "factions"].flatMap(k => list(k).map(x => `<option value="${esc(x.id)}"${UI.dep === x.id ? " selected" : ""}>${esc(x.name)} (${k.slice(0, -1)})</option>`)).join("")}</select>
         ${UI.dep ? (d => d.length ? `<ul>${d.map(x => `<li>${esc(x.k)}: <b>${esc(x.name)}</b>, ${esc(x.why)} ${x.ref ? `<span class="adv-ref">${esc(x.ref)}</span>` : ""}</li>`).join("")}</ul><p class="t-small">If you remove it, each of these needs a new place, person or reason: change them yourself, or ask the Copilot for options.</p>` : `<p class="kn">Nothing in the adventure depends on it.</p>`)(deps(UI.dep)) : ""}</details>
       <details${ch.length ? "" : ""}><summary>Changed since the import (${ch.length})</summary>${ch.length ? `<ul>${ch.map(c => `<li>${esc(c)}</li>`).join("")}</ul><p class="t-small">The book's version of every file is kept (story/import-baseline.json): node atlas.js from-adventure --force puts a file back as the adventure had it; your changes are never written over without it.</p>` : `<p class="kn">Nothing yet: it stands as the adventure has it.</p>`}</details>
@@ -149,6 +186,9 @@
     else if (k === "cancel") { UI.enter = ""; UI.redraw = ""; }
     else if (k === "redraw") UI.redraw = b.dataset.id;
     else if (k === "redrawyes" && m) { UI.redraw = ""; save(m, draw(m), "drawn"); api.note && api.note(`${m.name}: drawn again; where things lie has moved with it.`); }
+    else if (k === "gensel") generate([...LOC.sel]);
+    else if (k === "genstart") { const s = KB().start && find(KB().start.place); const ids = s ? [s.id, ...[s.parent, s.region].map(v => v && find(v)).filter(x => x && x._k === "places").map(x => x.id)] : []; generate(ids); return; }
+    else if (k === "genall") { generate([], { all: true }); return; }
     else if (k === "start") { if (b.disabled) return; S().set("adv", "now", { started: Date.now() }); api.note && api.note("The campaign has begun. Tonight has the first session's sheet."); }
     else return;
     api.render();
@@ -156,7 +196,11 @@
   document.addEventListener("change", e => {
     const t = e.target; if (!t.dataset || !t.dataset.adv) return;
     if (t.dataset.adv === "quest") { const q = Object.assign({}, S().get("adv", "quests") || {}); q[t.dataset.id] = t.value; S().set("adv", "quests", q); }
-    else if (t.dataset.adv === "dep") UI.dep = t.value; else return;
+    else if (t.dataset.adv === "dep") UI.dep = t.value;
+    // (a tick or the depth: the button and the command change where they stand; the page keeps its focus, no redraw)
+    else if (t.dataset.adv === "locsel" || t.dataset.adv === "depth") { if (t.dataset.adv === "depth") LOC.depth = t.value; else if (t.checked) LOC.sel.add(t.dataset.id); else LOC.sel.delete(t.dataset.id);
+      const b = document.querySelector('[data-adv="gensel"]'); if (b) { b.textContent = `Generate selected (${LOC.sel.size})`; b.disabled = !LOC.sel.size || LOC.busy; } const c = document.querySelector(".adv-loc code"); if (c) c.textContent = `node atlas.js generate <campaign> ${[...LOC.sel].join(" ") || "<place>"} --depth ${LOC.depth}`; return; }
+    else return;
     api.render();
   });
   document.addEventListener("submit", e => {
@@ -172,5 +216,5 @@
   let tries = 0, watched = false; const t0 = setInterval(() => { tries++; const st = S();
     if (st && !watched && st.watch) { watched = true; for (const c of ["mechanics", "adv"]) st.watch(c, () => { if (api.tab() === "home") api.render(); }); }
     if (st && document.getElementById("app") && document.getElementById("app").dataset.mode === "gm") { clearInterval(t0); setTimeout(() => { try { seed(); } catch (er) { console.warn("atlas: the adventure's items could not be placed", er); } }, 800); } else if (tries > 60) clearInterval(t0); }, 500);
-  A.adventureApi = { deps, changes, draw, seed, apply };
+  A.adventureApi = { deps, changes, draw, seed, apply, LOC: () => LOC };
 })(typeof ATLAS !== "undefined" ? ATLAS : this.ATLAS);

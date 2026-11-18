@@ -432,7 +432,8 @@ function cmdMapFromSource(dir, want, flags) {
     const f = `places/${p.id}.js`, fp = path.join(dir, f); if (!fs.existsSync(fp)) { none.push(p.name + " (not written: from-adventure)"); continue; }
     if (fs.existsSync(path.join(dir, "edits", p.id + ".js")) && !flags.force) { kept.push(p.name + " (redrawn in the map editor)"); continue; }
     const had = fs.readFileSync(fp, "utf8"), b = base.files[f]; if (b && hash(had) !== b.hash && !flags.force) { kept.push(p.name + " (changed by you)"); continue; }
-    const M = mapOfPlace(kb, p, unit, by); if (!M) { none.push(p.name + " (the book gives it no keyed areas)"); continue; }
+    const only = flags._only && flags._only[p.id], P2 = only ? Object.assign({}, p, { areas: (p.areas || []).filter(a => only.has(a.id)) }) : p;
+    const M = mapOfPlace(kb, P2, unit, by); if (!M) { none.push(p.name + " (the book gives it no keyed areas)"); continue; }
     const body = had.replace(/\nATLAS\.place\(/, "\nATLAS.place(").replace(/\}\);\s*$/, `,
   "map": ${JSON.stringify(M)}
 });
@@ -451,7 +452,92 @@ function cmdMapFromSource(dir, want, flags) {
   if (kept.length) console.log("Kept as they are (--force to draw them from the book again): " + kept.join(", "));
   if (none.length) console.log("Not drawn: " + none.join(", "));
 }
+/* ---- choosing what to generate (the user, 18 Nov 2026: docs/requests/2026-11-18-selective-location-generation.md).
+   The whole adventure is read and known (the knowledge base, imported.js, places/<id>.js with their words and keyed
+   areas, the Copilot's passages); drawing a place is a step of its own, for the places the game master chooses, when
+   they choose: a settlement's streets (atlas.js city at its own size), a building's rooms (map-from-source), or one
+   room and its neighbours. Each place's state is kept in story/generation.json: not generated, generating, generated,
+   partially generated, failed (with why), so a failed one is tried again alone. Never over the game master's work. */
+const SETTLE = /\b(hamlet|village|town|city|capital|port|settlement|metropolis)\b/i;
+const genFile = dir => path.join(dir, "story", "generation.json");
+function statusOf(dir, kb, p, gen) {
+  const g = (gen || {})[p.id] || {}; if (g.status === "generating" || g.status === "failed") return g;
+  const settle = SETTLE.test(p.kind || "") || SETTLE.test(p.name || ""), city = fs.existsSync(path.join(dir, "cities", p.id + ".js")) || (fs.existsSync(path.join(dir, "city.js")) && new RegExp(`invent "${String(p.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`).test(fs.readFileSync(path.join(dir, "city.js"), "utf8")));
+  const f = path.join(dir, "places", p.id + ".js"), txt = fs.existsSync(f) ? fs.readFileSync(f, "utf8") : "", hasMap = /["']?\bmap["']?\s*:/.test(txt) || fs.existsSync(path.join(dir, "edits", p.id + ".js"));
+  const keys = new Set((txt.match(/"key":"([^"]+)"/g) || []).map(x => x.slice(7, -1))), areas = (p.areas || []).map(a => a.id).filter(Boolean), have = areas.filter(k => keys.has(k)).length;
+  const kids = kb.places.filter(c => [c.parent, c.region].some(v => v && (v === p.id || norm(v) === norm(p.name))));
+  const kidS = kids.map(c => statusOf(dir, kb, c, gen).status).filter(s => s !== "words"), anyKid = kidS.some(s => s === "generated" || s === "partial");
+  let status = "not generated";
+  if (settle) status = city ? (kids.length && kidS.some(s => s !== "generated") ? "partial" : "generated") : anyKid ? "partial" : "not generated";
+  else if (areas.length) status = hasMap ? (have >= areas.length ? "generated" : have ? "partial" : "generated") : "not generated";
+  else status = kidS.length ? (anyKid ? (kidS.every(s => s === "generated") ? "generated" : "partial") : "not generated") : "words";   // (a place the book gives only in words: nothing to draw)
+  return Object.assign({}, g, { status, settle, rooms: areas.length, roomsDrawn: have, city });
+}
+function tree(kb) {
+  const by = index(kb), parentOf = p => { for (const v of [p.parent, p.region]) { const x = v && resolve(by, v); if (x && x !== p && kb.places.includes(x)) return x.id; } return null; };
+  const kids = {}; for (const p of kb.places) { const q = parentOf(p) || ""; (kids[q] = kids[q] || []).push(p); }
+  return { kids, roots: kids[""] || [] };
+}
+function cmdLocations(dir, flags) {
+  const kb = rd(path.join(dir, "story", "adventure.json"), null); if (!kb) die("No story/adventure.json yet.");
+  for (const k of KINDS) kb[k] = kb[k] || [];
+  const gen = rd(genFile(dir), {}), T = tree(kb), out = [], start = kb.start && (resolve(index(kb), kb.start.place) || {}).id;
+  const walk = (p, d) => { const st = statusOf(dir, kb, p, gen); out.push(Object.assign({ id: p.id, name: p.name, kind: p.kind || "", depth: d, parent: null, start: p.id === start, areas: (p.areas || []).map(a => ({ id: a.id, name: a.name, floor: a.floor || "" })), ref: refOf(p) }, st)); for (const c of T.kids[p.id] || []) { walk(c, d + 1); out[out.length - 1].parent = out[out.length - 1].parent || p.id; } };
+  for (const r of T.roots) walk(r, 0);
+  if (flags.json) { console.log(JSON.stringify(out)); return out; }
+  const W = { generated: "✓ generated", partial: "◐ partly generated", "not generated": "· not generated", generating: "… generating", failed: "✗ failed", words: "  (in words only)" };
+  for (const x of out) console.log(`${"  ".repeat(x.depth)}${W[x.status] || x.status}  ${x.name}${x.rooms ? ` (${x.roomsDrawn || 0}/${x.rooms} rooms)` : ""}${x.start ? "  ← where it starts" : ""}${x.status === "failed" && x.error ? "  " + x.error : ""}   [${x.id}]`);
+  console.log(`\nGenerate: node atlas.js generate ${dir} <id> [<id> ...] [--depth exterior|playable|complete] [--rooms K1,K2]   (--start: where it opens; --all: everything)`);
+  return out;
+}
+function cmdGenerate(dir, ids, flags) {
+  const kb = rd(path.join(dir, "story", "adventure.json"), null); if (!kb) die("No story/adventure.json yet.");
+  for (const k of KINDS) kb[k] = kb[k] || [];
+  const by = index(kb), T = tree(kb), depth = ["exterior", "playable", "complete"].includes(flags.depth) ? flags.depth : "playable", gen = rd(genFile(dir), {}), save = () => wr(genFile(dir), gen);
+  let want = ids.map(v => (resolve(by, v) || {}).id || v);
+  // the start: where it opens and what is there (the opening session needs it)
+  if (flags.start) { const s = kb.start && resolve(by, kb.start.place); if (s) { want.push(s.id); const par = [s.parent, s.region].map(v => v && resolve(by, v)).find(x => x && kb.places.includes(x)); if (par) want.push(par.id); } }
+  if (flags.all) want = kb.places.map(p => p.id);
+  want = [...new Set(want)];
+  const unknown = want.filter(id => !kb.places.some(p => p.id === id)); if (unknown.length) die(`Not places of this adventure: ${unknown.join(", ")} (node atlas.js locations ${dir})`);
+  const city = require("./city-invent.js"), common = require("./city-common.js"), results = [];
+  for (const id of want) {
+    const p = kb.places.find(x => x.id === id); gen[id] = { status: "generating", depth, t: new Date().toISOString() }; save();
+    try {
+      const st = statusOf(dir, kb, p, {}), did = [];
+      // a settlement's streets, at its own size, in the campaign's world; never over one the game master changed
+      if (st.settle) {
+        const f = path.join(dir, "cities", p.id + ".js");
+        if (fs.existsSync(f) && !flags.force) did.push("its streets were there already (kept)");
+        else { common.cityTarget(p.id); try { city.inventCity(dir, p.name, Object.assign({}, p.population ? { population: String(p.population) } : { size: (SETTLE.exec(p.kind || "") || SETTLE.exec(p.name || "") || ["", "village"])[1].toLowerCase().replace("capital", "city").replace("port", "town").replace("settlement", "village") }), () => {}); } finally { common.cityTarget(null); } did.push("its streets, at " + (p.population ? "its population" : "its size"));
+          // (its city on the world map: the world's location for it says city: "<id>", when there is a world)
+          const wf = path.join(dir, "world.js"); if (fs.existsSync(wf)) { const t = fs.readFileSync(wf, "utf8"); if (!t.includes(`city: "${p.id}"`) && !flags.nolink) did.push(`(to show it from the world map, its location there takes city: "${p.id}")`); } }
+        // its buildings with rooms: the playable ones (people, encounters or the start there) or all of them
+        if (depth !== "exterior") for (const c of T.kids[p.id] || []) { if (!(c.areas || []).length) continue; const busy = kb.encounters.some(e => (resolve(by, e.place) || {}).id === c.id) || kb.people.some(x => (resolve(by, x.at) || {}).id === c.id) || (kb.start && (resolve(by, kb.start.place) || {}).id === c.id);
+          if (depth === "complete" || busy) { const log = []; const L = console.log; console.log = m => log.push(m); try { cmdMapFromSource(dir, [c.id], flags); } finally { console.log = L; } did.push(log.join(" ").replace(/\s+/g, " ").replace(/^Drawn from the book: /, "").slice(0, 160)); gen[c.id] = { status: "generated", depth, t: new Date().toISOString() }; } }
+      }
+      // a building's rooms: all, or the rooms asked for and the ones they open onto (the least the room needs to be played)
+      if ((p.areas || []).length) {
+        let f2 = flags;
+        if (flags.rooms && flags.rooms !== true) { const ask = String(flags.rooms).split(",").map(s => s.trim()).filter(Boolean), near = new Set(ask);
+          for (const a of p.areas) if (ask.includes(a.id)) for (const e of a.exits || []) near.add(typeof e === "string" ? e : e.to);
+          f2 = Object.assign({}, flags, { _only: { [p.id]: near } }); did.push(`room${ask.length > 1 ? "s" : ""} ${ask.join(", ")}${near.size > ask.length ? ` and the ${near.size - ask.length} ${near.size - ask.length > 1 ? "rooms" : "room"} they open onto` : ""}`); }
+        const log = []; const L = console.log; console.log = m => log.push(m); try { cmdMapFromSource(dir, [p.id], f2); } finally { console.log = L; }
+        did.push(log.join(" ").replace(/\s+/g, " ").replace(/^Drawn from the book: /, "").replace(new RegExp("^" + String(p.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ": "), "").slice(0, 200));
+      }
+      if (!did.length) did.push("the book gives it only in words: nothing to draw; it is known to the Copilot and the page as written");
+      const now = statusOf(dir, kb, p, {}); gen[id] = { status: flags.rooms && flags.rooms !== true ? "partial" : now.status === "words" ? "generated" : now.status, depth, t: new Date().toISOString(), did };
+      results.push(`✓ ${p.name}: ${did.join("; ")}`);
+    } catch (e) { gen[id] = { status: "failed", depth, t: new Date().toISOString(), error: String(e.message || e).split("\n")[0].slice(0, 240) }; results.push(`✗ ${p.name}: ${gen[id].error} (try it again: node atlas.js generate ${dir} ${id})`); }
+    save();
+  }
+  console.log(results.join("\n"));
+  console.log("Then: node atlas.js build " + dir + " (and node atlas.js ready " + dir + ")");
+  return results;
+}
 async function run(cmd, pos, flags, ctx) {
+  if (cmd === "locations") return cmdLocations(pos[0], flags);
+  if (cmd === "generate") return cmdGenerate(pos[0], pos.slice(1), flags);
   if (cmd === "map-from-source") return cmdMapFromSource(pos[0], pos.slice(1), flags);
   if (cmd === "import") return cmdImport(pos[0], pos.slice(1), flags);
   if (cmd === "import-status") return cmdStatus(pos[0]);

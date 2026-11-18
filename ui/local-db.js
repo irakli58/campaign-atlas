@@ -159,6 +159,9 @@
           .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not read"); return x.word || []; }); });
       }
     },
+    // an imported adventure's locations (atlas.js locations), and generating the ones chosen (atlas.js generate, then a build)
+    locations: function () { return fetch(URL_.replace(/db$/, "locations"), { headers: { "x-atlas-token": TOKEN }, cache: "no-store" }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not read"); return d.places; }); }); },
+    generate: function (o) { return fetch(URL_.replace(/db$/, "generate"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not generated"); return d; }); }); },
     makeCity: function (o) {
       return fetch(URL_.replace(/db$/, "make-city"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not made"); return d; }); })

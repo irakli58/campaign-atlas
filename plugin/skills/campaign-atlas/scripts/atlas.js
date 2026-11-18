@@ -14,6 +14,10 @@
    node atlas.js adventure <dir>                 merge the chunks' readings into story/adventure.json; check its links and coverage
    node atlas.js from-adventure <dir> [--force]  write the campaign from it (imported.js, places/, adventure.js); never over your changes
    node atlas.js ready <dir>                     the readiness check and completion report (story/report.md, ready.js)
+   node atlas.js locations <dir> [--json]        the adventure's places as a tree, each with what is generated
+   node atlas.js generate <dir> <place> [...] [--depth exterior|playable|complete] [--rooms K1,K2] [--start] [--all] [--force]
+                                                 generate only the places chosen: a settlement's streets at its size, its buildings'
+                                                 rooms, or a few rooms and their neighbours; a failed one tried again alone
    node atlas.js map-from-source <dir> [<place> ...] [--force]
                                                  each place's map from the book: a room for every keyed area, its size, its exits
                                                  as doors, arches, secret doors and stairs, its people, encounters and clues in it
@@ -82,7 +86,7 @@ const fs = require("fs"), path = require("path"), crypto = require("crypto");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "age", "tectonics", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare", "sea", "river", "roads", "hills", "levels", "craters", "liquid", "locked", "lid", "temp", "cover", "env", "palette", "from", "type", "scope", "layout", "star", "system-name", "galaxy-name", "model", "chunk", "population"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "age", "tectonics", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare", "sea", "river", "roads", "hills", "levels", "craters", "liquid", "locked", "lid", "temp", "cover", "env", "palette", "from", "type", "scope", "layout", "star", "system-name", "galaxy-name", "model", "chunk", "population", "depth", "rooms"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -1424,7 +1428,7 @@ switch (cmd) {
   case "wild": cmdWild(pos[0], pos[1]); break;
   case "check": cmdCheck(pos[0], pos.slice(1)); break;
   // importing an adventure the game master owns (references/import.md)
-  case "import": case "import-status": case "import-mark": case "adventure": case "from-adventure": case "ready": case "map-from-source": require("./atlas-import.js").run(cmd, pos, flags, { load }).catch(e => die(e.message)); break;
+  case "import": case "import-status": case "import-mark": case "adventure": case "from-adventure": case "ready": case "map-from-source": case "locations": case "generate": require("./atlas-import.js").run(cmd, pos, flags, { load }).catch(e => die(e.message)); break;
   case "ascii": cmdAscii(pos[0], pos[1], pos[2]); break;
   case "dump": cmdDump(pos[0], pos.slice(1)); break;
   case "status": cmdStatus(pos[0]); break;
