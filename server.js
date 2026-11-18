@@ -13,6 +13,8 @@ const PlayersLan = require("./lib/players-lan"), RecorderLan = require("./lib/re
 
 const ROOT = __dirname, PORT = +process.env.ATLAS_PORT || 4747;
 const UI = path.join(ROOT, "ui"), DATA = path.join(ROOT, "data"), WORK = path.join(ROOT, "workspace"), CAMPS = path.join(WORK, "campaigns");
+// adventures the game master owns, pasted into imports/ (never committed: imports/.gitignore), to import without choosing them
+const IMPORTS = path.join(ROOT, "imports");
 const SHIPPED = path.join(ROOT, "plugin", "skills", "campaign-atlas"), SKILL = path.join(WORK, ".claude", "skills", "campaign-atlas");
 const ATLAS_JS = path.join(SKILL, "scripts", "atlas.js"), TEMPLATE = path.join(SKILL, "template");
 const TOKEN = crypto.randomBytes(24).toString("hex");
@@ -407,7 +409,7 @@ async function route(req, res) {
     // an imported adventure's files, each streamed straight to disk; then the import starts (lib/jobs.js addImport)
     if ((mm = p.match(/^\/api\/campaigns\/([a-z0-9-]+)\/(source|import-start)$/))) {
       if (m === "PUT" && mm[2] === "source") return send(res, 200, await jobs.source(mm[1], url.searchParams.get("name"), req));
-      if (m === "POST" && mm[2] === "import-start") return send(res, 200, { job: await jobs.importStart(mm[1]), state: await state() });
+      if (m === "POST" && mm[2] === "import-start") { const o = await body(req, 1 << 14); return send(res, 200, { job: await jobs.importStart(mm[1], Array.isArray(o.fromImports) ? o.fromImports.map(n => path.join(IMPORTS, path.basename(String(n)))) : []), state: await state() }); }
     }
     if ((mm = p.match(/^\/api\/campaigns\/([a-z0-9-]+)\/(events|stop|continue|report|open|launch)$/))) {
       const slug = mm[1], j = jobs.get(slug); if (!j) return fail(res, 404, "No such campaign.");
@@ -419,6 +421,8 @@ async function route(req, res) {
       if (m === "POST" && mm[2] === "launch") return send(res, 200, { job: await jobs.launch(slug, (await body(req, 1 << 12)).tool) });
     }
     if (m === "POST" && p === "/api/open-workspace") { openFolder(WORK); return send(res, 200, { ok: true }); }
+    if (m === "GET" && p === "/api/imports") { fs.mkdirSync(IMPORTS, { recursive: true }); return send(res, 200, { folder: IMPORTS, files: fs.readdirSync(IMPORTS).filter(f => /\.(pdf|txt|md|markdown|json)$/i.test(f) && f !== "README.md").sort((a, b) => a.localeCompare(b, "en", { numeric: true })).map(f => ({ name: f, size: fs.statSync(path.join(IMPORTS, f)).size })) }); }
+    if (m === "POST" && p === "/api/open-imports") { fs.mkdirSync(IMPORTS, { recursive: true }); openFolder(IMPORTS); return send(res, 200, { ok: true }); }
     if (m === "GET" && p === "/api/examples") return send(res, 200, { examples: Object.entries(EXAMPLES).filter(([id]) => fs.existsSync(path.join(EXDIR, id, "campaign.js"))).map(([id, e]) => Object.assign({ id, ready: fs.existsSync(path.join(CAMPS, "example-" + id, "dist", "preview.html")) }, e)) });
     if (m === "POST" && p === "/api/example") return send(res, 200, await example(String((await body(req, 1 << 10)).id || "")));
     return fail(res, 404, "not found");

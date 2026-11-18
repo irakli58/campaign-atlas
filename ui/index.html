@@ -42,6 +42,9 @@
         <label class="field"><span>Title</span><input name="title" required maxlength="120" placeholder="Write your campaign's name here"></label>
         <div class="field imp-only" id="f-import">
           <span>The adventure's files</span>
+          <div class="impfolder"><b>From the imports folder</b> <small class="hint">(the app's own <code>imports</code> folder: paste the PDF there)</small> <button type="button" class="btn ghost" id="impopen">Open the imports folder</button> <button type="button" class="btn ghost" id="imprefresh">Look again</button>
+            <div id="implist" class="hint">…</div></div>
+          <span class="hint">Or choose them from anywhere:</span>
           <label class="btn ghost file">Choose the files…<input type="file" name="impfiles" multiple accept=".pdf,.txt,.md,.markdown,.json" hidden></label>
           <small class="hint" id="impnote">A PDF, or text or Markdown; several parts are read in the order chosen (a book split into chapters works). Any size: it is read from this computer and stays in the campaign's folder.</small>
           <label class="rights"><input type="checkbox" name="rights"> This is my own copy, for my own table. Atlas keeps it in the campaign's folder and never publishes it; the page made from it holds the campaign, not the book.</label>

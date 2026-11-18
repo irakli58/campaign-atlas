@@ -353,6 +353,14 @@
   };
   form.addEventListener("change", e => { if (e.target.name === "how") paintHow(); });
   paintHow();
+  // the adventures pasted into the app's imports/ folder, to tick instead of choosing files
+  async function listImports() {
+    const box = $("#implist"); if (!box) return;
+    try { const r = await api("/api/imports"); box.innerHTML = r.files.length ? r.files.map(f => `<label class="rights"><input type="checkbox" name="impfrom" value="${esc(f.name)}" checked> ${esc(f.name)} <small>(${(f.size / 1e6).toFixed(1)} MB)</small></label>`).join("") : `Nothing there yet. Paste the PDF into <code>${esc(r.folder)}</code>, then Look again.`;
+      if (r.files.length && !form.title.value.trim()) form.title.value = r.files[0].name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/\s+(part\s*)?\d+$/i, ""); } catch (x) { box.textContent = x.message; }
+  }
+  document.addEventListener("click", e => { if (e.target.id === "impopen") api("/api/open-imports", {}).catch(() => {}); if (e.target.id === "imprefresh") listImports(); });
+  form.addEventListener("change", e => { if (e.target.name === "how" && howNow() === "import") listImports(); });
   // one file of an imported adventure, sent as it is (no size limit of a form); the app writes it straight to disk
   async function sendFile(slug, f, note) {
     const r = await fetch(`/api/campaigns/${slug}/source?name=${encodeURIComponent(f.name)}`, { method: "PUT", headers: { "x-atlas-token": TOKEN, "content-type": "application/octet-stream" }, body: f });
@@ -363,18 +371,18 @@
   form.addEventListener("submit", async e => {
     e.preventDefault();
     if (howNow() === "import") {
-      const err = $("#newerr"); err.textContent = ""; const fl = [...(form.impfiles.files || [])];
-      if (!fl.length) { err.textContent = "Choose the adventure's files."; return; }
+      const err = $("#newerr"); err.textContent = ""; const fl = [...(form.impfiles.files || [])], from = [...form.querySelectorAll("input[name=impfrom]:checked")].map(x => x.value);
+      if (!fl.length && !from.length) { err.textContent = "Paste the adventure into the imports folder (then Look again), or choose its files."; return; }
       if (!form.rights.checked) { err.textContent = "Tick that it is your own copy, for your own table."; return; }
       const p = prov(), own = isOwn(p);
       if (own && !S.tools[toolOf(p)].found) { err.textContent = "Put " + S.tools[toolOf(p)].label + " on this computer first: the steps are above."; return; }
       if (!own && !S.connectors[p].connected) { err.textContent = "Connect " + PROV[p] + " first: paste your key above."; return; }
-      const o = { import: true, rights: true, provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value || fl[0].name, system: form.system.value, genre: genreNow() === "auto" ? "" : genreNow(), kind: kindNow() === "auto" ? "" : kindNow(), maps: (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d", chunk: +form.impchunk.value || 0, model: form.model ? form.model.value : undefined, budget: form.budget ? +form.budget.value : undefined };
+      const o = { import: true, rights: true, provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value || (fl[0] || {}).name || from[0], system: form.system.value, genre: genreNow() === "auto" ? "" : genreNow(), kind: kindNow() === "auto" ? "" : kindNow(), maps: (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d", chunk: +form.impchunk.value || 0, model: form.model ? form.model.value : undefined, budget: form.budget ? +form.budget.value : undefined };
       const btn = $("#gobtn"); btn.disabled = true;
       try {
         const r = await api("/api/campaigns", o), slug = r.job.slug;
         for (let i = 0; i < fl.length; i++) { btn.textContent = `Sending ${i + 1} of ${fl.length}…`; await sendFile(slug, fl[i]); }
-        btn.textContent = "Reading it…"; const s2 = await api(`/api/campaigns/${slug}/import-start`, {}); setS(s2.state);
+        btn.textContent = "Reading it…"; const s2 = await api(`/api/campaigns/${slug}/import-start`, { fromImports: from }); setS(s2.state);
         if (own) { try { await api(`/api/campaigns/${slug}/launch`, { tool: o.tool }); } catch (x) { launchNote = x.message; } }
         form.impfiles.value = ""; $("#impnote").textContent = ""; location.hash = "c/" + slug;
       } catch (x) { err.textContent = x.message; }
