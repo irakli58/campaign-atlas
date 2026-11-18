@@ -3,7 +3,6 @@
 // every location that has no at: [x, y] where its kind belongs, and suggests routes while there are none here.
 ATLAS.world({
   title: "The Wyrmwater Reach",
-  look: "painted",
   scale: { unit: "mile", per: 0.5 },                       // the map is 1000 units across: 500 miles
   speeds: { road: 24, trail: 16, pass: 10, river: 30, sea: 72 },
   regions: [

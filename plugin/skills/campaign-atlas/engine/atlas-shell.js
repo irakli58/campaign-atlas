@@ -83,19 +83,14 @@
 
   /* ---- the frame */
   const kicker = [cfg.system, cfg.setting, gm + "'s gazetteer"].filter(Boolean).join(" · ");
+  document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("#audio-btn"), pop = document.getElementById("audio-pop"); if (!pop) return;
+    if (b) { const open = !pop.classList.contains("open"); pop.classList.toggle("open", open); b.setAttribute("aria-expanded", open); return; }
+    if (!e.target.closest("#audio-pop") && !e.target.closest(".mus-panel, .snd-panel, dialog")) { pop.classList.remove("open"); const bb = document.getElementById("audio-btn"); if (bb) bb.setAttribute("aria-expanded", "false"); } });
   app.dataset.mode = state.mode;
   app.innerHTML = `
   <header class="mast">
-    <div><div class="kicker">${esc(kicker)}</div><h1>${esc(cfg.title)}${cfg.strap ? `: <em>${esc(cfg.strap)}</em>` : ""}</h1></div>
-    <div class="tools">
-      <span class="ux-qwrap"><input id="q" class="search" type="search" placeholder="Search everything (Ctrl+K)" aria-label="Search everything in the campaign" autocomplete="off"></span>
-      ${ACTS.length ? `<select id="act" class="actsel" aria-label="Filter by act"><option value="all">All acts</option>${ACTS.map(a => `<option value="${a}">${esc(actTitle(a))}</option>`).join("")}</select>` : ""}
-      <div class="mode" role="group" aria-label="View mode"><button id="m-keeper" type="button" aria-pressed="${state.mode === "gm"}">${esc(gm)}</button><button id="m-player" type="button" aria-pressed="${state.mode === "player"}">Player-safe</button></div>
-      ${A.modules ? `<button type="button" class="featbtn keeper" data-mf-open title="What this campaign uses: switch parts of Atlas on and off" aria-label="What this campaign uses"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>` : ""}
-    </div>
-  </header>
-  ${A.music ? `<div class="musicbar">${A.music.html()}${A.sound ? A.sound.html() : ""}</div>` : ""}
-  <nav class="views" aria-label="View">
+    <div class="mast-id" title="${esc(kicker)}"><div class="kicker">${esc(kicker)}</div><h1>${esc(cfg.title)}${cfg.strap ? `: <em>${esc(cfg.strap)}</em>` : ""}</h1></div>
+    <nav class="views" aria-label="View">
     ${A.nav ? A.nav.btnsHTML() : ""}<button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
     ${A.worldMount && A.worldList && A.worldList().length ? `<button type="button" id="v-world" aria-pressed="false">World map</button>${A.worldList().length > 1 ? `<select id="v-worldsel" class="v-worldsel" aria-label="Which world" title="This campaign's worlds: its own, and the others it holds (a planet, a moon, a plane's layer)">${A.nav ? A.nav.worldOptions("main") : A.worldList().map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")}</select>` : ""}` : ""}
     ${A.galaxyParams && A.galaxyMount ? `<button type="button" id="v-galaxy" class="keeper" aria-pressed="false">Star chart</button>` : ""}
@@ -103,6 +98,15 @@
     ${(A.storyData || []).length ? `<button type="button" id="v-story" class="keeper" aria-pressed="false">The story</button>` : ""}
     ${A.music && A.music.enabled && A.music.enabled() ? `<button type="button" id="v-music" aria-pressed="false">Music</button>` : ""}
   </nav>
+    <div class="tools">
+      <span class="ux-qwrap"><input id="q" class="search" type="search" placeholder="Search everything (Ctrl+K)" aria-label="Search everything in the campaign" autocomplete="off"></span>
+      ${ACTS.length ? `<select id="act" class="actsel" aria-label="Filter by act"><option value="all">All acts</option>${ACTS.map(a => `<option value="${a}">${esc(actTitle(a))}</option>`).join("")}</select>` : ""}
+      <div class="mode" role="group" aria-label="View mode"><button id="m-keeper" type="button" aria-pressed="${state.mode === "gm"}">${esc(gm)}</button><button id="m-player" type="button" aria-pressed="${state.mode === "player"}">Player-safe</button></div>
+      ${A.modules ? `<button type="button" class="featbtn keeper" data-mf-open title="What this campaign uses: switch parts of Atlas on and off" aria-label="What this campaign uses"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>` : ""}
+    </div>
+    ${A.music ? `<button type="button" class="audiobtn" id="audio-btn" aria-expanded="false" aria-controls="audio-pop" title="Music and sounds">♪ Audio</button>` : ""}
+    ${A.music ? `<div class="musicbar mb-pop" id="audio-pop">${A.music.html()}${A.sound ? A.sound.html() : ""}</div>` : ""}
+  </header>
   <section class="story keeper" id="story" aria-label="The whole story"></section>
   <section class="studio" id="studio" aria-label="Make your own music"></section>
   ${A.tableUI ? `<section class="tablev keeper" id="tablev" aria-label="At the table"></section>` : ""}

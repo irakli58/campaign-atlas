@@ -432,7 +432,7 @@
       ] },
       { id: "bible", title: "The story and its music", summary: "The council's story bible, and the music made for every place.", features: ["bible", "music"], steps: [
         { say: "The story: the council's bible, the judge's grades, and the story as you gave it.", sel: "#v-story", act: "look", optional: true },
-        { say: "Every place has its own music, made by the page itself. Play it from here.", sel: ".musicbar, #v-music", act: "look" },
+        { say: "Every place has its own music, made by the page itself. Audio, at the top, opens it: play, choose songs, the volume and the sounds.", sel: ["#audio-btn", ".musicbar", "#v-music"], act: "look" },
         { say: "Beside its volume, push it yourself when the scene turns: Calm takes the tension and drums out, Tense darkens it, Fight plays the style's battle music. It never changes by itself; As the scene follows the place again.", sel: ["#mus-push", ".musicbar"], act: "look", optional: true },
         { say: "That is Atlas. Help and tutorials is always here for any lesson again.", sel: ".tu-helpbtn", act: "look" }
       ] },

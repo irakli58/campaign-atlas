@@ -274,6 +274,8 @@
   }
   function welcome() {
     if (P.seen || VIDEO || !(document.querySelector(".mode") || D.welcome)) return;
+    // (one prompt at a time: while the page's "New" banner asks to be read, the tour waits for another visit)
+    { const ban = document.getElementById("tIntro"); if (ban && ban.offsetParent) return; }
     P.seen = true; save();
     const t = document.createElement("div"); t.className = "tu-toast"; t.setAttribute("role", "note");
     t.innerHTML = `<p><b>New to Atlas?</b> A few minutes' tour: watch it done, or try it yourself.</p><div class="tu-bar"><button type="button" data-tw="show">Show me</button><button type="button" class="tu-p" data-tw="try">Let me try</button><button type="button" data-tw="no">Not now</button></div>`;

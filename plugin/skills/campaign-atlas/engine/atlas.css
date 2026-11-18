@@ -3231,3 +3231,21 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .wm-ccbox h4 { margin: 0 0 6px; } .wm-ccbox label { display: block; margin: 6px 0; } .wm-ccbox select { max-width: 100%; }
 .wm-ccpick { max-height: 140px; overflow: auto; border: 1px solid rgba(0,0,0,.1); padding: 4px 6px; border-radius: 6px; }
 .wm-cclist { list-style: none; padding: 0; margin: 6px 0; } .wm-cclist li { padding: 3px 0; border-bottom: 1px solid rgba(0,0,0,.06); } .wm-cclist label { display: inline; }
+
+/* ---- the UI overhaul (18 Nov 2026; the user: "its not very intuitive"): one compact bar at the top, always there: the
+        campaign's name, its views, search, the DM / players' switch, help, the switches and the audio */
+.mast { position: sticky; top: 0; z-index: 35; background: var(--bg); grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px 18px; padding: 8px 0; margin-bottom: 8px; }
+.mast .mast-id { min-width: 0; }
+.mast .kicker { font-size: 10px; letter-spacing: .1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45vw; }
+.mast h1 { font-size: clamp(20px, 2.2vw, 30px); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45vw; }
+.mast .views { grid-column: 1 / -1; order: 3; margin: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding: 2px 0; }
+.mast .views button { white-space: nowrap; }
+.mast .tools { flex-wrap: nowrap; }
+.audiobtn { border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; color: var(--ink); white-space: nowrap; }
+.audiobtn[aria-expanded="true"] { background: var(--ink); color: var(--bg); }
+.mast { position: sticky; }
+.musicbar.mb-pop { display: none; position: absolute; right: 0; top: 100%; z-index: 36; margin: 4px 0 0; background: var(--bg); border: 1px solid var(--rule); border-radius: 12px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.16); flex-wrap: wrap; gap: 8px; max-width: min(640px, calc(100vw - 24px)); }
+.musicbar.mb-pop.open { display: flex; }
+.t-intro.keeper { margin: 8px 0 12px; }
+@media (max-width: 1100px) { .mast { grid-template-columns: minmax(0, 1fr) auto auto; } .mast .views { grid-column: 1 / -1; order: 3; } .mast h1, .mast .kicker { max-width: 60vw; } }
+@media (max-width: 700px) { .mast .tools { flex-wrap: wrap; } .mast .kicker { display: none; } }

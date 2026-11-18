@@ -2,7 +2,7 @@
 // again. To stand a location somewhere else give it at: [x, y] in world.js; to name a sea, a range or a forest, list it
 // in world.js regions: [{ name, kind: "sea" | "lake" | "range" | "forest" }]. spots: where the locations without at: stand.
 ATLAS.worldTerrain({
-  look: "painted",
+  look: "hydro",
   land: "continent",
   sizeName: "medium",
   seed: 4242,
