@@ -433,6 +433,20 @@ function geology(o, U) {
   // no lakes, only dry pans in its hollows; the winds still blow)
   if (o.dry) for (let n = 0; n < N; n++) { C.rain[n] *= .02; if (C.mm) C.mm[n] *= .02; }
 
+  /* 6b. what the ice left (tectonics 2, phase 4), where the glacial maximum's ice lay on the land (world-shore.js ice):
+         the valleys it filled broadened into U-shapes, their floors flattened; and along its farthest edge a terminal
+         moraine, a low ridge of the rock it carried, 30 to 90 m, so the hollows behind it fill as glacial lakes when the
+         lakes are found below (Finland, the Great Lakes' country) [Benn and Evans, Glaciers and Glaciation] */
+  if (TV2 && SH && SH.ice && !SK) {
+    const ice = SH.ice, at = (i, j) => (i < 0 || j < 0 || i >= cols || j >= rows) ? -1 : j * cols + i, E0 = Float32Array.from(E);
+    for (let n = 0; n < N; n++) { if (!ice[n] || E0[n] <= 0) continue; const i = n % cols, j = (n / cols) | 0; let mn = 1e9, sm = 0, c = 0;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const m = at(i + di, j + dj); if (m < 0 || E0[m] <= 0) continue; mn = Math.min(mn, E0[m]); sm += E0[m]; c++; }
+      const mean = sm / Math.max(1, c); if (E0[n] < mean && mn < 1e9) E[n] = Math.max(1, mn + (E0[n] - mn) * .45); }
+    for (let n = 0; n < N; n++) { if (ice[n] || E[n] <= 0) continue; const i = n % cols, j = (n / cols) | 0; let edge = false;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const m = at(i + di, j + dj); if (m >= 0 && ice[m]) { edge = true; break; } }
+      if (edge) E[n] += 30 + 60 * U.fbm(nD, (n % cols) / cols * 40 + 3, ((n / cols) | 0) / cols * 40, 2); }
+  }
+
   /* 7. lakes in the hollows the rivers cannot empty, salt pans where they cannot fill */
   const F = fill(E, cols, rows, U), lakeCells = new Uint8Array(N), playa = [], seen = new Uint8Array(N), I = n => n % cols, J = n => (n / cols) | 0;
   for (let n = 0; n < N; n++) {
