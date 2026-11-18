@@ -3249,3 +3249,19 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .t-intro.keeper { margin: 8px 0 12px; }
 @media (max-width: 1100px) { .mast { grid-template-columns: minmax(0, 1fr) auto auto; } .mast .views { grid-column: 1 / -1; order: 3; } .mast h1, .mast .kicker { max-width: 60vw; } }
 @media (max-width: 700px) { .mast .tools { flex-wrap: wrap; } .mast .kicker { display: none; } }
+
+/* ---- At the table's tools (the UI overhaul, 18 Nov 2026): a box to find one, groups that fold, each tool's line of what it
+        does shown for the one open only (the others say it on hover), so the list fits a screen */
+.tvn-q { width: 100%; box-sizing: border-box; margin: 2px 0 6px; padding: 7px 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
+.tvn-none { padding: 6px 9px; margin: 0; }
+.tvn-grp > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.tvn-grp > summary::-webkit-details-marker { display: none; }
+.tvn-grp > summary::after { content: "▾"; margin-left: auto; font-size: 11px; transition: transform .15s; }
+.tvn-grp:not([open]) > summary::after { transform: rotate(-90deg); }
+.tvn-grp { display: grid; gap: 2px; }
+@media (min-width: 861px) { #app:not([data-tablet="1"]) .tv-nav button:not([aria-selected="true"]) .tvn-d { display: none; } #app:not([data-tablet="1"]) .tv-nav button { padding: 6px 9px; } }
+@media (max-width: 860px) { .tvn-q, .tvn-none { display: none; } .tvn-grp { display: contents; } .tvn-grp > summary { display: none; } }
+#app[data-tablet="1"] .tvn-q, #app[data-tablet="1"] .tvn-none, #app[data-tablet="1"] .tvn-grp > summary { display: none; }
+#app[data-tablet="1"] .tvn-grp { display: contents; }
+.tv-nav .tvn-it[hidden], .tv-nav .tvn-grp[hidden], .tv-nav .tvn-more[hidden], .tv-nav .tvn-g[hidden], .tv-nav .tvn-hint[hidden] { display: none; }
+@media (min-width: 861px) { #app:not([data-tablet="1"]) .tvn-grp:not([open]) > .tvn-it { display: none; } }

@@ -343,6 +343,7 @@
         { say: "At the table opens on Start here: every tool, with what it is for.", sel: "#v-table", act: "click", auto: true, wait: 400 },
         { say: "Start here: the two things a game night turns on, and every other tool as a card.", sel: "[data-t='tab'][data-tab='home']", act: "click", try: "Click Start here.", wait: 400 },
         { say: "At its top, until you hide it: what to do to be ready for the first session, each step ticking itself as you do it, each a way to where it is done.", sel: [".th-check", "[data-t='tab'][data-tab='home']"], act: "look" },
+        { say: "Looking for one tool among many? Type in Find a tool, at the top of the list: a word of its name or of what it does (dice, rumour, money). Click a group's name to fold it away; the page remembers.", sel: [".tvn-q", ".tv-nav"], act: "look" },
         { say: "Pin the tools you use most with the ☆ beside each: they come first in the list, and the rest fold under All the tools. Nothing is taken away.", sel: [".tvn-pin", ".tv-nav"], act: "look" },
         { say: "Combat and dice: initiative, wounds and sanity, rolls in your game's rules.", sel: "[data-t='tab'][data-tab='combat']", act: "click", try: "Click Combat and dice.", wait: 400 },
         { say: "Make it up: a person or a small mapped place on the spot, and random tables.", sel: "[data-t='tab'][data-tab='make']", act: "click", try: "Click Make it up.", wait: 400 },

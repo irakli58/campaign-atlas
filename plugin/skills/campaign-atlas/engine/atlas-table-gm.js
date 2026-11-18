@@ -498,15 +498,30 @@
   // the list of tools: Start here, the pinned (the UX review of 5 Nov 2026, item 15), then all of them by group, folded
   // when some are pinned (open when the tool shown is among them)
   function navHTML() {
-    const P0 = pins(), groups = Object.entries(GROUPS).map(([g, gl]) => `<div class="tvn-g">${esc(gl)}</div>${TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0])).map(navBtn).join("")}`).join("");
-    if (!P0.length) return navBtn(TABS[0]) + groups + `<p class="tvn-hint kn">☆ pins a tool: your pinned ones come first.</p>`;
-    return navBtn(TABS[0]) + `<div class="tvn-g">Pinned</div>${P0.map(k => navBtn(TABS.find(t => t[0] === k))).join("")}<details class="tvn-more"${P0.includes(UI.tab) || UI.tab === "home" ? "" : " open"}><summary>All the tools</summary>${groups}</details>`;
+    // (the UI overhaul of 18 Nov 2026: a box to find a tool by its name or what it does, and each group folds, remembered;
+    // the group holding the tool shown always open)
+    const P0 = pins(), folded = g => pref.get("fold-" + g) === "1" && app() && app().dataset.tablet !== "1" && !(window.matchMedia && matchMedia("(max-width: 860px)").matches) && !TABS.some(t => t[0] === UI.tab && t[3] === g),
+      groups = Object.entries(GROUPS).map(([g, gl]) => `<details class="tvn-grp" data-g="${g}"${folded(g) ? "" : " open"}><summary class="tvn-g">${esc(gl)}</summary>${TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0])).map(navBtn).join("")}</details>`).join("");
+    const find = `<input type="search" class="tvn-q" data-t="navq" placeholder="Find a tool" aria-label="Find a tool by its name or what it does" value="${esc(UI.navQ || "")}" autocomplete="off"><p class="tvn-none kn" hidden>No tool by that name. Try other words, or Help.</p>`;
+    if (!P0.length) return find + navBtn(TABS[0]) + groups + `<p class="tvn-hint kn">☆ pins a tool: your pinned ones come first.</p>`;
+    return find + navBtn(TABS[0]) + `<div class="tvn-g">Pinned</div>${P0.map(k => navBtn(TABS.find(t => t[0] === k))).join("")}<details class="tvn-more"${P0.includes(UI.tab) || UI.tab === "home" ? "" : " open"}><summary>All the tools</summary>${groups}</details>`;
   }
   function pickHTML() {
     const P0 = pins();
     return `${[TABS[0]].map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}${P0.length ? `<optgroup label="Pinned">${P0.map(k => TABS.find(t => t[0] === k)).map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}</optgroup>` : ""}${Object.entries(GROUPS).map(([g, gl]) => `<optgroup label="${esc(gl)}">${TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0])).map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}</optgroup>`).join("")}`;
   }
-  function renavigate() { const box = $("#tablev"); if (!box || !box.dataset.done) return; const nav = box.querySelector(".tv-nav"), pk = box.querySelector("[data-t='tabpick']"); if (nav) nav.innerHTML = navHTML(); if (pk) { pk.innerHTML = pickHTML(); pk.value = UI.tab; } }
+  // the tools' list narrowed to the words typed: each tool's name and what it does; the groups with none hidden, the rest open
+  function navFilter(q) {
+    UI.navQ = q; const nav = document.querySelector("#tablev .tv-nav"); if (!nav) return;
+    const ws = String(q || "").toLowerCase().split(/\s+/).filter(Boolean); let any = 0;
+    nav.querySelectorAll(".tvn-it").forEach(it => { const t = it.textContent.toLowerCase() + " " + ((it.querySelector("[data-tab]") || {}).dataset || {}).tab, ok = ws.every(w => t.includes(w)); it.hidden = !ok; if (ok) any++; });
+    nav.querySelectorAll(".tvn-grp, .tvn-more").forEach(d => { const n = [...d.querySelectorAll(".tvn-it")].filter(x => !x.hidden).length; d.hidden = !n;
+      if (ws.length) { if (!d.dataset.was) d.dataset.was = d.open ? "1" : "0"; d.dataset.filtering = "1"; d.open = true; setTimeout(() => { delete d.dataset.filtering; }, 0); }
+      else if (d.dataset.was) { d.dataset.filtering = "1"; d.open = d.dataset.was === "1"; delete d.dataset.was; setTimeout(() => { delete d.dataset.filtering; }, 0); } });
+    nav.querySelectorAll(":scope > .tvn-g, .tvn-hint").forEach(g => { g.hidden = !!ws.length; });
+    const none = nav.querySelector(".tvn-none"); if (none) none.hidden = !ws.length || !!any;
+  }
+  function renavigate() { const box = $("#tablev"); if (!box || !box.dataset.done) return; const nav = box.querySelector(".tv-nav"), pk = box.querySelector("[data-t='tabpick']"); if (nav) { const f = document.activeElement && document.activeElement.matches && document.activeElement.matches("[data-t='navq']"); nav.innerHTML = navHTML(); if (UI.navQ) navFilter(UI.navQ); if (f) { const q = nav.querySelector("[data-t='navq']"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } } } if (pk) { pk.innerHTML = pickHTML(); pk.value = UI.tab; } }
   function view() {
     const box = $("#tablev"); if (!box) return;
     dismissIntro();
@@ -1305,6 +1320,8 @@
         else if (d.t === "lines" || d.t === "veils") { const z = Object.assign({}, S.get("safety", "zero") || {}); z[d.t] = t.value.split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 60); S.set("safety", "zero", z); }
         else if (d.t === "cbset") { const c = cnow(), r = c.list.find(x => x.id === d.id); if (!r) return; r[d.f] = ["name", "note", "ac"].includes(d.f) ? t.value.slice(0, 120) : (t.value === "" ? null : +t.value); cset(c); }
       });
+      document.addEventListener("input", e => { const q = e.target.closest && e.target.closest("[data-t='navq']"); if (q) navFilter(q.value); });
+      document.addEventListener("toggle", e => { const d = e.target; if (!d.classList || !d.classList.contains("tvn-grp") || d.dataset.filtering) return; pref.set("fold-" + d.dataset.g, d.open ? "0" : "1"); }, true);
       document.addEventListener("focusout", e => { if (UI.dirty && $("#tvBody") && $("#tvBody").contains(e.target)) setTimeout(() => { if (!$("#tvBody").contains(document.activeElement)) renderTab(); }, 0); });
       document.addEventListener("submit", e => {
         const f = e.target; if (!f.matches) return;
