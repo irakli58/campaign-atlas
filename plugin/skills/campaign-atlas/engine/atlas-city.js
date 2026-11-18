@@ -2045,9 +2045,11 @@ function createMap3D(host, C, planCanvas, hooks) {
     // them, and off the names already written, rather than be written under a mark: "THE W(12)RENS")
     const taken = PL.filter(e => e.x != null).map(e => [e.x - 5.4, e.y - 5.8, e.x + 5.4, e.y + 5.4]);
     const free = (x, y, bw, bh) => !taken.some(m => x - bw / 2 < m[2] && x + bw / 2 > m[0] && y - bh < m[3] && y > m[1]);
-    const spot = (x, y, bw, bh) => { let y2 = y; if (!free(x, y, bw, bh)) for (let k = 1; k <= 5; k++) { const a = y - k * (bh * .6 + 1.2), b = y + k * (bh * .6 + 1.2); if (free(x, a, bw, bh)) { y2 = a; break; } if (free(x, b, bw, bh)) { y2 = b; break; } } taken.push([x - bw / 2, y2 - bh, x + bw / 2, y2]); return y2; };
-    for (const [d, at] of Object.entries(D.districts)) { const t = d.toUpperCase(), bw = t.length * (5.5 * .62 + 1.2), y = spot(at[0], at[1] - 9, bw, 5.5); s += `<text x="${at[0]}" y="${y.toFixed(1)}" text-anchor="middle" font-size="5.5" letter-spacing="1.2" fill="${P.INK}" opacity=".7">${A.esc(t)}</text>`; }
-    for (const l of D.landmarks) if (l.major && l.at && l.name) { const bw = l.name.length * 3.6 * .5, y = spot(l.at[0], l.at[1], bw, 3.6); s += `<text x="${l.at[0]}" y="${y.toFixed(1)}" text-anchor="middle" font-size="3.6" font-style="italic" fill="${P.INK}" opacity=".8">${A.esc(l.name)}</text>`; }
+    const spot = (x, y, bw, bh) => { let at = [x, y];
+      if (!free(x, y, bw, bh)) search: for (let k = 1; k <= 6; k++) for (const dx of [0, bw * .35, -bw * .35]) for (const sg of [-1, 1]) { const c = [x + dx, y + sg * k * (bh * .6 + 1.2)]; if (free(c[0], c[1], bw, bh)) { at = c; break search; } }
+      taken.push([at[0] - bw / 2, at[1] - bh, at[0] + bw / 2, at[1]]); return at; };
+    for (const [d, at] of Object.entries(D.districts)) { const t = d.toUpperCase(), bw = t.length * (5.5 * .62 + 1.2), [x, y] = spot(at[0], at[1] - 9, bw, 5.5); s += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="5.5" letter-spacing="1.2" fill="${P.INK}" opacity=".7">${A.esc(t)}</text>`; }
+    for (const l of D.landmarks) if (l.major && l.at && l.name) { const bw = l.name.length * 3.6 * .5, [x, y] = spot(l.at[0], l.at[1], bw, 3.6); s += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="3.6" font-style="italic" fill="${P.INK}" opacity=".8">${A.esc(l.name)}</text>`; }
     for (const e of PL) {
       if (e.x == null) continue;
       const sel = st && st.sel === e.id, dim = st && st.matches && !st.matches(e.p);

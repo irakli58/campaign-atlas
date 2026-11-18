@@ -3274,3 +3274,7 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
   .mast .tools { gap: 6px; }
   .mast .audiobtn { align-self: start; }
 }
+.tracker.trk-empty #trk:not([open]) > summary { padding-top: 4px; padding-bottom: 4px; }
+.tracker.trk-empty #trk:not([open]) .trh { font-size: 15px; }
+.tracker.trk-empty #trk:not([open]) { background: transparent; border-style: dashed; }
+.tracker.trk-empty { margin-bottom: 14px; }

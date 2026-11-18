@@ -479,7 +479,9 @@
     const body = $("#trk-body"), sum = $("#trk-sum"); if (!body) return;
     if (!TR.ready) { body.innerHTML = `<p class="trnote">${TR.db === false ? "The tracker saves to this page's database, which isn't available here. Open the page on claude.ai while signed in to use it." : "Loading the tracker…"}</p>`; sum.textContent = ""; return; }
     const found = TR.keys.filter(isFound), ticked = Object.values(TR.clues).reduce((n, a) => n + a.length, 0), total = Object.values(ROWS).reduce((n, a) => n + a.length, 0);
-    sum.textContent = `${ticked} of ${total} clues found · ${found.length} of ${TR.keys.length} keys · ${TR.party.length} ${TR.party.length === 1 ? "character" : "characters"}`;
+    // (the UI overhaul of 18 Nov 2026: an empty tracker is one quiet line, not a bar of noughts)
+    const empty = !total && !TR.keys.length && !TR.party.length; { const sec = $("#tracker"); if (sec) sec.classList.toggle("trk-empty", empty); }
+    sum.textContent = empty ? "nothing to track yet: open it to add the characters or a key" : `${ticked} of ${total} clues found · ${found.length} of ${TR.keys.length} keys · ${TR.party.length} ${TR.party.length === 1 ? "character" : "characters"}`;
     const places = allPlaces();
     const ready = places.filter(p => ["unknown", "rumoured", "known"].includes(stOf(p.id)) && accessInfo(p.id).via.length > 0);
     const fragile = places.filter(p => !["resolved", "closed"].includes(stOf(p.id)) && accessInfo(p.id).ways.length === 1 && !accessInfo(p.id).free);
