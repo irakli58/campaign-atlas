@@ -301,6 +301,9 @@
       for (const [, x] of Object.entries(M.secrets || {})) push(`${p.name}: ${x.t || "a secret"}`, j(x.t, x.acc, x.dest, x.why), p.id);
     }
     for (const c of Object.values(A.castData || {})) push(`${c.n}${c.role ? ", " + c.role : ""}`, j(c.look, c.manner, c.bg, c.want, c.secret, c.lie, c.press, c.fate, typeof c.ties === "object" && c.ties ? Object.entries(c.ties).map(([k, v]) => k + ": " + v).join("; ") : c.ties));
+    // (an imported adventure, atlas-adventure.js: every fact of its knowledge base, each passage named with where in the
+    // book it is, "The adventure, p. 43", so the Copilot can tell the book's facts from its own suggestions)
+    if (A.adventurePassages) for (const [src, text, go] of A.adventurePassages()) push(src, text, go, 1.1);
     for (const pc of Object.values(A.pcsData || {})) push(`Player character: ${pc.n}`, j(pc.concept, pc.bg, pc.hook, pc.secret, pc.clue && pc.clue.t, pc.clue && pc.clue.d));
     for (const c of A.clocksData || []) push(`Clock: ${c.name}`, j(c.who, ...(c.ticks || []), c.done));
     for (const s of sessions()) push(`Session ${s.n}: ${s.title || ""}`, j(s.start, s.cliff, s.notes));
@@ -588,6 +591,7 @@
     const card = k => { const t = TABS.find(x => x[0] === k); return `<button type="button" class="th-card" data-t="tab" data-tab="${k}">${T.icon(t[2])}<span class="th-n">${esc(t[1])}</span><span class="th-d">${esc(t[4])}</span><span class="th-s${k === "safety" && !lines().lines.length && !lines().veils.length ? " warn" : ""}">${esc(statusOf(k))}</span></button>`; };
     const go = (tab, words) => `<button type="button" class="t-link" data-t="tab" data-tab="${tab}">${words}</button>`;
     return `<div class="th">
+      ${cardsFor("home")}
       ${A.nav ? A.nav.checklistHTML() : ""}
       <div class="th-hero">
         <article class="th-big">${T.icon("screen", "big")}<div><h3>The players' screen</h3><p class="th-say">A second window, for a television or another screen. Your players see only what you send it: a map a room at a time, a handout, a face, the world map.</p>

@@ -205,7 +205,9 @@
     // (the consistency check's findings that bear on it: atlas-consistency.js, the same the Consistency tab lists)
     const found = I.kind === "check" && A.consistency ? A.consistency.about([I.text, I.place && placeName(I.place), I.a && nameOf(I.a)].filter(Boolean).join(" ") || "contradiction") : [];
     const findings = found.length ? "THE CONSISTENCY CHECK FOUND:\n" + found.map(f => `- (${f.sev === "error" ? "certain" : "possible"}) ${f.title}: ${f.why}`).join("\n") + "\n\n" : I.kind === "check" ? "THE CONSISTENCY CHECK FOUND: nothing bearing on this.\n\n" : "";
-    return `You help the game master of the tabletop roleplaying campaign "${c.title || ""}"${c.system ? " (" + c.system + ")" : ""} improvise during play. Ground everything in the campaign's own words below; never contradict them, and never decide what the players do or how the dice fall. Where you add something the campaign does not say, keep it small and consistent with it. Plain prose, no headings, no lists unless asked.
+    return `You help the game master of the tabletop roleplaying campaign "${c.title || ""}"${c.system ? " (" + c.system + ")" : ""} improvise during play. Ground everything in the campaign's own words below; never contradict them, and never decide what the players do or how the dice fall. Where you add something the campaign does not say, keep it small and consistent with it. Plain prose, no headings, no lists unless asked.${A.adventureData ? `
+
+This campaign is a published adventure the game master imported. Passages whose source begins "The adventure" are the book itself: give what they establish as "The adventure says (with its page)". Anything of your own is "A suggestion", kept apart. Where the adventure says nothing on the question, say so plainly, then offer an optional improvisation that fits it. The results of its setup${A.adventureMechanics ? " (" + A.adventureMechanics() + ")" : ""} are fixed for this game: use them.` : ""}
 
 ${asks}${again ? `\n\nGive something different from this: "${again.slice(0, 600)}"` : ""}
 

@@ -3468,3 +3468,22 @@ button.it-pick { border: 0; background: none; padding: 0; font: inherit; color: 
 .it-lt { margin: 8px 0; }
 .it-gen .t-row { flex-wrap: wrap; }
 .it-gen .t-in { width: auto; max-width: 100%; }
+
+/* ---- an imported adventure (atlas-adventure.js) */
+.adv-card .tw-hh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.adv-state { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; }
+.adv-ok { color: var(--ok); } .adv-rv { color: var(--bone); } .adv-no { color: var(--accent); }
+.adv-ready ul, .adv-q, .adv-p, .adv-res { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 4px; }
+.adv-mark { display: inline-block; width: 1.2em; font-weight: 700; }
+.adv-c-ready .adv-mark { color: var(--ok); } .adv-c-review .adv-mark { color: var(--bone); } .adv-c-incomplete .adv-mark { color: var(--accent); }
+.adv-ref { font-family: var(--f-mono); font-size: 11px; color: var(--muted); border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+.adv-added { color: var(--bone); border-color: var(--bone); }
+.adv-m { border-top: 1px solid var(--rule); padding: 8px 0; }
+.adv-card-name, .adv-card { } .adv-res .adv-card { font-family: var(--f-display); }
+.adv-q-done b { text-decoration: line-through; color: var(--muted); } .adv-q-failed b { color: var(--accent); }
+.adv-areas { padding-left: 0; list-style: none; display: grid; gap: 8px; } .adv-areas p { margin: 2px 0; }
+.adv-here { font-size: 14px; }
+.adv-go { margin-top: 10px; align-items: center; gap: 10px; }
+.adv-go [disabled] { opacity: .5; cursor: not-allowed; }
+.adv-q select.t-in { width: auto; min-width: 7em; margin-right: 6px; }
+.adv-q li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }

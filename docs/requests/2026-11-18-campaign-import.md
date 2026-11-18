@@ -323,3 +323,12 @@ It came while the item and loot system was being built; it says to finish that f
 > The DM should be able to run the campaign with minimal preparation and use the DM Copilot whenever needed.
 > After import, everything must remain editable so the DM can customize the adventure as much or as little as they want.
 > Curse of Strahd should be the first comprehensive test case, but the feature must work for many different campaigns and tabletop RPG systems.
+
+## The approval (18 Nov 2026)
+
+After the audit and the proposed design (docs/plans/2026-11-18-campaign-import-plan.md), the user, verbatim:
+
+> go ahead with the first one and ill provide the pdf soon
+
+("The first one" is the design.) The user will provide the Curse of Strahd PDF; until then the importer is built and
+tested on an original test adventure.

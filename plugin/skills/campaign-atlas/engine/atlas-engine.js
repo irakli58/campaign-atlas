@@ -760,6 +760,9 @@ var ATLAS = (function () {
   //   ATLAS.cast({ vane: { n: "Harbour Master Vane", role: "...", look: "...", manner: "...", voice: "...", bg: "...", ties: { okafor: "..." }, want: "...", secret: "...", lie: "...", press: "...", fate: "..." } })
   // A person on a map who is one of them says who: "vane" and need not repeat the name or the description.
   A.cast = people => { A.castData = Object.assign(A.castData || {}, people); return A; };
+  // an imported adventure (atlas.js from-adventure; references/import.md): its knowledge base, and its readiness report
+  A.adventure = kb => { A.adventureData = kb || null; return A; };
+  A.readiness = rep => { A.readinessData = rep || null; return A; };
   A.place = (id, def) => {
     const meta = Object.assign({}, def), map = meta.map, expand = meta.expand, guide = meta.guide;
     delete meta.map; delete meta.expand; delete meta.guide;
