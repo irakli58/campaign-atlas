@@ -97,8 +97,11 @@ function geology(o, U) {
       seedsC = [...contPl].map(k => { const q = pc[k], cx = q.x / q.n, cy = q.y / q.n; let best = -1, bd = 1e9; for (let n = 0; n < CN; n++) if (plate[n] === k) { const d = (ci(n) - cx) ** 2 + (cj(n) - cy) ** 2; if (d < bd) { bd = d; best = n; } } return best; }).filter(n => n >= 0);
       // (how far each cell is from its plate's edge, in cells)
       const dB = U.distance(cc, cr, n => { const i = ci(n), j = cj(n); for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < cc && b < cr && plate[b * cc + a] !== plate[n]) return true; } return false; });
-      const wB = Math.max(3, cc * .035), base = land === "masses" ? lcFor(seedsC.length) : landCost(null);
-      tvCost = m => base(m) + 3.2 * Math.exp(-dB[m] / wB) + (contPl.has(plate[m]) ? 0 : 1.4);
+      const wB = Math.max(2, cc * .022), base = land === "masses" ? lcFor(seedsC.length) : landCost(null);
+      // (the brake uneven along the plate's edge, so the coast reaches the edge in places, a peninsula or an active
+      // margin, and stops short of it in others, a gulf or a broad passive shelf: the continents' outlines their own,
+      // not their plates' rounded shapes; and a craton's own lobes, by the coasts' noise at a larger scale)
+      tvCost = m => base(m) * (.7 + .9 * U.fbm(nD, X(m) * 3 * zs + 41, Y(m) * 3 * zs + 9, 3)) + 2 * Math.exp(-dB[m] / wB) * (.15 + 1.7 * Math.pow(U.fbm(nC, X(m) * 4.5 * zs + 23, Y(m) * 4.5 * zs + 5, 3), 2)) + (contPl.has(plate[m]) ? 0 : 1.4);
     }
     const MUL = land === "masses" && seedsC.length > 1 ? seedsC.map(() => Math.exp((rnd() + rnd() + rnd() - 1.5) * 1.3)) : null;
     const zm = land === "masses" ? Math.sqrt(seedsC.length) : 1, lc0 = landCost(land === "coast" ? others : null), lcM = m => .12 + 5 * Math.pow(U.fbm(nB, X(m) * 2.2 * zm * zs, Y(m) * 2.2 * zm * zs, 5), 3) + .9 * Math.pow(U.fbm(nA, X(m) * 6 * zm * zs + 3, Y(m) * 6 * zm * zs, 3), 2) + edgeCost(m);
