@@ -583,7 +583,7 @@
     return `<div class="th">
       ${A.nav ? A.nav.checklistHTML() : ""}
       <div class="th-hero">
-        <article class="th-big">${T.icon("screen", "big")}<div><h3>The players' screen</h3><p>A second window, for a television or another screen. Your players see only what you send it: a map a room at a time, a handout, a face, the world map.</p>
+        <article class="th-big">${T.icon("screen", "big")}<div><h3>The players' screen</h3><p class="th-say">A second window, for a television or another screen. Your players see only what you send it: a map a room at a time, a handout, a face, the world map.</p>
           <p class="t-scrstat${open ? " on" : ""}">${esc(screenStatus())}</p>
           <div class="t-row">${open ? `<button type="button" class="t-btn prim" data-t="tab" data-tab="screen">Choose what they see</button>` : `<button type="button" class="t-btn prim" data-t="openscreen">${T.icon("open")}Open it</button><button type="button" class="t-btn" data-t="tab" data-tab="screen">Choose what they see</button>`}</div></div></article>
         <article class="th-big">${T.icon("tonight", "big")}<div><h3>Tonight</h3><p>${s ? `Session ${esc(s.n)}${s.title ? ": " + esc(s.title) : ""}. ` : ""}${plural(places.length, "place")} they are likely to visit, ${plural(left, "clue")} still to find there.</p>${s && s.start ? `<p class="th-quote">${esc(s.start)}</p>` : ""}
@@ -592,13 +592,13 @@
       <h3 class="th-h">During the game</h3><div class="th-grid">${["clocks", "combat", "make", "ask", "board"].concat(TPLUGS.filter(p => p.group === "play").map(p => p.key)).filter(shownTab).map(card).join("")}</div>
       <h3 class="th-h">Before and after</h3><div class="th-grid">${["party", "safety", "export"].concat(TPLUGS.filter(p => p.group === "prep").map(p => p.key)).filter(shownTab).map(card).join("")}</div>
       ${A.modules ? (() => { const su = A.modules.summary(); return `<section class="th-mods"><h3>What this campaign uses</h3><p><b>${esc(su.name)}</b> · ${su.n} of ${su.of} parts of Atlas in use. Switch off what this campaign does not need: it is hidden and stops its work, and nothing is deleted.</p><div class="t-row"><button type="button" class="t-btn" data-mf-open>Choose what it uses</button></div></section>`; })() : ""}
-      <section class="th-how"><h3>How a game night goes</h3><ol>
+      <details class="th-how"><summary><h3>How a game night goes</h3></summary><ol>
         <li><b>Before the first game.</b> Ask the table what must stay out of the story and what may only happen off screen, and write it under ${go("safety", "Safety")}. See how the players' characters are woven in under ${go("party", "The party")}.</li>
         <li><b>Before each game.</b> Read ${go("tonight", "tonight's sheet")}. Print it, or the handouts, if you like paper (${go("export", "Print and export")}).</li>
         <li><b>At the table.</b> Open the players' screen on the television. As the players explore, show each place's map a room at a time and give them its handouts: both are on every place's page, in the <i>At the table</i> row under its name. Tick the ${go("clocks", "clocks")} when the villains move.</li>
         <li><b>Whenever you need it.</b> The toolbar at the bottom right of every page: dice, a person made up on the spot, ideas when they're stuck, a question to the campaign, and the players' screen.</li>
         <li><b>After the game.</b> Write a few lines of notes under ${go("tonight", "Tonight")}. Next time, "Previously on…" is made from them.</li>
-      </ol>${A.nav && A.ux && A.ux.ls.get("checklist-off") === "1" ? `<p><button type="button" class="t-link" data-ckon>Show the checklist for the first session again</button></p>` : ""}</section></div>`;
+      </ol>${A.nav && A.ux && A.ux.ls.get("checklist-off") === "1" ? `<p><button type="button" class="t-link" data-ckon>Show the checklist for the first session again</button></p>` : ""}</details></div>`;
   }
 
   /* ---- Tonight */

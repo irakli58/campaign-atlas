@@ -3326,3 +3326,22 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .tracker.trk-empty:not(.trk-want) { display: none; }
 .enc-trk { border: 0; background: none; padding: 4px 0; margin-left: 10px; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .wrap { padding-top: 8px; }
+/* At the table, its start: a short head, the checklist one line a step, the two big cards without their long words, no
+   second copy of the tools' list (the list is beside it), the how-to folded */
+@media (min-width: 861px) {
+  #app:not([data-tablet="1"]) .tv-head .st-kicker, #app:not([data-tablet="1"]) .tv-lead { display: none; }
+  #app:not([data-tablet="1"]) .tv-h { font-size: 30px; margin: 0; }
+  #app:not([data-tablet="1"]) .tv-head { align-items: center; margin-bottom: 12px; }
+  #app:not([data-tablet="1"]) .th-h, #app:not([data-tablet="1"]) .th-grid, #app:not([data-tablet="1"]) .th-mods { display: none; }
+  #app:not([data-tablet="1"]) .th-big .th-say { display: none; }
+}
+.th-check ol { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.th-check li { flex: 0 1 auto; }
+.th-check .th-ckb span { display: none; }
+.th-check .th-ckb b { font-size: 15px; }
+.th-check { padding: 10px 14px; }
+.th-how > summary { cursor: pointer; list-style: none; }
+.th-how > summary::-webkit-details-marker { display: none; }
+.th-how > summary h3 { display: inline; }
+.th-how > summary::after { content: " ▾"; color: var(--muted); }
+.th-how[open] > summary::after { content: " ▴"; }

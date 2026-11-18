@@ -382,7 +382,7 @@
     if (n === L.length && ls.get("checklist-done-seen") === "1") return "";
     if (n === L.length) ls.set("checklist-done-seen", "1");
     return `<section class="th-check" aria-label="Ready for the first session"><div class="th-ckh"><h3>Ready for the first session</h3><span class="kn">${n} of ${L.length} done</span><span class="t-sp"></span><button type="button" class="t-link" data-ckoff>Hide this list</button></div>
-      <ol>${L.map(x => `<li class="${x.done ? "done" : ""}"><span class="th-ckm" aria-hidden="true">${x.done ? "✓" : ""}</span><button type="button" class="th-ckb" ${x.attr}><b>${esc(x.t)}</b><span>${esc(x.d)}</span></button></li>`).join("")}</ol></section>`;
+      <ol>${L.map(x => `<li class="${x.done ? "done" : ""}"><span class="th-ckm" aria-hidden="true">${x.done ? "✓" : ""}</span><button type="button" class="th-ckb" ${x.attr} title="${esc(x.d)}"><b>${esc(x.t)}</b><span>${esc(x.d)}</span></button></li>`).join("")}</ol></section>`;
   };
   document.addEventListener("click", e => {
     const t = e.target; if (!t.closest || !X) return;
