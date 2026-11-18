@@ -3224,3 +3224,5 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .fa-tr { font-size: .85em; padding: 0 .35rem; border-radius: 4px; background: rgba(120, 90, 40, .12); }
 .wm-trf { display: grid; gap: .3rem; border: 1px solid var(--line, #c9b98f); border-radius: 6px; padding: .4rem .6rem; }
 .fa-cf { padding: .4rem 0; border-bottom: 1px solid var(--line, #e2d6b5); }
+/* the world map looking back in time (the plates run back): today's towns, roads, names and marks hidden */
+.wm-svg.drifting .wm-trd, .wm-svg.drifting .wm-dip, .wm-svg.drifting .wm-cur, .wm-svg.drifting .wm-coa, .wm-svg.drifting .wm-net, .wm-svg.drifting .wm-routes, .wm-svg.drifting .wm-netp, .wm-svg.drifting .wm-jour, .wm-svg.drifting .wm-fx, .wm-svg.drifting .wm-over, .wm-svg.drifting .wm-hdl { display: none; }

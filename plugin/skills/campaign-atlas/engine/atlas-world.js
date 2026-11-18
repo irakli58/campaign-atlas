@@ -1268,7 +1268,8 @@
       const bp = $(".wm-pltog"), br = $(".wm-rktog"); bp.hidden = !hasP; br.hidden = !hasR; bp.setAttribute("aria-pressed", hasP && LAY.plates); br.setAttribute("aria-pressed", hasR && LAY.rocks);
       // (with the plates on, the slider runs them back; at 0, today's plates)
       const dl = $(".wm-drift"); if (dl) { dl.hidden = !(hasP && LAY.plates && art.driftLayer); const inp = dl.querySelector("input"), rg = art.driftRange && art.driftRange(WD); if (inp && rg && inp.max !== String(rg.max)) { inp.max = rg.max; inp.step = rg.step; if (+inp.value > rg.max) { inp.value = 0; LAY.drift = 0; } } if (inp && !inp._bound) { inp._bound = 1; inp.addEventListener("input", () => { LAY.drift = +inp.value; dl.querySelector(".wm-drift-v").textContent = LAY.drift ? LAY.drift + " million years" : "today"; drawGeoLayers(); }); } }
-      $(".wm-pl").innerHTML = hasP && LAY.plates ? (LAY.drift && art.driftLayer ? art.driftLayer(WD, LAY.drift) : art.plateLayer(WD)) : ""; $(".wm-rk").innerHTML = hasR && LAY.rocks ? art.rockLayer(WD) : "";
+      $(".wm-pl").innerHTML = hasP && LAY.plates ? (LAY.drift && art.driftLayer ? art.driftLayer(WD, LAY.drift) : art.plateLayer(WD)) : "";
+      { const sv = $(".wm-svg"); if (sv) sv.classList.toggle("drifting", !!(hasP && LAY.plates && LAY.drift)); } $(".wm-rk").innerHTML = hasR && LAY.rocks ? art.rockLayer(WD) : "";
       // (the trade routes: each route with trade, in gold, thicker the more moves along it; dashed where suspended or
       // closed, marked where war or an embargo stands in the way; the trade route's name and goods at its middle)
       const tr = WD.routes.filter(r => r.trade && !r.gone && (gm() || !r.hidden)), bt = $(".wm-trtog");

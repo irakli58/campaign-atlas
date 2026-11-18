@@ -1263,13 +1263,22 @@
     }
     const kmU = kmPerUnit(WD);
     // (today's map veiled in sea blue, so the land of the past reads on its own; today's coast dashed over it)
-    let s = `<rect width="${W}" height="${H}" fill="#41708e" fill-opacity=".82"/><path d="${ringsAt(G, G.sea, .8).map(r => pathD(r, true)).join("")}" fill="none" stroke="#3b2f22" stroke-opacity=".5" stroke-width="${r1(1 * K)}" stroke-dasharray="${r1(5 * K)} ${r1(4 * K)}"/>`;
+    let s = `<rect width="${W}" height="${H}" fill="#3f6f8f" fill-opacity=".94"/><path d="${ringsAt(G, G.sea, .8).map(r => pathD(r, true)).join("")}" fill="none" stroke="#3b2f22" stroke-opacity=".5" stroke-width="${r1(1 * K)}" stroke-dasharray="${r1(5 * K)} ${r1(4 * K)}"/>`;
     const fs = Math.min(W, H) * .014;
+    // (the land of the past as land, the user, 18 Nov: "doesnt it look like weird?": one colour of land for all the plates,
+    // drawn first, then every plate's coast, so where two plates lie over each other the land is one; the plates' names
+    // small; today's towns, roads and names hidden meanwhile (atlas-world.js, class "drifting"))
+    let fills = "", coasts = "", names = "";
     for (const p of L.plates) { const d = WD._driftRings[p.id]; if (!d) continue;
-      const a = -p.dir * Math.PI / 180, dist = (+p.speed || 0) * 10 * myr / kmU, dx = -Math.cos(a) * dist, dy = -Math.sin(a) * dist, col = PCOL[p.id % PCOL.length];
-      // (a map of the whole world wraps east to west: land carried over one edge comes back at the other)
+      const a = -p.dir * Math.PI / 180, dist = (+p.speed || 0) * 10 * myr / kmU, dx = -Math.cos(a) * dist, dy = -Math.sin(a) * dist;
       const wrap = WD.T && /world/.test(String(WD.T.sizeName || "")) || W * kmU > 30000, x0 = wrap ? ((dx % W) + W * 1.5) % W - W / 2 : dx;
-      for (const ox of wrap ? [x0 - W, x0, x0 + W] : [x0]) s += `<g transform="translate(${r1(ox)} ${r1(dy)})"><path d="${d}" fill="${col}" fill-opacity=".72" stroke="#3b2f22" stroke-opacity=".7" stroke-width="${r1(.9 * K)}"/>${p.name && ox === x0 ? `<text x="${r1(p.at[0])}" y="${r1(p.at[1])}" text-anchor="middle" font-size="${r1(fs)}" font-family="Georgia, serif" font-variant="small-caps" fill="#3b2f22" stroke="#f6f2e8" stroke-width="${r1(2.4 * K)}" paint-order="stroke">${A.esc ? A.esc(p.name) : p.name}</text>` : ""}</g>`; }
+      for (const ox of wrap ? [x0 - W, x0, x0 + W] : [x0]) { const tr = `transform="translate(${r1(ox)} ${r1(dy)})"`;
+        fills += `<path ${tr} d="${d}" fill="#d2bf8e"/>`;
+        coasts += `<path ${tr} d="${d}" fill="none" stroke="#f3ead0" stroke-opacity=".5" stroke-width="${r1(3.2 * K)}" stroke-linejoin="round"/><path ${tr} d="${d}" fill="none" stroke="#5b4630" stroke-opacity=".75" stroke-width="${r1(.9 * K)}" stroke-linejoin="round"/>`;
+        if (p.name && ox === x0) names += `<text x="${r1(p.at[0] + ox)}" y="${r1(p.at[1] + dy)}" text-anchor="middle" font-size="${r1(fs * .9)}" font-family="Georgia, serif" font-style="italic" fill="#5b4630" fill-opacity=".85" stroke="#f3ead0" stroke-width="${r1(2 * K)}" stroke-opacity=".7" paint-order="stroke">${A.esc ? A.esc(p.name) : p.name}</text>`; } }
+    // (a little relief: the land a shade darker inland, lighter at its coasts, so it reads as ground and not a cut-out)
+    s += `<filter id="drift-sh" x="-5%" y="-5%" width="110%" height="110%"><feMorphology operator="erode" radius="${r1(6 * K)}" in="SourceAlpha" result="in"/><feGaussianBlur in="in" stdDeviation="${r1(8 * K)}" result="b"/><feFlood flood-color="#8a7a4e" flood-opacity=".45"/><feComposite in2="b" operator="in" result="sh"/><feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="sh"/></feMerge></filter>`;
+    s += `<g filter="url(#drift-sh)">${fills}</g>${coasts}${names}`;
     s += `<path d="${ringsAt(G, G.sea, .8).map(r => pathD(r, true)).join("")}" fill="none" stroke="#f6f2e8" stroke-opacity=".75" stroke-width="${r1(1.1 * K)}" stroke-dasharray="${r1(5 * K)} ${r1(4 * K)}"/>`;
     s += `<text x="${r1(W * .5)}" y="${r1(H * .06)}" text-anchor="middle" font-size="${r1(fs * 1.4)}" font-family="Georgia, serif" fill="#3b2f22" stroke="#f6f2e8" stroke-width="${r1(3 * K)}" paint-order="stroke">The land ${myr} million years ago: today's plate motions run back (a sketch; the dashed line is today's coast)</text>`;
     return s;
