@@ -30,6 +30,24 @@ const vn = (x, y, s) => { const i = Math.floor(x), j = Math.floor(y), u = x - i,
 
 function tectonics(G) {
   const { cols, rows, f, cc, cr, ckm, cellKm, plate, plates, crust, bInfo, oldB, hotC, vols, E, isLand, lake, playa, eco, seed } = G, N = cols * rows, CN = cc * cr;
+  // (tectonics 2, phase 3: the world's deep history, worked out from the plates' own motion: each collision belt with
+  // when its continents met, each margin where an ocean has been sinking with how old the floor arriving there is, each
+  // rift tearing a continent, the old cores; their places, for the map to name them with their ages)
+  const history = [];
+  if (G.TV2) {
+    const pos = new Map(); const addAt = (k, n) => { const q = pos.get(k) || { x: 0, y: 0, n: 0, max: 0 }; q.x += n % cc; q.y += (n / cc) | 0; q.n++; pos.set(k, q); return q; };
+    for (let n = 0; n < CN; n++) { const b = bInfo[n]; if (!b) continue; const key = Math.min(b.pa, b.pb) + "~" + Math.max(b.pa, b.pb);
+      if (b.conv > .1 && b.ca && b.cb) addAt("c|" + key, n);
+      else if (b.conv > .1 && (b.ca || b.cb)) { const q = addAt("s|" + key, n); if (G.floorAge) q.max = Math.max(q.max, G.floorAge[n] || 0); }
+      else if (b.conv < -.1 && b.ca && b.cb) addAt("r|" + key, n); }
+    const unitXY = q => [Math.round((q.x / q.n + .5) * f * (G.cell0 || 4)), Math.round((q.y / q.n + .5) * f * (G.cell0 || 4))];
+    for (const [k, q] of pos) { if (q.n < 4) continue; const [kind, key] = k.split("|"), [a, b] = key.split("~").map(Number);
+      if (kind === "c") history.push({ kind: "collision", a, b, myr: (G.collAges && G.collAges.get(key) || {}).age || null, at: unitXY(q) });
+      else if (kind === "s") history.push({ kind: "subduction", a, b, myr: Math.round(Math.max(10, q.max)), at: unitXY(q) });
+      else history.push({ kind: "rift", a, b, myr: 2 + Math.round((Math.abs(Math.sin(a * 3.1 + b * 7.7 + seed) * 999) % 1) * 18), at: unitXY(q) }); }
+    for (const o of G.oldBelts || []) history.push({ kind: "oldbelt", a: o.k, b: o.k, myr: o.myr, at: [Math.round((o.n % cc + .5) * f * (G.cell0 || 4)), Math.round((((o.n / cc) | 0) + .5) * f * (G.cell0 || 4))] });
+    history.sort((x, y) => (y.myr || 0) - (x.myr || 0));
+  }
   const ci = n => n % cc, cj = n => (n / cc) | 0, I = n => n % cols, J = n => (n / cols) | 0;
   const toC = n => Math.min(cr - 1, (J(n) / f) | 0) * cc + Math.min(cc - 1, (I(n) / f) | 0);
   // the borders: each border cell's kind (on the plate whose number is lower, so each border is drawn once)
@@ -122,7 +140,7 @@ function tectonics(G) {
   for (let j = 0; j < gr; j++) for (let i = 0; i < gc; i++) { const n = Math.min(cr - 1, j * st) * cc + Math.min(cc - 1, i * st); PG[j * gc + i] = plate[n]; let b = 0; for (let dj = 0; dj < st && !b; dj++) for (let di = 0; di < st; di++) { const a = i * st + di, y = j * st + dj; if (a < cc && y < cr && bk[y * cc + a]) { b = bk[y * cc + a]; break; } } BG[j * gc + i] = b; }
   const unit = f * cell;
   for (const p of plateList) p.at = [Math.round((p.cx + .5) * unit), Math.round((p.cy + .5) * unit)];
-  return { layer: { cols: gc, rows: gr, step: st * unit, plate: b64(PG), border: b64(BG), plates: plateList.map(({ cx, cy, ...p }) => p) }, rocks, deposits: deposits.map(({ i, j, ...d }) => d), BORDER, ROCK };
+  return { layer: { history, cols: gc, rows: gr, step: st * unit, plate: b64(PG), border: b64(BG), plates: plateList.map(({ cx, cy, ...p }) => p) }, rocks, deposits: deposits.map(({ i, j, ...d }) => d), BORDER, ROCK };
 }
 function b64(u) { return typeof Buffer !== "undefined" ? Buffer.from(u).toString("base64") : btoa(String.fromCharCode.apply(null, u)); }
 function box(F, cols, rows, r, passes) {

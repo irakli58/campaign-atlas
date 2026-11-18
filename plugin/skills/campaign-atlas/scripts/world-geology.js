@@ -187,6 +187,11 @@ function geology(o, U) {
   if (TV2) { let vmx = 1e-9; for (const p of plates) vmx = Math.max(vmx, Math.hypot(p.vx, p.vy));
     const dR = U.distance(cc, cr, n => !!(bInfo[n] && bInfo[n].conv < -.1 && !bInfo[n].ca && !bInfo[n].cb));
     floorAge = new Float32Array(CN); for (let n = 0; n < CN; n++) { const p = plates[plate[n]] || { vx: 0, vy: 0 }, kmMyr = (1 + 9 * Math.hypot(p.vx, p.vy) / vmx) * 10; floorAge[n] = Math.min(180, dR[n] * ckm / Math.max(10, kmMyr)); } }
+  // (a collision's age, million years, the same for the whole of its two plates' border; kept for the history)
+  const collAges = new Map(); let vmxC = 1e-9; for (const p of plates) vmxC = Math.max(vmxC, Math.hypot(p.vx, p.vy));
+  const collAge = b => { const key = Math.min(b.pa, b.pb) + "~" + Math.max(b.pa, b.pb); if (collAges.has(key)) return collAges.get(key).age;
+    const h = Math.abs(Math.sin((b.pa + 1) * 12.9898 + (b.pb + 1) * 78.233 + seed * .17) * 43758.5453) % 1, S = 400 + 1400 * h, close = Math.max(6, Math.max(.05, b.conv) / vmxC * 95), age = Math.round(Math.min(220, S / close));
+    collAges.set(key, { a: Math.min(b.pa, b.pb), b: Math.max(b.pa, b.pb), age }); return age; };
   const up = new Float32Array(CN), ridge = new Float32Array(CN), trench = new Float32Array(CN), volc = [], arcC = [], hotT = [];
   const bump = (d, c, w) => gauss((d - c) / w);
   // (on a whole planet the belts are as broad as the Earth's great ones, the Andes and the Himalaya with their high
@@ -202,7 +207,11 @@ function geology(o, U) {
     const along = .7 + .6 * U.fbm(nD, X(n) * 1.4 * zs, Y(n) * 1.4 * zs, 2);
     if (b.conv > .1) {
       const c = Math.min(1.5, b.conv) * along;
-      if (cHere && cOver) up[n] += c * BA * (2.2 * bump(d, 40 * BW, 95 * BW) + .55 * bump(d, 190 * BW, 150 * BW));
+      // (tectonics 2, phase 3: a collision's age from the plates' own motion: the crust the belt has taken up (400 to 1,800
+      // km of shortening, as the Earth's belts record) over the closing speed; a young belt stands high and sharp (the
+      // Himalaya, about 50 million years), an older one is worn lower and rounder (the Urals), its plateau lower still)
+      const wear = TV2 ? (A0 => A0 < 30 ? 1 : A0 < 80 ? 1 - (A0 - 30) / 50 * .35 : .62)(collAge(b)) : 1;
+      if (cHere && cOver) up[n] += c * BA * wear * (2.2 * bump(d, 40 * BW, 95 * BW) + .55 * wear * bump(d, 190 * BW, 150 * BW));
       else if (cHere) { up[n] += c * BA * (1.8 * bump(d, 70 * BW, 60 * BW) + (zs > 1 ? .45 * bump(d, 280, 170) : 0)); if (Math.abs(d - 120) < ckm * .6 && rnd() < .05) volc.push(n); }
       else if (cOver) trench[n] += c * gauss(d / 60);
       else if (here > (mine ? b.pb : b.pa)) {
@@ -229,9 +238,12 @@ function geology(o, U) {
       for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) { const a = ci0 + di, b = cj0 + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; up[b * cc + a] += 1.3 * gauss(Math.hypot(di, dj) * ckm / 30); }
       volc.push(cj0 * cc + ci0); } }
   // old belts, worn low, across the old continents (each kept for the rocks: old mountain roots)
-  const oldB = new Float32Array(CN), hotC = [];
+  const oldB = new Float32Array(CN), hotC = [], oldBelts = [];
   for (let k = 0; k < nP && !drawnM; k++) {
     if (rnd() < .45) continue; const s = plates[k].seed; if (!crust[s]) continue;
+    // (its age for the history: an old belt is the root of a range raised when an earlier ocean closed, 250 to 1,100
+    // million years ago, worn to hills since)
+    oldBelts.push({ k, n: s, myr: 250 + Math.round((Math.abs(Math.sin((k + 1) * 91.3 + seed * .71) * 43758.5453) % 1) * 850) });
     const a = rnd() * Math.PI, ux = Math.cos(a), uy = Math.sin(a), L = (.2 + rnd() * .25) / (zs > 1 ? Math.sqrt(zs) : 1), cx = X(s), cy = Y(s), wd = zs > 1 ? 300 : 90, oa = zs > 1 ? .4 : .7;
     // (on a whole planet such a belt would run thousands of km dead straight: there it is shorter and bends along its
     // length, as the Appalachians and the Urals do)
@@ -458,7 +470,7 @@ function geology(o, U) {
   const full = m => Math.min(rows - 1, Math.floor((cj(m) + .5) * f)) * cols + Math.min(cols - 1, Math.floor((ci(m) + .5) * f));
   const vols = [], maxV = Math.max(2, Math.round(N / 22000)); for (const m of volc) { const n = full(m); if (vols.length < maxV && Hb[n] > 128 && !lakeCells[n] && vols.every(v => Math.hypot(I(v) - I(n), J(v) - J(n)) > 28)) vols.push(n); }
   // the plates, the rocks and what lies in them (world-tectonics.js), for the map's plate and geology layers
-  const tect = o.tectonics === false ? null : require("./world-tectonics.js").tectonics({ cell0: o.cell || 4, cols, rows, f, cc, cr, ckm, cellKm, plate, plates, crust, bInfo, oldB, hotC, vols, E, isLand, lake: lakeCells, playa, eco, lat: o.lat || LAT[o.climate] || LAT.temperate, seed: o.seed });
+  const tect = o.tectonics === false ? null : require("./world-tectonics.js").tectonics({ collAges: TV2 ? collAges : null, floorAge, TV2, oldBelts, cell0: o.cell || 4, cols, rows, f, cc, cr, ckm, cellKm, plate, plates, crust, bInfo, oldB, hotC, vols, E, isLand, lake: lakeCells, playa, eco, lat: o.lat || LAT[o.climate] || LAT.temperate, seed: o.seed });
   return { H: Hb, Lo, M, coast, temp: C.temp, eco, ocean: C.ocean || null, tect, shore: SH ? Object.assign(SH, { margin: SHin.margin, crust: SHin.crust, hotspots: SHin.hotspots, lat: SHin.lat, wrap: SHin.wrap }) : null, info: { plates: nP, continental: plates.filter(p => crust[p.seed] === 1).length, volcanoes: vols, playa, lakes: lakeCells.reduce((s, v) => s + v, 0), peak: Math.round(top / 10) * 10 } };
 }
 // one step of the rivers' cutting: water routed down the land (through its hollows, which it fills and spills from:
