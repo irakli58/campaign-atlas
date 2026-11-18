@@ -241,6 +241,8 @@ function cmdFromAdventure(dir, flags) {
     wr(p, s); wrote.push(f); base.files[f] = { hash: hash(s), t: new Date().toISOString(), text: s };
   }
   base.format = FORMAT; base.t = new Date().toISOString(); wr(bf, base);
+  // (an imported adventure: its places as the book has them, so the standards for the council's campaigns do not apply)
+  { const cf = path.join(dir, "campaign.js"), t = fs.readFileSync(cf, "utf8"); if (!/\bmade:\s*"/.test(t)) fs.writeFileSync(cf, t.replace(/(\n\s*storageKey:\s*"[^"]*")/, `\n  made: "import",                       // an adventure the game master owns, imported (references/import.md)$1`)); }
   // the build reads them (atlas.js sources: imported.js, adventure.js, ready.js)
   console.log(`Wrote ${wrote.length} file${wrote.length === 1 ? "" : "s"}: ${wrote.slice(0, 12).join(", ")}${wrote.length > 12 ? "…" : ""}.`);
   if (kept.length) console.log(`Kept as you changed them (not written over; --force to replace them with the adventure's version): ${kept.join(", ")}.`);
@@ -268,10 +270,11 @@ function cmdReady(dir, ctx) {
     cov.notRead && cov.notRead.length ? `${cov.notRead.length} of ${cov.chunks} chunks are not read yet (${cov.notRead.map(c => "pages " + c.pages.join("-")).join("; ")})` : cov.unreadablePages && cov.unreadablePages.length ? `${cov.unreadablePages.length} pages had no text (scans): ${cov.unreadablePages.slice(0, 20).join(", ")}` : cov.chunks ? `all ${cov.chunks} chunks (${cov.pages} pages)` : "the adventure was given in Atlas's format", "import");
   const startP = kb.start && resolve(by, kb.start.place);
   add("start", "Where it starts", startP ? "ready" : "incomplete", startP ? `${startP.name}${kb.start.hook ? ": " + kb.start.hook : ""}` : "the adventure's starting place is not known", "places");
-  const unmapped = kb.places.filter(p => !has(`places/${p.id}.js`)), noMap = kb.places.filter(p => has(`places/${p.id}.js`) && !/\bmap\s*:/.test(fs.readFileSync(path.join(dir, `places/${p.id}.js`), "utf8")) && !fs.existsSync(path.join(dir, "edits", p.id + ".js")));
-  add("places", "Places", !kb.places.length ? "incomplete" : unmapped.length ? "incomplete" : noMap.length ? "review" : "ready", !kb.places.length ? "no places" : unmapped.length ? `${unmapped.length} not written yet (atlas.js from-adventure)` : noMap.length ? `${kb.places.length} places; ${noMap.length} have no map drawn yet: they play from their keyed areas (${noMap.slice(0, 8).map(p => p.name).join(", ")}${noMap.length > 8 ? "…" : ""})` : `${kb.places.length}, every one mapped`, "places");
+  const unmapped = kb.places.filter(p => !has(`places/${p.id}.js`)), noMap = kb.places.filter(p => (p.areas || []).length && has(`places/${p.id}.js`) && !/["']?\bmap["']?\s*:/.test(fs.readFileSync(path.join(dir, `places/${p.id}.js`), "utf8")) && !fs.existsSync(path.join(dir, "edits", p.id + ".js")));
+  add("places", "Places", !kb.places.length ? "incomplete" : unmapped.length ? "incomplete" : noMap.length ? "review" : "ready", !kb.places.length ? "no places" : unmapped.length ? `${unmapped.length} not written yet (atlas.js from-adventure)` : noMap.length ? `${kb.places.length} places; ${noMap.length} of those with keyed areas have no map drawn yet (atlas.js map-from-source): they play from their keyed areas meanwhile (${noMap.slice(0, 8).map(p => p.name).join(", ")}${noMap.length > 8 ? "…" : ""})` : `${kb.places.length}: every one the book keys into rooms is drawn${kb.places.some(p => !(p.areas || []).length) ? `; ${kb.places.filter(p => !(p.areas || []).length).length} the book describes without rooms play from their words` : ""}`, "places");
   const key = kb.people.filter(p => p.important || p.role), thin = key.filter(p => !(p.want || p.motivation) || !(p.look || p.personality || p.manner));
-  add("people", "Important people", !kb.people.length ? "incomplete" : thin.length ? "review" : "ready", !kb.people.length ? "no people" : thin.length ? `${kb.people.length} people; ${thin.length} lack a look or what they want: ${thin.slice(0, 6).map(p => p.name).join(", ")}` : `${kb.people.length}`, "people");
+  // (what the book leaves out of a person is the book's, not a fault: noted, never a review the game master must do)
+  add("people", "Important people", !kb.people.length ? "incomplete" : "ready", !kb.people.length ? "no people" : thin.length ? `${kb.people.length} people, as the book has them (${thin.length} without a look or a stated want in the book: ${thin.slice(0, 6).map(p => p.name).join(", ")})` : `${kb.people.length}`, "people");
   const noStats = kb.encounters.filter(e => e.kind === "combat" && (e.participants || []).some(x => !x.stats && !(resolve(by, x.name) || {}).stats));
   add("encounters", "Encounters and their statistics", !kb.encounters.length ? "review" : noStats.length ? "review" : "ready", !kb.encounters.length ? "no encounters found" : noStats.length ? `${kb.encounters.length} encounters; ${noStats.length} fights have someone with no statistics or book reference: ${noStats.slice(0, 6).map(e => e.name).join(", ")}` : `${kb.encounters.length}`, "encounters");
   const lost = kb.items.filter(i => (i.unique || i.story) && !i.place && !i.holder && !i.mechanic);
@@ -291,24 +294,165 @@ function cmdReady(dir, ctx) {
     add("changes", "Changes since the import", startGone ? "incomplete" : gone.some(([, p]) => dependsOn(kb, p.id).length) ? "review" : "ready",
       !gone.length ? "nothing the adventure needs has been taken away" : gone.map(([k, p]) => { const d = dependsOn(kb, p.id); return `${k} ${p.name} removed${d.length ? "; it was needed by " + d.slice(0, 6).join(", ") + (d.length > 6 ? "…" : "") : ""}`; }).join(". ") + (startGone ? ". The starting place is gone: choose another start." : ""), "changes");
   }
+  // the rooms against the book: every keyed area a room under its key, every exit the book gives a door, an archway or
+  // stairs between those two rooms (the user, 18 Nov 2026: "Rooms Must Match the Original Adventure Exactly")
+  if (A) {
+    let areas = 0, have = 0, exits = 0, joined = 0; const miss = [], unj = [];
+    for (const p of kb.places) {
+      const M = A.maps[p.id]; if (!M || !(p.areas || []).length) continue;
+      const roomOfKey = {}; for (const [rid, r] of Object.entries(M.rooms || {})) if (r && r.key) roomOfKey[r.key] = rid;
+      const where = {}; (M.floors || []).forEach((F, fi) => (F.R || []).forEach(r => { if (/^R\d/.test(r[0])) (where[r[0]] = where[r[0]] || []).push([fi, r[1], r[2], r[3], r[4]]); }));
+      const roomAt = (fi, x, y) => { for (const [rid, L] of Object.entries(where)) for (const [f, rx, ry, rw, rh] of L) if (f === fi && x >= rx && x < rx + rw && y >= ry && y < ry + rh) return rid; return null; };
+      const doorBetween = (a, b) => (M.floors || []).some((F, fi) => (F.D || []).some(d => { const [x, y, o, , len] = d; for (let i = 0; i < (len || 1); i++) { const p1 = o === "h" ? [x + i, y - 1] : [x - 1, y + i], p2 = o === "h" ? [x + i, y] : [x, y + i], r1 = roomAt(fi, ...p1), r2 = roomAt(fi, ...p2); if ((r1 === a && r2 === b) || (r1 === b && r2 === a)) return true; } return false; }));
+      const stairsBetween = (a, b) => { const fa = (where[a] || [])[0], fb = (where[b] || [])[0]; if (!fa || !fb || fa[0] === fb[0]) return false; const st = (M.floors[fa[0]].ST || []).map(q => q[0]).filter(id => (M.floors[fb[0]].ST || []).some(q => q[0] === id)); return st.length > 0; };
+      const seen = new Set();
+      for (const a of p.areas) { areas++; if (roomOfKey[a.id]) have++; else miss.push(`${p.name} ${a.id || a.name}`);
+        for (const e of a.exits || []) { const t = typeof e === "string" ? e : e.to, key = [a.id, t].sort().join("|"); if (!t || seen.has(key)) continue; seen.add(key); const ra = roomOfKey[a.id], rb = roomOfKey[t]; if (!ra || !rb) continue; exits++;
+          if (doorBetween(ra, rb) || stairsBetween(ra, rb)) joined++; else unj.push(`${p.name} ${a.id}–${t}`); } }
+    }
+    if (areas) add("rooms", "Rooms as the book has them", miss.length ? "incomplete" : unj.length ? "review" : "ready",
+      `${have} of ${areas} keyed areas are rooms under their key${miss.length ? " (missing: " + miss.slice(0, 8).join(", ") + (miss.length > 8 ? "…" : "") + ")" : ""}; ${joined} of ${exits} of the book's exits are doors or stairs between the right rooms${unj.length ? " (not joined: " + unj.slice(0, 6).join(", ") + ")" : ""}`, "places");
+  }
   add("secrets", "Secrets kept from the players", leaks.length ? "incomplete" : "ready", leaks.length ? `${leaks.length} handouts carry the game master's notes: ${leaks.map(i => i.name).join(", ")}` : "handouts carry only what the players may read; the page's player view and the players' copy hold no secrets (checked when built: node atlas.js check)", "secrets");
   for (const k of KINDS) rep.counts[k] = kb[k].length;
   for (const k of KINDS) for (const e of kb[k]) if (e.added) rep.review.push({ kind: k, id: e.id, name: e.name || e.title, why: "Atlas's addition, not the book's" });
-  rep.state = rep.checks.some(c => c.state === "incomplete") ? "incomplete" : rep.checks.some(c => c.state === "review") || rep.review.length ? "review" : "ready";
+  // (Atlas's own additions are listed as supplementary, not a review: only the technical checks can hold the campaign back)
+  rep.state = rep.checks.some(c => c.state === "incomplete") ? "incomplete" : rep.checks.some(c => c.state === "review") ? "review" : "ready";
   rep.chapters = (kb.chapters || []).map(c => ({ name: c.name || c.title, ref: refOf(c) }));
   wr(path.join(dir, "story", "report.json"), rep);
   wr(path.join(dir, "ready.js"), `// The readiness check and completion report (atlas.js ready): read by the page's Start here.\nATLAS.readiness(${JSON.stringify(rep)});\n`);
   const W = { ready: "Ready to play", review: "Needs review", incomplete: "Incomplete" };
   const md = [`# ${kb.title || "The adventure"}: completion report`, "", `**${W[rep.state]}**, ${rep.t.slice(0, 10)}`, "", "| Check | State | |", "|---|---|---|", ...rep.checks.map(c => `| ${c.label} | ${W[c.state]} | ${c.why.replace(/\|/g, "/")} |`), "",
     "## What was made", "", ...KINDS.filter(k => rep.counts[k]).map(k => `- ${k}: ${rep.counts[k]}`), "", rep.chapters.length ? "## Chapters\n\n" + rep.chapters.map(c => `- ${c.name}${c.ref ? " (" + c.ref + ")" : ""}`).join("\n") + "\n" : "",
-    rep.review.length ? "## Atlas's additions, to review\n\n" + rep.review.map(r => `- ${r.kind}: ${r.name}`).join("\n") + "\n" : ""];
+    rep.review.length ? "## Atlas's additions (supplementary, not the book's)\n\n" + rep.review.map(r => `- ${r.kind}: ${r.name}`).join("\n") + "\n" : ""];
   wr(path.join(dir, "story", "report.md"), md.join("\n"));
   console.log(`${W[rep.state]}.`); for (const c of rep.checks) console.log(`  ${c.state === "ready" ? "✓" : c.state === "review" ? "!" : "✗"} ${c.label}: ${c.why}`);
   if (rep.review.length) console.log(`  ${rep.review.length} of Atlas's additions to review.`);
   console.log("story/report.md, and ready.js for the page.");
 }
 
+/* ---- the places' maps from the book (the user, 18 Nov 2026: "Do not generate a random room layout and then attach the
+   adventure's room name to it"). Every keyed area is a room, under its own key; its size as the book gives it (in the
+   campaign's squares); its exits as the book gives them: a door, double doors, an archway, a gate, a secret door, a
+   window, stairs to another floor; the people, encounters and clues the book puts in it. Where the book's own map is
+   traced (references/import.md, step 5) that tracing wins; otherwise the rooms are laid out by their exits, joined
+   where the book joins them, and the map says the positions are Atlas's (src.layout: "text"), never the book's. */
+const FT = { ft: 1, feet: 1, foot: 1, "'": 1, m: 3.28, metres: 3.28, meters: 3.28, yards: 3, yd: 3 };
+function sizeOf(a, unit) {
+  const v = a.size; if (Array.isArray(v) && v.length >= 2) return { w: Math.max(1, Math.round(+v[0])), h: Math.max(1, Math.round(+v[1])), src: "book" };
+  const t = String(v || a.dimensions || "").toLowerCase(); let m;
+  const toSq = (n, u) => Math.max(1, Math.round(n * (FT[u] || 1) / unit));
+  if ((m = /(\d+(?:\.\d+)?)\s*(ft|feet|foot|'|m|metres|meters|yards|yd)?\s*(?:by|x|×)\s*(\d+(?:\.\d+)?)\s*(ft|feet|foot|'|m|metres|meters|yards|yd)?/.exec(t))) return { w: toSq(+m[1], m[2] || m[4] || "ft"), h: toSq(+m[3], m[4] || m[2] || "ft"), src: "book" };
+  if ((m = /(\d+(?:\.\d+)?)[- ]?(ft|feet|foot|'|m|metres|meters)?[- ]?(square|wide|across|diameter|radius)/.exec(t))) { const n = toSq(+m[1] * (m[3] === "radius" ? 2 : 1), m[2] || "ft"); return { w: n, h: n, src: "book", round: /diameter|radius/.test(m[3]) }; }
+  return { w: 6, h: 6, src: "atlas" };
+}
+const DOOR = { door: "d", doors: "dd", double: "dd", arch: "a", archway: "a", opening: "a", passage: "a", corridor: "a", open: "a", gate: "g", portcullis: "g", secret: "s", hidden: "s", window: "w" };
+function mapOfPlace(kb, p, unit, by) {
+  const areas = (p.areas || []).filter(a => a && (a.id || a.name)); if (!areas.length) return null;
+  const floorOf = a => String(a.floor || a.level || "GROUND FLOOR").toUpperCase();
+  const floors = [...new Set(areas.map(floorOf))], R = {}, rooms = {}, placed = {}, idOf = {};
+  areas.forEach((a, i) => { idOf[a.id || a.name] = "R" + (i + 1); });
+  const S = {}; for (const a of areas) S[a.id || a.name] = sizeOf(a, unit);
+  const exitsOf = a => (a.exits || a.connections || []).map(e => typeof e === "string" ? { to: e } : e).filter(e => e && e.to);
+  const sameArea = v => areas.find(a => a.id === v || a.name === v || norm(a.name) === norm(v));
+  const out = { ov: p.gm || p.desc || "", ext: p.desc || "", entry: ["R1"], floors: [], rooms: {}, clues: {}, npcs: {}, enc: {}, src: { layout: "text", from: "adventure", ref: refOf(p) } };
+  const sideV = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0], north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] };
+  for (const fl of floors) {
+    const on = areas.filter(a => floorOf(a) === fl), box = {}, overlaps = (x, y, w, h) => Object.values(box).some(b => x < b.x + b.w && x + w > b.x && y < b.y + b.h && y + h > b.y);
+    const start = on[0]; box[start.id || start.name] = { x: 0, y: 0, w: S[start.id || start.name].w, h: S[start.id || start.name].h };
+    const queue = [start];
+    while (queue.length || Object.keys(box).length < on.length) {
+      const a = queue.shift() || on.find(x => !box[x.id || x.name]); if (!a) break; const ka = a.id || a.name;
+      if (!box[ka]) { const mx = Math.max(0, ...Object.values(box).map(b => b.x + b.w)); box[ka] = { x: mx + 2, y: 0, w: S[ka].w, h: S[ka].h }; }
+      const A0 = box[ka];
+      for (const e of exitsOf(a)) {
+        const b = sameArea(e.to); if (!b || floorOf(b) !== fl) continue; const kb2 = b.id || b.name; if (box[kb2]) continue;
+        const { w, h } = S[kb2], want = sideV[String(e.side || e.wall || "").toLowerCase()], tries = want ? [want, [0, 1], [1, 0], [0, -1], [-1, 0]] : [[1, 0], [0, 1], [-1, 0], [0, -1]];
+        let got = null;
+        for (const [dx, dy] of tries) {
+          for (let slide = 0; slide < 30 && !got; slide++) for (const sg of [1, -1]) {
+            const off = slide * sg, x = dx > 0 ? A0.x + A0.w : dx < 0 ? A0.x - w : A0.x + Math.round((A0.w - w) / 2) + off, y = dy > 0 ? A0.y + A0.h : dy < 0 ? A0.y - h : A0.y + Math.round((A0.h - h) / 2) + off;
+            const touches = dx ? (y < A0.y + A0.h && y + h > A0.y) : (x < A0.x + A0.w && x + w > A0.x);
+            if (touches && !overlaps(x, y, w, h)) { got = { x, y, w, h }; break; }
+          }
+          if (got) break;
+        }
+        if (!got) { const mx = Math.max(...Object.values(box).map(q => q.x + q.w)); got = { x: mx + 1, y: A0.y, w, h, far: true }; }
+        box[kb2] = got; queue.push(b);
+      }
+    }
+    // the floor's squares: everything moved to start at 1, 1
+    const x0 = Math.min(...Object.values(box).map(b => b.x)) - 1, y0 = Math.min(...Object.values(box).map(b => b.y)) - 1;
+    for (const b of Object.values(box)) { b.x -= x0; b.y -= y0; }
+    const F = { n: fl, w: Math.max(...Object.values(box).map(b => b.x + b.w)) + 1, h: Math.max(...Object.values(box).map(b => b.y + b.h)) + 1, R: [], D: [], I: [], ST: [], M: [], P: [] };
+    for (const a of on) { const k = a.id || a.name, b = box[k], rid = idOf[k]; placed[k] = { fl, b, rid };
+      // (the label as fits the room: the name, or for a small room the book's key; the full name is in the guide)
+      const nm = String(a.name || k), fits = nm.length <= Math.max(3, b.w * 2.6);
+      F.R.push([rid, b.x, b.y, b.w, b.h, fits ? nm.slice(0, 28) : String(a.id || nm).slice(0, Math.max(3, Math.floor(b.w * 2.6))), a.kind || (/cave|cavern|tunnel|grotto/i.test(a.name || "") ? "cave" : /yard|court|garden|graveyard|cemetery|road|square/i.test(a.name || "") ? "yard" : "stone"), a.hidden ? { h: 1 } : undefined].filter(v => v !== undefined));
+    }
+    // the exits as doors on the wall two rooms share; a secret one the GM's only
+    const seen = new Set();
+    for (const a of on) for (const e of exitsOf(a)) {
+      const b = sameArea(e.to); if (!b || floorOf(b) !== fl) continue; const ka = a.id || a.name, kb2 = b.id || b.name, key = [ka, kb2].sort().join("|"); if (seen.has(key)) continue; seen.add(key);
+      const P = box[ka], Q = box[kb2], t = DOOR[String(e.kind || e.type || "door").toLowerCase()] || "d", len = t === "dd" ? 2 : 1;
+      if (P.x + P.w === Q.x || Q.x + Q.w === P.x) { const x = P.x + P.w === Q.x ? Q.x : P.x, y1 = Math.max(P.y, Q.y), y2 = Math.min(P.y + P.h, Q.y + Q.h); if (y2 > y1) { F.D.push([x, Math.floor((y1 + y2 - len) / 2), "v", t, len]); continue; } }
+      if (P.y + P.h === Q.y || Q.y + Q.h === P.y) { const y = P.y + P.h === Q.y ? Q.y : P.y, x1 = Math.max(P.x, Q.x), x2 = Math.min(P.x + P.w, Q.x + Q.w); if (x2 > x1) { F.D.push([Math.floor((x1 + x2 - len) / 2), y, "h", t, len]); continue; } }
+      out.src.unjoined = (out.src.unjoined || []).concat(`${ka}–${kb2}`);   // (laid out apart: the book's exit kept in the guide)
+    }
+    out.floors.push(F);
+  }
+  // stairs between floors, where the book's exits go up or down
+  let sn = 0; const fIdx = n => out.floors.findIndex(F => F.n === n);
+  for (const a of areas) for (const e of exitsOf(a)) { const b = sameArea(e.to); if (!b || floorOf(b) === floorOf(a)) continue; const ka = a.id || a.name, kb2 = b.id || b.name; if (ka > kb2) continue;
+    // (up or down as the book says it, else by what the floors are: a crypt, a cellar or a dungeon is below)
+    const pa = placed[ka], pb = placed[kb2], id = "S" + (++sn), low = n => /crypt|cellar|basement|under|below|dungeon|sewer|vault|catacomb|cave|pit|lower/i.test(n), hi = n => /tower|upper|attic|loft|roof|second|first floor|balcony|spire/i.test(n);
+    const up = /\bdown\b/i.test(e.dir || e.kind || "") ? false : /\bup\b/i.test(e.dir || e.kind || "") ? true : low(pb.fl) && !low(pa.fl) ? false : low(pa.fl) && !low(pb.fl) ? true : hi(pb.fl) ? true : fIdx(pb.fl) > fIdx(pa.fl);
+    out.floors[fIdx(pa.fl)].ST.push([id, pa.b.x, pa.b.y, 1, 1, up ? "up" : "down", pb.fl, "n", e.name || ""]);
+    out.floors[fIdx(pb.fl)].ST.push([id, pb.b.x, pb.b.y, 1, 1, up ? "down" : "up", pa.fl, "n"]); }
+  // each room's guide, as the book has it; what is Atlas's said so
+  for (const a of areas) { const k = a.id || a.name, rid = idOf[k];
+    out.rooms[rid] = { n: `${a.id ? a.id + ". " : ""}${a.name || ""}`, key: a.id || "", d: a.desc || "", kp: a.gm || "", obj: [].concat(a.features || a.furniture || []).join("; "), src: { ref: refOf(a) || a.ref || "", size: S[k].src } };
+    for (const kk of Object.keys(out.rooms[rid])) if (out.rooms[rid][kk] === "") delete out.rooms[rid][kk]; }
+  // who and what the book puts in each room: a marker at its centre (people, encounters, clues)
+  const mark = (letter, k, rec, i) => { const pl = placed[k]; if (!pl) return; const F = out.floors[fIdx(pl.fl)], id = letter + (i + 1); F.M.push([id, pl.b.x + pl.b.w / 2 + (i % 3) * .7 - .7, pl.b.y + Math.min(pl.b.h - .6, pl.b.h / 2 + .9)]); return id; };
+  const areaKey = v => { const a = sameArea(v); return a ? a.id || a.name : null; };
+  kb.people.filter(x => (resolve(by, x.at) || {}).id === p.id && x.area).forEach((x, i) => { const k = areaKey(x.area), id = k && mark("N", k, x, i); if (id) out.npcs[id] = { who: x.id, at: idOf[k], doing: x.doing || x.role || "", knows: (x.knows || []).map(q => q.text || q).join(" ") }; });
+  kb.encounters.filter(e => (resolve(by, e.place) || {}).id === p.id && e.area).forEach((e, i) => { const k = areaKey(e.area), id = k && mark("E", k, e, i); if (id) out.enc[id] = { t: e.name, at: idOf[k], d: [e.conditions, [].concat(e.outcomes || []).join(" / ")].filter(Boolean).join(" "), src: refOf(e) }; });
+  kb.clues.filter(c => (resolve(by, c.place) || {}).id === p.id && c.area).forEach((c, i) => { const k = areaKey(c.area), id = k && mark("C", k, c, i); if (id) out.clues[id] = { t: String(c.name || c.text || "").slice(0, 80), at: idOf[k], d: c.text || "", to: [].concat(c.points || []).map(v => (resolve(by, v) || {}).id).filter(Boolean)[0], src: refOf(c) }; });
+  // every floor the same size, so the stairs line up
+  const W = Math.max(...out.floors.map(F => F.w)), H = Math.max(...out.floors.map(F => F.h)); for (const F of out.floors) { F.w = W; F.h = H; }
+  return out;
+}
+function cmdMapFromSource(dir, want, flags) {
+  const kb = rd(path.join(dir, "story", "adventure.json"), null); if (!kb) die("No story/adventure.json yet.");
+  for (const k of KINDS) kb[k] = kb[k] || [];
+  const by = index(kb), unit = (() => { try { const m = /grid:\s*\{\s*unit:\s*(\d+(?:\.\d+)?)/.exec(fs.readFileSync(path.join(dir, "campaign.js"), "utf8")); return m ? +m[1] : 5; } catch (e) { return 5; } })();
+  const bf = path.join(dir, "story", "import-baseline.json"), base = rd(bf, { files: {} }), list = want.length ? kb.places.filter(p => want.includes(p.id)) : kb.places, done = [], kept = [], none = [];
+  for (const p of list) {
+    const f = `places/${p.id}.js`, fp = path.join(dir, f); if (!fs.existsSync(fp)) { none.push(p.name + " (not written: from-adventure)"); continue; }
+    if (fs.existsSync(path.join(dir, "edits", p.id + ".js")) && !flags.force) { kept.push(p.name + " (redrawn in the map editor)"); continue; }
+    const had = fs.readFileSync(fp, "utf8"), b = base.files[f]; if (b && hash(had) !== b.hash && !flags.force) { kept.push(p.name + " (changed by you)"); continue; }
+    const M = mapOfPlace(kb, p, unit, by); if (!M) { none.push(p.name + " (the book gives it no keyed areas)"); continue; }
+    const body = had.replace(/\nATLAS\.place\(/, "\nATLAS.place(").replace(/\}\);\s*$/, `,
+  "map": ${JSON.stringify(M)}
+});
+`).replace(/,\n\s*"map": \{[\s\S]*\}\n\}\);\n,\n  "map"/, `,
+  "map"`);
+    const clean = had.replace(/,\n  "map": [\s\S]*\n\}\);\s*$/, "\n});\n"), next = clean.replace(/\n\}\);\s*$/, `,
+  "map": ${JSON.stringify(M)}
+});
+`);
+    void body; wr(fp, next); base.files[f] = { hash: hash(next), t: new Date().toISOString(), text: next };
+    const n = M.floors.reduce((k, F) => k + F.R.length, 0), d = M.floors.reduce((k, F) => k + F.D.length + F.ST.length, 0);
+    done.push(`${p.name}: ${n} room${n === 1 ? "" : "s"} on ${M.floors.length} floor${M.floors.length === 1 ? "" : "s"}, ${d} door${d === 1 ? "" : "s"} and stair${d === 1 ? "" : "s"}${(M.src.unjoined || []).length ? `; ${M.src.unjoined.length} exit${M.src.unjoined.length > 1 ? "s" : ""} could not be put on a shared wall (kept in the guide)` : ""}${Object.values(M.rooms).some(r => r.src && r.src.size === "atlas") ? "; some sizes are Atlas's (the book gives none)" : ""}`);
+  }
+  wr(bf, base);
+  console.log(done.length ? "Drawn from the book:\n  " + done.join("\n  ") : "Nothing drawn.");
+  if (kept.length) console.log("Kept as they are (--force to draw them from the book again): " + kept.join(", "));
+  if (none.length) console.log("Not drawn: " + none.join(", "));
+}
 async function run(cmd, pos, flags, ctx) {
+  if (cmd === "map-from-source") return cmdMapFromSource(pos[0], pos.slice(1), flags);
   if (cmd === "import") return cmdImport(pos[0], pos.slice(1), flags);
   if (cmd === "import-status") return cmdStatus(pos[0]);
   if (cmd === "import-mark") return cmdMark(pos[0], pos[1]);

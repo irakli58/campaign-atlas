@@ -6,7 +6,26 @@ scenario, or their own long notes. The design comes from the user's request of 1
 (docs/requests/2026-11-18-campaign-import.md) and the plan they approved
 (docs/plans/2026-11-18-campaign-import-plan.md).
 
-**The rules that matter most**
+**The rules that matter most** (the user, 18 Nov 2026: docs/requests/2026-11-18-import-is-the-bible-and-strahd-fixes.md)
+
+- **The uploaded adventure is the bible.** Everything Atlas makes follows it: its story, its people and what they want
+  and know, its places and geography, its rooms (their sizes, exits, doors, stairs, windows, furniture, secret passages,
+  traps, encounters, treasure, people), its quests, timeline, mechanics and endings. It outranks the writers' council,
+  general knowledge of the game, and the Copilot's ideas.
+- **Implementation, never rewriting.**
+  - Do not proofread it, critique it or fix it. Do not rewrite dialogue, close plot holes, rebalance encounters, change
+    personalities, quests, item locations or endings, add storylines, or re-pace it. Play it as written, even what
+    seems strange or hard.
+  - A described castle becomes a map, a person a profile, an encounter a playable one, a chest its contents, a quest a
+    trackable one, a scripted event a trigger.
+- **No invented canon.** Where the book says nothing (a house with no interior), Atlas may fill what play needs. It
+  must not contradict the book, invent revelations, add canon-changing people, move items or alter quests. Such details
+  are supplementary (`added: true`, and a map's `src.layout: "atlas"`), never the book's.
+- **No review step.** The game master is never asked to approve each person, place or item. `ready` checks the work
+  (read, linked, drawn, placed, nothing secret given away), not the story. What cannot be read is named as missing,
+  never invented.
+- **The game master's changes are the campaign from then on.** A file they change is never written over (only
+  `--force`), and the original is kept in `story/import-baseline.json` to compare or restore.
 
 - **Only the game master's own copy, for their own table.** `import` needs `--i-own-this`. The source stays in
   `story/source/`. Never fetch an adventure from the web, never rebuild a missing chapter from summaries or memory, and
@@ -66,13 +85,14 @@ others freely.
 | Section | Fields |
 |---|---|
 | `chapters` | `name`, `summary`, `ref` |
-| `places` | `name`, `kind` (village, castle, ruin, tower…), `parent` or `region` (another place's id), `desc` (what the players see), `gm` (what only the game master knows), `areas: [{ id: "K20", name, desc, gm, ref }]`, `links: [{ to, how }]`, `tier`, `ref` |
-| `people` | `name`, `role`, `look`, `manner`, `voice`, `bg`, `want`, `secret`, `knows: [{ text, about, ref }]` (only what they plausibly know), `at` (a place id), `faction`, `ties: [{ who, how }]`, `stats` (a book reference such as "MM p. 297", or the block), `triggers`, `reactions`, `important`, `ref` |
+| `places` | `name`, `kind` (hamlet, village, town, city, castle, ruin, tower, dungeon…), `population` (if the book gives it), `parent` or `region` (another place's id), `desc` (what the players see), `gm` (what only the game master knows), `areas` (below), `links: [{ to, how }]`, `tier`, `ref` |
+| a place's `areas` | `id` (the book's key: "K20"), `name`, `floor` ("CRYPT", "SECOND FLOOR"…, as the book names its levels), `size` (as written: "30 feet by 20 feet", "15 feet square", or [w, h] in squares), `exits: [{ to: "K21", kind: "door" \| "double" \| "arch" \| "gate" \| "secret" \| "window" \| "stairs", side: "north" \| "east" \| "south" \| "west", dir: "up" \| "down" }]`, `features` (furniture and objects, as listed), `hidden`, `desc`, `gm`, `ref`. Write exactly what the book says; leave out what it does not. |
+| `people` | `area` (the keyed area they are in, when the book says), `name`, `role`, `look`, `manner`, `voice`, `bg`, `want`, `secret`, `knows: [{ text, about, ref }]` (only what they plausibly know), `at` (a place id), `faction`, `ties: [{ who, how }]`, `stats` (a book reference such as "MM p. 297", or the block), `triggers`, `reactions`, `important`, `ref` |
 | `factions` | `name`, `kind`, `leader`, `hq`, `territory`, `wants`, `plan`, `rels`, `ref` |
 | `quests` | `name`, `giver`, `place`, `goal`, `steps`, `reward`, `optional`, `needs` (ids of what it depends on), `clock`, `ref` |
 | `encounters` | `name`, `place`, `area`, `kind` (combat, social, exploration, trap, puzzle), `participants: [{ name, count, stats }]`, `conditions`, `terrain`, `positions`, `outcomes`, `rewards`, `consequences`, `ref` |
 | `monsters` | `name`, `stats` (a book reference, or the block if the adventure prints it), `ref` |
-| `items` | `name`, `cat`, `rarity`, `place`, `area`, `holder`, `desc` (what the players see), `gm` (its secret), `stats`, `unique`, `story` (a story item), `mechanic` (the mechanic that places it), `handout` (the text the players may read), `ref` |
+| `items` | `name`, `cat`, `rarity`, `place`, `area` (its keyed area), `holder`, `desc` (what the players see), `gm` (its secret), `stats`, `unique`, `story` (a story item), `mechanic` (the mechanic that places it), `handout` (the text the players may read), `ref` |
 | `clues` | `text`, `place`, `area`, `points` (place ids), `about`, `ref` |
 | `tables` | `name`, `roll` ("d12"), `rows: [{ range, text }]`, `ref` |
 | `events` | `title`, `when`, `place`, `what`, `why`, `trigger`, `ref` |
@@ -142,7 +162,16 @@ It keeps `story/import-baseline.json`, a copy of what it wrote. A file the game 
 written over again (`--force` to replace it with the adventure's version), and the baseline lets the page compare and
 revert.
 
-Then draw each place's map in the usual way (playbook, step 5), keeping the book's own numbering:
+Then **`map-from-source`** draws each place's map from its areas: a room under every key, the book's size in the
+campaign's squares, the book's exits as doors, double doors, archways, gates, secret doors, windows and stairs on the
+walls the rooms share, and the people, encounters and clues the book puts in each room. Where the book gives no size,
+the room is 6 by 6 squares and says so (`src.size: "atlas"`). The positions are laid out by the exits
+(`src.layout: "text"`). Where the game master gives the book's map, trace it instead, so the positions are the book's.
+`ready` then checks every keyed area is a room under its key, and every exit is a door or stairs between the right two
+rooms. A settlement is laid out with `atlas.js city --invent` at its own size (`--size hamlet | village | town | city`,
+or `--population N` from the book), never inflated to fill the sheet.
+
+Where the book's own map is given, or where a building is drawn by hand, keep the book's own numbering:
 - **room ids:** the keyed areas' ids (`K20` becomes a room `K20`);
 - **each room's guide:** the area's `desc` and `gm`;
 - **people, clues, encounters, traps and treasure:** each in its area.

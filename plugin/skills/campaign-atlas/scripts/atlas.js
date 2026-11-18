@@ -14,6 +14,9 @@
    node atlas.js adventure <dir>                 merge the chunks' readings into story/adventure.json; check its links and coverage
    node atlas.js from-adventure <dir> [--force]  write the campaign from it (imported.js, places/, adventure.js); never over your changes
    node atlas.js ready <dir>                     the readiness check and completion report (story/report.md, ready.js)
+   node atlas.js map-from-source <dir> [<place> ...] [--force]
+                                                 each place's map from the book: a room for every keyed area, its size, its exits
+                                                 as doors, arches, secret doors and stairs, its people, encounters and clues in it
    node atlas.js galaxy <dir> [--systems 300] [--seed S] [--type barred|spiral|flocculent|lenticular|elliptical|dwarf|ring]
                     [--scope neighbourhood|sector|arm|galaxy] [--span 100] [--milky-way] [--no-browns] [--name "The Verge"]
                                                  a GALAXY grown from a seed (galaxy.js) and from the real kind of galaxy named (model 2):
@@ -363,7 +366,7 @@ function checkGuide(A, id, P, N) {
 function checkStandard(A, id, P) {
   const m = A.meta[id], M = A.get(id, 99);
   // (a handmade campaign, made: "hand" in campaign.js: a place is as big as its maker makes it; the standards are for the council)
-  if (A.config.made === "hand") return;
+  if (A.config.made === "hand" || A.config.made === "import") return;   // (an imported adventure: its places are as the book has them, checked against it by atlas.js ready)
   if (![1, 2, 3].includes(m.tier)) return P("no tier: say how much the story depends on this place (tier: 1 the story cannot run without it, 2 the trail passes through it, 3 colour)");
   const S = standardFor(A, m.tier), rooms = new Set();
   M.floors.forEach(F => F.R.forEach(r => { if (A.isRoom(r[0])) rooms.add(r[0]); }));
@@ -659,7 +662,7 @@ function checkCast(A) {
     if (!p.n) { out.push(`   ! ${k} has no name (n)`); problems++; }
     const lack = [...PERSON, "want", "secret", "press"].filter(f => !(f === "ties" ? tieText(p.ties) : p[f]));
     // (a person the game master made by hand, or any in a handmade campaign: what they lack is still to write, not wrong)
-    if (lack.length && (p.made === "hand" || A.config.made === "hand")) { out.push(`   - ${k} (made by hand): still to write: ${lack.join(", ")}`); notes++; }
+    if (lack.length && (p.made === "hand" || A.config.made === "hand" || A.config.made === "import")) { out.push(`   - ${k} (made by hand): still to write: ${lack.join(", ")}`); notes++; }
     else if (lack.length) { out.push(`   ! ${k} lacks: ${lack.map(f => PERSON_SAYS[f] || ({ want: "what they want (want)", secret: "what they hide (secret)", press: "what makes them talk (press)" })[f]).join(", ")}`); problems++; }
     for (const t of strayTies(A, p.ties)) { out.push(`   - ${k}'s ties name "${t}", who is not in the cast: use a cast id, or write the name out in full`); notes++; }
     if (!met.has(k) && !p.offstage && !(p.at && p.at.pl)) { out.push(`   - ${k} is in the cast but is met nowhere: give a person on some map who: "${k}" (or mark the cast entry offstage: true)`); notes++; }
@@ -886,7 +889,7 @@ function cmdCheck(dir, want) {
     // (in a handmade campaign a room still to describe is a draft, not a fault)
     // (what a place's guide is still to say: a clue's description, how it is found, the overview, the words to read aloud,
     // a floor's note. Broken data stays a problem)
-    if (A.config.made === "hand") for (const [m, lv] of [...prob]) if (/rooms? incomplete|has no name on the map|needs a description|needs how it is found|needs a hint|needs what the players|no overview|no exterior description|has no floor note|needs a player|is not described|lacks:/.test(m)) { prob.delete(m); note.set(m + " (still to write)", lv); }
+    if (A.config.made === "hand" || A.config.made === "import") for (const [m, lv] of [...prob]) if (/rooms? incomplete|has no name on the map|needs a description|needs how it is found|needs a hint|needs what the players|no overview|no exterior description|has no floor note|needs a player|is not described|lacks:/.test(m)) { prob.delete(m); note.set(m + " (still to write)", lv); }
     checkCave(A, id, m => prob.set(m, n), m => note.set(m, n));
     const M = A.get(id, 99), tag = lv => n ? ` [${A.sizeName(lv)}]` : "";
     console.log(`${id}: tier ${A.meta[id].tier || "?"} · ${g.rooms} rooms · ${M.floors.length} floor${M.floors.length > 1 ? "s" : ""}${n ? ` · ${n + 1} sizes` : ""} · guide ${g.done}/${g.rooms}${prob.size ? "" : "  OK"}`);
@@ -900,7 +903,7 @@ function cmdCheck(dir, want) {
     const leads = A.leads(), inb = {}; for (const l of leads) if (A.meta[l.to] && l.to !== l.from) (inb[l.to] = inb[l.to] || new Set()).add(l.from + "/" + l.via);
     const living = ["sandbox", "hybrid"].includes(A.config.kind), out = [];
     // (in a handmade campaign the trail is the game master's to make, a piece at a time: what it lacks is still to make)
-    const hand = A.config.made === "hand", before = problems;
+    const hand = A.config.made === "hand" || A.config.made === "import", before = problems;
     for (const id of A.order) {
       const m = A.meta[id], k = (inb[id] || new Set()).size, need = standardFor(A, m.tier).inbound; if (m.start) continue;
       const road = living && !!m.location && !!A.worldData;
@@ -1421,7 +1424,7 @@ switch (cmd) {
   case "wild": cmdWild(pos[0], pos[1]); break;
   case "check": cmdCheck(pos[0], pos.slice(1)); break;
   // importing an adventure the game master owns (references/import.md)
-  case "import": case "import-status": case "import-mark": case "adventure": case "from-adventure": case "ready": require("./atlas-import.js").run(cmd, pos, flags, { load }).catch(e => die(e.message)); break;
+  case "import": case "import-status": case "import-mark": case "adventure": case "from-adventure": case "ready": case "map-from-source": require("./atlas-import.js").run(cmd, pos, flags, { load }).catch(e => die(e.message)); break;
   case "ascii": cmdAscii(pos[0], pos[1], pos[2]); break;
   case "dump": cmdDump(pos[0], pos.slice(1)); break;
   case "status": cmdStatus(pos[0]); break;

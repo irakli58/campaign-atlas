@@ -71,10 +71,11 @@ A hut of turf and bone at the valley's edge. Old Wen, a blind hermit, was a novi
 <!-- page 4 -->
 ## Chapter 3: The Abbey of Saint Orsa (A)
 
-A1. Gatehouse. Two Grey Brothers (cult fanatic stat blocks are too strong: use acolyte) bar the way unless the characters claim to be pilgrims.
-A2. Chapel. The altar where the Lantern must be relit. A shroud. Prior Hollis preaches here at midnight.
-A3. Bell Tower. The bell is cracked. From here the whole valley can be seen above the fog.
-A4. Crypt. The tomb of the Abbess Veyra. Her ghost rises if the tomb is opened, and attacks unless someone speaks her name.
+A1. Gatehouse. A room 20 feet by 15 feet. A door in the north wall leads to the chapel (A2). Two Grey Brothers (cult fanatic stat blocks are too strong: use acolyte) bar the way unless the characters claim to be pilgrims.
+A2. Chapel. 40 feet by 30 feet, with the altar against the north wall, where the Lantern must be relit. A shroud. An open archway in the east wall leads to the bell tower (A3); stairs in the southwest corner go down to the crypt (A4); a secret door in the west wall opens into the Prior's cell (A5). Prior Hollis preaches here at midnight.
+A3. Bell Tower. A tower 15 feet square. The bell is cracked. From here the whole valley can be seen above the fog.
+A4. Crypt. Below the chapel, 30 feet by 20 feet. The tomb of the Abbess Veyra. Her ghost rises if the tomb is opened, and attacks unless someone speaks her name.
+A5. The Prior's Cell. A cell 10 feet square, a cot and a chest. The chest holds the Prior's silver and a potion of healing.
 
 Prior Hollis, the leader of the Grey Brothers, is a gaunt man with a burned right hand, soft-spoken and patient. Use the priest stat block. He wants the fog to stay: in the fog, no one dies of age, and he is very old. He knows where the Lantern is only if the Key was drawn for it; otherwise he believes it lost. If attacked, he calls the dead from the crypt.
 
@@ -86,7 +87,7 @@ The Grey Brothers: the cult of the abbey, led by Prior Hollis, about a dozen str
 
 ## Treasure
 
-The Lantern of Saint Orsa: a brass lantern with a cracked pane, unlit. A unique, rare wondrous item (homebrew): relit at the altar, it lifts the fog; carried, it keeps the walking dead at ten feet. The Book of Saint Orsa: the rite for relighting the Lantern; without it the rite takes a full night and a DC 15 Religion check. In the Prior's cell: 120 gp in old abbey silver and a potion of healing.
+The Lantern of Saint Orsa: a brass lantern with a cracked pane, unlit. A unique, rare wondrous item (homebrew): relit at the altar, it lifts the fog; carried, it keeps the walking dead at ten feet. The Book of Saint Orsa: the rite for relighting the Lantern; without it the rite takes a full night and a DC 15 Religion check. In the Prior's cell (A5): 120 gp in old abbey silver and a potion of healing.
 
 ## Endings
 
