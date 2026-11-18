@@ -49,3 +49,7 @@ Phase 1, behind a new model name so every existing world is untouched, tested on
 ## What needs your yes
 
 - Phase 1: continents built on the plates, plate motion from rotation poles, for **new** worlds (existing ones keep theirs).
+
+## Done since
+
+- **Phase 1, built 18 Nov** (approved: "ok do all of em"). `tectonics: 2` for every new world (world-invent.js `tectV`: a world made again keeps the version it was made with; `--tectonics 1|2`): some plates continental (as many as the land asks, the larger likelier), each carrying a **craton** near its middle from which its continent grows, slowed near its plate's edge (world-geology.js, `TV2`, `contPl`, `tvCost`); **coherent plate motion by slab pull** (1a): an oceanic plate heads for the nearest continental plate at 0.6-1 of the top speed, a continental plate drifts slowly, so borders slide or part between oceanic neighbours and converge at continents. Measured on three seeds of a four-landmass planet: plate border over land fell from 44-51% (more than the land's 39% share: borders cut continents) to 29-34% (borders in the oceans and along margins); the ranges now stand along the continents' active margins and the interiors are old plains. Seen: continents a little rounder than before (they take their plate's shape): to work on with phase 2 (lobes, microcontinents, rifted edges).

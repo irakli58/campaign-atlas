@@ -62,6 +62,8 @@ function geology(o, U) {
   // (the cost has strong contrasts at several scales, so a continent reaches out in lobes and peninsulas and leaves gulfs)
   const landCost = sides => m => .12 + 5 * Math.pow(U.fbm(nB, X(m) * 2.2 * zs, Y(m) * 2.2 * zs, 5), 3) + .6 * Math.pow(U.fbm(nA, X(m) * 5 * zs + 3, Y(m) * 5 * zs, 3), 2) + edgeCost(m, sides);
   const side = Math.floor(rnd() * 4), others = [0, 1, 2, 3].filter(s => s !== side);
+  const TV2 = (+o.tectonics || 1) >= 2; let contPl = null, tvCost = null;
+  const lcFor = nS => { const zm = Math.sqrt(nS); return m => .12 + 5 * Math.pow(U.fbm(nB, X(m) * 2.2 * zm * zs, Y(m) * 2.2 * zm * zs, 5), 3) + .9 * Math.pow(U.fbm(nA, X(m) * 6 * zm * zs + 3, Y(m) * 6 * zm * zs, 3), 2) + edgeCost(m); };
   let seedsC;
   // (a world drawn by hand: its land is the sketch's, read onto this grid (atlas-world-sketch.js), not grown)
   const SK = o.sketch && o.sketch.land && o.sketch.land.length === cols * rows ? o.sketch : null;
@@ -81,14 +83,46 @@ function geology(o, U) {
     else { seedsC = [cell((.42 + rnd() * .16) * asp, .42 + rnd() * .16)]; for (let k = 0; k < 2 + Math.floor(rnd() * 3); k++) seedsC.push(cell((.22 + rnd() * .56) * asp, .22 + rnd() * .56)); }
     // (many landmasses: sizes from great to small, a few big and more little, as the Earth's are; their coasts as lobed
     // as a continent's at their own scale)
+    // (tectonics 2, the realistic continents plan's phase 1, approved 18 Nov 2026: the continents built on the plates. Some
+    // plates are continental, as many as the land asks; each carries a craton, an old stable core, near its middle, and
+    // the continent grows out from it over the same coasts' cost, slowed as it nears its plate's edge, so the plates'
+    // borders fall mostly in the oceans or along the continents' margins (active where the border converges, passive
+    // where it is far), not at random through them. A continent may still reach across a border, where it was sutured)
+    if (TV2 && /^(continent|continents|masses)$/.test(land)) {
+      const pc = plates.map(() => ({ x: 0, y: 0, n: 0 })); for (let n = 0; n < CN; n++) { const q = pc[plate[n]]; if (q) { q.x += ci(n); q.y += cj(n); q.n++; } }
+      const want = land === "continent" ? 1 + (rnd() < .45 ? 1 : 0) : land === "masses" ? seedsC.length : seedsC.length;
+      // (the plates big enough to carry a continent, the larger likelier)
+      const order = plates.map((p, k) => [k, pc[k].n * (.6 + rnd() * .8)]).filter(([k]) => pc[k].n > CN * .02).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+      contPl = new Set(order.slice(0, Math.max(1, Math.min(order.length, want))));
+      seedsC = [...contPl].map(k => { const q = pc[k], cx = q.x / q.n, cy = q.y / q.n; let best = -1, bd = 1e9; for (let n = 0; n < CN; n++) if (plate[n] === k) { const d = (ci(n) - cx) ** 2 + (cj(n) - cy) ** 2; if (d < bd) { bd = d; best = n; } } return best; }).filter(n => n >= 0);
+      // (how far each cell is from its plate's edge, in cells)
+      const dB = U.distance(cc, cr, n => { const i = ci(n), j = cj(n); for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < cc && b < cr && plate[b * cc + a] !== plate[n]) return true; } return false; });
+      const wB = Math.max(3, cc * .035), base = land === "masses" ? lcFor(seedsC.length) : landCost(null);
+      tvCost = m => base(m) + 3.2 * Math.exp(-dB[m] / wB) + (contPl.has(plate[m]) ? 0 : 1.4);
+    }
     const MUL = land === "masses" && seedsC.length > 1 ? seedsC.map(() => Math.exp((rnd() + rnd() + rnd() - 1.5) * 1.3)) : null;
     const zm = land === "masses" ? Math.sqrt(seedsC.length) : 1, lc0 = landCost(land === "coast" ? others : null), lcM = m => .12 + 5 * Math.pow(U.fbm(nB, X(m) * 2.2 * zm * zs, Y(m) * 2.2 * zm * zs, 5), 3) + .9 * Math.pow(U.fbm(nA, X(m) * 6 * zm * zs + 3, Y(m) * 6 * zm * zs, 3), 2) + edgeCost(m);
-    const lab = grow(seedsC, land === "masses" ? lcM : lc0, land === "archipelago" ? Math.round(target * .4) : land === "islands" ? Math.round(target * .7) : target, MUL);
+    const lab = grow(seedsC, tvCost || (land === "masses" ? lcM : lc0), land === "archipelago" ? Math.round(target * .4) : land === "islands" ? Math.round(target * .7) : target, MUL);
     // (the growth stops on a ragged front: eased into a coastline's curves, the lobes and gulfs kept, the spikes gone)
     const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = lab[n] >= 0 ? 1 : 0;
     // (separate landmasses stay separate: where two meet, a strait of sea between them)
     if (land === "masses" && seedsC.length > 1) { const r = Math.max(1, Math.round(cc * .008)); for (let n = 0; n < CN; n++) { if (lab[n] < 0) continue; const i = ci(n), j = cj(n); let other = false; for (let dj = -r; dj <= r && !other; dj++) for (let di = -r; di <= r; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a; if (lab[m] >= 0 && lab[m] !== lab[n]) { other = true; break; } } if (other) F[n] = 0; } }
     boxBlur(F, cc, cr, 3, 3); for (let n = 0; n < CN; n++) crust[n] = F[n] > .5 ? 1 : 0;
+  }
+
+  /* 1a. how the plates move (tectonics 2): coherently, as the forces that drive them say. An oceanic plate is pulled
+         along by its own sinking edge (slab pull, the strongest force): toward the nearest continental plate it dives
+         under, fast (5 to 10 cm a year); a continental plate, with no slab to pull it, drifts slowly (1 to 3 cm a year).
+         Neighbouring oceanic plates heading for the same continent move alike, so the borders between them slide or
+         part, and a ridge opens behind them [Forsyth and Uyeda 1975: plate speed and slab pull] */
+  if (TV2 && contPl && contPl.size) {
+    const pc = plates.map(() => ({ x: 0, y: 0, n: 0 })); for (let n = 0; n < CN; n++) { const q = pc[plate[n]]; if (q) { q.x += ci(n); q.y += cj(n); q.n++; } }
+    plates.forEach((p, k) => {
+      const q = pc[k]; if (!q.n) return; const cx = q.x / q.n, cy = q.y / q.n;
+      if (contPl.has(k)) { const a = rnd() * Math.PI * 2, s = .18 + rnd() * .2; p.vx = Math.cos(a) * s; p.vy = Math.sin(a) * s; return; }
+      let best = null, bd = 1e9; for (const c of contPl) { const r = pc[c]; if (!r.n) continue; const dx = r.x / r.n - cx, dy = r.y / r.n - cy, d = Math.hypot(dx, dy); if (d < bd) { bd = d; best = [dx / (d || 1), dy / (d || 1)]; } }
+      if (!best) return; const tw = (rnd() - .5) * .9, s = .6 + rnd() * .4, ca = Math.cos(tw), sa = Math.sin(tw); p.vx = (best[0] * ca - best[1] * sa) * s; p.vy = (best[0] * sa + best[1] * ca) * s;
+    });
   }
 
   /* 1b. a past age (the user, 18 Nov 2026: "play the game in the past", docs/requests/2026-11-18-world-ages.md): every
