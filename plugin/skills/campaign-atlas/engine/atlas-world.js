@@ -361,7 +361,7 @@
     if (want && (want === "stars") === starry) look = want;
     const size = Array.isArray(W.size) && W.size[0] > 0 ? W.size.slice(0, 2) : T.w ? [T.w, T.h] : [1000, 700];
     const SH = shapeOf(W, OV);
-    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: (T.sea == null ? 128 : T.sea) + Math.max(-10, Math.min(20, +(OV.style && OV.style.sea) || 0)),   // (an ice age's low sea, some 120 m down, to the high seas of a hothouse age, a few hundred metres up) H: unb64(T.height), M: unb64(T.moist), C: unb64(T.cover), B: unb64(T.biome), Cn: unb64(T.canopy), Tc: unb64(T.tempC), Gr: unb64(T.ground) } : null;
+    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: (T.sea == null ? 128 : T.sea) + Math.max(-10, Math.min(20, +(OV.style && OV.style.sea) || 0)), /* (an ice age's low sea, some 120 m down, to the high seas of a hothouse age, a few hundred metres up) */ H: unb64(T.height), M: unb64(T.moist), C: unb64(T.cover), B: unb64(T.biome), Cn: unb64(T.canopy), Tc: unb64(T.tempC), Gr: unb64(T.ground) } : null;
     if (!opt.noLand && !G && SH.base && !T.stars && !T.drawing) G = blankLand(size, SH.base);
     if (G) {
       if (!G.M) G.M = new Uint8Array(G.cols * G.rows).fill(128); if (!G.C || G.C.length !== G.cols * G.rows) G.C = new Uint8Array(G.cols * G.rows);
