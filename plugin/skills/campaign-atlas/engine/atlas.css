@@ -3265,3 +3265,12 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 #app[data-tablet="1"] .tvn-grp { display: contents; }
 .tv-nav .tvn-it[hidden], .tv-nav .tvn-grp[hidden], .tv-nav .tvn-more[hidden], .tv-nav .tvn-g[hidden], .tv-nav .tvn-hint[hidden] { display: none; }
 @media (min-width: 861px) { #app:not([data-tablet="1"]) .tvn-grp:not([open]) > .tvn-it { display: none; } }
+/* (a phone: the name on its own line, then the tools and Audio, then the views; the bar scrolls away, there is no room
+   to keep it) */
+@media (max-width: 700px) {
+  .mast { position: static; grid-template-columns: minmax(0, 1fr) auto; }
+  .mast .mast-id { grid-column: 1 / -1; }
+  .mast h1 { max-width: 100%; font-size: 24px; white-space: normal; }
+  .mast .tools { gap: 6px; }
+  .mast .audiobtn { align-self: start; }
+}

@@ -1875,24 +1875,33 @@ function createMap3D(host, C, planCanvas, hooks) {
     renderer.render(scene, camera);
     // overlay
     const W = host.clientWidth, H = host.clientHeight, named = dist < 150;
+    // (the UI overhaul of 18 Nov 2026: the places' numbered marks win; a district's name or a landmark's moves off them,
+    // up or down, rather than be written under a mark: "THE W(12)RENS")
+    const marks = [];
+    const clear = (x, y, w, h) => !marks.some(m => x - w / 2 < m[2] && x + w / 2 > m[0] && y - h / 2 < m[3] && y + h / 2 > m[1]);
+    const dodge = (x, y, w, h) => { if (clear(x, y, w, h)) return y; for (let k = 1; k <= 4; k++) for (const sg of [-1, 1]) { const y2 = y + sg * k * (h * .55 + 6); if (clear(x, y2, w, h)) return y2; } return y; };
     for (const id in LM) {
       const o = LM[id], el = pins[id];
       pv.set(o.grp.position.x, o.top + .8, o.grp.position.z).project(camera);
       if (pv.z > 1 || pv.x < -1.1 || pv.x > 1.1 || pv.y < -1.1 || pv.y > 1.2) { el.classList.add("off"); continue; }
       el.classList.remove("off"); el.classList.toggle("named", named);
-      el.style.transform = `translate(${((pv.x + 1) / 2 * W).toFixed(1)}px, ${((1 - pv.y) / 2 * H).toFixed(1)}px) translate(-50%, -100%)`;
+      const px = (pv.x + 1) / 2 * W, py = (1 - pv.y) / 2 * H;
+      el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) translate(-50%, -100%)`;
+      marks.push([px - 17, py - 36, px + 17, py]);
     }
     for (const d of dl) {
       pv.set(d.x, 0, d.z).project(camera);
       const off = pv.z > 1 || dist < 45;
       d.el.classList.toggle("off", off);
-      if (!off) d.el.style.transform = `translate(${((pv.x + 1) / 2 * W).toFixed(1)}px, ${((1 - pv.y) / 2 * H).toFixed(1)}px) translate(-50%, -50%)`;
+      if (!off) { if (!d.w) { d.w = d.el.offsetWidth; d.h = d.el.offsetHeight; } const x = (pv.x + 1) / 2 * W, y = dodge(x, (1 - pv.y) / 2 * H, d.w || 80, d.h || 16);
+        d.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`; if (d.w) marks.push([x - d.w / 2, y - d.h / 2, x + d.w / 2, y + d.h / 2]); }
     }
     for (const o of ll) {
       pv.set(o.x, o.y, o.z).project(camera);
       const off = pv.z > 1 || dist > o.far || pv.x < -1.05 || pv.x > 1.05 || pv.y < -1.05 || pv.y > 1.05;
       o.el.classList.toggle("off", off);
-      if (!off) o.el.style.transform = `translate(${((pv.x + 1) / 2 * W).toFixed(1)}px, ${((1 - pv.y) / 2 * H).toFixed(1)}px) translate(-50%, -100%)`;
+      if (!off) { if (!o.w) { o.w = o.el.offsetWidth; o.h = o.el.offsetHeight; } const x = (pv.x + 1) / 2 * W, y = dodge(x, (1 - pv.y) / 2 * H - (o.h || 14) / 2, o.w || 60, o.h || 14) + (o.h || 14) / 2;
+        o.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`; }
     }
     for (const o of pp) {
       if (o.walk) { const t = Math.min(1, ((now || performance.now()) - o.walk.t0) / o.walk.dur), k = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; o.x = o.walk.fx + (o.walk.tx - o.walk.fx) * k; o.z = o.walk.fz + (o.walk.tz - o.walk.fz) * k; if (t >= 1) { o.walk = null; o.el.classList.remove("walking"); } else request(); }
@@ -2032,8 +2041,13 @@ function createMap3D(host, C, planCanvas, hooks) {
     for (const b of D.basins) s += `<path d="${[b.pts, ...(b.holes || [])].map(r => "M" + line(r).split(" ").join("L") + "Z").join("")}" fill-rule="evenodd" fill="${P.WATERC}" stroke="${P.INK}" stroke-width=".3"/>`;
     for (const r of D.rivers) if (!r.ghost) s += `<polyline points="${line(r.pts)}" fill="none" stroke="${P.WATERC}" stroke-width="${r.hw * 2}" stroke-linecap="round" stroke-linejoin="round"/>`;
     for (const [, cls, pts] of D.roads) if (cls <= 1) s += `<polyline points="${line(pts)}" fill="none" stroke="${cls ? P.ROADF : P.MAJORF}" stroke-width="${cls ? 1.6 : 2.6}" stroke-linecap="round" stroke-linejoin="round"/>`;
-    for (const l of D.landmarks) if (l.major && l.at && l.name) s += `<text x="${l.at[0]}" y="${l.at[1]}" text-anchor="middle" font-size="3.6" font-style="italic" fill="${P.INK}" opacity=".8">${A.esc(l.name)}</text>`;
-    for (const [d, at] of Object.entries(D.districts)) s += `<text x="${at[0]}" y="${at[1] - 9}" text-anchor="middle" font-size="5.5" letter-spacing="1.2" fill="${P.INK}" opacity=".7">${A.esc(d.toUpperCase())}</text>`;
+    // (the UI overhaul of 18 Nov 2026: the places' numbered marks win; a district's or a landmark's name moves up or down off
+    // them, and off the names already written, rather than be written under a mark: "THE W(12)RENS")
+    const taken = PL.filter(e => e.x != null).map(e => [e.x - 5.4, e.y - 5.8, e.x + 5.4, e.y + 5.4]);
+    const free = (x, y, bw, bh) => !taken.some(m => x - bw / 2 < m[2] && x + bw / 2 > m[0] && y - bh < m[3] && y > m[1]);
+    const spot = (x, y, bw, bh) => { let y2 = y; if (!free(x, y, bw, bh)) for (let k = 1; k <= 5; k++) { const a = y - k * (bh * .6 + 1.2), b = y + k * (bh * .6 + 1.2); if (free(x, a, bw, bh)) { y2 = a; break; } if (free(x, b, bw, bh)) { y2 = b; break; } } taken.push([x - bw / 2, y2 - bh, x + bw / 2, y2]); return y2; };
+    for (const [d, at] of Object.entries(D.districts)) { const t = d.toUpperCase(), bw = t.length * (5.5 * .62 + 1.2), y = spot(at[0], at[1] - 9, bw, 5.5); s += `<text x="${at[0]}" y="${y.toFixed(1)}" text-anchor="middle" font-size="5.5" letter-spacing="1.2" fill="${P.INK}" opacity=".7">${A.esc(t)}</text>`; }
+    for (const l of D.landmarks) if (l.major && l.at && l.name) { const bw = l.name.length * 3.6 * .5, y = spot(l.at[0], l.at[1], bw, 3.6); s += `<text x="${l.at[0]}" y="${y.toFixed(1)}" text-anchor="middle" font-size="3.6" font-style="italic" fill="${P.INK}" opacity=".8">${A.esc(l.name)}</text>`; }
     for (const e of PL) {
       if (e.x == null) continue;
       const sel = st && st.sel === e.id, dim = st && st.matches && !st.matches(e.p);
