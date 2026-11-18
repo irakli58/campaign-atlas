@@ -40,6 +40,9 @@ screenshot of each main view, plus a count of the buttons on screen):
 - **The phone bar**: the name gets its own line, and the bar scrolls away.
 - **An empty tracker** is one quiet dashed line: "nothing to track yet: open it to add the characters or a key".
 - **The realm example** wears the geological look.
+- **The world map's toolbar**: its seven layer switches (Plates, Rocks and resources, Relations, Trade, Ocean currents,
+  Coasts, Road network) are now together under Layers, beside Filters. Layers is hidden when the world has none and
+  marked while any is on. Filters and Layers close at a click elsewhere, and the tour teaches Layers.
 
 ## Still to do in the overhaul
 
@@ -49,7 +52,5 @@ screenshot of each main view, plus a count of the buttons on screen):
   table.
 - **The settings (gear)**: they are many switches on one long page. Group them under headings that match the views, and
   give them a search like Find a tool.
-- **The world map's toolbar**: the look, Filters, Relations, Road network, Edit map and two help buttons are on one
-  row. Fold the rarely used ones under "More".
 - **After each change**: smoke-all.js (all 58 tabs, no errors) on the realm and Kestrel examples, uiaudit.js at both
   sizes, and the tour updated.

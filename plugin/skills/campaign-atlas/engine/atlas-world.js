@@ -829,17 +829,19 @@
         <span class="wm-title">${esc(WD.title || "The world")}</span>
         <select class="wm-look keeper" aria-label="How the map is drawn" title="How the map is drawn: the players see it the same way" hidden></select>
         <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
+        <details class="wm-filt wm-layers"><summary title="What the map shows over the land: plates, rocks, relations, trade, currents, coasts, the road network">Layers</summary><div class="wm-fbody wm-lbody">
         <button type="button" class="wm-btn wm-pltog" data-w="plates" aria-pressed="false" hidden title="Show the tectonic plates: their borders, what happens at each, which way each plate moves">Plates</button>
-        <label class="wm-drift" hidden title="Run the plates back: where the land lay so many million years ago, today's motions run backward (a sketch)">Ago <input type="range" min="0" max="100" step="5" value="0" aria-label="Million years ago"> <span class="wm-drift-v">today</span></label>
         <button type="button" class="wm-btn wm-rktog" data-w="rocks" aria-pressed="false" hidden title="Show the rocks of each region, and the ores, gems, coal, oil, salt, hot springs and caves in them, with why each is there">Rocks and resources</button>
         <button type="button" class="wm-btn wm-dptog keeper" data-w="diplo" aria-pressed="false" hidden title="Show how the powers stand: a line between their seats, coloured from war to alliance, with their treaties (keeper only)">Relations</button>
         <button type="button" class="wm-btn wm-trtog" data-w="trade" aria-pressed="false" hidden title="Show the trade routes: their goods, how much moves along them and whether war or an embargo stands in the way">Trade</button>
-        <span class="wm-sp"></span>
-        <span class="wm-editbar keeper"></span>
-        ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
         <button type="button" class="wm-btn" data-w="currents" aria-pressed="false" hidden title="The ocean's currents: warm and cold, the gyres, the equator and the lines of latitude">Ocean currents</button>
         <button type="button" class="wm-btn" data-w="coasts" aria-pressed="false" hidden title="What kind each coast is and why it formed there: fjords, rias, deltas, barrier islands, cliffs, reefs">Coasts</button>
         <button type="button" class="wm-btn" data-w="roadnet" aria-pressed="false" hidden title="The roads, sea lanes, river routes, towns, villages and borders grown over the ages from the land and its trade (on trial: atlas.js roads)">Road network (trial)</button>
+        </div></details>
+        <label class="wm-drift" hidden title="Run the plates back: where the land lay so many million years ago, today's motions run backward (a sketch)">Ago <input type="range" min="0" max="100" step="5" value="0" aria-label="Million years ago"> <span class="wm-drift-v">today</span></label>
+        <span class="wm-sp"></span>
+        <span class="wm-editbar keeper"></span>
+        ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
         <span class="wm-dev" hidden><label><span class="kn">Development</span> <input type="range" min="1" max="5" step="1" value="3" aria-label="How developed the land's roads are: 1 tribal, 2 early, 3 medieval, 4 industrialising, 5 modern"></label> <span class="wm-devn"></span> <button type="button" class="wm-btn" data-w="devreset" hidden title="Back to the network as it was made">Default</button></span>
         ${A.ux ? `<span class="keeper wm-uxs">${A.ux.saveMark()}${A.ux.keysBtn("world")}</span>` : ""}<button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false" title="Edit the map (E)">Edit map</button>
       </div>

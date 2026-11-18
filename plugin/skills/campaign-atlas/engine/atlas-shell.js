@@ -83,6 +83,8 @@
 
   /* ---- the frame */
   const kicker = [cfg.system, cfg.setting, gm + "'s gazetteer"].filter(Boolean).join(" · ");
+  // (the world map's Filters and Layers fold away at a click elsewhere)
+  document.addEventListener("click", e => { if (!e.target.closest) return; for (const d of document.querySelectorAll(".wm-filt[open]")) if (!d.contains(e.target)) d.open = false; });
   document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("#audio-btn"), pop = document.getElementById("audio-pop"); if (!pop) return;
     if (b) { const open = !pop.classList.contains("open"); pop.classList.toggle("open", open); b.setAttribute("aria-expanded", open); return; }
     if (!e.target.closest("#audio-pop") && !e.target.closest(".mus-panel, .snd-panel, dialog")) { pop.classList.remove("open"); const bb = document.getElementById("audio-btn"); if (bb) bb.setAttribute("aria-expanded", "false"); } });

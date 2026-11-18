@@ -3278,3 +3278,7 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .tracker.trk-empty #trk:not([open]) .trh { font-size: 15px; }
 .tracker.trk-empty #trk:not([open]) { background: transparent; border-style: dashed; }
 .tracker.trk-empty { margin-bottom: 14px; }
+/* (the UI overhaul, 18 Nov 2026: the world map's layer switches together under Layers; hidden when the map has none) */
+.wm-lbody { display: flex; flex-wrap: wrap; gap: 6px; width: max-content; max-width: min(460px, 86vw); }
+.wm-layers:not(:has(.wm-lbody > .wm-btn:not([hidden]))) { display: none; }
+.wm-layers:has(.wm-lbody [aria-pressed="true"]) > summary { border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
