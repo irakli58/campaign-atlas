@@ -54,5 +54,8 @@ screenshot of each main view, plus a count of the buttons on screen):
 
 ## Still to do in the overhaul
 
+- Nothing from this review is left. Further passes follow the stress test (Curse of Strahd), which will show the
+  page under a full campaign.
+
 - **After each change**: smoke-all.js (all 58 tabs, no errors) on the realm and Kestrel examples, uiaudit.js at both
   sizes, and the tour updated.
