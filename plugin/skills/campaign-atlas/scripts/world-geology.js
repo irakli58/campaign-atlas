@@ -171,6 +171,12 @@ function geology(o, U) {
     near[n] = n; dist[n] = 0; q.push(n);
   }
   for (let h = 0; h < q.length; h++) { const n = q[h], i = ci(n), j = cj(n); for (const [di, dj] of NB8) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= cc || b >= cr) continue; const m = b * cc + a, d = dist[n] + Math.hypot(di, dj); if (d < dist[m] && d * ckm < (zs > 1 ? 900 : 450)) { dist[m] = d; near[m] = near[n]; q.push(m); } } }
+  // (tectonics 2, the realistic continents plan's phase 2: the ocean floor's age, million years, from the nearest
+  // spreading ridge at its plate's speed; on a plate with no ridge of its own, old floor, up to 180, as the Earth's oldest)
+  let floorAge = null;
+  if (TV2) { let vmx = 1e-9; for (const p of plates) vmx = Math.max(vmx, Math.hypot(p.vx, p.vy));
+    const dR = U.distance(cc, cr, n => !!(bInfo[n] && bInfo[n].conv < -.1 && !bInfo[n].ca && !bInfo[n].cb));
+    floorAge = new Float32Array(CN); for (let n = 0; n < CN; n++) { const p = plates[plate[n]] || { vx: 0, vy: 0 }, kmMyr = (1 + 9 * Math.hypot(p.vx, p.vy) / vmx) * 10; floorAge[n] = Math.min(180, dR[n] * ckm / Math.max(10, kmMyr)); } }
   const up = new Float32Array(CN), ridge = new Float32Array(CN), trench = new Float32Array(CN), volc = [], arcC = [], hotT = [];
   const bump = (d, c, w) => gauss((d - c) / w);
   // (on a whole planet the belts are as broad as the Earth's great ones, the Andes and the Himalaya with their high
@@ -327,7 +333,7 @@ function geology(o, U) {
   // rock, the ice age's glaciers, the lowstand's rivers and the sea's return, the deltas, the waves. Each cell told of the
   // plates' meeting nearest it: 1 two continents, 2 an ocean diving under this continent, 3 the ocean's side of that,
   // 4 two oceans (an arc), 5 plates parting, 6 sliding past; and how far it lies from that border)
-  let SH = null, SHin = null;
+  let SH = null, SHin = null, SHin_age = null;
   if (o.shores) {
     const marginF = new Uint8Array(N), bdistF = new Float32Array(N).fill(1e9), warpF = new Float32Array(N), crustK = new Uint8Array(N), wC = new Float32Array(CN);
     for (let m = 0; m < CN; m++) wC[m] = U.fbm(nC, X(m) * 1.6 * zs, Y(m) * 1.6 * zs, 3);
@@ -339,7 +345,8 @@ function geology(o, U) {
       marginF[n] = b.conv > .1 ? (cHere && cOver ? 1 : cHere ? 2 : cOver ? 3 : 4) : b.conv < -.1 ? 5 : 6;
     }
     const fineOf = m => Math.min(rows - 1, Math.floor((cj(m) + .5) * f)) * cols + Math.min(cols - 1, Math.floor((ci(m) + .5) * f));
-    SHin = { cols, rows, cellKm, seed, lat: o.lat || LAT[o.climate] || LAT.temperate, wrap: !!(o.lat && o.lat[0] >= 89), spin: o.spin, margin: marginF, bdist: bdistF, warp: warpF, crust: crustK, up: Uf, rain: Rf, ridge: ridgeF, trench: trenchF, volcanoes: volc.map(fineOf), hotspots: hotT.map(([m, k]) => ({ n: fineOf(m), k })) };
+    if (floorAge) { SHin_age = new Float32Array(N); for (let n = 0; n < N; n++) { const x = n % cols + .5, y = ((n / cols) | 0) + .5; SHin_age[n] = samp(floorAge, x, y); } }
+    SHin = { floorAge: SHin_age, cols, rows, cellKm, seed, lat: o.lat || LAT[o.climate] || LAT.temperate, wrap: !!(o.lat && o.lat[0] >= 89), spin: o.spin, margin: marginF, bdist: bdistF, warp: warpF, crust: crustK, up: Uf, rain: Rf, ridge: ridgeF, trench: trenchF, volcanoes: volc.map(fineOf), hotspots: hotT.map(([m, k]) => ({ n: fineOf(m), k })) };
     SH = require("./world-shore.js").shape(Object.assign({ H: Hf, sea: seaLvl, keepLand: !!SK }, SHin), U);
   }
   const E = new Float32Array(N), isLand = new Uint8Array(N);

@@ -298,12 +298,16 @@ function seafloor(E, o, SH, U) {
     const d = D[n], x = I(n) / rows, y = J(n) / rows, W = Math.max(4, Wf[n]), sw = SWf[n];
     // the shelf; beyond it the slope and the deep floor, the slope beginning at the continent's own edge where a shelf
     // sea lies over it; and that shelf sea itself (the North Sea's kind), as much as the continent lies under the sea there
-    const e = Math.max(0, Math.min(d - W, ISL[n] > .5 || o.crust[n] === 1 ? 1e9 : dCr[n])), zOut = e < sw ? -130 - e / sw * 3200 : -3330 - Math.min(1500, (e - sw) * 1.4);
+    const e = Math.max(0, Math.min(d - W, ISL[n] > .5 || o.crust[n] === 1 ? 1e9 : dCr[n]));
+    // (tectonics 2: past the slope's foot the floor lies as deep as its age makes it: young floor by a ridge some 2.6 km
+    // down, deepening as it cools, to about 5.8 km on the oldest [Parsons and Sclater 1977; Stein and Stein 1992])
+    const zAge = o.floorAge ? -Math.min(5800, 2600 + 330 * Math.sqrt(Math.max(0, o.floorAge[n]))) : null;
+    const zOut = e < sw ? -130 - e / sw * 3200 : zAge != null ? -3330 + (zAge + 3330) * smooth(0, 160, e - sw) : -3330 - Math.min(1500, (e - sw) * 1.4);
     const sea = SF[n] * (1 - smooth(600, 900, d)), zSea = -(70 + 90 * nB(x * 5 + 7, y * 5)) - 40 * smooth(400, 900, d);
     let z = d <= W ? -(12 + 118 * Math.pow(d / W, 1.15)) : zOut * (1 - sea) + zSea * sea;
     // (a mid-ocean ridge is a broad swell whose crest lies some 2.5 km down, not a wall reaching for the surface: the user,
     // 18 Nov 2026, "white streaks in the ocean"; so its rise is capped below the shelf's depths)
-    z += Math.min(1, o.ridge[n] || 0) * 1100 * Math.min(1, d / 300) - (o.trench[n] || 0) * 2600; if ((o.ridge[n] || 0) > .05) z = Math.min(z, -2300);
+    z += (o.floorAge ? 0 : Math.min(1, o.ridge[n] || 0) * 1100 * Math.min(1, d / 300)) - (o.trench[n] || 0) * 2600; if ((o.ridge[n] || 0) > .05) z = Math.min(z, -2300);
     // (the deep floor's unevenness, growing with the depth rather than starting at one)
     z += (nC(x * 12, y * 12) - .5) * 300 * smooth(-400, -1500, z);
     // banks on a broad shelf: low swells of sand and gravel, the shallower for being on the shelf
