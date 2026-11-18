@@ -43,6 +43,9 @@ screenshot of each main view, plus a count of the buttons on screen):
 - **The world map's toolbar**: its seven layer switches (Plates, Rocks and resources, Relations, Trade, Ocean currents,
   Coasts, Road network) are now together under Layers, beside Filters. Layers is hidden when the world has none and
   marked while any is on. Filters and Layers close at a click elsewhere, and the tour teaches Layers.
+- **The settings (the gear, What this campaign uses)**: a Find a part box filters the 23 parts by name and by what they
+  do. Groups with no match are hidden, and the words stay through each change. The tour teaches it. The groups were
+  already there.
 
 ## Still to do in the overhaul
 
@@ -50,7 +53,5 @@ screenshot of each main view, plus a count of the buttons on screen):
   button while a map is being dragged or zoomed, or move it in over the maps.
 - **A place's page**: review the order of its sections (what the GM needs during play first), the same way as At the
   table.
-- **The settings (gear)**: they are many switches on one long page. Group them under headings that match the views, and
-  give them a search like Find a tool.
 - **After each change**: smoke-all.js (all 58 tabs, no errors) on the realm and Kestrel examples, uiaudit.js at both
   sizes, and the tour updated.

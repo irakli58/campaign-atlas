@@ -147,8 +147,10 @@
     let h = `<div class="mf"><p class="mf-lead">Choose what this campaign uses. Switching something off hides it and stops its work; nothing is deleted, and switching it back on picks up where it was. Safety (lines and veils, the X-card) is always on.</p>`;
     h += `<div class="mf-pres"><span class="mf-pl">Presets</span>${preBtn("asbefore", "As before")}${Object.entries(PRESETS).map(([id, [l]]) => preBtn(id, l)).join("")}${Object.entries(mine).map(([id, p]) => `<span class="mf-mine">${preBtn(id, p.name)}<button type="button" class="mf-x" data-mf-drop="${esc(id)}" aria-label="Forget the preset ${esc(p.name)}" title="Forget this preset">×</button></span>`).join("")}${SAVING ? `<span class="mf-name"><input type="text" data-mf-name maxlength="60" placeholder="A name for these choices" aria-label="A name for these choices"><button type="button" class="mf-pb" data-mf-savego>Save</button></span>` : `<button type="button" class="mf-pb mf-save" data-mf-save>Save these as my own…</button>`}</div>`;
     h += `<p class="mf-now">Now: <b>${esc(su.name)}</b> · ${su.n} of ${su.of} in use</p>`;
+    // (the UI overhaul of 18 Nov 2026: a box to find a part by its name or what it does)
+    h += `<input type="search" class="mf-q" data-mf-q placeholder="Find a part (music, weather, factions…)" aria-label="Find a part of Atlas by its name or what it does" value="${esc(Q)}" autocomplete="off"><p class="mf-none kn" hidden>Nothing by that name. Try other words.</p>`;
     for (const [g, gl] of GROUPS) {
-      h += `<h4 class="mf-g">${esc(gl)}</h4><div class="mf-list">`;
+      h += `<h4 class="mf-g" data-mf-g="${esc(g)}">${esc(gl)}</h4><div class="mf-list" data-mf-g="${esc(g)}">`;
       for (const m of MODULES.filter(x => x.group === g)) {
         const lv = cur[m.id], warn = NEEDS.filter(([id, from, need, least]) => id === m.id && rank(id, lv) >= rank(id, from) && rank(need, cur[need]) < rank(need, least)).map(x => x[4]);
         const gone = miss.includes(m.id) && on(m.id);
@@ -160,17 +162,28 @@
     return h + `</div>`;
   }
   // the dialog behind the gear (SAVING: the name of a new preset being asked for)
-  let DLG = null, SAVING = false;
+  let DLG = null, SAVING = false, Q = "";
+  // the panel narrowed to the words typed: each part's name and what it says it does; the groups with none hidden
+  function filter(root) {
+    const ws = Q.toLowerCase().split(/\s+/).filter(Boolean); let any = 0;
+    root.querySelectorAll(".mf-row").forEach(r => { const ok = ws.every(w => r.textContent.toLowerCase().includes(w)); r.hidden = !ok; if (ok) any++; });
+    root.querySelectorAll(".mf-list[data-mf-g]").forEach(l => { const n = [...l.querySelectorAll(".mf-row")].some(r => !r.hidden); l.hidden = !n; const h = root.querySelector(`h4.mf-g[data-mf-g="${l.dataset.mfG}"]`); if (h) h.hidden = !n; });
+    const no = root.querySelector(".mf-none"); if (no) no.hidden = !ws.length || !!any;
+  }
+  const refilter = () => { const f = document.activeElement && document.activeElement.matches && document.activeElement.matches("[data-mf-q]"); for (const r of document.querySelectorAll(".mf-dlg, .mf-inline")) filter(r);
+    if (f) { const q = document.querySelector(".mf-dlg[open] [data-mf-q]") || document.querySelector(".mf-inline [data-mf-q]"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } } };
   function open() {
     if (typeof document === "undefined") return;
     if (!DLG) { DLG = document.createElement("dialog"); DLG.className = "kedlg mf-dlg"; DLG.setAttribute("aria-label", "What this campaign uses"); document.body.appendChild(DLG); }
     DLG.innerHTML = `<div class="ke"><h3>What this campaign uses</h3>${panelHTML()}<div class="ka"><button type="button" class="prim" data-mf-close>Done</button></div></div>`;
     if (!DLG.open) { try { DLG.showModal(); } catch (e) { DLG.setAttribute("open", ""); } }
+    if (Q) filter(DLG);
   }
   function paintOpen() {
     if (typeof document === "undefined") return;
     if (DLG && DLG.open) { const y = DLG.querySelector(".ke") ? DLG.scrollTop : 0; DLG.querySelector(".ke").innerHTML = `<h3>What this campaign uses</h3>${panelHTML()}<div class="ka"><button type="button" class="prim" data-mf-close>Done</button></div>`; DLG.scrollTop = y; }
     for (const el of document.querySelectorAll(".mf-inline")) el.innerHTML = panelHTML();
+    if (Q) refilter();
   }
   if (typeof document !== "undefined") {
     document.addEventListener("click", e => {
@@ -185,6 +198,7 @@
       if (b.dataset.mfDrop) { dropMine(b.dataset.mfDrop); return; }
       if (b.dataset.mfSave != null) { SAVING = true; paintOpen(); const i = document.querySelector(".mf-dlg[open] [data-mf-name], .mf-inline [data-mf-name]"); if (i) i.focus(); }
     });
+    document.addEventListener("input", e => { if (e.target && e.target.matches && e.target.matches("[data-mf-q]")) { Q = e.target.value; const r = e.target.closest(".mf-dlg, .mf-inline"); if (r) filter(r); } });
     document.addEventListener("keydown", e => { if (e.key === "Enter" && e.target && e.target.matches && e.target.matches("[data-mf-name]")) { e.preventDefault(); const n = e.target.value.trim(); SAVING = false; if (n) saveMine(n); else paintOpen(); } });
     const first = () => apply();
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", first); else setTimeout(first, 0);
