@@ -91,6 +91,37 @@ function geology(o, U) {
     boxBlur(F, cc, cr, 3, 3); for (let n = 0; n < CN; n++) crust[n] = F[n] > .5 ? 1 : 0;
   }
 
+  /* 1b. a past age (the user, 18 Nov 2026: "play the game in the past", docs/requests/2026-11-18-world-ages.md): every
+        plate's crust carried back along its heading at its speed (1 to 10 cm a year, as world-tectonics.js tells them:
+        10 to 100 km in a million years), the continents of that time where the plates then were. What follows, the
+        same as for today's world, then works on that layout: the belts rise where the plates met then, the rivers cut
+        that land, the climate falls by the latitudes it lay at. Where two plates' crust came to lie on one cell (crust
+        since swallowed under the other), the continent's wins; where none did (ocean floor made since, at the ridges),
+        open ocean, of the nearest plate. A whole planet wraps east to west */
+  const ageMyr = Math.max(0, +o.ageMyr || 0);
+  if (ageMyr > 0 && !SK) {
+    let vmax = 1e-9; for (const p of plates) vmax = Math.max(vmax, Math.hypot(p.vx, p.vy));
+    const wrap = zs > 1 || land === "masses", P2 = new Int16Array(CN).fill(-1), C2 = new Uint8Array(CN);
+    const shift = plates.map(p => { const v = Math.hypot(p.vx, p.vy) || 1, km = (1 + 9 * v / vmax) * 10 * ageMyr; return [-p.vx / v * km / ckm, -p.vy / v * km / ckm]; });
+    for (let n = 0; n < CN; n++) {
+      const k = plate[n]; if (k < 0) continue; const [dx, dy] = shift[k]; let a = Math.round(ci(n) + dx); const b = Math.round(cj(n) + dy);
+      if (b < 0 || b >= cr) continue; if (wrap) a = ((a % cc) + cc) % cc; else if (a < 0 || a >= cc) continue;
+      const m = b * cc + a; if (P2[m] < 0 || (crust[n] && !C2[m])) { P2[m] = k; C2[m] = crust[n]; }
+    }
+    // (the gaps: the ocean floor made since, given to the nearest plate)
+    // (grown out over the same winding cost the plates themselves grow over, so the new borders, and the ridges along
+    // them, curve as the old ones do instead of running ruler-straight between the plates)
+    { const dd = new Float32Array(CN).fill(1e9), hp = new U.Heap(), cost = m => .15 + 6 * Math.pow(U.fbm(nA, X(m) * 2.2 * zs + 31, Y(m) * 2.2 * zs + 7, 4), 3);
+      for (let n = 0; n < CN; n++) if (P2[n] >= 0) { dd[n] = 0; hp.push(n, 0); }
+      const done = new Uint8Array(CN);
+      while (hp.size) { const n = hp.pop(); if (done[n]) continue; done[n] = 1; const i = ci(n), j = cj(n);
+        for (const [di, dj] of NB8) { let a = i + di; const b = j + dj; if (b < 0 || b >= cr) continue; if (wrap) a = ((a % cc) + cc) % cc; else if (a < 0 || a >= cc) continue; const m = b * cc + a; if (done[m]) continue;
+          const d = dd[n] + cost(m) * Math.hypot(di, dj); if (d < dd[m]) { dd[m] = d; if (!(P2[m] >= 0) || dd[m] > 0) P2[m] = P2[n]; hp.push(m, d); } } } }
+    // (the coast eased, as a continent's is when it is grown: the carried crust's edges are the grid's)
+    const F = new Float32Array(CN); for (let n = 0; n < CN; n++) F[n] = C2[n] ? 1 : 0; boxBlur(F, cc, cr, 2, 2);
+    for (let n = 0; n < CN; n++) { plate[n] = P2[n] < 0 ? 0 : P2[n]; crust[n] = F[n] > .5 ? 1 : 0; }
+  }
+
   /* 2. where the land rises: the plates' borders, each cell's nearest one, and what kind it is */
   const near = new Int32Array(CN).fill(-1), dist = new Float32Array(CN).fill(1e9), q = [], bInfo = [];
   for (let n = 0; n < CN; n++) {
