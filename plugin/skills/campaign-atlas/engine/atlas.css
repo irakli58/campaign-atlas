@@ -3363,3 +3363,58 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .wm-jmb { position: absolute; bottom: calc(100% + 6px); right: 0; display: grid; gap: 4px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
 .wm-jmb button { white-space: nowrap; text-align: left; }
 @media (max-width: 700px) { .wm-journey { flex-wrap: wrap; white-space: normal; max-width: calc(100% - 20px); } }
+
+/* ==== The design system (18 Nov 2026; the user: "i want consistency and also ease of use") ====
+   Four kinds of control, the same in every view:
+   1. NAVIGATION and switches (where you are, what is shown): a mono, upper-case pill: the views, DM / players, Help,
+      the map's Filters and Layers and its layers, a list's chips.
+   2. ACTIONS (do something): the body's serif, plain case, a rounded rectangle. Each area has at most one MAIN action,
+      filled dark (.prim); the others are plain, with a border.
+   3. LINKS (go somewhere, or a small extra): the accent colour, underlined.
+   4. ICON buttons (the gear, music, ?, a map's zoom): a 32 px square or circle.
+   Every one shows the same ring when reached by the keyboard. */
+:root { --ctl-h: 32px; --r-act: 6px; --t-act: 14.5px; --t-nav: 11.5px; }
+
+/* 1. navigation and switches */
+.views button, .mode button, .wm-btn, .wm-filt > summary, .tu-helpbtn, .chip, .tvn-g {
+  font-family: var(--f-mono); font-size: var(--t-nav); letter-spacing: .05em; text-transform: uppercase; }
+.views button, .wm-btn, .wm-filt > summary, .tu-helpbtn, .chip { min-height: 30px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--rule); background: transparent; color: var(--ink); }
+.mode { border-radius: 999px; }
+.mode button { min-height: 30px; }
+.views button:hover, .wm-btn:hover, .wm-filt > summary:hover, .tu-helpbtn:hover, .chip:hover { border-color: var(--ink); }
+.views button[aria-pressed="true"], .wm-btn[aria-pressed="true"], .wm-filt[open] > summary, .chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* 2. actions */
+.t-btn, .t-mini, .mx-b, .enc-add, .enc-know, .addclue, .d-editsw, .sc-edit, .wm-jmore > summary, .wm-journey button, .wm-jmb button,
+.dossier button.prim, .leads button, .ka button, .mf-pb, .stseg button, .t-intro .t-btn, .wm-panel button:not(.wm-x):not(.t-link), .wm-dlg button:not(.wm-x):not(.t-link) {
+  font-family: var(--f-body); font-size: var(--t-act); letter-spacing: 0; text-transform: none; line-height: 1.2;
+  min-height: var(--ctl-h); padding: 5px 12px; border-radius: var(--r-act); border: 1px solid var(--rule); background: var(--panel); color: var(--ink); cursor: pointer; }
+.t-btn:hover, .t-mini:hover, .mx-b:hover, .enc-add:hover, .enc-know:hover, .addclue:hover, .d-editsw:hover, .sc-edit:hover, .wm-jmore > summary:hover,
+.wm-journey button:hover, .wm-jmb button:hover, .leads button:hover, .ka button:hover, .mf-pb:hover, .stseg button:hover,
+.wm-panel button:not(.wm-x):not(.t-link):hover, .wm-dlg button:not(.wm-x):not(.t-link):hover { border-color: var(--ink); }
+/* the main action: one an area, filled */
+.prim, .t-btn.prim, button.prim, .mx-b.prim, .wm-journey button.prim { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.prim:hover, .t-btn.prim:hover, button.prim:hover { opacity: .9; }
+/* a chosen one of a set (a status, a preset, a switch that is on) */
+.t-btn[aria-pressed="true"], .stseg button[aria-pressed="true"], .mf-pb[aria-pressed="true"], .d-editsw[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* 3. links */
+.t-link, .enc-trk, .fold-all, [data-ckoff], [data-ckon] { font-family: var(--f-body); font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* 4. icon buttons */
+.featbtn, .audiobtn, .ux-keysb, .tu-qb { width: var(--ctl-h); height: var(--ctl-h); min-width: var(--ctl-h); padding: 0; display: inline-grid; place-items: center; border-radius: 50%; border: 1px solid var(--rule); background: transparent; color: var(--ink); font-family: var(--f-mono); font-size: 13px; margin: 0; }
+.featbtn:hover, .audiobtn:hover, .ux-keysb:hover, .tu-qb:hover { border-color: var(--ink); }
+.audiobtn[aria-expanded="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.wm-ctl button, .mctl button { border-radius: var(--r-act); }
+@media (max-width: 1239px) { .mast .audiobtn { width: auto; padding: 0 12px; border-radius: 999px; } }
+
+/* the one keyboard ring */
+:where(button, summary, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* steady spacing between controls side by side */
+.t-row, .ka, .wm-jb, .wm-jmb, .enc-new { gap: 8px; }
+/* (the stragglers: rules of their own that out-weighed the system) */
+#app .mast .mode button, #app .mast .tu-helpbtn { font-size: var(--t-nav); letter-spacing: .05em; }
+#app .songcard .sc-edit { font-family: var(--f-body); font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+#app .mx-b { font-family: var(--f-body); font-size: var(--t-act); letter-spacing: 0; text-transform: none; border-radius: var(--r-act); min-height: var(--ctl-h); }
+#app .tu-qb { width: 28px; height: 28px; min-width: 28px; border-radius: 50%; }

@@ -67,7 +67,7 @@
 .tu-l .tu-ok{width:20px;text-align:center;color:#6fbf73}
 .tu-l > div{flex:1}
 .tu-feats{columns:2 220px;font-size:14px;margin-top:6px}.tu-feats a{color:inherit;cursor:pointer;text-decoration:underline dotted;display:inline-block;margin:1px 0}
-.tu-helpbtn{font:600 11px/1 var(--f-mono,monospace)!important;letter-spacing:.06em;text-transform:uppercase}
+.tu-helpbtn{font:500 11.5px/1 var(--f-mono,monospace)!important;letter-spacing:.06em;text-transform:uppercase}
 .tu-qb{display:inline-grid;place-items:center;width:20px;height:20px;margin-left:6px;border-radius:50%;border:1px solid currentColor;background:transparent;color:#e2b54a;font:700 11px/1 var(--f-mono,monospace);cursor:pointer;vertical-align:middle;opacity:.75}
 .tu-qb:hover{opacity:1}
 .tu-toast{position:fixed;left:16px;bottom:16px;z-index:2147482999;max-width:360px;background:var(--panel,#1b1a17);color:var(--ink,#ece5d6);border:1px solid #e2b54a;border-radius:12px;padding:12px 14px;box-shadow:0 12px 36px rgba(0,0,0,.4);font:14.5px/1.45 var(--f-body,Georgia,serif);animation:tuin .5s ease-out}
