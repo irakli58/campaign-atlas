@@ -3345,3 +3345,11 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .th-how > summary h3 { display: inline; }
 .th-how > summary::after { content: " ▾"; color: var(--muted); }
 .th-how[open] > summary::after { content: " ▴"; }
+/* a place's page is for running the game; ✎ Edit shows the tools that change it (empty notes too) */
+.dossier:not(.dedit) .ed-only { display: none !important; }
+.dossier:not(.dedit) .ed-notes .nt:has(textarea:placeholder-shown) { display: none; }
+.dossier:not(.dedit) .ed-notes:not(:has(textarea:not(:placeholder-shown))) { display: none; }
+.d-editsw { margin-left: auto; border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 11px; letter-spacing: .06em; color: var(--muted); cursor: pointer; }
+.d-editsw[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.dossier .eyebrow { display: flex; align-items: center; flex-wrap: wrap; }
+.dossier.dedit .sec:has(> .sec-none) { display: block; }

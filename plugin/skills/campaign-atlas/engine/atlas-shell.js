@@ -85,6 +85,8 @@
   const kicker = [cfg.system, cfg.setting, gm + "'s gazetteer"].filter(Boolean).join(" · ");
   // (the empty tracker is not shown: the Gazetteer's side has a button that brings it out, open)
   document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-trk-show]"); if (!b) return; const t = document.getElementById("tracker"), d = document.getElementById("trk"); if (!t) return; t.classList.add("trk-want"); if (d) d.open = true; t.scrollIntoView({ block: "nearest", behavior: "smooth" }); });
+  // (a place's page: for running the game; Edit shows the tools that change it; remembered)
+  document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-dedit]"); if (!b) return; DEDIT = !DEDIT; try { localStorage.setItem("atlas-dossier-edit", DEDIT ? "1" : "0"); } catch (er) {} const d = document.getElementById("dossier"); if (d) d.classList.toggle("dedit", DEDIT); b.setAttribute("aria-pressed", String(DEDIT)); b.textContent = DEDIT ? "✎ Editing" : "✎ Edit"; });
   // (the world map's Filters and Layers fold away at a click elsewhere)
   document.addEventListener("click", e => { if (!e.target.closest) return; for (const d of document.querySelectorAll(".wm-filt[open]")) if (!d.contains(e.target)) d.open = false; });
   document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("#audio-btn"), pop = document.getElementById("audio-pop"); if (!pop) return;
@@ -274,6 +276,7 @@
 
   /* ---- the dossier */
   // "Open all" / "Close all" for a list of folding entries (clues, people, rooms, scenes, connections)
+  let DEDIT = (() => { try { return localStorage.getItem("atlas-dossier-edit") === "1"; } catch (e) { return false; } })();
   const FOLDALL = `<button type="button" class="fold-all" data-foldall="1">Open all</button>`;
   // referee only: why each connected place is connected, and through whom
   function connWhy(p) {
@@ -313,7 +316,7 @@
     // the head of the dossier, with the place's suggested song at its top right (the user asked for it there)
     $("#dossier").innerHTML = `
       <div class="dhead"><div class="dtop"><div class="dtitle">
-      ${trail}<div class="eyebrow"><span>No. ${pad(p.n)}</span><span>${esc(CATS[p.cat] || "")}</span><span>${esc(p.dist)}</span></div>
+      ${trail}<div class="eyebrow"><span>No. ${pad(p.n)}</span><span>${esc(CATS[p.cat] || "")}</span><span>${esc(p.dist)}</span>${state.mode === "gm" ? `<button type="button" class="d-editsw keeper" data-dedit aria-pressed="${DEDIT}" title="Show the tools that change this place: add clues and ways in, notes on forcing it and what closes it (off: the page for running the game)">${DEDIT ? "✎ Editing" : "✎ Edit"}</button>` : ""}</div>
       <h2>${esc(p.name)}</h2>
       ${p.sub ? `<p class="subt keeper">${esc(p.sub)}</p>` : ""}
       <div class="meta">${acts}${bone}</div>
@@ -337,7 +340,7 @@
         <button type="button" data-go="${esc(prev.id)}">← ${pad(prev.n)} ${esc(prev.name)}</button>
         <button type="button" data-go="${esc(next.id)}">${pad(next.n)} ${esc(next.name)} →</button>
       </nav>`;
-    const d = $("#dossier");
+    const d = $("#dossier"); d.classList.toggle("dedit", DEDIT);
     if (flash) { d.classList.remove("flash"); void d.offsetWidth; d.classList.add("flash"); }
   }
   function renderAll(flash) {
@@ -554,8 +557,8 @@
       return `<li class="cl${done ? " done" : ""}"><input type="checkbox" data-found="${esc(k.id)}" aria-label="Found: ${esc(k.title)}"${done ? " checked" : ""}${ro}><details class="clf"><summary>${esc(k.title)}</summary>${k.from ? `<p class="clx kn">From ${esc(k.from)}</p>` : ""}${leads}</details></li>`;
     }).join("");
     const n = rows.filter(r => clueDone(p.id, r.k)).length + keysFoundAt(p.id).filter(isFound).length, tot = rows.length + keysFoundAt(p.id).length;
-    return `<section class="sec sec-clues"><h3>Clues to find <span class="cl-n">${n} of ${tot} found</span>${tot ? FOLDALL : ""}</h3><ul class="cls">${main}${extra}</ul>
-      ${TR.canWrite ? `<button type="button" class="addclue" data-kfound="${esc(p.id)}">+ Add a clue found here</button>` : ""}</section>`;
+    return `<section class="sec sec-clues"><h3>Clues to find <span class="cl-n">${n} of ${tot} found</span>${tot ? FOLDALL : ""}</h3>${tot ? `<ul class="cls">${main}${extra}</ul>` : `<p class="kn sec-none">None here.</p>`}
+      ${TR.canWrite ? `<button type="button" class="addclue ed-only" data-kfound="${esc(p.id)}">+ Add a clue found here</button>` : ""}</section>`;
   }
   function accHead(id) {
     const a = accessInfo(id), st = TR.status[id] || {};
@@ -569,16 +572,16 @@
     const a = accessInfo(id), st = TR.status[id] || {}, ro = TR.canWrite ? "" : " disabled";
     const warn = a.ways.length === 1 && !["resolved", "closed"].includes(a.s) ? `<p class="warn">Only one way in. If the party misses it, they can't find this place. Consider another lead.</p>` : "";
     return `<section class="sec keeper leads"><h3>Access, leads and keys</h3>
-      ${accHead(id)}
-      <label class="freeck"><input type="checkbox" data-free="${esc(id)}"${a.free ? " checked" : ""}${ro}> Open from the start (a public place, or somewhere they already know)</label>
+      <div class="ed-only">${accHead(id)}</div>
+      <label class="freeck ed-only"><input type="checkbox" data-free="${esc(id)}"${a.free ? " checked" : ""}${ro}> Open from the start (a public place, or somewhere they already know)</label>
       <div class="stseg" role="group" aria-label="Status">${STATUSES.map(([v, l]) => `<button type="button" data-st="${v}" data-pl="${esc(id)}" aria-pressed="${a.s === v}"${ro}><span class="sd st-${v}"></span>${l}</button>`).join("")}</div>
       <h4>Ways in (${a.via.length} of ${a.ways.length} found)</h4>
       ${a.ways.length ? `<ul class="wl">${a.ways.map(wayLine).join("")}</ul>` : `<p class="kn">No clue points here.</p>`}${warn}
-      <div class="grid2">
+      <div class="grid2 ed-notes">
         <label class="nt"><span>Forcing it without a lead</span><textarea data-note="force" data-pl="${esc(id)}" rows="3" placeholder="What it costs: a roll, a bribe, someone noticing…"${ro}>${esc(st.force || "")}</textarea></label>
         <label class="nt"><span>What closes it</span><textarea data-note="closes" data-pl="${esc(id)}" rows="3" placeholder="What happens if the party waits or gets caught…"${ro}>${esc(st.closes || "")}</textarea></label>
       </div>
-      ${TR.canWrite ? `<button type="button" class="prim" data-knew="${esc(id)}">+ Add another way in</button>` : ""}
+      ${TR.canWrite ? `<button type="button" class="prim ed-only" data-knew="${esc(id)}">+ Add another way in</button>` : ""}
     </section>`;
   }
   function renderClues() { const p = byId[state.sel], slot = $("#clueSlot"); if (p && slot) slot.innerHTML = clueSection(p); }
