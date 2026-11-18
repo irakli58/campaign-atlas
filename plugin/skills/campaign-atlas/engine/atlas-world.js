@@ -1195,7 +1195,9 @@
       if (P.at && P.plan.length && gm()) {
         const legs = [P.at, ...P.plan], next = WD.byId[P.plan[0]];
         J.hidden = false;
-        J.innerHTML = `<span class="kl">The party's journey</span><span>${legs.map(id => esc(WD.byId[id].name)).join(" → ")}</span>${A.journey ? `<span class="wm-jb">${A.journey.bar(JH)}</span>` : ""}<span class="wm-jb"><button type="button" data-w="arrive">Arrived at ${esc(next.name)}</button><button type="button" data-w="cancel">Call it off</button></span>`;
+        J.innerHTML = `<span class="kl">The party's journey</span><span>${legs.map(id => esc(WD.byId[id].name)).join(" → ")}</span>${A.journey ? `<span class="wm-jb">${A.journey.bar(JH)}</span>` : ""}<details class="wm-jmore"><summary title="Rest a day, arrived, call it off, the road so far">More</summary><div class="wm-jmb"><button type="button" data-w="arrive">Arrived at ${esc(next.name)}</button><button type="button" data-w="cancel">Call it off</button></div></details>`;
+        // (the uncluttered pass, 18 Nov 2026: one line on the map: the way, how far, Travel a day; the rest under More)
+        { const mb = J.querySelector(".wm-jmb"); for (const b of J.querySelectorAll(".wm-jb [data-w='restday'], .wm-jb [data-w='jlog']")) mb.prepend(b); }
       } else J.hidden = true;
       root.classList.toggle("journeying", !J.hidden);
     }

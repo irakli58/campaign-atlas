@@ -59,3 +59,32 @@ screenshot of each main view, plus a count of the buttons on screen):
 
 - **After each change**: smoke-all.js (all 58 tabs, no errors) on the realm and Kestrel examples, uiaudit.js at both
   sizes, and the tour updated.
+
+## The second pass: uncluttered (18 Nov 2026)
+
+The user asked: "is the ui still cluttered or more readable and usable? that was the main goal to fix". The answer was
+that it was more readable in places but still cluttered. Then they said: "work on it being uncluttered" (saved as
+docs/requests/2026-11-18-uncluttered.md). This pass made these changes:
+
+1. **The top is one line on a wide screen.** It holds the campaign's name, the views, a shorter search box, DM /
+   players, Help, the gear and a ♪ button. The campaign line above the name is now in its tooltip.
+   - The "New" banner is one slim line, with its long words moved to the tooltip.
+   - The investigation tracker is hidden while it is empty. "Investigation tracker", beside + A place, brings it out
+     open, and the tour teaches it.
+   - On the Gazetteer at 1440×900, content now starts at about 160 px instead of about 335 px.
+2. **At the table's start page:**
+   - A short head: the title and the two main buttons on one line.
+   - The checklist is one line per step, with its explanations in the tooltips.
+   - The two big cards no longer carry their long explanations.
+   - The second copy of the tools, as cards, is gone from the desk view; the list sits beside it. The phone keeps the
+     cards.
+   - "How a game night goes" is folded.
+   - Buttons on screen: 112 before, 89 after.
+3. **A place's page is for running the game.**
+   - ✎ Edit, beside the place's number, shows the tools that change the place. These are: + Add a clue found here, + Add
+     another way in, "Open from the start", the notes on forcing it and what closes it (empty notes are hidden; written
+     ones always show), and the second copy of the access line. The page remembers the choice.
+   - Empty clues are one quiet line. The tour teaches the switch.
+   - On a starting place: 15 controls without Edit, 20 with it.
+4. **The party's journey on the world map** is one line: the way, how far it is, and Travel a day. Rest a day, Arrived,
+   Call it off and The road so far are under More.

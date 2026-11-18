@@ -3353,3 +3353,13 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .d-editsw[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .dossier .eyebrow { display: flex; align-items: center; flex-wrap: wrap; }
 .dossier.dedit .sec:has(> .sec-none) { display: block; }
+/* the party's journey on the map: one line; Rest, Arrived, Call it off and the road so far under More */
+.wm-journey { flex-wrap: nowrap; align-items: center; white-space: nowrap; max-width: calc(100% - 140px); }
+.wm-journey > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wm-journey .wm-jb { flex-wrap: nowrap; }
+.wm-jmore { position: relative; }
+.wm-jmore > summary { list-style: none; cursor: pointer; border: 1px solid var(--rule); border-radius: 4px; padding: 3px 9px; font-size: 13.5px; }
+.wm-jmore > summary::-webkit-details-marker { display: none; }
+.wm-jmb { position: absolute; bottom: calc(100% + 6px); right: 0; display: grid; gap: 4px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.wm-jmb button { white-space: nowrap; text-align: left; }
+@media (max-width: 700px) { .wm-journey { flex-wrap: wrap; white-space: normal; max-width: calc(100% - 20px); } }
