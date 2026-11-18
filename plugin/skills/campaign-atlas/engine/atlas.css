@@ -3284,3 +3284,11 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .wm-layers:has(.wm-lbody [aria-pressed="true"]) > summary { border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
 .mf-q { width: 100%; box-sizing: border-box; margin: 6px 0 4px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); font: inherit; }
 .mf .mf-row[hidden], .mf .mf-list[hidden], .mf h4.mf-g[hidden] { display: none; }
+/* (the table toolbar folds to one button: Tools) */
+.t-dock .t-dmin { min-width: 30px; padding: 7px 4px 5px; color: var(--muted); }
+.t-dock .t-dmin .ic, .t-dock .t-dmin .t-dmin-l { display: none; }
+.t-dock .t-dmin b { font-size: 16px; line-height: 22px; font-weight: 400; }
+.t-dock.min > button:not(.t-dmin) { display: none; }
+.t-dock.min .t-dmin { min-width: 58px; color: var(--ink); }
+.t-dock.min .t-dmin .ic, .t-dock.min .t-dmin .t-dmin-l { display: block; }
+.t-dock.min .t-dmin b { display: none; }

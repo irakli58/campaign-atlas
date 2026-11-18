@@ -89,7 +89,9 @@
   const pickFor = s => { const m = /\[data-t='tab'\]\[data-tab='([\w-]+)'\]/.exec(s), pk = m && document.querySelector("[data-t='tabpick']"); if (!pk || !visible(pk) || ![...pk.options].some(o => o.value === m[1])) return null; pk.__tab = m[1]; return pk; };
   // (a tool folded under "All the tools", when some are pinned: the fold is opened for it)
   const unfold = s => { const L = [...document.querySelectorAll(s)], x = L.find(e => e.closest("details:not([open])")); if (!x) return null; for (let d = x.closest("details:not([open])"); d; d = d.parentElement && d.parentElement.closest("details:not([open])")) d.open = true; return L.find(visible) || null; };
-  async function find(sel, ms) { const list = [].concat(sel); const t0 = Date.now(); while (Date.now() - t0 < (ms || 3500)) { for (const s of list) { let el = null; try { el = [...document.querySelectorAll(s)].find(visible) || unfold(s) || pickFor(s); } catch (e) { el = null; } if (el) return el; } await sleep(120); } return null; }
+  async function find(sel, ms) { const list = [].concat(sel); const t0 = Date.now();
+    // (the table toolbar folded to Tools: opened for a step that shows one of its tools)
+    if (list.some(s => /#tDock \[/.test(s))) { const d = document.querySelector("#tDock.min"); if (d) { d.classList.remove("min"); const b = d.querySelector(".t-dmin"); if (b) b.setAttribute("aria-pressed", "false"); } } while (Date.now() - t0 < (ms || 3500)) { for (const s of list) { let el = null; try { el = [...document.querySelectorAll(s)].find(visible) || unfold(s) || pickFor(s); } catch (e) { el = null; } if (el) return el; } await sleep(120); } return null; }
   function light(el) {
     const r = el.getBoundingClientRect(), pad = 6;
     Object.assign(spot.style, { left: r.left - pad + "px", top: r.top - pad + "px", width: r.width + pad * 2 + "px", height: r.height + pad * 2 + "px" }); spot.classList.add("on");

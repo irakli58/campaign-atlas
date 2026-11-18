@@ -1167,7 +1167,10 @@
   function dockInit() {
     if ($("#tDock") || !app()) return;
     const dock = document.createElement("div"); dock.id = "tDock"; dock.className = "t-dock keeper"; dock.setAttribute("role", "toolbar"); dock.setAttribute("aria-label", "Table tools");
-    dock.innerHTML = DOCK.map(([k, l, ic]) => `<button type="button" data-dock="${k}" aria-expanded="false" title="${esc(l)}"${shownDock(k) ? "" : " hidden"}>${T.icon(ic)}<span>${esc(l)}</span>${k === "screen" ? `<i class="t-dot" aria-hidden="true"></i>` : ""}</button>`).join("");
+    dock.innerHTML = DOCK.map(([k, l, ic]) => `<button type="button" data-dock="${k}" aria-expanded="false" title="${esc(l)}"${shownDock(k) ? "" : " hidden"}>${T.icon(ic)}<span>${esc(l)}</span>${k === "screen" ? `<i class="t-dot" aria-hidden="true"></i>` : ""}</button>`).join("")
+      // (the UI overhaul of 18 Nov 2026: the bar folds to one button, so it leaves the corner of a map free; remembered)
+      + `<button type="button" class="t-dmin" data-t2="dockmin" aria-pressed="${pref.get("dockmin") === "1"}" title="Fold the toolbar to one button, or open it again" aria-label="Fold or open the table toolbar">${T.icon("dice")}<span class="t-dmin-l">Tools</span><b aria-hidden="true">›</b></button>`;
+    if (pref.get("dockmin") === "1") dock.classList.add("min");
     const pop = document.createElement("div"); pop.id = "tPop"; pop.className = "t-pop keeper"; pop.hidden = true; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Table tool");
     const msg = document.createElement("p"); msg.id = "tDockNote"; msg.className = "t-docknote keeper"; msg.setAttribute("aria-live", "polite");
     app().append(pop, msg, dock);
@@ -1295,6 +1298,7 @@
         const x = t.closest("[data-t2]");
         if (x && x.dataset.t2 === "xok") { pref.set("xseen", x.dataset.at); const el = document.getElementById("tXcard"); if (el) el.hidden = true; return; }
         if (x && x.dataset.t2 === "introok") { dismissIntro(); return; }
+        if (x && x.dataset.t2 === "dockmin") { const d = $("#tDock"), m = !d.classList.contains("min"); d.classList.toggle("min", m); x.setAttribute("aria-pressed", String(m)); pref.set("dockmin", m ? "1" : "0"); if (m) dockClose(); return; }
         const dk = t.closest("[data-dock]"); if (dk) { if (dk.dataset.dock === "close") dockClose(); else dockOpen(dk.dataset.dock); return; }
         // (a click on something its own panel has just drawn again is still inside it)
         if (UI.dock && t.isConnected && !t.closest("#tPop, #tDock, dialog")) dockClose();

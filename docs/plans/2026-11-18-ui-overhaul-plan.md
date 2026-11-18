@@ -46,11 +46,11 @@ screenshot of each main view, plus a count of the buttons on screen):
 - **The settings (the gear, What this campaign uses)**: a Find a part box filters the 23 parts by name and by what they
   do. Groups with no match are hidden, and the words stay through each change. The tour teaches it. The groups were
   already there.
+- **The table toolbar at the bottom right** folds to one button, Tools, with the › at its end. This frees the corner of
+  a map, and the page remembers the choice. The tour opens it again for its own steps and teaches the fold.
 
 ## Still to do in the overhaul
 
-- **The toolbar at the bottom right** (Dice, A person, Stuck?, ...) covers the corner of the maps. Let it fold to one
-  button while a map is being dragged or zoomed, or move it in over the maps.
 - **A place's page**: review the order of its sections (what the GM needs during play first), the same way as At the
   table.
 - **After each change**: smoke-all.js (all 58 tabs, no errors) on the realm and Kestrel examples, uiaudit.js at both

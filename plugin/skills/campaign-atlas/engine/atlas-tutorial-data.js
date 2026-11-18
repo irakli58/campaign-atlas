@@ -316,7 +316,7 @@
         { say: "It is their chronicle too, on their screen and their phones: what they mean to do, written in their own words for you to read; their purse and what they carry; and what the table remembers that they saw, did and said, never your notes for later. Each is a switch here.", sel: "#tvBody .tj-keys", act: "look", optional: true }
       ] },
       { id: "dock", title: "The quick tools", summary: "Dice, a person on the spot, ideas when they're stuck, questions, the copilot: always at the bottom right.", features: ["dock", "dice", "person", "stuck", "ask"], needs: has("#tDock"), steps: [
-        { say: "These quick tools are on every page, at the bottom right.", sel: "#tDock", act: "look" },
+        { say: "These quick tools are on every page, at the bottom right. The › at its end folds the bar to one button, Tools, to free the corner of a map; Tools opens it again.", sel: "#tDock", act: "look" },
         { say: "Dice for any roll.", sel: "#tDock [data-dock='dice']", act: "click", try: "Click Dice.", wait: 500 },
         { say: "A person made up on the spot: a name for the story's age, a look, a want, a secret.", sel: "#tDock [data-dock='person']", act: "click", try: "Click A person.", wait: 500 },
         { say: "When the table goes quiet: ways back into the story, from what is still open.", sel: "#tDock [data-dock='stuck']", act: "click", try: "Click Stuck?", wait: 500 },
