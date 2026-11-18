@@ -25,7 +25,7 @@
   // the kinds of what happens, in the order the filter lists them
   const KIND = {
     event: "In the world", deed: "The party did", conseq: "Because of it", found: "Found", heard: "Heard of", reached: "Reached",
-    settled: "Finished", news: "News", off: "Called off", loot: "Gained or spent", session: "At the table", note: "Written by you"
+    settled: "Finished", news: "News", off: "Called off", loot: "Gained or spent", session: "At the table", note: "Written by you", deep: "The world's deep past"
   };
   // the collections that are the world (a plugin adds its own: A.history.keep)
   const COLLS = ["clock", "events", "eventdefs", "news", "factions", "npcstate", "clocks", "history"];
@@ -58,7 +58,13 @@
   function all() {
     const st = S(); if (!st) return [];
     const own = Object.entries(st.get("history") || {}).filter(([id, h]) => id !== "since" && h && h.title).map(([id, h]) => Object.assign({ who: [], factions: [], places: [], outcome: [] }, h, { id, own: true }));
-    return fromEvents().concat(own).sort((a, b) => ((b.m == null ? -1e12 : b.m) - (a.m == null ? -1e12 : a.m)) || ((b.t || 0) - (a.t || 0)));
+    // (the world's deep past, as its plates made it (world-tectonics.js history, tectonics 2): each range's rising, each
+    // sinking ocean, each rift, the old roots, as the oldest entries; the game master's only)
+    const T = A.worldTerrainData || {}, pn0 = k => (((T.tect || {}).plates || []).find(p => p.id === k) || {}).name || "a plate", pn = k => pn0(k).replace(/^The /, "the "), cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+    const deep = (((T.tect || {}).history) || []).map((h, i) => ({ id: "geo~" + i, kind: "deep", m: null, t: 0, vis: "gm", who: [], factions: [], places: [], outcome: [], whenText: `about ${h.myr} million years ago`,
+      title: h.kind === "collision" ? cap(`${pn(h.a)} and ${pn(h.b)} met, and a mountain range rose`) : h.kind === "subduction" ? `The ocean floor began sinking under ${pn(h.b)}'s margin` : h.kind === "oldbelt" ? `An ocean closed in ${pn(h.a)}, raising mountains since worn to hills` : `A rift began to tear ${pn(h.a)}`, what: h.kind === "subduction" ? `The floor reaching the trench there is up to ${h.myr} million years old.` : "" }));
+    deep.reverse();   // (newest of them first, as the rest of the history runs)
+    return fromEvents().concat(own, deep).sort((a, b) => ((b.m == null ? -1e12 : b.m) - (a.m == null ? -1e12 : a.m)) || ((b.t || 0) - (a.t || 0)));
   }
   const words = h => [h.title, h.what, h.cause, h.whoText, [].concat(h.outcome || []).join(" "), (h.who || []).map(personName).join(" "), (h.factions || []).map(facName).join(" "), (h.places || []).map(placeName).join(" ")].join(" ").toLowerCase();
   function list(f) {
