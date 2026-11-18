@@ -43,6 +43,9 @@
     // The default: the dark-mystery, cosmic-horror film score the user asked for. An orchestra, not a band: slow piano
     // and harp figures over low strings, a solo cello, voices, a celesta, and a deep drum where the dread gathers.
     arkham:        { label: "Dark mystery, orchestral horror", light: "aeolian", dark: "harmonic", root: 45, keys: "grand", wind: "cello", pad: "strings", bell: "grand", ost: "stab", cine: true },
+    // gothic horror in a fantasy world (Barovia and its kind: the user, 18 Nov 2026): a low organ under choir and strings,
+    // the cello's tune, a harp's cold plucking, a tolling bell; the harmonic minor of the dark places
+    gothic:        { label: "Gothic horror: organ, choir and strings", light: "aeolian", dark: "harmonic", root: 43, keys: "harp", wind: "cello", pad: "choir", bell: "bell", ost: "pizz", bass: "lowstr", drone: "organ", horn: "frhorn", cine: true },
     // a lute, a recorder, a portative organ, a hurdy-gurdy droning under it all; the vielle (the fiddle of the age)
     // in the tavern, the shawm in the market, the busine (the long war trumpet) and nakers in battle, monks' plainchant
     // in church and crypt; tabor and frame drum; chords of bare fifths, in the church modes
@@ -190,6 +193,8 @@
   // master). The quietest places, a cellar or a crypt, need most; the sparse ones still vary from tune to tune.
   const LEVELS = {
     //           calm  street night market tavern church temple crypt library manor palace docks sea  sewer cellar cave  lab   hosp  prison factory wareh station forest moor desert storm ritual dread myst sorrow chase battle base ruins ship
+    // (gothic, measured 18 Nov 2026 the same way; a cinematic style, so it multiplies the cinematic trim)
+    gothic:        [2.63, 3.8, 3.37, 1.36, 1.34, 3.09, 3.71, 3.82, 2.48, 3.27, 3.04, 3.24, 1.75, 3.76, 3.22, 3.24, 2.75, 1.27, 2.77, 1.56, 3.67, 2.73, 2.41, 2.04, 2.06, 2.66, 1.3, 1.41, 4.4, 3.03, 1.18, 1.27, 1.3, 3.44, 2.32],
     medieval:      [1.72, 1.51, 1.77, 1.62, 1.27, 1.54, 1.5, 3.45, 2.24, 1.78, 1.45, 1.8, 0.93, 4.37, 3.46, 3.16, 1.5, 0.96, 1.54, 1.01, 3.19, 1.83, 1.36, 1.45, 1.53, 1.17, 1.83, 1.15, 2.01, 1.58, 0.72, 0.79, 1.52, 1.43, 1.23],
     industrial:    [1.93, 1.72, 1.6, 1.74, 1.55, 1.52, 1.53, 2.89, 2.3, 1.98, 1.8, 1.6, 0.98, 3.54, 3.58, 2.3, 1.58, 1, 2.11, 1.02, 3.8, 1.97, 1.41, 1.15, 1.23, 1.15, 1.52, 1.14, 2.17, 1.75, 0.87, 1.09, 1.04, 1.11, 1.29],
     wartime:       [1.84, 1.57, 1.48, 1.79, 1.51, 1.61, 1.37, 2.22, 2.26, 1.96, 1.81, 1.8, 1.01, 2.65, 2.77, 2.29, 1.53, 0.97, 1.82, 1, 2.9, 1.47, 1.8, 1.24, 1.38, 1.1, 1.87, 1.05, 2.02, 1.65, 1.21, 1.5, 1.29, 1.23, 1.21],
@@ -201,7 +206,7 @@
     fantasy:       [1.51, 1.35, 1.03, 0.99, 0.75, 1.21, 0.92, 0.78, 2.15, 2.06, 2.04, 1.23, 0.88, 0.88, 0.99, 0.93, 1.18, 0.84, 0.78, 0.77, 1.06, 1.39, 1.55, 0.82, 0.84, 0.75, 0.56, 0.54, 1.34, 1.17, 0.5, 0.5, 0.5, 0.78, 0.81]
   };
   const ORDER = Object.keys(MOODS).filter(k => !MOODS[k].off);
-  const trimOf = (F, fl, mood) => F.cine ? TRIM_CINE[mood] || 1 : LEVELS[fl] ? LEVELS[fl][ORDER.indexOf(mood)] || 1 : TRIM[mood] || 1;
+  const trimOf = (F, fl, mood) => F.cine ? (TRIM_CINE[mood] || 1) * (LEVELS[fl] ? LEVELS[fl][ORDER.indexOf(mood)] || 1 : 1) : LEVELS[fl] ? LEVELS[fl][ORDER.indexOf(mood)] || 1 : TRIM[mood] || 1;
   // a place that does not say what it is: its name usually does
   const GUESS = [
     [/crypt|tomb|catacomb|ossuar|morgue|mortuar|mausole|graveyard|burial/, "crypt"], [/sewer|tunnel|drain|culvert|underground|catacomb/, "sewer"], [/cellar|vault|basement|undercroft|strongroom/, "cellar"], [/cave|cavern|grotto|mine\b|quarry/, "cave"],
@@ -224,6 +229,11 @@
   // the campaign's flavour: said outright, or taken from the look and region of its city, or from its paper
   function flavour() {
     const c = A.config.music || {}; if (c.flavour && FLAVOURS[c.flavour]) return c.flavour;
+    // (no flavour chosen: the campaign's own world, never the 1920s mystery for every campaign; the user, 18 Nov 2026, heard
+    // Curse of Strahd played as Arkham. A fantasy campaign of horror (a curse, the undead, a vampire, dread) is gothic)
+    if (!c.flavour && A.campaignWorld) { const W = A.campaignWorld(), cfg = A.config || {}, words = [cfg.setting, cfg.subtitle, cfg.title, cfg.subgenre, cfg.system].join(" ");
+      if (W.fantasy) return /horror|gothic|curse|vampire|undead|dread|ravenloft|strahd|barovia|haunt|grim|dark fantasy/i.test(words) ? "gothic" : "fantasy";
+      if (W.scifi) return "scifi"; }
     if (c.flavour !== "auto") return "arkham";         // flavour: "auto" takes it from the city instead
     const D = A.cityData;
     if (D) { if (D.region === "desert") return "arabic"; if (D.region === "eastasia") return "eastasia"; const look = typeof D.look === "object" ? D.look.base : D.look; if (look === "fantasy") return "fantasy"; if (look === "scifi" || look === "future") return "scifi"; if (look === "modern") return "modern"; if (look === "medieval") return D.region === "mediterranean" ? "mediterranean" : "medieval"; return D.region === "mediterranean" ? "mediterranean" : "industrial"; }
@@ -967,10 +977,19 @@
     studioRefresh();
     apply();
   }
+  // (said once, the first time music plays: what it is played on. The real sampled instruments (the music plan of
+  // 17 Nov 2026) are not installed yet, so it is Atlas's own synthesised instruments, never passed off as more; the
+  // user, 18 Nov 2026: "Do not fall back to generic or outdated music without notifying the DM")
+  let toldInst = false;
+  function sayInstruments() {
+    if (toldInst) return; toldInst = true; const F = FLAVOURS[flavour()] || {};
+    const m = `Music: ${F.label || flavour()}, played on Atlas's own synthesised instruments (the sampled orchestra is not installed yet).${(A.config.music || {}).flavour ? "" : " Its style follows the campaign's world; choose another under Audio."}`;
+    if (A.tableUI && A.tableUI.api && A.tableUI.api.note) A.tableUI.api.note(m); else console.info(m);
+  }
   function play() {
     if (off()) return;
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-    if (!P.ac) { P.ac = new AC(); P.eng = new Engine(P.ac); P.eng.master.gain.value = P.vol; }
+    if (!P.ac) { P.ac = new AC(); P.eng = new Engine(P.ac); P.eng.master.gain.value = P.vol; sayInstruments(); }
     P.ac.resume(); P.on = true; if (!P.timer) P.timer = setInterval(tick, 300);
     if (P.bed) { P.bed.end(P.ac.currentTime + .05, 2); P.bed = null; }      // the music takes over from the narrator's bed
     apply();
