@@ -361,7 +361,7 @@
     if (want && (want === "stars") === starry) look = want;
     const size = Array.isArray(W.size) && W.size[0] > 0 ? W.size.slice(0, 2) : T.w ? [T.w, T.h] : [1000, 700];
     const SH = shapeOf(W, OV);
-    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist), C: unb64(T.cover), B: unb64(T.biome), Cn: unb64(T.canopy), Tc: unb64(T.tempC), Gr: unb64(T.ground) } : null;
+    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: (T.sea == null ? 128 : T.sea) + Math.max(-10, Math.min(20, +(OV.style && OV.style.sea) || 0)),   // (an ice age's low sea, some 120 m down, to the high seas of a hothouse age, a few hundred metres up) H: unb64(T.height), M: unb64(T.moist), C: unb64(T.cover), B: unb64(T.biome), Cn: unb64(T.canopy), Tc: unb64(T.tempC), Gr: unb64(T.ground) } : null;
     if (!opt.noLand && !G && SH.base && !T.stars && !T.drawing) G = blankLand(size, SH.base);
     if (G) {
       if (!G.M) G.M = new Uint8Array(G.cols * G.rows).fill(128); if (!G.C || G.C.length !== G.cols * G.rows) G.C = new Uint8Array(G.cols * G.rows);
@@ -1633,6 +1633,7 @@
         + `<button type="button" class="wm-btn" data-w="undo"${HIST.length ? "" : " disabled"} title="Undo (Ctrl+Z)">Undo</button><button type="button" class="wm-btn" data-w="redo"${REDO.length ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo</button>`
         + (A.worldGenSrc && WD.look !== "stars" && !DRAW ? (wData() || {}).planet ? tb("newworld", "Draw its surface", false, "Paint its land or give a drawing of your own: its physics decide what the low ground holds, whether rivers run and whether anything grows") : tb("newworld", "Make a new world", false, "Generate a whole new land: how big, its shape (from your own drawing if you like), its climate") : "")
         + (A.pmap && WD.look !== "stars" ? tb("pmaps", "Players' maps", false, "Hand-drawn parchment maps for the players: what their characters know, drawn as they would draw it; you draw and reveal on them as the game goes") : "")
+        + (landy ? `<label class="wm-sealv" title="Raise the sea to drown the low coasts and shelves, or lower it to bare them, as in an ice age; the land, your places and roads stay as they are">Sea level <input type="range" class="wm-sea" min="-10" max="20" step="1" value="${esc((OV.style && OV.style.sea) || 0)}" aria-label="Sea level"> <span class="kn">${(OV.style && OV.style.sea) ? ((OV.style.sea > 0 ? "+" : "") + OV.style.sea) : "as made"}</span></label>` : "")
         + tb("export", "Copy as world.js")
         + (vers() && vers().list(WID).length ? tb("vers", "Earlier versions", S.panelV, "The map as it was before each visit's changes, to look at and bring back") : "")
         + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>${presetBar()}` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
@@ -1666,7 +1667,7 @@
       if (CUR.on && WD.T && WD.T.currents) $(".wm-hint").insertAdjacentHTML("afterbegin", `<span class="lg"><svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" class="wc-s w" style="stroke-width:3px"/></svg>Warm current</span><span class="lg"><svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" class="wc-s c" style="stroke-width:3px"/></svg>Cold current</span><button type="button" class="wm-btn wc-nb" data-w="curnames">${CUR.names ? "Hide their names" : "Show their names"}</button>`);
     }
     // what the land is drawn from: when it changes (a stroke of the brush, a river, a realm, a name), it is drawn again
-    const landKey = () => JSON.stringify([GEN.ver, WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.liquid, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
+    const landKey = () => JSON.stringify([GEN.ver, WD.G ? WD.G.sea : 0, WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.liquid, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
     let lastLand = landKey();
     // the recipe changed: its land from this browser's keeping, or made afresh (the generator in a worker, so the page
     // stays free); no recipe: back to the campaign's own land
@@ -2402,7 +2403,10 @@
     function onChange(e) {
       const t = e.target;
       // the map drawn another way: kept with the world (the players' screen and copy follow)
-      if (t.matches(".wm-look")) { if (gm()) save("style", { look: t.value }); return; }
+      if (t.matches(".wm-look")) { if (gm()) save("style", Object.assign({}, OV.style || {}, { look: t.value })); return; }
+      // (the sea raised or lowered over the land as it is, the user's realistic continents request, section 7: "allow
+      // sea-level adjustments to expose or submerge continental shelves without regenerating the entire world")
+      if (t.matches(".wm-sea") && e.type === "change") { if (gm()) save("style", Object.assign({}, OV.style || {}, { sea: +t.value || 0 })); return; }
       if (t.matches("[data-wb]")) {
         const k = t.dataset.wb;
         if (k === "m") { S.brush = t.value; const pp = presetOf(S.brush); S.pcol = pp ? pp.col : null; renderBars(); const lw = lifeWarn(pp ? pp.base : S.brush); if (lw) note(lw); }
