@@ -98,7 +98,7 @@
   const SEEN = ["did", "decision", "talk", "promise", "threat", "clue", "visit", "item", "fate", "bond", "theory", "mystery"];
   function chronicleShare(S) {
     const J = journal(S), out = {};
-    if (J.purse) { const p = S.get("econ", "purse"); if (p && p.n != null) out.purse = A.money && A.money.fmt ? A.money.fmt(+p.n) : String(p.n); out.carry = Object.values(S.get("stash") || {}).filter(x => x && x.n).sort((a, b) => (b.t || 0) - (a.t || 0)).map(x => ({ n: x.n, qty: x.qty || 1 })); }
+    if (J.purse) { const p = S.get("econ", "purse"); if (p && p.n != null) out.purse = A.money && A.money.fmt ? A.money.fmt(+p.n) : String(p.n); out.carry = Object.values(S.get("stash") || {}).filter(x => x && x.n && (!x.owner || x.owner === "party" || String(x.owner).startsWith("pc:"))).sort((a, b) => (b.t || 0) - (a.t || 0)).map(x => ({ n: x.n, qty: x.qty || 1 })); }
     if (J.memories) out.mems = Object.values(S.get("memory") || {}).filter(m => m && m.text && m.state === "kept" && SEEN.includes(m.kind) && ["canon", "narration", "player"].includes(m.src)).sort((a, b) => (b.t || b.t0 || 0) - (a.t || a.t0 || 0)).slice(0, 30).map(m => ({ text: m.text, quote: m.quote || "", session: m.session || "" }));
     return out;
   }

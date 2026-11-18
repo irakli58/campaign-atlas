@@ -112,7 +112,9 @@
     const p = econ("purse"), n = purse() + by, log = (p.log || []).concat({ m: nowM(), by, what: String(what || "").slice(0, 120) }).slice(-40);
     S().set("econ", "purse", { n, log });
   }
-  const stash = () => Object.entries((S() && S().get("stash")) || {}).filter(([, x]) => x && x.n).sort((a, b) => b[1].t - a[1].t);
+  // (the one item store, atlas-items.js: "stash" holds every thing of the campaign, each with its owner; the party's
+  // are those with no owner or the owner "party", so what the party carries here is unchanged)
+  const stash = () => Object.entries((S() && S().get("stash")) || {}).filter(([, x]) => x && x.n && (!x.owner || x.owner === "party")).sort((a, b) => b[1].t - a[1].t);
   const putItem = x => S().set("stash", "i" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), Object.assign({ t: Date.now(), m: nowM(), qty: 1 }, x));
   function merchants() {
     const own = (S() && S().get("merchants")) || {}, out = [];
@@ -276,5 +278,5 @@
     init(store) { for (const c of ["econ", "stash", "prices", "merchants", "stock", "clock", "factions"]) store.watch(c, () => paint()); if (A.history) for (const c of ["econ", "stash", "prices", "merchants", "stock"]) A.history.keep(c); } });
 
   // (ATLAS.economy, the campaign's own, is how table.js gives its money and goods: the page's are A.money)
-  A.money = { fmt, parse, goods, kinds, price, purse, spend, stash, merchants, stockOf, rollLoot, conds: () => conds().concat(wars()), cleanPrice, mode, sayPrice };
+  A.money = { fmt, parse, goods, kinds, price, purse, spend, stash, putItem, sellPrice, merchants, stockOf, rollLoot, age, QUAL, COND, conds: () => conds().concat(wars()), cleanPrice, mode, sayPrice };
 })(ATLAS);

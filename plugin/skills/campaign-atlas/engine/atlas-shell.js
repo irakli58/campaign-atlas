@@ -676,6 +676,7 @@
     return `<div class="prof"><dl>
       ${row("Where", n.at ? ((A.nameOf && A.nameOf(M, n.at)) ? n.at + " · " + A.nameOf(M, n.at) : n.at) : "")}${row("Looks", g("look"))}${row("Manner", g("manner"))}${row("Sounds", g("voice"))}${row("Doing", n.doing)}${row("Story", g("bg"))}${tiesRows(n)}${row("Wants", g("want"))}${row("Knows", n.knows)}${row("Secret", g("secret"), "sec-k")}${row("Lie", g("lie"))}${row("Talks", g("press"))}${row("Reveals", n.rev)}${row("Fate", c.fate)}
     </dl>${A.tableUI ? A.tableUI.stats(n.stats || c.stats) : ""}
+    ${A.items && state.mode === "gm" ? A.items.personHTML(A.story && A.story.personRef ? A.story.personRef(pid, k) : n.who ? "cast:" + n.who : "npc:" + pid + "/" + k) : ""}
     ${TR.ready ? `<label class="cnote"><span>Your notes on ${esc(who(n)[0])}</span><textarea data-cnote="${esc(cid)}" rows="3" placeholder="What the party has learned, how you've played them, changes…"${TR.canWrite ? "" : " disabled"}>${esc(notes)}</textarea></label>` : ""}</div>`;
   }
   function peopleList(p) {

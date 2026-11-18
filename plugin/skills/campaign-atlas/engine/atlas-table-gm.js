@@ -84,8 +84,11 @@
     if (hooks.length) out.push(`<section class="sec keeper t-hooks"><h3>Hooks</h3><p class="kn">Ways into adventure from here, for the players to take up or leave.</p><ul class="t-hooklist">${hooks.map(h => `<li><b>${esc(h.t)}</b>${h.d ? " " + esc(h.d) : ""}${h.who ? ` <span class="kn">(${esc(h.who)})</span>` : ""}${toList(h.to).filter(t => A.meta[t]).length ? ` <span class="t-small">It leads to ${toList(h.to).filter(t => A.meta[t]).map(goBtn).join(", ")}</span>` : ""}</li>`).join("")}</ul></section>`);
     const tabs = Object.entries(m.tables || {}).filter(([, l]) => Array.isArray(l) && l.length);
     if (tabs.length) out.push(`<section class="sec keeper t-rt"><h3>Random tables</h3>${tabs.map(([name, list]) => tableRow("p:" + p.id + ":" + name, name, list)).join("")}</section>`);
+    // (what other files add to a place's page: atlas-items.js, its things and Generate loot here)
+    for (const f of DXTRA) { try { out.push(f(p) || ""); } catch (e) { console.warn("atlas: a place's extra could not be drawn", e); } }
     return out.join("");
   }
+  const DXTRA = [], addDossier = f => DXTRA.push(f);
   // one random table: its name, a roll button, the result, and the whole list folded
   function tableRow(key, name, list) {
     const got = UI.tabSel === key && UI.tabRes ? UI.tabRes : "";
@@ -968,7 +971,7 @@
       <div><section class="t-card"><h3>${T.icon("make")} A place, now</h3>${A.quickPlace && (!A.modules || A.modules.on("makeup.describe")) ? `<div class="t-row"><button type="button" class="t-btn" data-t="qpdesc" title="Describe a building in a sentence; Atlas lays out its rooms and furnishes them, and adds nothing else">A building from a description…</button></div>` : ""}<p class="t-small">A small place with its map, someone in it and something to find${X.TR.ready ? " that points where the party needs to go" : ""}.</p>
         <div class="t-row"><select data-t="flykind" aria-label="What kind of place"><option value="">Any kind</option>${FLY_KINDS[g].map(k => `<option value="${k}">${esc(KIND_WORD[g][k])}</option>`).join("")}</select><button type="button" class="t-btn prim" data-t="fly">Make a place</button></div>${fly}
         ${kept.filter(k => k.kind !== "person").length ? `<h4 class="t-h4">Places made at the table</h4><ul class="t-ul">${kept.filter(k => k.kind !== "person").map(k => `<li><button type="button" class="t-go" data-t="flyopen" data-id="${esc(k.id)}">${esc(k.name)}</button> <span class="kn">${esc((KIND_WORD[k.g] || {})[k.kind] || "")}</span> <button type="button" class="t-mini" data-t="flydel" data-id="${esc(k.id)}" aria-label="Forget it">×</button></li>`).join("")}</ul>` : ""}</section></div>
-      <div><section class="t-card t-rt"><h3>${T.icon("tables")} Random tables</h3>${ctab.map(([n, l]) => tableRow("c:" + n, n, l)).join("")}${gtab.map(([n, l]) => tableRow("g:" + n, n, l)).join("")}<p class="t-small">Each place's own tables are in its dossier.</p></section></div></div>`;
+      <div><section class="t-card t-rt"><h3>${T.icon("tables")} Random tables</h3>${ctab.map(([n, l]) => tableRow("c:" + n, n, l)).join("")}${gtab.map(([n, l]) => tableRow("g:" + n, n, l)).join("")}<p class="t-small">Each place's own tables are in its dossier.</p></section></div></div>${(c => c ? `<div class="t-grid t-g2w">${c}</div>` : "")(cardsFor("make"))}`;
   }
 
   /* ---- The board */
@@ -1224,7 +1227,7 @@
   /* ================================================================ connecting it to the page */
   A.tableUI = {
     twice, onlyTo: hid => onlyTo(hid), showTo: (to, doc) => showTo(to, doc),
-    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab, addDock, addCard,
+    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, addDossier, handoutBtns, view, intensity, addTab, addDock, addCard,
     // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
     api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s, m) => askRaw(p, f || (() => {}), s, m), lookupBest: (q, k) => lookupBest(q, k), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, tabs: () => TABS.filter(t => shownTab(t[0])).map(t => ({ key: t[0], label: t[1], desc: t[4] })), open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
     init(ctx) {
