@@ -697,4 +697,18 @@ function roads(WD, opt, BIO, log) {
   return Object.assign({ v: 2, level: DEFAULT_LEVEL }, ref.common, { levels });
 }
 
-module.exports = { roads, TECH, ORDERS, LEVELS, DEFAULT_LEVEL };
+// the places the land would hold beyond the game master's own (Add More Life, the world map's Connect Cities; the user,
+// 18 Nov 2026): the same central-place settling as the road network's, the map's own places kept as they are and the
+// new ones spaced from them, each with its kind of site, its rank, how well the land suits it and a name of the land's
+// language. Nothing is placed here: the page shows them to be chosen, by the Settlement Density slider
+function suggestPlaces(WD, opt, BIO) {
+  opt = Object.assign({ seed: 1, era: "medieval" }, opt || {}); if (!WD.G) throw new Error("this world has no land to settle");
+  opt.tech = TECH[opt.era] ? opt.era : ERA_TECH[String(opt.era).toLowerCase()] || "medieval";
+  const rnd = mulberry32(opt.seed * 7 + 29), L = landOf(WD, BIO), S = settle(L, WD, opt, rnd);
+  const nm = namer(rnd, (WD.locs || []).map(l => l.name).filter(Boolean), !!TECH[opt.tech].scifi);
+  const extra = S.places.filter(p => !p.story && p.at).map(p => ({ at: p.at, tier: p.tier, site: p.site || "plain", port: !!p.port, score: Math.round((S.score[p.cell] || 0) * 1000) / 1000, makes: p.makes || "", name: nm(p.site || "plain") }));
+  extra.sort((a, b) => b.score - a.score);
+  return { extra, landKm2: Math.round(S.landKm2), scifi: !!TECH[opt.tech].scifi };
+}
+
+module.exports = { roads, suggestPlaces, TECH, ORDERS, LEVELS, DEFAULT_LEVEL };

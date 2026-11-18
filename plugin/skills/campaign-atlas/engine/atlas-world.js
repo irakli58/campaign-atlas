@@ -844,7 +844,7 @@
         ${A.ux ? `<span class="keeper wm-uxs">${A.ux.saveMark()}${A.ux.keysBtn("world")}</span>` : ""}<button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false" title="Edit the map (E)">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-rk"></g><g class="wm-pl"></g><g class="wm-trd"></g><g class="wm-dip"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-rk"></g><g class="wm-pl"></g><g class="wm-trd"></g><g class="wm-dip"></g><g class="wm-cc"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -1281,6 +1281,144 @@
       g.innerHTML = tr.map(r => { const way = typeof wayFor === "function" ? wayFor(r) : [WD.byId[r.from].at, WD.byId[r.to].at], w = ({ low: 2, medium: 3.4, high: 5 }[r.trade.vol] || 2.6) * K, off = ["suspended", "closed"].includes(r.trade.status), trouble = gm() && tradeTrouble(r), mid = way[Math.floor(way.length / 2)], first = r.trade.name && !named.has(r.trade.name); if (first) named.add(r.trade.name);
         return `<path d="${pathD(way)}" fill="none" stroke="${trouble ? "#b0161b" : "#c99a1e"}" stroke-opacity=".85" stroke-width="${w}" stroke-linecap="round"${off ? ` stroke-dasharray="${8 * K} ${6 * K}"` : ""}><title>${esc([r.trade.name, r.trade.goods, r.trade.vol, r.trade.status, trouble].filter(Boolean).join(" · "))}</title></path>${first ? `<text x="${mid[0]}" y="${mid[1] - 8 * K}" text-anchor="middle" font-size="${13 * K}" fill="#6b4e0a" stroke="#fbf5e3" stroke-width="${3 * K}" paint-order="stroke" font-style="italic">${esc(r.trade.name)}${r.trade.goods ? ": " + esc(r.trade.goods) : ""}</text>` : ""}`; }).join("");
     }
+    /* ---- Connect Cities and Add More Life (the user, 18 Nov 2026: docs/requests/2026-11-18-connect-cities.md): the roads
+            between the game master's settlements laid by Atlas over the land, the map's own pathfinder routing each one
+            (wayOf over pathGrid: slopes, rivers, the sea) and its own travel times; which pairs to join chosen as real
+            networks grow: the cheapest joins first, every road already there counted as joined (so the game master's
+            roads are kept and built around), the bigger places first, villages by the density, a few loops where the
+            network is a long way round; borders between powers at war or hostile costed dearer, allies cheaper, never
+            forbidden. Add More Life: the places the land would hold (the road network's own settling, scripts/
+            world-roads.js suggestPlaces), as many as the Settlement Density slider says. Shown first; nothing is
+            written until Accept; the roads made are ordinary routes (added, hidden from the players until revealed) */
+    const CC = { open: false, props: null, places: null, busy: false, sugg: null, seed: 1 };
+    const TIER_OF = k => /capital|city/.test(k) ? 1 : /town|port|castle|keep|fort|monastery|base|station/.test(k) ? 2 : 3;
+    const eraWord = () => { try { return String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase(); } catch (e) { return ""; } };
+    const ccDefaultDensity = () => { const e = eraWord(); return /future|modern|now|today|20|19|victorian|historical/.test(e) ? "dense" : /ancient|tribal|stone|bronze/.test(e) ? "sparse" : "balanced"; };
+    function ccClear() { CC.props = null; CC.places = null; const g = $(".wm-cc"); if (g) g.innerHTML = ""; }
+    function ccSuggest() {
+      if (CC.sugg) return CC.sugg; if (!(A.roadGen && A.roadGen.suggestPlaces) || !WD.G) return (CC.sugg = { extra: [] });
+      try { const e = eraWord(); CC.sugg = A.roadGen.suggestPlaces(WD, { seed: (WD.T && WD.T.seed) || 1, era: /future|scifi/.test(e) ? "future" : /modern|19|20|victorian|historical/.test(e) ? "modern" : /ancient/.test(e) ? "ancient" : "medieval" }, A.worldBiomes); } catch (err) { console.warn("atlas: add more life", err); CC.sugg = { extra: [] }; }
+      return CC.sugg;
+    }
+    // how many new places a density gives, and which: the best-placed first; villages and hamlets alone at low
+    // density, towns from the middle, a city only near the top (the user: 0 none, 25 a few villages and hamlets, 50
+    // moderately peopled, 75 many villages, farms and trading posts, 100 all the land would feed)
+    function ccPick(d) {
+      if (!(d > 0)) return [];
+      // (the countryside about the game master's own settlements, not every continent of a planet: within a couple of the
+      // usual distances between their places, at least a day's walk or so; with none placed, the whole land)
+      const own = WD.locs.filter(l => SETTLED.includes(l.kind) && Array.isArray(l.at) && !l.gone);
+      let X = ccSuggest().extra || [];
+      if (own.length) { const nn = own.map(a => Math.min(...own.filter(b => b !== a).map(b => Math.hypot(a.at[0] - b.at[0], a.at[1] - b.at[1])), 1e9)).filter(v => v < 1e9).sort((a, b) => a - b), med = nn.length ? nn[nn.length >> 1] : 60, R = Math.max(40, med * 2.2);
+        X = X.filter(x => own.some(l => Math.hypot(l.at[0] - x.at[0], l.at[1] - x.at[1]) < R)); }
+      const ok = X.filter(p => p.tier === "village" || (p.tier === "town" && d >= 50) || (p.tier === "city" && d >= 85));
+      return ok.slice(0, Math.round(ok.length * Math.pow(d / 100, 1.35)));
+    }
+    function ccStance(a, b) {
+      const L = A.lives, oa = (WD.byId[a] || {}).owner, ob = (WD.byId[b] || {}).owner; if (!oa || !ob || oa === ob || !L || !L.all) return { f: oa && ob && oa !== ob ? 1.15 : 1 };
+      const all = L.all(), sOf = r => Array.isArray(r) ? r[0] : r && typeof r === "object" ? r.stance : r, st = sOf(((all[oa] || {}).rels || {})[ob]) || sOf(((all[ob] || {}).rels || {})[oa]) || "neutral", d = L.diplomacy ? L.diplomacy(oa, ob) : null, tr = ((d && d.treaties) || []).map(t => String(t).split(":")[0]);
+      let f = { war: 2.6, hostile: 1.8, wary: 1.3, friendly: .95, allied: .85 }[st] || 1.15; if (tr.includes("trade")) f *= .85; if (tr.includes("embargo") || tr.includes("blockade")) f *= 1.5;
+      return { f, st, war: st === "war" };
+    }
+    async function ccRun() {
+      if (CC.busy) return; CC.busy = true; ccPanel("Laying the roads over the land…");
+      const box = $(".wm-ccbox"), val = n => { const e = box && box.querySelector(`[name="${n}"]`); return e ? (e.type === "checkbox" ? e.checked : e.value) : ""; };
+      const dens = val("dens") || ccDefaultDensity(), life = !!val("life"), sd = +val("sd") || 0, scope = val("scope") || "all", own = val("own") || "";
+      const chosen = new Set([...(box ? box.querySelectorAll('[name="pick"]:checked') : [])].map(x => x.value));
+      if (!PG && WD.G) PG = pathGrid(WD);
+      // the places: the map's settlements (all, those chosen, or one power's), and the new ones Add More Life would add
+      let P = WD.locs.filter(l => SETTLED.includes(l.kind) && Array.isArray(l.at) && !l.gone).map(l => ({ id: l.id, at: l.at, tier: TIER_OF(l.kind), name: l.name, owner: l.owner }));
+      if (scope === "chosen") P = P.filter(p => chosen.has(p.id)); else if (scope === "power" && own) P = P.filter(p => p.owner === own);
+      const fresh = life ? ccPick(sd).map((x, k) => ({ id: "new~" + k, at: x.at, tier: x.tier === "city" ? 1 : x.tier === "town" ? 2 : 3, name: x.name, kind: x.tier === "village" ? (x.score < .35 ? "hamlet" : "village") : x.port ? "port" : x.tier, fresh: true })) : [];
+      // (a new place too near one of the game master's own is not added)
+      const keep = fresh.filter(f => !P.concat(WD.locs.map(l => ({ at: l.at }))).some(p => p.at && Math.hypot(p.at[0] - f.at[0], p.at[1] - f.at[1]) < 14));
+      const ALL = P.concat(keep), byId = new Map(ALL.map(p => [p.id, p]));
+      // joined already: every road there is (the game master's own kept as they are)
+      const par = new Map(); const find = x => { while (par.has(x) && par.get(x) !== x) x = par.get(x); return x; }, join = (a, b) => { a = find(a); b = find(b); if (a !== b) par.set(a, b); };
+      for (const p of ALL) par.set(p.id, p.id);
+      const have = new Set(); for (const r of WD.routes) if (!r.gone && byId.has(r.from) && byId.has(r.to)) { join(r.from, r.to); have.add([r.from, r.to].sort().join("~")); }
+      for (const r of WD.routes) if (!r.gone && (byId.has(r.from) || byId.has(r.to))) { const o = byId.has(r.from) ? r.to : r.from; if (!byId.has(o)) { par.set(o, par.get(o) || o); join(r.from, r.to); } }
+      // the candidates: each place's nearest few, each routed over the land by the map's own pathfinder
+      const K = dens === "dense" ? 7 : dens === "balanced" ? 5 : 4, pairs = new Map();
+      for (const a of ALL) ALL.filter(b => b !== a).map(b => [b, Math.hypot(b.at[0] - a.at[0], b.at[1] - a.at[1])]).sort((x, y) => x[1] - y[1]).slice(0, K).forEach(([b]) => { const k = [a.id, b.id].sort().join("~"); if (!have.has(k)) pairs.set(k, [a, b]); });
+      const tmp = Object.assign({}, WD.byId); for (const f of keep) tmp[f.id] = { id: f.id, at: f.at, kind: f.kind };
+      const WDx = Object.assign({}, WD, { byId: tmp }), cand = []; let k0 = 0;
+      for (const [k, [a, b]] of pairs) {
+        if (++k0 % 6 === 0) { ccPanel(`Laying the roads over the land… ${k0} of ${pairs.size} looked at`); await new Promise(r => setTimeout(r, 0)); if (!CC.open) { CC.busy = false; return; } }
+        const r = { id: "cc~" + k, from: a.id, to: b.id, kind: "road" }, way = wayOf(WDx, PG, r); if (!way || way.length < 2) continue;
+        const tv = travel(WDx, r, way) || {}, days = tv.days || Math.hypot(b.at[0] - a.at[0], b.at[1] - a.at[1]) / 30, pol = ccStance(a.id, b.id);
+        // (high ground along it: a mountain trail; a village at one end: a track)
+        let hi = 0; if (PG) for (const q of way) { const i = clamp(Math.floor(q[1] / PG.size), 0, PG.nr - 1) * PG.nc + clamp(Math.floor(q[0] / PG.size), 0, PG.nc - 1); hi = Math.max(hi, PG.H[i]); }
+        cand.push({ k, a, b, way, days, w: days * pol.f * (1 + .22 * (a.tier + b.tier - 2)), pol, high: PG ? hi > PG.sea + (255 - PG.sea) * .55 : false });
+      }
+      cand.sort((x, y) => x.w - y.w);
+      const props = [], deg = new Map(), add = c => { props.push(c); join(c.a.id, c.b.id); deg.set(c.a.id, (deg.get(c.a.id) || 0) + 1); deg.set(c.b.id, (deg.get(c.b.id) || 0) + 1); };
+      // 1. the spanning network of the places that count at this density
+      const counts = p => dens === "dense" || p.tier <= 2; for (const c of cand) if (counts(c.a) && counts(c.b) && find(c.a.id) !== find(c.b.id)) add(c);
+      // 2. villages: at balanced density each one joins the network by its cheapest road; sparse leaves them as they are
+      if (dens === "balanced") for (const p of ALL.filter(p => p.tier === 3)) { if (find(p.id) !== p.id && deg.get(p.id)) continue; const c = cand.find(c => (c.a === p || c.b === p) && find(c.a.id) !== find(c.b.id)); if (c) add(c); }
+      // 3. a few loops where the network makes a long way round (graph distance against the road's own)
+      const loops = dens === "dense" ? 1.45 : dens === "balanced" ? 2.2 : 0;
+      if (loops) { let extra = 0; const cap = Math.ceil(ALL.length * (dens === "dense" ? .5 : .2));
+        const gdist = (s, t) => { const adj = new Map(); for (const c of props) { for (const [u, v] of [[c.a.id, c.b.id], [c.b.id, c.a.id]]) { if (!adj.has(u)) adj.set(u, []); adj.get(u).push([v, c.days]); } } for (const r of WD.routes) if (!r.gone) { const d = (r.days || 2); for (const [u, v] of [[r.from, r.to], [r.to, r.from]]) { if (!adj.has(u)) adj.set(u, []); adj.get(u).push([v, d]); } }
+          const D = new Map([[s, 0]]), q = [[0, s]]; while (q.length) { q.sort((x, y) => x[0] - y[0]); const [d, u] = q.shift(); if (u === t) return d; if (d > (D.get(u) || 0)) continue; for (const [v, w] of adj.get(u) || []) { const nd = d + w; if (nd < (D.has(v) ? D.get(v) : Infinity)) { D.set(v, nd); q.push([nd, v]); } } } return Infinity; };
+        for (const c of cand) { if (extra >= cap) break; if (props.includes(c) || !(counts(c.a) && counts(c.b))) continue; if (gdist(c.a.id, c.b.id) > c.days * loops) { add(c); extra++; } } }
+      // the kind and class of each road: by the places it joins, the land it crosses and the age
+      const e = eraWord(), modern = /future|modern|now|today|20|19|victorian|historical/.test(e), classes = roadClasses().map(x => x[0]);
+      for (const c of props) {
+        const top = Math.min(c.a.tier, c.b.tier), low = Math.max(c.a.tier, c.b.tier);
+        c.kind = c.high && low >= 2 ? "trail" : c.high ? "pass" : "road";
+        c.cls = c.pol.war ? "military" : top === 1 && low <= 2 ? (modern && classes.includes("highway") ? "highway" : "trade") : low === 3 ? "dirt" : (modern ? "paved" : "dirt");
+        if (!classes.includes(c.cls)) c.cls = "dirt";
+        c.on = true;
+      }
+      CC.props = props; CC.places = keep.filter(f => props.some(c => c.a === f || c.b === f) || life); CC.busy = false; ccDraw(); ccPanel();
+    }
+    function ccDraw() {
+      const g = $(".wm-cc"); if (!g) return; if (!CC.props) { g.innerHTML = ""; return; }
+      const K = Math.max(1, Math.min(WD.size[0], WD.size[1]) / 900), COL = { highway: "#c0392b", trade: "#b4791f", paved: "#8a5a2b", military: "#7a1f1f", dirt: "#6f5b3e", causeway: "#5a6f7a", bridge: "#5a6f7a", maglev: "#2f6fb0" };
+      g.innerHTML = CC.props.filter(c => c.on).map(c => `<path d="${pathD(c.way)}" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="${r1(4.2 * K)}" stroke-linecap="round"/><path d="${pathD(c.way)}" fill="none" stroke="${COL[c.cls] || "#6f5b3e"}" stroke-width="${r1((c.cls === "dirt" ? 1.6 : 2.6) * K)}" stroke-dasharray="${c.kind === "trail" ? `${r1(2 * K)} ${r1(3 * K)}` : `${r1(7 * K)} ${r1(4 * K)}`}" stroke-linecap="round"><title>${esc(c.a.name + " — " + c.b.name + " · " + c.cls + (c.kind !== "road" ? " " + c.kind : ""))}</title></path>`).join("")
+        + (CC.places || []).map(f => `<circle cx="${r1(f.at[0])}" cy="${r1(f.at[1])}" r="${r1((f.tier === 3 ? 3.2 : 4.6) * K)}" fill="#fffaf0" stroke="#b4791f" stroke-width="${r1(1.4 * K)}" stroke-dasharray="${r1(2 * K)} ${r1(1.5 * K)}"><title>${esc("New: " + f.name + " (" + f.kind + ")")}</title></circle><text x="${r1(f.at[0] + 6 * K)}" y="${r1(f.at[1] + 3 * K)}" font-size="${r1(9 * K)}" font-style="italic" fill="#6f4a1f" stroke="#fffaf0" stroke-width="${r1(2 * K)}" paint-order="stroke">${esc(f.name)}</text>`).join("");
+    }
+    function ccPanel(busy) {
+      let box = $(".wm-ccbox"); if (!CC.open) { if (box) box.remove(); return; }
+      if (!box) { box = document.createElement("div"); box.className = "wm-ccbox keeper"; root.appendChild(box); box.addEventListener("click", ccClick); box.addEventListener("input", ccInput); box.addEventListener("change", ccInput); }
+      const prev = {}; for (const el of box.querySelectorAll("[name]")) prev[el.name + (el.value && el.type === "checkbox" && el.name === "pick" ? ":" + el.value : "")] = el.type === "checkbox" ? el.checked : el.value;
+      const settled = WD.locs.filter(l => SETTLED.includes(l.kind) && !l.gone), owners = [...new Set(settled.map(l => l.owner).filter(Boolean))], dens = prev.dens || ccDefaultDensity(), sd = prev.sd != null ? prev.sd : 45, life = !!prev.life, scope = prev.scope || "all";
+      const est = life ? ccPick(+sd).length : 0, opt = (v, l, cur) => `<option value="${esc(v)}"${String(v) === String(cur) ? " selected" : ""}>${esc(l)}</option>`;
+      box.innerHTML = `<h4>Connect Cities</h4>
+        <p class="kn">Roads between your settlements, laid over the land: up the valleys, over the passes, across the rivers where they can be crossed. Your own roads stay as they are; the new ones are shown first.</p>
+        <label>Which places <select name="scope">${opt("all", "All the settlements", scope)}${opt("chosen", "Only those I tick", scope)}${owners.length ? opt("power", "One power's", scope) : ""}</select></label>
+        ${scope === "power" ? `<label>Whose <select name="own">${owners.map(o => opt(o, facName(o), prev.own)).join("")}</select></label>` : ""}
+        ${scope === "chosen" ? `<div class="wm-ccpick">${settled.map(l => `<label><input type="checkbox" name="pick" value="${esc(l.id)}"${prev["pick:" + l.id] !== false ? " checked" : ""}> ${esc(l.name)}</label>`).join("")}</div>` : ""}
+        <label>Road density <select name="dens">${opt("sparse", "Sparse: the main places only", dens)}${opt("balanced", "Balanced: towns joined, villages by one road", dens)}${opt("dense", "Dense: almost everywhere joined", dens)}</select></label>
+        <label class="wm-cclife"><input type="checkbox" name="life"${life ? " checked" : ""}> Add More Life: new villages and towns where the land would feed them</label>
+        ${life ? `<label>Settlement density <input type="range" name="sd" min="0" max="100" step="1" value="${esc(sd)}"> <b class="wm-ccsd">${esc(sd)}</b></label><p class="kn wm-ccest">About ${est} new place${est === 1 ? "" : "s"}${+sd === 0 ? "" : +sd < 50 ? ", villages and hamlets" : +sd < 85 ? ", villages, hamlets and towns" : ", towns, villages and a city or two"}, on fed land, by rivers and coasts, apart from your own.</p>` : ""}
+        <div class="t-row"><button type="button" class="wm-btn prim" data-cc="run"${CC.busy ? " disabled" : ""}>${CC.props ? "Propose again" : "Propose roads"}</button><button type="button" class="wm-btn" data-cc="close">Cancel</button></div>
+        ${busy ? `<p class="kn">${esc(busy)}</p>` : ""}
+        ${CC.props ? `<h5>Proposed: ${CC.props.filter(c => c.on).length} road${CC.props.length === 1 ? "" : "s"}${CC.places && CC.places.length ? `, ${CC.places.length} new place${CC.places.length === 1 ? "" : "s"}` : ""}</h5>
+          <ul class="wm-cclist">${CC.props.map((c, i) => `<li><label><input type="checkbox" data-cci="${i}"${c.on ? " checked" : ""}> ${esc(c.a.name)} — ${esc(c.b.name)}</label> <select data-ccc="${i}">${roadClasses().map(([k, l]) => opt(k, l, c.cls)).join("")}</select> <span class="kn">${c.days ? Math.round(c.days * 10) / 10 + " d" : ""}${c.kind !== "road" ? " · " + c.kind : ""}${c.pol.st && c.pol.st !== "neutral" ? " · " + c.pol.st : ""}</span></li>`).join("")}</ul>
+          <div class="t-row"><button type="button" class="wm-btn prim" data-cc="accept">Accept</button><span class="kn">Each becomes an ordinary road to move, retype or take away; hidden from the players until you reveal it.</span></div>` : ""}`;
+    }
+    function ccInput(e) {
+      const t = e.target;
+      if (t.name === "sd") { const b = $(".wm-ccbox .wm-ccsd"), est = $(".wm-ccbox .wm-ccest"), n = ccPick(+t.value).length; if (b) b.textContent = t.value; if (est) est.textContent = `About ${n} new place${n === 1 ? "" : "s"}${+t.value === 0 ? "" : +t.value < 50 ? ", villages and hamlets" : +t.value < 85 ? ", villages, hamlets and towns" : ", towns, villages and a city or two"}, on fed land, by rivers and coasts, apart from your own.`; return; }
+      if (t.dataset.cci != null && CC.props) { CC.props[+t.dataset.cci].on = t.checked; ccDraw(); return; }
+      if (t.dataset.ccc != null && CC.props) { CC.props[+t.dataset.ccc].cls = t.value; ccDraw(); return; }
+      if (e.type === "change" && ["scope", "life", "own"].includes(t.name)) ccPanel();
+    }
+    function ccClick(e) {
+      const b = e.target.closest("[data-cc]"); if (!b) return;
+      if (b.dataset.cc === "close") { CC.open = false; ccClear(); ccPanel(); renderBars(); return; }
+      if (b.dataset.cc === "run") { ccClear(); ccRun(); return; }
+      if (b.dataset.cc === "accept" && CC.props) {
+        // the new places first (each its own id), then the roads that reach them; nothing else touched
+        const idOf = new Map(); for (const f of CC.places || []) { if (!CC.props.some(c => c.on && (c.a === f || c.b === f)) && !(CC.places || []).includes(f)) continue; let id = String(f.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "place"; while (WD.byId[id] || OV.loc[id] || [...idOf.values()].includes(id)) id += "-" + Math.floor(Math.random() * 90 + 10); idOf.set(f.id, id); save("l-" + id, { name: f.name, kind: f.kind, state: "unknown", at: [r1(f.at[0]), r1(f.at[1])], added: true, gen: "life" }); }
+        let n = 0; for (const c of CC.props) { if (!c.on) continue; const from = idOf.get(c.a.id) || c.a.id, to = idOf.get(c.b.id) || c.b.id; if (String(from).startsWith("new~") || String(to).startsWith("new~")) continue; save("r-x" + Date.now().toString(36) + (n++), { from, to, kind: c.kind, cls: c.cls, added: true, hidden: true, gen: "connect", state: c.pol.war ? "damaged" : undefined, danger: c.pol.war ? "Crosses a border between powers at war: watched, or closed" : undefined }); }
+        note(`${n} road${n === 1 ? "" : "s"}${idOf.size ? " and " + idOf.size + " new place" + (idOf.size === 1 ? "" : "s") : ""} added. Your own roads are as they were; the new ones are hidden from the players until you reveal them.`);
+        CC.open = false; ccClear(); ccPanel(); renderBars(); return;
+      }
+    }
     // how the powers stand, on the map (the manual civilization editor's request of 17 Nov 2026; keeper only): each
     // power's seat (its capital; else its largest place; else the middle of its realm), and between two seats a line
     // coloured from war to alliance, bowed so two lines between the same seats do not lie on each other; the treaties
@@ -1489,7 +1627,7 @@
       { const tt = ctx.title && ctx.title(WID, S.sel && WD.byId[S.sel] ? WD.byId[S.sel].name : ""), te = $(".wm-title"); if (tt && te && te.__t !== tt) { te.__t = tt; te.innerHTML = tt; } }
       if (A.ux) A.ux.editing(stage, S.edit && gm() ? ({ loc: "+ Place", route: "+ Route", brush: "Shape the land", river: "+ River", realm: WD.look === "stars" ? "+ Territory" : "+ Realm", label: "+ Name" }[S.tool] || "the map") : null);
       const tb = (w, l, on, title) => `<button type="button" class="wm-btn" data-w="${w}" aria-pressed="${!!on}"${title ? ` title="${esc(title)}"` : ""}>${l}</button>`, landy = WD.look !== "stars" && !drawn();
-      eb.innerHTML = S.edit && gm() ? tb("addloc", "+ Place", S.tool === "loc") + tb("addroute", "+ Route", S.tool === "route")
+      eb.innerHTML = S.edit && gm() ? tb("addloc", "+ Place", S.tool === "loc") + tb("addroute", "+ Route", S.tool === "route") + (WD.look !== "stars" && WD.G ? tb("connect", "Connect Cities", !!CC.open, "Let Atlas lay the roads between your settlements, over the land, and add villages where the land would feed them: shown first, nothing changes until you accept") : "")
         + (landy ? tb("brush", "Shape the land", S.tool === "brush", "Paint land, sea, mountains, forests, deserts and swamps") + tb("river", "+ River", S.tool === "river") : "")
         + tb("realm", WD.look === "stars" ? "+ Territory" : "+ Realm", S.tool === "realm", "Draw a kingdom, province or territory, and say who holds it") + tb("label", "+ Name", S.tool === "label", "Write a name on the map: a sea, a range, a forest")
         + `<button type="button" class="wm-btn" data-w="undo"${HIST.length ? "" : " disabled"} title="Undo (Ctrl+Z)">Undo</button><button type="button" class="wm-btn" data-w="redo"${REDO.length ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo</button>`
@@ -2219,6 +2357,7 @@
         case "duploc": if (L) { let id = L.id + "-2"; while (WD.byId[id] || OV.loc[id]) id = L.id + "-" + Math.floor(Math.random() * 900 + 100); const c = {}; for (const k of ["name", "kind", "state", "region", "owner", "desc", "gm"]) if (L[k] != null) c[k] = L[k]; c.name = L.name + " (copy)"; c.at = [r1(clamp(L.at[0] + 22, 0, W)), r1(clamp(L.at[1] + 16, 0, H))]; S.sel = id; save("l-" + id, c); } break;
         case "enter": if (L) { let cid = L.city || L.id; if (!ctx.hasCity(cid) && A.worldCity.can(WD)) { if (netOn()) L.netRoads = netRoadsAt(L.at) || []; A.worldCity.make(WD, L); delete L.netRoads; cid = L.city || cid; } if (ctx.hasCity(cid)) ctx.enter(cid, L.id); } break;
         case "make": if (L && ctx.makeCity) { b.disabled = true; b.textContent = "Making the map…"; Promise.resolve(ctx.makeCity(L, WD)).catch(err => { b.disabled = false; b.textContent = "Make its 3D map now"; note("The map could not be made: " + ((err && err.message) || err)); }); } break;
+        case "connect": CC.open = !CC.open; if (!CC.open) ccClear(); ccPanel(); renderBars(); break;
         case "edit": S.edit = !S.edit; S.tool = null; S.first = null; S.draft = null; S.cur = null; root.classList.toggle("editing", S.edit); renderBars(); renderPanel(); drawFx(); break;
         case "addloc": S.tool = S.tool === "loc" ? null : "loc"; S.first = null; renderBars(); break;
         // (a place of the campaign at this location: its page and its inside, made with the city's own place maker)

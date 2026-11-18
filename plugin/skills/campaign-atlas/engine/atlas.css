@@ -3226,3 +3226,8 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .fa-cf { padding: .4rem 0; border-bottom: 1px solid var(--line, #e2d6b5); }
 /* the world map looking back in time (the plates run back): today's towns, roads, names and marks hidden */
 .wm-svg.drifting .wm-trd, .wm-svg.drifting .wm-dip, .wm-svg.drifting .wm-cur, .wm-svg.drifting .wm-coa, .wm-svg.drifting .wm-net, .wm-svg.drifting .wm-routes, .wm-svg.drifting .wm-netp, .wm-svg.drifting .wm-jour, .wm-svg.drifting .wm-fx, .wm-svg.drifting .wm-over, .wm-svg.drifting .wm-hdl { display: none; }
+/* Connect Cities (the world map editor): its panel beside the map */
+.wm-ccbox { position: fixed; right: 16px; top: 120px; z-index: 40; width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 160px); overflow: auto; background: var(--paper, #faf6ec); color: var(--ink, #2a2016); border: 1px solid rgba(0,0,0,.18); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 12px 14px; font-size: 14px; }
+.wm-ccbox h4 { margin: 0 0 6px; } .wm-ccbox label { display: block; margin: 6px 0; } .wm-ccbox select { max-width: 100%; }
+.wm-ccpick { max-height: 140px; overflow: auto; border: 1px solid rgba(0,0,0,.1); padding: 4px 6px; border-radius: 6px; }
+.wm-cclist { list-style: none; padding: 0; margin: 6px 0; } .wm-cclist li { padding: 3px 0; border-bottom: 1px solid rgba(0,0,0,.06); } .wm-cclist label { display: inline; }
