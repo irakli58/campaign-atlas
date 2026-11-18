@@ -22,8 +22,17 @@
             helicopter pads and hangars, a fuel point, an ammunition point set apart, a mast
      --town   a small town beside it; --ruin 0 to 1 leaves that share of its houses roofless (a place fought over) */
 "use strict";
-const path = require("path");
+const path = require("path"), fs = require("fs");
 const { eraOf, REGION_WORDS, mulberry32, plen, pip, writeCity, js } = require("./city-common.js");
+// the campaign's world, from campaign.js: its genre, or a game that is fantasy by nature (D&D, Pathfinder) or science fiction
+function campaignGenre(dir) {
+  let t = ""; try { t = fs.readFileSync(path.join(dir, "campaign.js"), "utf8"); } catch (e) { return ""; }
+  const g = (/^\s*genre:\s*"([a-z]*)"/m.exec(t) || [])[1] || "", sys = (/^\s*system:\s*"([^"]*)"/m.exec(t) || [])[1] || "";
+  if (g) return g;
+  if (/d&d|dungeons|pathfinder|13th age|shadowdark|dragonbane|old.school|osr/i.test(sys)) return "fantasy";
+  if (/mothership|traveller|alien|starfinder|cyberpunk|stars without number|lancer/i.test(sys)) return "scifi";
+  return "";
+}
 
 const L = s => s.split("|");
 // Each culture: main-street names; the pool and pattern for grown streets ({n} name, {s} kind of street); districts;
@@ -76,7 +85,7 @@ function turn(d, side, SW, SH, M) {
   const da = side === "north" ? Math.PI : side === "east" ? -Math.PI / 2 : Math.PI / 2;
   const pt = p => f(p[0], p[1]).concat(p.slice(2)), P = pts => Array.isArray(pts) ? pts.map(pt) : pts;
   for (const r of d.roads || []) r[2] = P(r[2]);
-  for (const k of ["rivers", "basins", "parks", "plazas", "rails", "walls"]) for (const o of d[k] || []) { o.pts = P(o.pts); if (o.wharves) { if (side === "north") o.wharves = [SW - o.wharves[1], SW - o.wharves[0]]; else delete o.wharves; } }
+  for (const k of ["rivers", "basins", "parks", "plazas", "rails", "walls", "open"]) for (const o of d[k] || []) { o.pts = P(o.pts); if (o.wharves) { if (side === "north") o.wharves = [SW - o.wharves[1], SW - o.wharves[0]]; else delete o.wharves; } }
   if (d.gasworks) d.gasworks = d.gasworks.map(pt);
   if (d.signs) d.signs = d.signs.map(pt);
   for (const l of d.landmarks || []) { if (l.at) l.at = pt(l.at); if (l.pts) l.pts = P(l.pts); if (l.ang != null) l.ang = +l.ang + da; }
@@ -100,10 +109,18 @@ function inventCity(dir, name, flags, log) {
   if (kind === "camp" || kind === "base") return inventSite(dir, name, flags, kind, log);
   if (["moonbase", "outpost", "colony", "station"].includes(kind)) return inventOutpost(dir, name, flags, kind, log);
   if (kind !== "city") throw new Error(`unknown kind "${flags.kind}": use city, camp, base, moonbase, outpost, colony or station`);
+  // (the campaign's own world when the command gives no era, year or culture: a fantasy campaign's settlements are
+  // fantasy ones, never the modern or the 1888 default; the user, 18 Nov 2026: "Atlas generated an 1888-style map")
+  if (!flags.era && !flags.year && !flags.culture) { const g = campaignGenre(dir); if (g === "fantasy") flags = Object.assign({}, flags, { era: "fantasy" }); else if (g === "scifi") flags = Object.assign({}, flags, { era: "future" }); }
   const { era, year, look, fantasy } = eraOf(flags), ck = String(flags.culture && flags.culture !== true ? flags.culture : fantasy ? "fantasy" : "english").toLowerCase(), C = CULTURES[ck];
   if (!C) throw new Error(`unknown culture "${flags.culture}": use one of ${Object.keys(CULTURES).join(", ")}`);
-  const size = String(flags.size && flags.size !== true ? flags.size : "city").toLowerCase(), dims = { town: [250, 160], city: [320, 200], metropolis: [400, 250] }[size];
-  if (!dims) throw new Error(`unknown size "${flags.size}": use town, city or metropolis`);
+  // its size: as asked; else from how many live there (--population); else from its name (a village is a village); else a
+  // city. A hamlet and a village are a few houses round a lane or a green, with fields and woods all about, never a city
+  // that fills the sheet (the user, 18 Nov 2026: "Do not inflate settlements just to fill the canvas")
+  const pop = +flags.population || 0;
+  const size = String(flags.size && flags.size !== true ? flags.size : pop ? (pop < 120 ? "hamlet" : pop < 1500 ? "village" : pop < 12000 ? "town" : pop < 250000 ? "city" : "metropolis") : /\bhamlet\b/i.test(name) ? "hamlet" : /\bvillage\b/i.test(name) ? "village" : /\btown\b/i.test(name) ? "town" : "city").toLowerCase(), dims = { hamlet: [150, 100], village: [200, 130], town: [250, 160], city: [320, 200], metropolis: [400, 250] }[size];
+  if (!dims) throw new Error(`unknown size "${flags.size}": use hamlet, village, town, city or metropolis`);
+  const small = size === "hamlet" || size === "village";
   const site = String(flags.site && flags.site !== true ? flags.site : "river").toLowerCase().replace("port", "harbour").replace("sea", "coast").replace("inland", "plain").replace("desert", "plain").replace("oasis", "lake");
   if (!["river", "coast", "harbour", "lake", "plain"].includes(site)) throw new Error(`unknown site "${flags.site}": use river, coast, harbour, lake or plain`);
   const plan = String(flags.plan && flags.plan !== true ? flags.plan : (era === "modern" || C.grid) ? "grid" : "organic").toLowerCase();
@@ -123,7 +140,7 @@ function inventCity(dir, name, flags, log) {
   const hillA = flags.hills != null && flags.hills !== true && isFinite(+flags.hills) ? angOf(+flags.hills) : null;
   const riverRun = /^(ns|ew)$/.test(String(flags.river || "")) ? (Math.abs(rot) === 90 ? (flags.river === "ns" ? "ew" : "ns") : flags.river) : "";
   const roadTo = n => ck === "french" ? `Route de ${n}` : ck === "german" ? `${n}er Straße` : `${n} Road`;
-  const cx = SW * R(.46, .54), cy = SH * (wet ? R(.36, .42) : R(.45, .53)), RC = Math.min(SW, SH) * (era === "medieval" ? .3 : .27);
+  const cx = SW * R(.46, .54), cy = SH * (wet ? R(.36, .42) : R(.45, .53)), RC = Math.min(SW, SH) * (era === "medieval" ? .3 : .27) * (size === "hamlet" ? .32 : size === "village" ? .45 : 1);
   const mains = shuffle(C.mains), holy = shuffle(C.holy), dnames = C.districts.slice(0, 1).concat(shuffle(C.districts.slice(1)));
   let mi = 0; const mainName = () => mains[mi++ % mains.length];
   const rpool = C.names ? C.names.pool : L("Swan|Crown|Anchor|Mitre|Bell|Angel|Plough|Pump|Tenter|Dyer|Tanner|Cooper|Chandler|Weaver|Salter|Fuller|Wheeler|Turner|Harrow|Magpie|Feathers|Rope|Tallow|Candle|Mulberry|Raven|Rook|Mill|Chapel|Friar|Abbey|Mint|Orchard|Forge|Falcon|Stag|Lantern|Beacon|Ferry|Willow"), rsuf = C.names ? C.names.suffix : [L("Street|Road|Row|Place"), L("Lane|Street|Row|Walk"), L("Alley|Court|Yard|Passage")], used = new Set(C.mains);
@@ -136,12 +153,12 @@ function inventCity(dir, name, flags, log) {
   if (wet) { const pts = []; for (let x = X0 - 10; x <= X1 + 10; x += 6) pts.push([x, seaY(x)]); pts.push([X1 + 10, Y1 + 10], [X0 - 10, Y1 + 10]); basins.push({ name: "", pts }); signs.push([bayX, seaY(bayX) + 16, C.harbour]); }
   let lake = null;
   if (site === "lake") { const lx = SW * (rnd() < .5 ? .14 : .86), ly = SH * R(.2, .8), lr = Math.min(SW, SH) * R(.26, .34); lake = Array.from({ length: 26 }, (_, i) => { const a = i / 26 * 6.2832, r = lr * (1 + .16 * Math.sin(a * 3 + ph1) + .09 * Math.sin(a * 5 + ph2)); return [lx + r * Math.cos(a), ly + r * .8 * Math.sin(a)]; }); basins.push({ name: C.lake, pts: lake }); }
-  let river = null; const rhw = { town: 3.2, city: 4.4, metropolis: 5.6 }[size];
+  let river = null; const rhw = { hamlet: 1.6, village: 2.2, town: 3.2, city: 4.4, metropolis: 5.6 }[size];
   if (site === "river" || site === "harbour") {
     const ns = site === "harbour" || (riverRun ? (rnd(), riverRun === "ns") : rnd() < .3), amp = R(9, 16), off = (rnd() < .5 ? -1 : 1) * R(15, 24), pts = [];
     if (ns) { const xr = site === "harbour" ? bayX : cx + off; for (let y = Y0 - 10; y <= (site === "harbour" ? seaY(bayX) + 6 : Y1 + 10); y += 16) pts.push([xr + (site === "harbour" ? (cx + off - bayX) * Math.max(0, 1 - (y - Y0) / (cy - Y0 + 30)) : 0) + amp * Math.sin(y / 38 + ph1), y]); }
     else for (let x = X0 - 10; x <= X1 + 10; x += 18) pts.push([x, cy + Math.abs(off) + amp * Math.sin(x / 52 + ph1) + amp * .4 * Math.sin(x / 23 + ph2)]);
-    river = pts; rivers.push({ pts, hw: rhw, smooth: 2, label: pick(C.rivers), big: rhw > 4 && !ns, wharves: era === "modern" ? undefined : [cx - 70, cx + 70] });
+    river = pts; rivers.push({ pts, hw: rhw, smooth: 2, label: pick(C.rivers), big: rhw > 4 && !ns, wharves: era === "modern" || small ? undefined : [cx - 70, cx + 70] });
   }
   const segD = (x, y, pts) => { let best = 1e9; for (let i = 1; i < pts.length; i++) { const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy; let t = l ? ((x - ax) * dx + (y - ay) * dy) / l : 0; t = t < 0 ? 0 : t > 1 ? 1 : t; best = Math.min(best, Math.hypot(x - ax - t * dx, y - ay - t * dy)); } return best; };
   const inSea = (x, y, m = 0) => wet && y > seaY(x) - m, inLake = (x, y, m = 0) => !!lake && (pip(x, y, lake) || (m > 0 && segD(x, y, [...lake, lake[0]]) < m)), onRiver = (x, y, m = 0) => !!river && segD(x, y, river) < rhw + m;
@@ -150,7 +167,7 @@ function inventCity(dir, name, flags, log) {
   // a spot near (x, y) that is on dry land and on the sheet
   const land = (x, y, m = 4) => { for (let r = 0; r < 60; r += 3) for (let a = 0; a < 6.28; a += .7) { const px = x + r * Math.cos(a), py = y + r * Math.sin(a); if (onSheet(px, py, 8) && dry(px, py, m)) return [px, py]; } return [x, y]; };
 
-  const roads = [], walls = [], rails = [], parks = [], plazas = [], landmarks = [], gasworks = [], districts = {};
+  const roads = [], walls = [], rails = [], parks = [], plazas = [], landmarks = [], gasworks = [], districts = {}, data0 = { open: [] };
   // a road is kept only where it runs on land; the sea and a lake end it, and only main roads and streets bridge the river
   const lay = (name, cls, pts, opt) => {
     const dense = []; for (let i = 1; i < pts.length; i++) { const [ax, ay] = pts[i - 1], [bx, by] = pts[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 1.5)); for (let q = i === 1 ? 0 : 1; q <= n; q++) dense.push([ax + (bx - ax) * q / n, ay + (by - ay) * q / n]); }
@@ -204,7 +221,7 @@ function inventCity(dir, name, flags, log) {
     for (let i = 0, n = 0; i < dq.length && n < (size === "town" ? 4 : 6); i++) { const [x, y] = at(dq[i][0], dq[i][1]); if (onSheet(x, y, 26) && dry(x, y, 6)) districts[dnames[n++ % dnames.length]] = [x, y]; }
   } else {
     // ---- the old plan: roads from the gates to the market, a wall or the boulevard that replaced it, streets between
-    const nA = size === "town" ? 5 : Math.floor(R(5, 7.99)), a0 = R(0, 6.28), arms = [];
+    const nA = size === "hamlet" ? 2 : size === "village" ? 3 : size === "town" ? 5 : Math.floor(R(5, 7.99)), a0 = R(0, 6.28), arms = [];
     const wob = a => 1 + .1 * Math.sin(a * 3 + ph1) + .06 * Math.sin(a * 5 + ph2), ringPt = (a, r) => [cx + r * wob(a) * Math.cos(a), cy + r * wob(a) * .86 * Math.sin(a)];
     // (the roads to the world's places go first, each named for where it goes; the others where there is room between)
     const armDir = [], near = (p, q) => Math.abs(((p - q + 9.4248) % 6.2832) - 3.1416) < .55;
@@ -212,28 +229,30 @@ function inventCity(dir, name, flags, log) {
     for (let i = 0; i < (armDir.length || nA); i++) {
       const a = armDir.length ? armDir[i][0] : a0 + i * 6.2832 / nA + R(-.22, .22), pts = [[cx, cy]]; let x = cx, y = cy, h = a;
       for (let s = 0; s < 30; s++) { h += R(-.12, .12) + (a - h) * .3; x += Math.cos(h) * 22; y += Math.sin(h) * 22; pts.push([x, y]); if (x < X0 - 6 || x > X1 + 6 || y < Y0 - 6 || y > Y1 + 6) break; }
-      arms.push(a); lay((armDir.length && armDir[i][1]) || mainName(), 0, pts);
+      arms.push(a); lay((armDir.length && armDir[i][1]) || mainName(), small ? 1 : 0, pts);
     }
     arms.sort((p, q) => p - q);
     const ring = (r, from, to) => { const pts = []; for (let a = from; a <= to + 1e-6; a += .16) pts.push(ringPt(a, r)); return pts; };
-    const walled = era === "medieval" || flags.walls;
-    lay(walled ? C.wall : streetName(1), 1, ring(RC - 5, 0, 6.2832));
+    const walled = (era === "medieval" && !small) || flags.walls;
+    if (!small) lay(walled ? C.wall : streetName(1), 1, ring(RC - 5, 0, 6.2832));
     if (walled) { let run = []; for (const p of ring(RC, 0, 6.2832)) { if (dry(p[0], p[1], .5) && p[0] > X0 && p[0] < X1 && p[1] > Y0 && p[1] < Y1) run.push(p); else { if (run.length > 2) walls.push({ pts: run }); run = []; } } if (run.length > 2) walls.push({ pts: run }); }
-    else lay(C.ring, 0, ring(RC + 3, 0, 6.2832));
-    for (let i = 0; i < arms.length; i++) { const a = arms[i], b = i + 1 < arms.length ? arms[i + 1] : arms[0] + 6.2832; lay(streetName(1), 1, ring(RC * .52, a, b)); if ((b - a) > .5) lay(streetName(1), 1, ring(RC * R(1.45, 1.8), a + .06, b - .06)); }
+    else if (!small) lay(C.ring, 0, ring(RC + 3, 0, 6.2832));
+    if (!small) for (let i = 0; i < arms.length; i++) { const a = arms[i], b = i + 1 < arms.length ? arms[i + 1] : arms[0] + 6.2832; lay(streetName(1), 1, ring(RC * .52, a, b)); if ((b - a) > .5) lay(streetName(1), 1, ring(RC * R(1.45, 1.8), a + .06, b - .06)); }
+    else if (size === "village") lay(streetName(2), 2, ring(RC * .7, arms[0] + .3, arms[0] + 2.6));
     if (wet) lay(C.quay, 1, Array.from({ length: 40 }, (_, i) => { const x = cx - 110 + 220 * i / 39; return [x, seaY(x) - 3.6]; }));
-    plazas.push({ name: C.market, pts: Array.from({ length: 8 }, (_, i) => [cx + 5.2 * Math.cos(i / 8 * 6.2832 + .39), cy + 4.4 * Math.sin(i / 8 * 6.2832 + .39)]) });
+    plazas.push({ name: small ? (size === "village" ? "The Green" : "") : C.market, pts: Array.from({ length: 8 }, (_, i) => [cx + (small ? 3.4 : 5.2) * Math.cos(i / 8 * 6.2832 + .39), cy + (small ? 2.8 : 4.4) * Math.sin(i / 8 * 6.2832 + .39)]) });
     const bis = i => (arms[i] + (i + 1 < arms.length ? arms[i + 1] : arms[0] + 6.2832)) / 2, big = arms.map((_, i) => i).sort((p, q) => ((q + 1 < arms.length ? arms[q + 1] : arms[0] + 6.2832) - arms[q]) - ((p + 1 < arms.length ? arms[p + 1] : arms[0] + 6.2832) - arms[p]));
     const polar = (a, r) => ringPt(a, r);
-    { const [x, y] = polar(bis(big[0]), 13); mark(C.cathedral(holy[0]), C.faith, x, y, C.faith === "church" ? { top: era === "medieval" ? "twin" : "", size: 1.25, major: true } : { size: 1.25, major: true }); }
-    { const [x, y] = polar(bis(big[1 % big.length]), 12); mark(era === "medieval" ? C.hall : C.cityhall, "hall", x, y, { top: era === "medieval" ? "spire" : "dome", size: 1.05, major: true }); }
+    if (small) { if (size === "village") { const [x, y] = polar(bis(big[0]), 7); mark(C.church(holy[0]), C.faith, x, y, { size: .8, major: true }); } }
+    else { const [x, y] = polar(bis(big[0]), 13); mark(C.cathedral(holy[0]), C.faith, x, y, C.faith === "church" ? { top: era === "medieval" ? "twin" : "", size: 1.25, major: true } : { size: 1.25, major: true }); }
+    if (!small) { const [x, y] = polar(bis(big[1 % big.length]), 12); mark(era === "medieval" ? C.hall : C.cityhall, "hall", x, y, { top: era === "medieval" ? "spire" : "dome", size: 1.05, major: true }); }
     // (the castle stands on the high ground, where the world has hills beside the city)
-    if (era === "medieval" || rnd() < .45 || hillA != null) { const [x, y] = polar(hillA != null ? hillA : bis(big[2 % big.length]), RC - 9); mark(C.castle, "castle", x, y, { major: true, size: era === "medieval" ? 1 : .8 }); }
-    for (let i = 1; i <= (size === "town" ? 2 : 4); i++) { const [x, y] = polar(bis(i % arms.length) + R(-.25, .25), RC * R(.55, 1.5)); mark(C.church(holy[i % holy.length]), C.faith, x, y, { size: .75, label: i < 3 }); }
+    if (!small && (era === "medieval" || rnd() < .45 || hillA != null)) { const [x, y] = polar(hillA != null ? hillA : bis(big[2 % big.length]), RC - 9); mark(C.castle, "castle", x, y, { major: true, size: era === "medieval" ? 1 : .8 }); }
+    for (let i = 1; i <= (small ? 0 : size === "town" ? 2 : 4); i++) { const [x, y] = polar(bis(i % arms.length) + R(-.25, .25), RC * R(.55, 1.5)); mark(C.church(holy[i % holy.length]), C.faith, x, y, { size: .75, label: i < 3 }); }
     if (wet) { const x = bayX + bayW * 1.15; landmarks.push({ name: C.light, kind: "spire", top: "light", at: [x, seaY(x) - 3], h: 5 }); }
     // a fantasy city's wonders: a wizard's tower in the town, a great tree beyond it, standing stones outside the walls,
     // and a crystal near the market
-    if (fantasy) {
+    if (fantasy && !small) {
       const fp = a => a[Math.floor(rnd() * a.length)];
       // a wonder that stands in the open has a clearing round it, where no house grows
       const clearing = (x, y, r, trees) => parks.push({ name: "", pts: Array.from({ length: 16 }, (_, i) => [x + r * Math.cos(i / 16 * 6.2832), y + r * .85 * Math.sin(i / 16 * 6.2832)]), trees });
@@ -242,7 +261,7 @@ function inventCity(dir, name, flags, log) {
       { const [x, y] = land(...polar(bis(big[1 % big.length]) + Math.PI, RC * 1.95), 12); landmarks.push({ name: fp(["The Standing Stones", "The Old Ring", "The Nine Sisters"]), kind: "stones", at: [x, y], major: true }); clearing(x, y, 12, .15); }
       { const [x, y] = polar(bis(big[2 % big.length]) + .5, RC * .32); mark(fp(["The Crystal Well", "The Shard", "The Wishing Stone"]), "crystal", x, y, { size: .8 }); }
     }
-    if (era !== "medieval") {
+    if (era !== "medieval" && !small) {
       const ra = bis(big[0]) + Math.PI, n = [Math.cos(ra), Math.sin(ra)], d = RC + 20, t = [-n[1], n[0]], pt = s => [cx + n[0] * d + t[0] * s + n[0] * (s * s) / 1400, cy + n[1] * d * .86 + t[1] * s + n[1] * (s * s) / 1400];
       rails.push({ name: C.rail, pts: [-260, -130, -50, 0, 50, 130, 260].map(pt) });
       const [sx, sy] = mark(C.station, "hall", cx + n[0] * (d - 7), cy + n[1] * (d - 7) * .86, { size: 1.4, major: true });
@@ -251,7 +270,7 @@ function inventCity(dir, name, flags, log) {
       parks.push({ name: C.park, pts: Array.from({ length: 14 }, (_, i) => { const a = i / 14 * 6.2832, r = pr * (1 + .18 * Math.sin(a * 3 + ph2)); return [px + r * Math.cos(a), py + r * .8 * Math.sin(a)]; }), trees: .7 });
       void sx; void sy;
     }
-    if (era === "modern") {
+    if (era === "modern" && !small) {
       const da = bis(big[2 % big.length]), [dx, dy] = polar(da, RC * 1.25), sig = RC * .7, cell = 16, cols = Math.ceil((X1 - X0) / cell), rows = Math.ceil((Y1 - Y0) / cell), v = [];
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const x = X0 + (c + .5) * cell, y = Y0 + (r + .5) * cell, h = 17 * Math.exp(-(((x - dx) ** 2 + (y - dy) ** 2) / (sig * sig))); v.push(h < 3.2 ? 0 : Math.round(h * 10) / 10); }
       heights = { cell, cols, rows, x0: X0, y0: Y0, v };
@@ -259,8 +278,22 @@ function inventCity(dir, name, flags, log) {
       mark(C.stadium, "stadium", ...polar(bis(big[0]) + 2.2, RC * 2.1), { size: 1 });
       extra = { wharf: js("() => false") };
     }
-    districts[dnames[0]] = [cx, cy + (walled ? 0 : 2)];
-    for (let i = 0, n = 1; i < arms.length && n < (size === "town" ? 4 : 6); i++) { const [x, y] = polar(bis(i), RC * 1.75); if (onSheet(x, y, 26) && dry(x, y, 6) && Object.values(districts).every(q => Math.hypot(q[0] - x, q[1] - y) > 50)) districts[dnames[n++]] = [x, y]; }
+    districts[small ? name.replace(/^(the )?(village|hamlet) of /i, "").replace(/^./, c => c.toUpperCase()) : dnames[0]] = [cx, cy + (walled ? 0 : 2)];
+    // (a hamlet or a village: the houses only near the lanes' meeting; all about it fields, woods and open ground, where
+    // nothing is built, so it stands in its countryside instead of filling the sheet)
+    if (small) {
+      const inner = RC * 1.15, n = size === "hamlet" ? 9 : 12, open = data0.open;
+      for (let i = 0; i < n; i++) {
+        const a = i / n * 6.2832, b = (i + 1) / n * 6.2832 + .002, far = Math.max(SW, SH) * 1.2, pts = [];
+        for (let t = 0; t <= 6; t++) { const q = a + (b - a) * t / 6; pts.push([cx + inner * (1 + .12 * Math.sin(q * 5 + ph1)) * Math.cos(q), cy + inner * .86 * (1 + .12 * Math.sin(q * 5 + ph1)) * Math.sin(q)]); }
+        for (let t = 6; t >= 0; t--) { const q = a + (b - a) * t / 6; pts.push([cx + far * Math.cos(q), cy + far * Math.sin(q)]); }
+        open.push({ kind: "field", pts });
+      }
+      // woods here and there in the fields, out of the village
+      for (let k = 0; k < (size === "hamlet" ? 3 : 5); k++) { const a = R(0, 6.2832), d = RC * R(2.2, 4.2), wx = cx + d * Math.cos(a), wy = cy + d * .8 * Math.sin(a), wr = R(12, 24); if (!dry(wx, wy, wr * .5)) continue;
+        parks.push({ name: "", pts: Array.from({ length: 14 }, (_, i) => { const q = i / 14 * 6.2832, r = wr * (1 + .25 * Math.sin(q * 3 + k) + .1 * Math.sin(q * 7 + ph2)); return [wx + r * Math.cos(q), wy + r * .8 * Math.sin(q)]; }), trees: 1.3 }); }
+    }
+    for (let i = 0, n = 1; i < arms.length && !small && n < (size === "town" ? 4 : 6); i++) { const [x, y] = polar(bis(i), RC * 1.75); if (onSheet(x, y, 26) && dry(x, y, 6) && Object.values(districts).every(q => Math.hypot(q[0] - x, q[1] - y) > 50)) districts[dnames[n++]] = [x, y]; }
     const core = RC.toFixed(0), X = cx.toFixed(0), Y = cy.toFixed(0), side = rnd() < .5 ? 1 : -1;
     Object.assign(extra, {
       crooked: js(`(x, y) => Math.hypot(x - ${X}, y - ${Y}) < ${core} ? 1 : ${era === "medieval" ? .7 : .3}`),
@@ -270,11 +303,11 @@ function inventCity(dir, name, flags, log) {
   }
 
   const data = Object.assign({
-    look, region: region || undefined, seed, sheet: { w: SW, h: SH, margin: M },
+    look, region: region || undefined, seed, sheet: { w: SW, h: SH, margin: M }, open: data0.open.length ? data0.open : undefined,
     title: C.title(name), subtitle: year != null ? `in the year ${year}` : "", scaleLabel: era === "modern" ? "Scale" : "Scale of Chains",
     invented: { name, era: fantasy ? "fantasy" : era, year, site, culture: ck, plan, size },
     names: C.names || undefined, districts, roads, rivers, basins, parks, plazas, rails, walls, gasworks: gasworks.length ? gasworks : undefined, signs, landmarks, heights,
-    boats: river || wet ? (era === "modern" ? 12 : 34) : 0
+    boats: small ? (wet ? 2 : 0) : river || wet ? (era === "modern" ? 12 : 34) : 0
   }, extra);
   turn(data, seaSide, SW, SH, M);
   const geo = `${seaSide !== "south" ? " --sea " + seaSide : ""}${riverRun ? " --river " + flags.river : ""}${routes.length ? ` --roads "${flags.roads}"` : ""}${hillA != null ? " --hills " + flags.hills : ""}`;
@@ -282,7 +315,7 @@ function inventCity(dir, name, flags, log) {
   // (the page makes the cities of its world map itself, with the same plan: atlas-world.js)
   if (flags.layoutOnly) return data;
   const file = writeCity(dir, data, [
-    `${name}: an invented city, laid out by: atlas.js city --invent "${name}" ${year != null ? "--year " + year : "--era " + (fantasy ? "fantasy" : era)} --site ${site} --culture ${ck} --plan ${plan} --size ${size} --seed ${seed}${geo}`,
+    `${name}: an invented ${size}, laid out by: atlas.js city --invent "${name}" ${year != null ? "--year " + year : "--era " + (fantasy ? "fantasy" : era)} --site ${site} --culture ${ck} --plan ${plan} --size ${size} --seed ${seed}${geo}`,
     "The same command with the same seed lays out the same city; another seed, another city.",
     "This file is rewritten whenever the city is generated again. Put your own changes in campaign.js:",
     '  ATLAS.cityEdit(c => { c.title = "..."; c.landmarks.push({ name, kind, at: [x, y] }); c.districts["The Rookery"] = [x, y]; });'

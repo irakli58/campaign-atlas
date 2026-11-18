@@ -745,9 +745,12 @@
   // what the city is told: its age and people as the campaign's own city has them, its size by what kind of place it is
   function cityFlags(WD, L) {
     const main = A.cityData || {}, look = typeof main.look === "string" ? main.look : (main.look || {}).base || "", inv = main.invented || {};
-    const fantasy = look === "fantasy" || /fantas/i.test(String((A.config || {}).setting || "")) || inv.era === "fantasy";
-    const era = fantasy ? "fantasy" : WD.look === "atlas" || look === "modern" ? "modern" : look === "old" || look === "industrial" ? "industrial" : "medieval";
-    const g = whereItLies(WD, L), size = /capital/.test(L.kind) && era === "modern" ? "metropolis" : /capital|city|port/.test(L.kind) ? "city" : "town";
+    // (the campaign's own genre first, so a fantasy campaign's settlements are fantasy ones, whatever look its main city
+    // has: the user's Curse of Strahd came out as 1888 towns, 18 Nov 2026)
+    const W = A.campaignWorld ? A.campaignWorld() : {}, fantasy = W.fantasy || look === "fantasy" || /fantas/i.test(String((A.config || {}).setting || "")) || inv.era === "fantasy";
+    const era = fantasy ? "fantasy" : W.scifi ? "future" : WD.look === "atlas" || look === "modern" ? "modern" : look === "old" || look === "industrial" ? "industrial" : "medieval";
+    // its size by what kind of place it is, and its own name: a hamlet, a village, a town, a city (never every place a town)
+    const nk = String(L.kind || "") + " " + String(L.name || ""), g = whereItLies(WD, L), size = /capital/.test(L.kind) && era === "modern" ? "metropolis" : /capital|city|port/.test(L.kind) ? "city" : /hamlet|farm|homestead|camp|outpost|hut|mill|inn\b|tavern|shrine|lodge|tower/i.test(nk) ? "hamlet" : /village|abbey|monaster|priory/i.test(nk) ? "village" : /town|market/i.test(nk) ? "town" : "village";
     const f = { era, size, site: g.site, culture: inv.culture || (fantasy ? "fantasy" : "english") };
     for (const k of ["sea", "river", "roads", "hills"]) if (g[k] != null) f[k] = g[k];
     if (main.region) f.region = main.region;

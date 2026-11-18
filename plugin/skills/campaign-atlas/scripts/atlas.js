@@ -46,7 +46,7 @@
                                                  a REAL city: its true streets, water, parks and landmarks
    node atlas.js city <dir> --invent "Saltreach" [--year 1350 | --era ...] [--site river|coast|harbour|lake|plain]
                       [--culture english|american|french|italian|spanish|german|arabic|japanese|fantasy]
-                      [--plan organic|grid] [--size town|city|metropolis] [--region ...] [--seed N]
+                      [--plan organic|grid] [--size hamlet|village|town|city|metropolis] [--population N] [--region ...] [--seed N]
                       [--sea north|south|east|west] [--river ns|ew] [--roads "270:Harrowgate,0:Eldermere"] [--hills 315]
                                                  where it lies in its world: the sea's side, the river's run, the roads
                                                  to other places (bearings, 0 north), the high ground (the world map gives them)
@@ -79,7 +79,7 @@ const fs = require("fs"), path = require("path"), crypto = require("crypto");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "age", "tectonics", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare", "sea", "river", "roads", "hills", "levels", "craters", "liquid", "locked", "lid", "temp", "cover", "env", "palette", "from", "type", "scope", "layout", "star", "system-name", "galaxy-name", "model", "chunk"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "age", "tectonics", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare", "sea", "river", "roads", "hills", "levels", "craters", "liquid", "locked", "lid", "temp", "cover", "env", "palette", "from", "type", "scope", "layout", "star", "system-name", "galaxy-name", "model", "chunk", "population"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -858,8 +858,22 @@ function checkTable(A) {
   const line = `the table: ${clocks.length} clock${clocks.length === 1 ? "" : "s"} · ${ses.length} session${ses.length === 1 ? "" : "s"} · ${Object.keys(pcs).length} character${Object.keys(pcs).length === 1 ? "" : "s"} · ${hs.length} handout${hs.length === 1 ? "" : "s"} · ${stats} stat block${stats === 1 ? "" : "s"}${evs.length ? ` · ${evs.length} world event${evs.length === 1 ? "" : "s"}` : ""}${Object.keys(facs).length ? ` · ${Object.keys(facs).length} faction${Object.keys(facs).length === 1 ? "" : "s"}` : ""}`;
   return { line, out, problems, notes };
 }
+// the campaign's settlements against its own world: the look its genre calls for, and a size that fits its name (the user,
+// 18 Nov 2026: a fantasy Barovia drawn as an 1888 city filling the sheet; never again in silence)
+function checkWorldFit(A) {
+  const out = [], W = A.campaignWorld ? A.campaignWorld() : {}, cities = Object.assign({}, A.cities || {}); if (A.cityData && !Object.values(cities).includes(A.cityData)) cities.main = A.cityData;
+  const lookOf = d => typeof d.look === "string" ? d.look : d.look && d.look.base || "";
+  for (const [id, d] of Object.entries(cities)) {
+    if (!d || d.real) continue; const name = (d.invented && d.invented.name) || d.title || id, look = lookOf(d), size = (d.invented || {}).size || "";
+    if (W.fantasy && look && !["fantasy", "medieval"].includes(look)) out.push(`the city "${name}" wears the ${look} look, in a fantasy campaign: make it again (atlas.js city --invent, which now takes the campaign's genre), or give it look: "fantasy"`);
+    if (W.scifi && look && !["future", "scifi"].includes(look)) out.push(`the city "${name}" wears the ${look} look, in a science fiction campaign`);
+    if (/\b(village|hamlet)\b/i.test(name) && /^(town|city|metropolis)$/.test(size)) out.push(`"${name}" is a ${/hamlet/i.test(name) ? "hamlet" : "village"} by its name but was laid out as a ${size}: make it again with --size ${/hamlet/i.test(name) ? "hamlet" : "village"} (or --population N)`);
+  }
+  return out;
+}
 function cmdCheck(dir, want) {
   const A = load(dir); let problems = 0, notes = 0;
+  for (const m of checkWorldFit(A)) { console.log(`!! ${m}`); problems++; }
   const list = (want.length ? want : A.order);
   for (const id of list) {
     if (!A.meta[id]) { console.log(`!! ${id}: no such place`); problems++; continue; }

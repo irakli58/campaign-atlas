@@ -180,7 +180,10 @@
     // a campaign's own changes to a city that was fetched or generated for it: ATLAS.cityEdit(c => { ... }), applied once
     // an edit with no city named is for the campaign's main city (city.js); ATLAS.cityEdit(fn, "id") is for that city
     if (raw && A.cityEdits && !raw.__edited) { Object.defineProperty(raw, "__edited", { value: true }); const rid = raw.id || "main", main = raw === A.cityData; for (const e of A.cityEdits) { const f = typeof e === "function" ? e : e.fn, id = typeof e === "function" ? null : e.id; if (id ? id === rid : main) f(raw); } }
-    const D = Object.assign({ seed: 1888, look: "old", title: "", subtitle: "", scaleLabel: "", roads: [], rivers: [], basins: [], parks: [], squares: [], rails: [], forts: [], towers: [], gasworks: [], signs: [], districts: {}, roofs: {}, roof: "#7a2e3a", plazas: [], open: [], walls: [], landmarks: [], rows: [], footprints: [], ruin: 0, credit: "", real: false }, raw || {});
+    // (a city with no look of its own wears the campaign's world: a fantasy campaign's is fantasy, a science fiction one's
+    // the future; only a campaign of our own world falls back to the old look: the 1888 default made Barovia Victorian)
+    const W0 = A.campaignWorld ? A.campaignWorld() : {}, look0 = W0.fantasy ? "fantasy" : W0.scifi ? "future" : "old";
+    const D = Object.assign({ seed: 1888, look: look0, title: "", subtitle: "", scaleLabel: "", roads: [], rivers: [], basins: [], parks: [], squares: [], rails: [], forts: [], towers: [], gasworks: [], signs: [], districts: {}, roofs: {}, roof: "#7a2e3a", plazas: [], open: [], walls: [], landmarks: [], rows: [], footprints: [], ruin: 0, credit: "", real: false }, raw || {});
     D.sheet = Object.assign({ w: 320, h: 200, margin: 30 }, (raw && raw.sheet) || {});
     // a landmark given only its outline (pts) stands at the outline's centre (without this it was skipped, and a place
     // that said it was that landmark stood somewhere else entirely: Birkenau's Crematorium III, 14 Oct 2026)
@@ -2257,5 +2260,8 @@ function createMap3D(host, C, planCanvas, hooks) {
   // the game master's changes made in the city editor and given back to the campaign (atlas-cityedit.js): steps laid
   // over the city once it is built, never building it again: ATLAS.cityChanges("main", [{ op: "remove", at: [x, y] }, ...])
   A.cityChanges = (id, steps) => { (A.cityChangeData = A.cityChangeData || {})[id || "main"] = (steps || []).slice(); return A; };
-  A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, FANTASY_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN, kit: () => KIT, KIT_SHAPES: ["box", "roof", "cylinder", "cone", "tube", "dome", "ball", "pyramid", "spire", "obelisk", "frustum", "ring", "arch"], KIT_MATS: ["wall", "roof", "dark", "glow", "green", "glass", "gold", "copper", "stone", "brick", "wood", "white", "black", "water"], KIT_DRESS: ["balcony", "dome", "turret"] };
+  // (the city's plan drawn flat, as its 3D map is printed: for a check or a preview without a 3D card; the tests of
+  // settlement scale, 18 Nov 2026)
+  const preview2d = (raw, ppu) => { const D = prepare(raw); use(D); const city = buildCity(D, []); return { canvas: drawPlan(city, ppu || 3), city }; };
+  A.cityKit = { preview2d, prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, FANTASY_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN, kit: () => KIT, KIT_SHAPES: ["box", "roof", "cylinder", "cone", "tube", "dome", "ball", "pyramid", "spire", "obelisk", "frustum", "ring", "arch"], KIT_MATS: ["wall", "roof", "dark", "glow", "green", "glass", "gold", "copper", "stone", "brick", "wood", "white", "black", "water"], KIT_DRESS: ["balcony", "dome", "turret"] };
 })(ATLAS);
