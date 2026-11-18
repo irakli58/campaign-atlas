@@ -99,3 +99,34 @@ required.
 1. **The store, the rules files and the generators.** Then the Items tab, Make it up, the place page and the person card.
 2. **The Copilot**, the **loot tables**, and the **clue and reveal** handling.
 3. **The tour**, the documentation (references), and tests on the realm and Kestrel examples.
+
+## Done (18 Nov 2026, commit e77e565)
+
+Phases 1 and 2 are built and tested on both examples, and the tour teaches them:
+- the one store with owners, plus moves, containers, quantities, using up and destroying;
+- the rules files and the game master's own list;
+- every generator, and loot tables;
+- secrets, reveals, Show the players, and Make it a clue with approval;
+- the Items tab, the Make it up card, the place page, the person card, and the Copilot's Things and loot (Claude's
+  answer is read back as proposals, with the game's own items keeping their statistics and anything new marked
+  Homebrew);
+- the players' copy and journal list only the party's things.
+
+Tests:
+- realm (D&D 5e): loot follows the place. The forge gives weapons and mithral, the academy spellbooks and a poisoner's
+  kit, the poor mill almost nothing, the rich keep coin and a sealed order.
+- Kestrel (Call of Cthulhu in the far future): future goods, not 1920s ones.
+- The secret never reaches the players' screen.
+- axe-core reports no violations on the Items tab.
+- smoke-all.js opens 60 tabs with no errors.
+
+## Still to do
+
+- **Item pictures:** each category's small drawing, framed for the age, or a picture link. A drawn illustration for
+  important things (as atlas-portrait.js draws faces) is not done yet.
+- **Level and party strength:** "a magical sword for a level 5 party" works through the Copilot. There is no level
+  control in the form yet.
+- **Buying a generated shop's stock with the purse:** a thing can be moved to the party now. Money and goods'
+  merchants keep their own goods-based buying.
+- **Room-level places:** a thing is at a place, not yet at a room of its map.
+- **The Writer Council designing artifacts:** not wired in yet.
