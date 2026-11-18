@@ -1719,6 +1719,7 @@
         <label>Climate <select name="climate">${opt(clim, g.climate || "varied")}</select></label>
         <label>Where the deserts and rains fall <select name="rules">${opt([["earth", "As on the Earth: the winds, the seas, the mountains decide"], ["classic", "Atlas's older, simpler rules"]], g.rules || "earth")}</select></label>
         <label>The ocean's currents <select name="currents">${opt([["on", "Worked out: they warm and cool the coasts, bring fog and coastal deserts"], ["retro", "Worked out, on a world turning the other way"], ["", "Not worked out"]], g.currents != null ? g.currents : "on")}</select></label>
+        <label title="The same world as it stood that long ago: its plates carried back, its mountains, rivers, coasts and climate made for that time. Leave it at 0 for today. The map it replaces is kept under Earlier versions">How long ago <input type="number" name="ago" min="0" max="500" step="5" value="${esc(g.ago || 0)}" style="width:6em"> million years (0: today)</label>
         <label>The coasts <select name="coast">${opt([["geologic", "Shaped by their history: rock, ice-age glaciers, the sea's rise, rivers and waves (fjords, rias, deltas, reefs)"], ["natural", "Formed by waves, drift and sand only: beaches, cliffs, marsh, dunes, barrier islands"], ["", "Simple: beaches where the shore is low and gentle"]], g.coast != null ? g.coast : "geologic")}</select></label>
         <label>Kind of world <select name="realism">${opt([["fantasy", "Fantasy: its own places (enchanted woods, ...)"], ["realistic", "Realistic: only what the Earth would make"]], g.realism || (WD.T && WD.T.realism) || "fantasy")}</select></label>
         <label>Look <select name="look">${opt(looks, g.look || (looks.some(l => l[0] === "hydro") ? "hydro" : WD.look))}</select></label>
@@ -1797,7 +1798,7 @@
       });
       f.addEventListener("submit", e => {
         if (!e.submitter || e.submitter.value !== "make") return; e.preventDefault();
-        const v = { size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, currents: f.elements.currents ? f.elements.currents.value : "", coast: f.elements.coast ? f.elements.coast.value : "", realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
+        const v = { ago: f.elements.ago ? Math.max(0, Math.min(500, +f.elements.ago.value || 0)) : 0, size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, currents: f.elements.currents ? f.elements.currents.value : "", coast: f.elements.coast ? f.elements.coast.value : "", realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
         const whole = v.size === "planet";
         if (f.elements.land.value === "paint" || f.elements.land.value === "sketch") v.loose = +f.elements.loose.value;
         if (f.elements.land.value === "paint") {
@@ -1849,6 +1850,9 @@
         return A.worldGenerate(fl, W0).then(T => Object.assign({}, T, { look: "planet", planetPalette: pal }));
       }
       const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
+      // (a past age of the same world: the user, 18 Nov 2026, "play the game in the past"; world-geology.js 1b)
+      // (the same world: this one's seed, land, size, climate and tectonics, whatever the dialog's own seed says)
+      if (g.ago > 0) { flags.age = g.ago; const T0 = WD.T || {}; if (T0.seed) flags.seed = T0.seed; if (T0.land) flags.land = T0.land; if (T0.sizeName) flags.size = T0.sizeName; if (T0.climate) flags.climate = T0.climate; if (T0.tectonics) flags.tectonics = T0.tectonics; }
       flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.currents && g.rules !== "classic") { flags.currents = true; if (g.currents === "retro") flags.spin = "retrograde"; } else flags.currents = "off"; flags.coast = (g.coast === "natural" || g.coast === "geologic") && g.rules !== "classic" ? g.coast : "plain"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
       const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
       return new Promise((ok, no) => {
