@@ -1212,7 +1212,7 @@
     if (pref.get("intro") === "1" || $("#tIntro")) return;
     const nav = document.querySelector("nav.views"); if (!nav) return;
     const el = document.createElement("div"); el.id = "tIntro"; el.className = "t-intro keeper"; el.setAttribute("role", "note");
-    el.innerHTML = `${T.icon("play", "big")}<div class="ti-t"><b>New: everything for game night is under At the table.</b> A players' screen for your television, handouts, the villains' clocks, fights and dice, people and places made up on the spot. The quickest tools are always in the toolbar at the bottom right.</div><div class="t-row"><button type="button" class="t-btn prim" data-t="tab" data-tab="home">Show me</button><button type="button" class="t-btn" data-t2="introok">Got it</button></div>`;
+    el.innerHTML = `${T.icon("play", "big")}<div class="ti-t" title="A players' screen for your television, handouts, the villains' clocks, fights and dice, people and places made up on the spot. The quickest tools are always in the toolbar at the bottom right."><b>New:</b> everything for game night is under At the table.</div><div class="t-row"><button type="button" class="t-btn prim" data-t="tab" data-tab="home">Show me</button><button type="button" class="t-btn" data-t2="introok">Got it</button></div>`;
     (nav.closest("header.mast") || nav).after(el);
   }
   function dismissIntro() { pref.set("intro", "1"); const el = $("#tIntro"); if (el) el.remove(); }

@@ -83,6 +83,8 @@
 
   /* ---- the frame */
   const kicker = [cfg.system, cfg.setting, gm + "'s gazetteer"].filter(Boolean).join(" · ");
+  // (the empty tracker is not shown: the Gazetteer's side has a button that brings it out, open)
+  document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-trk-show]"); if (!b) return; const t = document.getElementById("tracker"), d = document.getElementById("trk"); if (!t) return; t.classList.add("trk-want"); if (d) d.open = true; t.scrollIntoView({ block: "nearest", behavior: "smooth" }); });
   // (the world map's Filters and Layers fold away at a click elsewhere)
   document.addEventListener("click", e => { if (!e.target.closest) return; for (const d of document.querySelectorAll(".wm-filt[open]")) if (!d.contains(e.target)) d.open = false; });
   document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("#audio-btn"), pop = document.getElementById("audio-pop"); if (!pop) return;
@@ -101,12 +103,12 @@
     ${A.music && A.music.enabled && A.music.enabled() ? `<button type="button" id="v-music" aria-pressed="false">Music</button>` : ""}
   </nav>
     <div class="tools">
-      <span class="ux-qwrap"><input id="q" class="search" type="search" placeholder="Search everything (Ctrl+K)" aria-label="Search everything in the campaign" autocomplete="off"></span>
+      <span class="ux-qwrap"><input id="q" class="search" type="search" placeholder="Search (Ctrl+K)" aria-label="Search everything in the campaign" autocomplete="off"></span>
       ${ACTS.length ? `<select id="act" class="actsel" aria-label="Filter by act"><option value="all">All acts</option>${ACTS.map(a => `<option value="${a}">${esc(actTitle(a))}</option>`).join("")}</select>` : ""}
       <div class="mode" role="group" aria-label="View mode"><button id="m-keeper" type="button" aria-pressed="${state.mode === "gm"}">${esc(gm)}</button><button id="m-player" type="button" aria-pressed="${state.mode === "player"}">Player-safe</button></div>
       ${A.modules ? `<button type="button" class="featbtn keeper" data-mf-open title="What this campaign uses: switch parts of Atlas on and off" aria-label="What this campaign uses"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>` : ""}
     </div>
-    ${A.music ? `<button type="button" class="audiobtn" id="audio-btn" aria-expanded="false" aria-controls="audio-pop" title="Music and sounds">♪ Audio</button>` : ""}
+    ${A.music ? `<button type="button" class="audiobtn" id="audio-btn" aria-expanded="false" aria-controls="audio-pop" title="Music and sounds" aria-label="Music and sounds">♪<span class="ab-l"> Audio</span></button>` : ""}
     ${A.music ? `<div class="musicbar mb-pop" id="audio-pop">${A.music.html()}${A.sound ? A.sound.html() : ""}</div>` : ""}
   </header>
   <section class="story keeper" id="story" aria-label="The whole story"></section>

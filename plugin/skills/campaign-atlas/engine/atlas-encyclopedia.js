@@ -46,7 +46,7 @@
     if (mod("handouts") && A.handoutWriter) h += sec("handouts", "Handouts", C.handouts.length, C.handouts.map(x => it("", x.state === "draft" || (A.handbook && A.handbook[x.id]) ? `data-ench="${esc(x.id)}"` : `data-t="hview" data-id="${esc(x.id)}"`, x.title || x.headline || "Untitled", x.state === "draft" ? "draft" : x.place ? (A.meta[x.place] || {}).name || "" : "")), btn("handout", "+ A handout"));
     const kinds = SKIND.filter(([, , m]) => !m || mod(m)), story = C.items.filter(x => kinds.some(k => k[0] === x.kind));
     if (A.story && (mod("investigation") || mod("plot"))) h += sec("story", "Story", story.length, story.map(x => it("", `data-enci="${esc(x.id)}" data-k="${esc(x.kind)}"`, x.n || "Untitled", (SKIND.find(k => k[0] === x.kind) || [0, 0, 0, ""])[3])), [mod("plot") && A.plot ? btn("plot", "+ A plot point") : "", mod("investigation.mysteries") && A.plot ? btn("mystery", "+ A mystery") : "", mod("plot.quests") && A.plot ? btn("quest", "+ A quest") : "", mod("investigation") ? btn("item", "+ A faction, an event, a thing, a secret", "faction") : ""].join(""));
-    h += `<div class="enc-new enc-places">${A.locations ? btn("place", "+ A place") : ""}${canCity() ? btn("city", "+ A city for the campaign") : ""}</div>`;
+    h += `<div class="enc-new enc-places">${A.locations ? btn("place", "+ A place") : ""}<button type="button" class="enc-trk keeper" data-trk-show title="The investigation tracker: the characters, the keys and which clues are found">Investigation tracker</button>${canCity() ? btn("city", "+ A city for the campaign") : ""}</div>`;
     return h;
   }
   /* ---- the campaign's own city, made from its page (the user, 11 Nov 2026: "do these"): the Atlas app runs the city

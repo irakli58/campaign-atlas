@@ -3298,3 +3298,31 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .dossier .sec:has(> .sec-none) > h3, .dossier .sec:has(> .links > .sec-none) > h3 { margin: 0; padding: 0; border: 0; opacity: .75; }
 .dossier .sec-none { margin: 0; font-size: 14px; opacity: .8; }
 .dossier .sec:has(> .sec-none) .fold-all { display: none; }
+
+/* ==== the uncluttered pass (18 Nov 2026; the user: "work on it being uncluttered") ==== */
+/* the top: one line on a wide screen: the name, the views, search, DM / players, help, the gear, the music */
+.mast .search { width: 170px; transition: width .15s; }
+.mast .search:focus { width: 260px; }
+.mast .mode button { padding: 6px 10px; font-size: 11px; }
+.mast .views button { padding: 5px 12px; font-size: 11.5px; }
+.mast { border-bottom: 1px solid var(--rule); padding: 6px 0; gap: 6px 14px; }
+@media (min-width: 1240px) {
+  .mast { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .mast .views { grid-column: auto; order: 0; }
+  .mast .kicker { display: none; }
+  .mast h1 { font-size: 22px; max-width: 22vw; }
+  .mast .ab-l { display: none; }
+  .mast .audiobtn { padding: 6px 10px; }
+}
+.mast .views button { letter-spacing: .04em; padding: 5px 10px; }
+.mast .views { gap: 4px; }
+.mast .search { width: 150px; }
+/* the "New" banner: one slim line */
+.t-intro.keeper { padding: 6px 12px; gap: 8px 12px; font-size: 15px; margin: 6px 0 10px; }
+.t-intro.keeper > .ic { width: 20px; height: 20px; }
+.t-intro.keeper .t-btn { padding: 4px 10px; font-size: 14px; }
+.t-intro.keeper .ti-t { flex: 1; min-width: 200px; }
+/* the tracker, empty, is not shown until asked for */
+.tracker.trk-empty:not(.trk-want) { display: none; }
+.enc-trk { border: 0; background: none; padding: 4px 0; margin-left: 10px; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.wrap { padding-top: 8px; }
