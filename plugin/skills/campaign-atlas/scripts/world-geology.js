@@ -113,6 +113,13 @@ function geology(o, U) {
     boxBlur(F, cc, cr, 3, 3); for (let n = 0; n < CN; n++) crust[n] = F[n] > .5 ? 1 : 0;
   }
 
+  /* 1c. microcontinents (tectonics 2, phase 2): a few slivers of continental crust rifted off a continent's margin and
+         left in the open ocean, as Madagascar, Zealandia or the Seychelles bank were: grown small, a few hundred km out */
+  if (TV2 && contPl && contPl.size && !SK) {
+    const dC = U.distance(cc, cr, n => crust[n] === 1), nM = Math.floor(rnd() * 3.2), opts = []; for (let n = 0; n < CN; n++) { const km = dC[n] * ckm; if (km > 180 && km < 650 && crust[n] === 0) opts.push(n); }
+    for (let k = 0; k < nM && opts.length; k++) { const s0 = opts[Math.floor(rnd() * opts.length)], sz = Math.round(CN * (.0012 + rnd() * .004)); const lab = grow([s0], m => crust[m] ? 99 : .2 + 3 * Math.pow(U.fbm(nB, X(m) * 9 * zs + k * 7, Y(m) * 9 * zs, 3), 2), sz); for (let n = 0; n < CN; n++) if (lab[n] === 0 && !crust[n]) crust[n] = 1; }
+  }
+
   /* 1a. how the plates move (tectonics 2): coherently, as the forces that drive them say. An oceanic plate is pulled
          along by its own sinking edge (slab pull, the strongest force): toward the nearest continental plate it dives
          under, fast (5 to 10 cm a year); a continental plate, with no slab to pull it, drifts slowly (1 to 3 cm a year).

@@ -307,7 +307,18 @@ function seafloor(E, o, SH, U) {
     let z = d <= W ? -(12 + 118 * Math.pow(d / W, 1.15)) : zOut * (1 - sea) + zSea * sea;
     // (a mid-ocean ridge is a broad swell whose crest lies some 2.5 km down, not a wall reaching for the surface: the user,
     // 18 Nov 2026, "white streaks in the ocean"; so its rise is capped below the shelf's depths)
-    z += (o.floorAge ? 0 : Math.min(1, o.ridge[n] || 0) * 1100 * Math.min(1, d / 300)) - (o.trench[n] || 0) * 2600; if ((o.ridge[n] || 0) > .05) z = Math.min(z, -2300);
+    z += (o.floorAge ? 0 : Math.min(1, o.ridge[n] || 0) * 1100 * Math.min(1, d / 300)) - (o.trench[n] || 0) * 2600;
+    // (tectonics 2, phase 2: the deep floor is not flat: seamounts, extinct volcanoes standing 1 to 3 km from it, their
+    // tops still under the sea, one to a few in every 150 km square of open ocean, more on older floor; and oceanic
+    // plateaus, broad swells of thickened crust a kilometre or two high [Wessel et al. 2010; the Ontong Java plateau])
+    if (o.floorAge && d > 120) {
+      const L = 150 / cellKm, gi = Math.floor(I(n) / L), gj = Math.floor(J(n) / L); let sm = 0;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const ii = gi + a, jj = gj + b, hh = Math.abs(Math.sin(ii * 127.1 + jj * 311.7 + (o.seed || 1) * .37) * 43758.5453) % 1; if (hh > .55) continue;
+        const cx = (ii + .2 + .6 * ((hh * 7.31) % 1)) * L, cy = (jj + .2 + .6 * ((hh * 3.17) % 1)) * L, rr = (14 + 22 * ((hh * 11.7) % 1)) / cellKm, dd = Math.hypot(I(n) - cx, J(n) - cy) / rr;
+        if (dd < 3) sm = Math.max(sm, (1000 + 2000 * ((hh * 5.3) % 1)) * (.6 + .4 * Math.min(1, (o.floorAge[n] || 0) / 60)) * Math.exp(-dd * dd)); }
+      const pl = Math.max(0, nB(x * 1.6 + 31, y * 1.6 + 17) - .74) * 6500;
+      z = Math.min(z + sm + Math.min(1800, pl), -450);
+    } if ((o.ridge[n] || 0) > .05) z = Math.min(z, -2300);
     // (the deep floor's unevenness, growing with the depth rather than starting at one)
     z += (nC(x * 12, y * 12) - .5) * 300 * smooth(-400, -1500, z);
     // banks on a broad shelf: low swells of sand and gravel, the shallower for being on the shelf

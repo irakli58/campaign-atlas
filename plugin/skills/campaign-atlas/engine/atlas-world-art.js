@@ -1291,6 +1291,12 @@
     const at = (i, j) => { const k = B[j * gc + i]; let x = 0, y = 0, c = 0; for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= gc || b >= gr || B[b * gc + a] !== k) continue; x += a; y += b; c++; } return [(x / c + .5) * st, (y / c + .5) * st]; };
     for (let j = 0; j < gr; j++) for (let i = 0; i < gc; i++) { const k = B[j * gc + i]; if (!k) continue; for (const [di, dj] of [[1, 0], [0, 1], [1, 1], [-1, 1]]) { const a = i + di, b = j + dj; if (a < 0 || b >= gr || a >= gc) continue; if (B[b * gc + a] !== k) continue; if ((di && dj) && (B[j * gc + a] === k || B[b * gc + i] === k)) continue; const [x0, y0] = at(i, j), [x1, y1] = at(a, b); by[k] = (by[k] || "") + `M${r1(x0)} ${r1(y0)}L${r1(x1)} ${r1(y1)}`; } }
     let s = "";
+    // (earthquakes: where plates catch and slip, as the world's seismicity maps show them: thickest along subduction
+    // zones and island arcs, then collisions and transforms, few on ridges and rifts; a mark for each place they shake
+    // often, the border's kind telling how deep and strong [the USGS earthquake catalogue's patterns])
+    { const RATE = { 1: .5, 2: .9, 3: .8, 4: .12, 5: .25, 6: .6 }; let q = "";
+      for (let j = 0; j < gr; j += 2) for (let i = 0; i < gc; i += 2) { const k = B[j * gc + i]; if (!k || !RATE[k]) continue; const h = Math.abs(Math.sin(i * 12.9898 + j * 78.233) * 43758.5453) % 1; if (h > RATE[k] * .35) continue; const [x, y] = at(i, j); q += `<circle cx="${r1(x + (h - .5) * st * 2)}" cy="${r1(y + ((h * 7) % 1 - .5) * st * 2)}" r="${r1((1.2 + 2.2 * ((h * 13) % 1)) * K)}"/>`; }
+      if (q) s += `<g class="wm-quakes" fill="#e0462d" fill-opacity=".45" stroke="#7a1a0a" stroke-opacity=".4" stroke-width="${r1(.4 * K)}"><title>Earthquakes: where the plates catch and slip, most along subduction zones and island arcs</title>${q}</g>`; }
     for (const [k, d] of Object.entries(by)) { const [c, w, dash] = BORDER_STYLE[k]; s += `<path d="${d}" fill="none" stroke="#f6f2e8" stroke-opacity=".55" stroke-width="${r1((w + 2) * K)}" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="${r1(w * K)}" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash.split(" ").map(v => r1(v * K)).join(" ")}"` : ""}/>`; }
     const fs = Math.min(W, H) * .014;
     for (const p of L.plates) { const [x, y] = p.at, a = -p.dir * Math.PI / 180, len = Math.min(W, H) * (.03 + .006 * p.speed), ex = x + Math.cos(a) * len, ey = y + Math.sin(a) * len, hl = 7 * K;
