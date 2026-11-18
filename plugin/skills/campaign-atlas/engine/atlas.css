@@ -3418,3 +3418,13 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 #app .songcard .sc-edit { font-family: var(--f-body); font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 #app .mx-b { font-family: var(--f-body); font-size: var(--t-act); letter-spacing: 0; text-transform: none; border-radius: var(--r-act); min-height: var(--ctl-h); }
 #app .tu-qb { width: 28px; height: 28px; min-width: 28px; border-radius: 50%; }
+/* At the table's list: the core tools, then More tools, folded */
+.tvn-extra { display: grid; gap: 2px; }
+.tvn-extra > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.tvn-extra > summary::-webkit-details-marker { display: none; }
+.tvn-extra > summary::after { content: "▾"; margin-left: auto; font-size: 11px; transition: transform .15s; }
+.tvn-extra:not([open]) > summary::after { transform: rotate(-90deg); }
+@media (min-width: 861px) { #app:not([data-tablet="1"]) .tvn-extra:not([open]) > .tvn-it { display: none; } }
+@media (max-width: 860px) { .tvn-extra { display: contents; } .tvn-extra > summary { display: none; } }
+#app[data-tablet="1"] .tvn-extra { display: contents; } #app[data-tablet="1"] .tvn-extra > summary { display: none; }
+.tv-nav .tvn-extra[hidden] { display: none; }

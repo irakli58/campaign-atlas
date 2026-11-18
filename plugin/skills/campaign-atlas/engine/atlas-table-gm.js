@@ -501,7 +501,11 @@
     // (the UI overhaul of 18 Nov 2026: a box to find a tool by its name or what it does, and each group folds, remembered;
     // the group holding the tool shown always open)
     const P0 = pins(), folded = g => pref.get("fold-" + g) === "1" && app() && app().dataset.tablet !== "1" && !(window.matchMedia && matchMedia("(max-width: 860px)").matches) && !TABS.some(t => t[0] === UI.tab && t[3] === g),
-      groups = Object.entries(GROUPS).map(([g, gl]) => `<details class="tvn-grp" data-g="${g}"${folded(g) ? "" : " open"}><summary class="tvn-g">${esc(gl)}</summary>${TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0])).map(navBtn).join("")}</details>`).join("");
+      // (ease of use, 18 Nov 2026: the core tools first; the others under More tools, opened for the tool shown, a search,
+      // or the game master's choice, remembered; a pinned tool is always among the pinned)
+      core = t => !TPLUGS.some(p => p.key === t[0]), list = (g, c) => TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0]) && core(t) === c),
+      groups = Object.entries(GROUPS).map(([g, gl]) => `<details class="tvn-grp" data-g="${g}"${folded(g) ? "" : " open"}><summary class="tvn-g">${esc(gl)}</summary>${list(g, true).map(navBtn).join("")}</details>`).join("")
+        + (n => n ? `<details class="tvn-extra"${pref.get("moretools") === "1" ? " open" : TABS.some(t => t[0] === UI.tab && !core(t)) ? ' open data-auto="1"' : ""}><summary class="tvn-g" title="The other tools: the world, its time and history, factions, money, rumours, the copilot, the investigation and more">More tools (${n})</summary>${Object.entries(GROUPS).map(([g]) => list(g, false).map(navBtn).join("")).join("")}</details>` : "")(Object.keys(GROUPS).reduce((k, g) => k + list(g, false).length, 0));
     const find = `<input type="search" class="tvn-q" data-t="navq" placeholder="Find a tool" aria-label="Find a tool by its name or what it does" value="${esc(UI.navQ || "")}" autocomplete="off"><p class="tvn-none kn" hidden>No tool by that name. Try other words, or Help.</p>`;
     if (!P0.length) return find + navBtn(TABS[0]) + groups + `<p class="tvn-hint kn">☆ pins a tool: your pinned ones come first.</p>`;
     return find + navBtn(TABS[0]) + `<div class="tvn-g">Pinned</div>${P0.map(k => navBtn(TABS.find(t => t[0] === k))).join("")}<details class="tvn-more"${P0.includes(UI.tab) || UI.tab === "home" ? "" : " open"}><summary>All the tools</summary>${groups}</details>`;
@@ -515,9 +519,9 @@
     UI.navQ = q; const nav = document.querySelector("#tablev .tv-nav"); if (!nav) return;
     const ws = String(q || "").toLowerCase().split(/\s+/).filter(Boolean); let any = 0;
     nav.querySelectorAll(".tvn-it").forEach(it => { const t = it.textContent.toLowerCase() + " " + ((it.querySelector("[data-tab]") || {}).dataset || {}).tab, ok = ws.every(w => t.includes(w)); it.hidden = !ok; if (ok) any++; });
-    nav.querySelectorAll(".tvn-grp, .tvn-more").forEach(d => { const n = [...d.querySelectorAll(".tvn-it")].filter(x => !x.hidden).length; d.hidden = !n;
+    nav.querySelectorAll(".tvn-grp, .tvn-more, .tvn-extra").forEach(d => { const n = [...d.querySelectorAll(".tvn-it")].filter(x => !x.hidden).length; d.hidden = !n;
       if (ws.length) { if (!d.dataset.was) d.dataset.was = d.open ? "1" : "0"; d.dataset.filtering = "1"; d.open = true; setTimeout(() => { delete d.dataset.filtering; }, 0); }
-      else if (d.dataset.was) { d.dataset.filtering = "1"; d.open = d.dataset.was === "1"; delete d.dataset.was; setTimeout(() => { delete d.dataset.filtering; }, 0); } });
+      else if (d.dataset.was) { d.dataset.filtering = "1"; d.open = d.dataset.was === "1" || !!d.querySelector('[aria-selected="true"]'); delete d.dataset.was; setTimeout(() => { delete d.dataset.filtering; }, 0); } });
     nav.querySelectorAll(":scope > .tvn-g, .tvn-hint").forEach(g => { g.hidden = !!ws.length; });
     const none = nav.querySelector(".tvn-none"); if (none) none.hidden = !ws.length || !!any;
   }
@@ -536,7 +540,7 @@
     }
     box.querySelectorAll(".tv-nav [data-t='tab'][data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === UI.tab));
     { const pk = box.querySelector("[data-t='tabpick']"); if (pk && pk.value !== UI.tab) pk.value = UI.tab; }
-    { const mo = box.querySelector(".tvn-more"); if (mo && !mo.open && mo.querySelector(`[data-tab="${UI.tab}"]`)) mo.open = true; }
+    for (const mo of box.querySelectorAll(".tvn-more, .tvn-extra, .tvn-grp")) if (!mo.open && mo.querySelector(`[data-tab="${UI.tab}"]`)) { if (mo.classList.contains("tvn-extra")) mo.dataset.auto = "1"; mo.open = true; }
     renderTab();
     if (A.nav) A.nav.mark();
     if (A.ux) A.ux.seenHere();
@@ -1325,7 +1329,9 @@
         else if (d.t === "cbset") { const c = cnow(), r = c.list.find(x => x.id === d.id); if (!r) return; r[d.f] = ["name", "note", "ac"].includes(d.f) ? t.value.slice(0, 120) : (t.value === "" ? null : +t.value); cset(c); }
       });
       document.addEventListener("input", e => { const q = e.target.closest && e.target.closest("[data-t='navq']"); if (q) navFilter(q.value); });
-      document.addEventListener("toggle", e => { const d = e.target; if (!d.classList || !d.classList.contains("tvn-grp") || d.dataset.filtering) return; pref.set("fold-" + d.dataset.g, d.open ? "0" : "1"); }, true);
+      document.addEventListener("toggle", e => { const d = e.target; if (!d.classList || d.dataset.filtering) return;
+        if (d.classList.contains("tvn-grp")) pref.set("fold-" + d.dataset.g, d.open ? "0" : "1");
+        else if (d.classList.contains("tvn-extra")) { if (d.dataset.auto) { delete d.dataset.auto; return; } pref.set("moretools", d.open ? "1" : "0"); } }, true);
       document.addEventListener("focusout", e => { if (UI.dirty && $("#tvBody") && $("#tvBody").contains(e.target)) setTimeout(() => { if (!$("#tvBody").contains(document.activeElement)) renderTab(); }, 0); });
       document.addEventListener("submit", e => {
         const f = e.target; if (!f.matches) return;
