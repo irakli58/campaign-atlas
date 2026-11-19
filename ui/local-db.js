@@ -49,8 +49,16 @@
   // what the page can ask of the app: the world map's "Make its 3D map now" (the page opens again on the new city)
   window.ATLAS_APP = {
     // a question for the game master's own Claude Code (the app runs it on this computer, on their plan)
-    ask: function (prompt) {
-      return fetch(URL_.replace(/db$/, "ask"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ prompt: prompt }) })
+    // where a kind of work is answered now: { local, model }
+    aiWhere: function (kind) {
+      return fetch(URL_.replace(/db$/, "aiwhere") + "?kind=" + encodeURIComponent(kind || "answering"), { headers: { "x-atlas-token": TOKEN } }).then(function (r) { return r.ok ? r.json() : { local: false }; }, function () { return { local: false }; });
+    },
+    // search by meaning: { vectors } from the embedding model on this computer, or { none } (then words, as before)
+    embed: function (texts) {
+      return fetch(URL_.replace(/db$/, "embed"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ texts: texts }) }).then(function (r) { return r.ok ? r.json() : { none: true }; }, function () { return { none: true }; });
+    },
+    ask: function (prompt, meta) {
+      return fetch(URL_.replace(/db$/, "ask"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify({ prompt: prompt, kind: meta && meta.kind || "answering" }) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "no answer"); return d.text; }); });
     },
     // the map editor: keep a redrawn map in the campaign (null puts the drawn one back), and read a floor plan into rooms
@@ -151,6 +159,9 @@
           .then(function (r) { return r.json().then(function (x) { if (!r.ok) throw new Error(x.error || "not read"); return x.word || []; }); });
       }
     },
+    // an imported adventure's locations (atlas.js locations), and generating the ones chosen (atlas.js generate, then a build)
+    locations: function () { return fetch(URL_.replace(/db$/, "locations"), { headers: { "x-atlas-token": TOKEN }, cache: "no-store" }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not read"); return d.places; }); }); },
+    generate: function (o) { return fetch(URL_.replace(/db$/, "generate"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not generated"); return d; }); }); },
     makeCity: function (o) {
       return fetch(URL_.replace(/db$/, "make-city"), { method: "POST", headers: { "content-type": "application/json", "x-atlas-token": TOKEN }, body: JSON.stringify(o) })
         .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "not made"); return d; }); })

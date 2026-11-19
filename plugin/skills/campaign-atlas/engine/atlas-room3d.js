@@ -39,7 +39,8 @@
   R3.WALLS = [["cut", "Walls cut away"], ["low", "Low walls"], ["full", "Full walls"]];
   // the light a floor is lit by: its own, its place's, the campaign's, or normal
   R3.lightOf = (id, F) => { const k = (F && F.light) || ((A.meta || {})[id] || {}).light || ((A.maps || {})[id] || {}).light || A.config.light || "normal"; return LIGHT[k] ? k : "normal"; };
-  const era = () => { try { return A.table && A.table.era ? A.table.era() : "victorian"; } catch (e) { return "victorian"; } };
+  // (a place's own age, while it is furnished, before the campaign's: atlas-modelui.js furnishRooms)
+  const era = () => { try { return A.__placeEra || (A.table && A.table.era ? A.table.era() : "victorian"); } catch (e) { return "victorian"; } };
 
   /* ---- the 2D maps' furniture, raised: [model, how it fills its drawing, { age: another model }]. fit stretches it to
           the drawing, row puts as many as fit side by side along it, nat keeps its own size (smaller if it must),

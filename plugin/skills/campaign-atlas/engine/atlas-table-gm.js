@@ -84,8 +84,11 @@
     if (hooks.length) out.push(`<section class="sec keeper t-hooks"><h3>Hooks</h3><p class="kn">Ways into adventure from here, for the players to take up or leave.</p><ul class="t-hooklist">${hooks.map(h => `<li><b>${esc(h.t)}</b>${h.d ? " " + esc(h.d) : ""}${h.who ? ` <span class="kn">(${esc(h.who)})</span>` : ""}${toList(h.to).filter(t => A.meta[t]).length ? ` <span class="t-small">It leads to ${toList(h.to).filter(t => A.meta[t]).map(goBtn).join(", ")}</span>` : ""}</li>`).join("")}</ul></section>`);
     const tabs = Object.entries(m.tables || {}).filter(([, l]) => Array.isArray(l) && l.length);
     if (tabs.length) out.push(`<section class="sec keeper t-rt"><h3>Random tables</h3>${tabs.map(([name, list]) => tableRow("p:" + p.id + ":" + name, name, list)).join("")}</section>`);
+    // (what other files add to a place's page: atlas-items.js, its things and Generate loot here)
+    for (const f of DXTRA) { try { out.push(f(p) || ""); } catch (e) { console.warn("atlas: a place's extra could not be drawn", e); } }
     return out.join("");
   }
+  const DXTRA = [], addDossier = f => DXTRA.push(f);
   // one random table: its name, a roll button, the result, and the whole list folded
   function tableRow(key, name, list) {
     const got = UI.tabSel === key && UI.tabRes ? UI.tabRes : "";
@@ -268,7 +271,7 @@
     try {
       let sample = null; try { sample = window.claude && window.claude.use ? await window.claude.use("sample") : null; } catch (e) { sample = null; }
       if (sample) { const job = sample(prompt, { onText: e => onText(e.text), signal: sig, cache: false }), r = run ? await Promise.race([job, run.stopped]) : await job; ok = true; return r.text; }
-      if (window.ATLAS_APP && window.ATLAS_APP.ask) { const job = window.ATLAS_APP.ask(prompt), t = run ? await Promise.race([job, run.stopped]) : await job; onText(t); ok = true; return t; }
+      if (window.ATLAS_APP && window.ATLAS_APP.ask) { const job = window.ATLAS_APP.ask(prompt, { kind: (meta && meta.kind) || "answering" }), t = run ? await Promise.race([job, run.stopped]) : await job; onText(t); ok = true; return t; }
       return null;
     } finally { if (run) A.ux.aiEnd(run, ok); }
   }
@@ -298,6 +301,9 @@
       for (const [, x] of Object.entries(M.secrets || {})) push(`${p.name}: ${x.t || "a secret"}`, j(x.t, x.acc, x.dest, x.why), p.id);
     }
     for (const c of Object.values(A.castData || {})) push(`${c.n}${c.role ? ", " + c.role : ""}`, j(c.look, c.manner, c.bg, c.want, c.secret, c.lie, c.press, c.fate, typeof c.ties === "object" && c.ties ? Object.entries(c.ties).map(([k, v]) => k + ": " + v).join("; ") : c.ties));
+    // (an imported adventure, atlas-adventure.js: every fact of its knowledge base, each passage named with where in the
+    // book it is, "The adventure, p. 43", so the Copilot can tell the book's facts from its own suggestions)
+    if (A.adventurePassages) for (const [src, text, go] of A.adventurePassages()) push(src, text, go, 1.1);
     for (const pc of Object.values(A.pcsData || {})) push(`Player character: ${pc.n}`, j(pc.concept, pc.bg, pc.hook, pc.secret, pc.clue && pc.clue.t, pc.clue && pc.clue.d));
     for (const c of A.clocksData || []) push(`Clock: ${c.name}`, j(c.who, ...(c.ticks || []), c.done));
     for (const s of sessions()) push(`Session ${s.n}: ${s.title || ""}`, j(s.start, s.cliff, s.notes));
@@ -319,6 +325,41 @@
     return C.docs.map(d => { let s = 0; for (const w of qs) { const tf = d.tf[w] || 0; if (tf) s += (1 + Math.log(tf)) * Math.log(1 + C.N / (C.df[w] || 1)); } if (s && qs.some(w => d.src.toLowerCase().includes(w))) s *= 1.5; return { d, s: s * d.w }; })
       .filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, k || 10).map(x => x.d);
   }
+
+  // search by meaning (the local AI plan's phase 4): when the app's embedding model on this computer is there (Local or
+  // Hybrid), each passage is turned into numbers once (kept by its words, so an edit re-reads only what changed) and a
+  // question finds passages by meaning as well as by words, the two rankings joined (reciprocal rank fusion). The index is
+  // built in the background; until it is ready, or with no embedding model, passages are found by their words as before.
+  // Nothing of this leaves the computer: the numbers come from the app's own server, from Ollama on 127.0.0.1.
+  const VEC = { have: new Map(), off: 0, busy: null };
+  const unit = v => { let n = 0; for (const x of v) n += x * x; n = Math.sqrt(n) || 1; return v.map(x => x / n); };
+  const keyOf = d => d.src + "\u0001" + d.text;
+  function vecBuild() {
+    const app = typeof window !== "undefined" && window.ATLAS_APP; if (!app || !app.embed || VEC.busy || Date.now() < VEC.off) return VEC.busy;
+    const C = corpus(), todo = C.docs.filter(d => !VEC.have.has(keyOf(d)));
+    if (!todo.length) return null;
+    VEC.busy = (async () => {
+      for (let i = 0; i < todo.length; i += 48) {
+        const part = todo.slice(i, i + 48), r = await app.embed(part.map(d => (d.src + ": " + d.text).slice(0, 1500)));
+        if (!r || !Array.isArray(r.vectors) || r.vectors.length !== part.length) { VEC.off = Date.now() + 5 * 60e3; return; }
+        part.forEach((d, j) => VEC.have.set(keyOf(d), unit(r.vectors[j])));
+      }
+    })().catch(() => { VEC.off = Date.now() + 5 * 60e3; }).finally(() => { VEC.busy = null; });
+    return VEC.busy;
+  }
+  async function lookupBest(q, k) {
+    k = k || 10; const byWords = lookup(q, 40), C = corpus();
+    const ready = C.docs.length && C.docs.every(d => VEC.have.has(keyOf(d)));
+    if (!ready) { vecBuild(); return byWords.slice(0, k); }
+    let qv = null; try { const r = await window.ATLAS_APP.embed([q]); qv = r && r.vectors && r.vectors[0] ? unit(r.vectors[0]) : null; } catch (e) { qv = null; }
+    if (!qv) return byWords.slice(0, k);
+    const sim = C.docs.map(d => { const v = VEC.have.get(keyOf(d)); let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * qv[i]; return { d, s: s * (d.w || 1) }; }).sort((a, b) => b.s - a.s).slice(0, 40);
+    // (only passages near the best in meaning: an embedding finds everything a little alike)
+    const top = sim.length ? sim[0].s : 0; for (let i = sim.length - 1; i >= 0; i--) if (sim[i].s < top * .8) sim.splice(i, 1);
+    const score = new Map(); byWords.forEach((d, i) => score.set(d, (score.get(d) || 0) + 1 / (60 + i))); sim.forEach((x, i) => score.set(x.d, (score.get(x.d) || 0) + 1 / (60 + i)));
+    return [...score.entries()].sort((a, b) => b[1] - a[1]).slice(0, k).map(([d]) => d);
+  }
+  if (typeof document !== "undefined") setTimeout(async () => { try { const w = window.ATLAS_APP && window.ATLAS_APP.aiWhere ? await window.ATLAS_APP.aiWhere("answering") : null; if (w && w.local) vecBuild(); } catch (e) {} }, 4000);
 
   /* ================================================================ files: the book, maps for online tables */
   async function saveFile(name, data, type) {
@@ -459,19 +500,38 @@
   const modOn = r => !r || !A.modules || (Array.isArray(r[0]) ? r.every(x => A.modules.on(x[0], x[1])) : A.modules.on(r[0], r[1]));
   const shownTab = k => modOn(KMOD[k]), shownDock = k => modOn(DMOD[k]);
   const pins = () => { try { return (JSON.parse(pref.get("pins") || "[]") || []).filter(k => TABS.some(t => t[0] === k) && shownTab(k)); } catch (e) { return []; } };
-  const navBtn = ([k, l, ic, , desc]) => `<span class="tvn-it"><button type="button" role="tab" data-t="tab" data-tab="${k}" aria-selected="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>${k === "home" ? "" : `<button type="button" class="tvn-pin" data-t="pin" data-tab="${k}" aria-pressed="${pins().includes(k)}" title="${pins().includes(k) ? "Unpin: back among all the tools" : "Pin it: your pinned tools come first"}" aria-label="${pins().includes(k) ? "Unpin" : "Pin"} ${esc(l)}">${pins().includes(k) ? "★" : "☆"}</button>`}</span>`;
+  const navBtn = ([k, l, ic, , desc]) => `<span class="tvn-it"><button type="button" data-t="tab" data-tab="${k}" aria-current="${UI.tab === k}" title="${esc(desc)}">${T.icon(ic)}<span class="tvn-l">${esc(l)}</span><span class="tvn-d">${esc(desc)}</span></button>${k === "home" ? "" : `<button type="button" class="tvn-pin" data-t="pin" data-tab="${k}" aria-pressed="${pins().includes(k)}" title="${pins().includes(k) ? "Unpin: back among all the tools" : "Pin it: your pinned tools come first"}" aria-label="${pins().includes(k) ? "Unpin" : "Pin"} ${esc(l)}">${pins().includes(k) ? "★" : "☆"}</button>`}</span>`;
   // the list of tools: Start here, the pinned (the UX review of 5 Nov 2026, item 15), then all of them by group, folded
   // when some are pinned (open when the tool shown is among them)
   function navHTML() {
-    const P0 = pins(), groups = Object.entries(GROUPS).map(([g, gl]) => `<div class="tvn-g">${esc(gl)}</div>${TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0])).map(navBtn).join("")}`).join("");
-    if (!P0.length) return navBtn(TABS[0]) + groups + `<p class="tvn-hint kn">☆ pins a tool: your pinned ones come first.</p>`;
-    return navBtn(TABS[0]) + `<div class="tvn-g">Pinned</div>${P0.map(k => navBtn(TABS.find(t => t[0] === k))).join("")}<details class="tvn-more"${P0.includes(UI.tab) || UI.tab === "home" ? "" : " open"}><summary>All the tools</summary>${groups}</details>`;
+    // (the UI overhaul of 18 Nov 2026: a box to find a tool by its name or what it does, and each group folds, remembered;
+    // the group holding the tool shown always open)
+    const P0 = pins(), folded = g => pref.get("fold-" + g) === "1" && app() && app().dataset.tablet !== "1" && !(window.matchMedia && matchMedia("(max-width: 860px)").matches) && !TABS.some(t => t[0] === UI.tab && t[3] === g),
+      // (ease of use, 18 Nov 2026: the core tools first; the others under More tools, opened for the tool shown, a search,
+      // or the game master's choice, remembered; a pinned tool is always among the pinned)
+      core = t => !TPLUGS.some(p => p.key === t[0]), list = (g, c) => TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0]) && core(t) === c),
+      groups = Object.entries(GROUPS).map(([g, gl]) => `<details class="tvn-grp" data-g="${g}"${folded(g) ? "" : " open"}><summary class="tvn-g">${esc(gl)}</summary>${list(g, true).map(navBtn).join("")}</details>`).join("")
+        + (n => n ? `<details class="tvn-extra"${pref.get("moretools") === "1" ? " open" : TABS.some(t => t[0] === UI.tab && !core(t)) ? ' open data-auto="1"' : ""}><summary class="tvn-g" title="The other tools: the world, its time and history, factions, money, rumours, the copilot, the investigation and more">More tools (${n})</summary>${Object.entries(GROUPS).map(([g]) => list(g, false).map(navBtn).join("")).join("")}</details>` : "")(Object.keys(GROUPS).reduce((k, g) => k + list(g, false).length, 0));
+    const find = `<input type="search" class="tvn-q" data-t="navq" placeholder="Find a tool" aria-label="Find a tool by its name or what it does" value="${esc(UI.navQ || "")}" autocomplete="off"><p class="tvn-none kn" hidden>No tool by that name. Try other words, or Help.</p>`;
+    if (!P0.length) return find + navBtn(TABS[0]) + groups + `<p class="tvn-hint kn">☆ pins a tool: your pinned ones come first.</p>`;
+    return find + navBtn(TABS[0]) + `<div class="tvn-g">Pinned</div>${P0.map(k => navBtn(TABS.find(t => t[0] === k))).join("")}<details class="tvn-more"${P0.includes(UI.tab) || UI.tab === "home" ? "" : " open"}><summary>All the tools</summary>${groups}</details>`;
   }
   function pickHTML() {
     const P0 = pins();
     return `${[TABS[0]].map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}${P0.length ? `<optgroup label="Pinned">${P0.map(k => TABS.find(t => t[0] === k)).map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}</optgroup>` : ""}${Object.entries(GROUPS).map(([g, gl]) => `<optgroup label="${esc(gl)}">${TABS.filter(t => t[3] === g && shownTab(t[0]) && !P0.includes(t[0])).map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join("")}</optgroup>`).join("")}`;
   }
-  function renavigate() { const box = $("#tablev"); if (!box || !box.dataset.done) return; const nav = box.querySelector(".tv-nav"), pk = box.querySelector("[data-t='tabpick']"); if (nav) nav.innerHTML = navHTML(); if (pk) { pk.innerHTML = pickHTML(); pk.value = UI.tab; } }
+  // the tools' list narrowed to the words typed: each tool's name and what it does; the groups with none hidden, the rest open
+  function navFilter(q) {
+    UI.navQ = q; const nav = document.querySelector("#tablev .tv-nav"); if (!nav) return;
+    const ws = String(q || "").toLowerCase().split(/\s+/).filter(Boolean); let any = 0;
+    nav.querySelectorAll(".tvn-it").forEach(it => { const t = it.textContent.toLowerCase() + " " + ((it.querySelector("[data-tab]") || {}).dataset || {}).tab, ok = ws.every(w => t.includes(w)); it.hidden = !ok; if (ok) any++; });
+    nav.querySelectorAll(".tvn-grp, .tvn-more, .tvn-extra").forEach(d => { const n = [...d.querySelectorAll(".tvn-it")].filter(x => !x.hidden).length; d.hidden = !n;
+      if (ws.length) { if (!d.dataset.was) d.dataset.was = d.open ? "1" : "0"; d.dataset.filtering = "1"; d.open = true; setTimeout(() => { delete d.dataset.filtering; }, 0); }
+      else if (d.dataset.was) { d.dataset.filtering = "1"; d.open = d.dataset.was === "1" || !!d.querySelector('[aria-current="true"]'); delete d.dataset.was; setTimeout(() => { delete d.dataset.filtering; }, 0); } });
+    nav.querySelectorAll(":scope > .tvn-g, .tvn-hint").forEach(g => { g.hidden = !!ws.length; });
+    const none = nav.querySelector(".tvn-none"); if (none) none.hidden = !ws.length || !!any;
+  }
+  function renavigate() { const box = $("#tablev"); if (!box || !box.dataset.done) return; const nav = box.querySelector(".tv-nav"), pk = box.querySelector("[data-t='tabpick']"); if (nav) { const f = document.activeElement && document.activeElement.matches && document.activeElement.matches("[data-t='navq']"); nav.innerHTML = navHTML(); if (UI.navQ) navFilter(UI.navQ); if (f) { const q = nav.querySelector("[data-t='navq']"); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } } } if (pk) { pk.innerHTML = pickHTML(); pk.value = UI.tab; } }
   function view() {
     const box = $("#tablev"); if (!box) return;
     dismissIntro();
@@ -481,12 +541,12 @@
         <div class="tv-head"><div><div class="st-kicker">${esc(gmName())} only</div><h2 class="tv-h">At the table</h2><p class="tv-lead">Everything for game night: what your players see, tonight's sheet, the villains' clocks, fights and dice, people and places made up on the spot.</p></div>
           <div class="tv-acts"><button type="button" class="t-btn prim" data-t="openscreen">${T.icon("open")}Open the players' screen</button><button type="button" class="t-btn" data-t="tablet" aria-pressed="${app().dataset.tablet === "1"}" title="Bigger buttons, and the tools along the bottom: for a tablet beside you at the table">${app().dataset.tablet === "1" ? "Table-side view: on" : "Table-side view"}</button></div></div>
         <label class="tv-pick"><span class="kl">Tool</span><select class="t-in" data-t="tabpick" aria-label="Which of the table's tools">${pickHTML()}</select></label>
-        <div class="tv-wrap"><nav class="tv-nav" role="tablist" aria-label="At the table">${navHTML()}</nav>
-        <div class="tv-main"><div class="tv-body" id="tvBody" role="tabpanel"></div><p class="tv-note" id="tvNote" aria-live="polite"></p></div></div></div>`;
+        <div class="tv-wrap"><nav class="tv-nav" aria-label="At the table's tools">${navHTML()}</nav>
+        <div class="tv-main"><div class="tv-body" id="tvBody" role="region" aria-label="The tool"></div><p class="tv-note" id="tvNote" aria-live="polite"></p></div></div></div>`;
     }
-    box.querySelectorAll(".tv-nav [data-t='tab'][data-tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === UI.tab));
+    box.querySelectorAll(".tv-nav [data-t='tab'][data-tab]").forEach(b => b.setAttribute("aria-current", b.dataset.tab === UI.tab));
     { const pk = box.querySelector("[data-t='tabpick']"); if (pk && pk.value !== UI.tab) pk.value = UI.tab; }
-    { const mo = box.querySelector(".tvn-more"); if (mo && !mo.open && mo.querySelector(`[data-tab="${UI.tab}"]`)) mo.open = true; }
+    for (const mo of box.querySelectorAll(".tvn-more, .tvn-extra, .tvn-grp")) if (!mo.open && mo.querySelector(`[data-tab="${UI.tab}"]`)) { if (mo.classList.contains("tvn-extra")) mo.dataset.auto = "1"; mo.open = true; }
     renderTab();
     if (A.nav) A.nav.mark();
     if (A.ux) A.ux.seenHere();
@@ -531,9 +591,10 @@
     const card = k => { const t = TABS.find(x => x[0] === k); return `<button type="button" class="th-card" data-t="tab" data-tab="${k}">${T.icon(t[2])}<span class="th-n">${esc(t[1])}</span><span class="th-d">${esc(t[4])}</span><span class="th-s${k === "safety" && !lines().lines.length && !lines().veils.length ? " warn" : ""}">${esc(statusOf(k))}</span></button>`; };
     const go = (tab, words) => `<button type="button" class="t-link" data-t="tab" data-tab="${tab}">${words}</button>`;
     return `<div class="th">
+      ${cardsFor("home")}
       ${A.nav ? A.nav.checklistHTML() : ""}
       <div class="th-hero">
-        <article class="th-big">${T.icon("screen", "big")}<div><h3>The players' screen</h3><p>A second window, for a television or another screen. Your players see only what you send it: a map a room at a time, a handout, a face, the world map.</p>
+        <article class="th-big">${T.icon("screen", "big")}<div><h3>The players' screen</h3><p class="th-say">A second window, for a television or another screen. Your players see only what you send it: a map a room at a time, a handout, a face, the world map.</p>
           <p class="t-scrstat${open ? " on" : ""}">${esc(screenStatus())}</p>
           <div class="t-row">${open ? `<button type="button" class="t-btn prim" data-t="tab" data-tab="screen">Choose what they see</button>` : `<button type="button" class="t-btn prim" data-t="openscreen">${T.icon("open")}Open it</button><button type="button" class="t-btn" data-t="tab" data-tab="screen">Choose what they see</button>`}</div></div></article>
         <article class="th-big">${T.icon("tonight", "big")}<div><h3>Tonight</h3><p>${s ? `Session ${esc(s.n)}${s.title ? ": " + esc(s.title) : ""}. ` : ""}${plural(places.length, "place")} they are likely to visit, ${plural(left, "clue")} still to find there.</p>${s && s.start ? `<p class="th-quote">${esc(s.start)}</p>` : ""}
@@ -542,13 +603,13 @@
       <h3 class="th-h">During the game</h3><div class="th-grid">${["clocks", "combat", "make", "ask", "board"].concat(TPLUGS.filter(p => p.group === "play").map(p => p.key)).filter(shownTab).map(card).join("")}</div>
       <h3 class="th-h">Before and after</h3><div class="th-grid">${["party", "safety", "export"].concat(TPLUGS.filter(p => p.group === "prep").map(p => p.key)).filter(shownTab).map(card).join("")}</div>
       ${A.modules ? (() => { const su = A.modules.summary(); return `<section class="th-mods"><h3>What this campaign uses</h3><p><b>${esc(su.name)}</b> · ${su.n} of ${su.of} parts of Atlas in use. Switch off what this campaign does not need: it is hidden and stops its work, and nothing is deleted.</p><div class="t-row"><button type="button" class="t-btn" data-mf-open>Choose what it uses</button></div></section>`; })() : ""}
-      <section class="th-how"><h3>How a game night goes</h3><ol>
+      <details class="th-how"><summary><h3>How a game night goes</h3></summary><ol>
         <li><b>Before the first game.</b> Ask the table what must stay out of the story and what may only happen off screen, and write it under ${go("safety", "Safety")}. See how the players' characters are woven in under ${go("party", "The party")}.</li>
         <li><b>Before each game.</b> Read ${go("tonight", "tonight's sheet")}. Print it, or the handouts, if you like paper (${go("export", "Print and export")}).</li>
         <li><b>At the table.</b> Open the players' screen on the television. As the players explore, show each place's map a room at a time and give them its handouts: both are on every place's page, in the <i>At the table</i> row under its name. Tick the ${go("clocks", "clocks")} when the villains move.</li>
         <li><b>Whenever you need it.</b> The toolbar at the bottom right of every page: dice, a person made up on the spot, ideas when they're stuck, a question to the campaign, and the players' screen.</li>
         <li><b>After the game.</b> Write a few lines of notes under ${go("tonight", "Tonight")}. Next time, "Previously on…" is made from them.</li>
-      </ol>${A.nav && A.ux && A.ux.ls.get("checklist-off") === "1" ? `<p><button type="button" class="t-link" data-ckon>Show the checklist for the first session again</button></p>` : ""}</section></div>`;
+      </ol>${A.nav && A.ux && A.ux.ls.get("checklist-off") === "1" ? `<p><button type="button" class="t-link" data-ckon>Show the checklist for the first session again</button></p>` : ""}</details></div>`;
   }
 
   /* ---- Tonight */
@@ -649,6 +710,7 @@
       case "person": return d.name || "a person";
       case "scene": return d.title ? `"${d.title}"` : "words to read";
       case "world": return "the world map";
+      case "pmap": return "a hand-drawn map";
       case "galaxy": return "the star chart";
       case "board": return "their board of what they know";
       case "safety": return "the lines and veils";
@@ -910,10 +972,10 @@
         ${p ? personCard(p) : ""}
         ${kept.filter(k => k.kind === "person").length ? `<h4 class="t-h4">Kept</h4><ul class="t-ul">${kept.filter(k => k.kind === "person").map(k => `<li><b>${esc(k.person.name)}</b>, ${esc(k.person.trade)} <span class="kn">${esc(k.person.look)}</span> <button type="button" class="t-mini" data-t="flydel" data-id="${esc(k.id)}" aria-label="Forget them">×</button></li>`).join("")}</ul>` : ""}</section>
       ${diceHTML()}</div>
-      <div><section class="t-card"><h3>${T.icon("make")} A place, now</h3><p class="t-small">A small place with its map, someone in it and something to find${X.TR.ready ? " that points where the party needs to go" : ""}.</p>
+      <div><section class="t-card"><h3>${T.icon("make")} A place, now</h3>${A.quickPlace && (!A.modules || A.modules.on("makeup.describe")) ? `<div class="t-row"><button type="button" class="t-btn" data-t="qpdesc" title="Describe a building in a sentence; Atlas lays out its rooms and furnishes them, and adds nothing else">A building from a description…</button></div>` : ""}<p class="t-small">A small place with its map, someone in it and something to find${X.TR.ready ? " that points where the party needs to go" : ""}.</p>
         <div class="t-row"><select data-t="flykind" aria-label="What kind of place"><option value="">Any kind</option>${FLY_KINDS[g].map(k => `<option value="${k}">${esc(KIND_WORD[g][k])}</option>`).join("")}</select><button type="button" class="t-btn prim" data-t="fly">Make a place</button></div>${fly}
         ${kept.filter(k => k.kind !== "person").length ? `<h4 class="t-h4">Places made at the table</h4><ul class="t-ul">${kept.filter(k => k.kind !== "person").map(k => `<li><button type="button" class="t-go" data-t="flyopen" data-id="${esc(k.id)}">${esc(k.name)}</button> <span class="kn">${esc((KIND_WORD[k.g] || {})[k.kind] || "")}</span> <button type="button" class="t-mini" data-t="flydel" data-id="${esc(k.id)}" aria-label="Forget it">×</button></li>`).join("")}</ul>` : ""}</section></div>
-      <div><section class="t-card t-rt"><h3>${T.icon("tables")} Random tables</h3>${ctab.map(([n, l]) => tableRow("c:" + n, n, l)).join("")}${gtab.map(([n, l]) => tableRow("g:" + n, n, l)).join("")}<p class="t-small">Each place's own tables are in its dossier.</p></section></div></div>`;
+      <div><section class="t-card t-rt"><h3>${T.icon("tables")} Random tables</h3>${ctab.map(([n, l]) => tableRow("c:" + n, n, l)).join("")}${gtab.map(([n, l]) => tableRow("g:" + n, n, l)).join("")}<p class="t-small">Each place's own tables are in its dossier.</p></section></div></div>${(c => c ? `<div class="t-grid t-g2w">${c}</div>` : "")(cardsFor("make"))}`;
   }
 
   /* ---- The board */
@@ -982,7 +1044,7 @@
   const askItem = a => `<article class="t-qa"><h4>${esc(a.q)}</h4>${a.a ? `<div class="t-ans">${esc(a.a).replace(/\n+/g, "<br>")}</div>` : ""}${a.hits && a.hits.length ? `<details${a.a ? "" : " open"}><summary>${a.a ? "The passages it read" : "What the campaign says"}</summary><ol class="t-hits">${a.hits.map(h => `<li><b>${h.go ? goBtn(h.go) + (h.src !== placeName(h.go) ? " · " + esc(h.src.replace(placeName(h.go) + ": ", "")) : "") : esc(h.src)}</b><p>${mark(h.text, a.q)}</p></li>`).join("")}</ol></details>` : a.a ? "" : `<p class="kn">The campaign says nothing about that.</p>`}</article>`;
   function mark(text, q) { const ws = words(q).filter(w => !STOP.has(w)); let s = esc(text); for (const w of ws) s = s.replace(new RegExp("\\b(" + w.replace(/[^a-z0-9']/g, "") + "\\w*)", "gi"), "<mark>$1</mark>"); return s; }
   async function ask(q) {
-    const hits = lookup(q, 12), item = { q, a: "", hits };
+    const hits = await lookupBest(q, 12), item = { q, a: "", hits };
     UI.ask.unshift(item); UI.ask = UI.ask.slice(0, 8);
     const paint = () => { const box = $("#tAsk"), pop = $("#tPopAsk"); if (box) box.innerHTML = UI.ask.map(askItem).join(""); if (pop) pop.innerHTML = askItem(UI.ask[0]); };
     paint();
@@ -1064,6 +1126,7 @@
       case "personkeep": if (UI.person) { const id = uid("p"); S.set("fly", id, { id, kind: "person", person: UI.person, t: Date.now() }); note(`${UI.person.name} is kept.`); } break;
       case "fly": UI.fly = makeFly((boxOf(b).querySelector('[data-t="flykind"]') || {}).value); renderTab(); break;
       case "flykeep": if (UI.fly) S.set("fly", UI.fly.id, UI.fly); break;
+      case "qpdesc": if (A.quickPlace) A.quickPlace.open({}); break;
       case "flyshow": if (UI.fly) { flyPlace(UI.fly); UI.fogPlace = UI.fly.id; UI.fogFloor = 0; if (!S.get("fly", UI.fly.id)) S.set("fly", UI.fly.id, UI.fly); show({ kind: "map", place: UI.fly.id, floor: 0, fly: UI.fly, view: fogView() }); } break;
       case "flyopen": { const f = S.get("fly", d.id); if (f) { UI.fly = f; renderTab(); } break; }
       case "flydel": twice(b, () => { S.set("fly", d.id, null); if (UI.fly && UI.fly.id === d.id) UI.fly = null; }); break;
@@ -1115,7 +1178,10 @@
   function dockInit() {
     if ($("#tDock") || !app()) return;
     const dock = document.createElement("div"); dock.id = "tDock"; dock.className = "t-dock keeper"; dock.setAttribute("role", "toolbar"); dock.setAttribute("aria-label", "Table tools");
-    dock.innerHTML = DOCK.map(([k, l, ic]) => `<button type="button" data-dock="${k}" aria-expanded="false" title="${esc(l)}"${shownDock(k) ? "" : " hidden"}>${T.icon(ic)}<span>${esc(l)}</span>${k === "screen" ? `<i class="t-dot" aria-hidden="true"></i>` : ""}</button>`).join("");
+    dock.innerHTML = DOCK.map(([k, l, ic]) => `<button type="button" data-dock="${k}" aria-expanded="false" title="${esc(l)}"${shownDock(k) ? "" : " hidden"}>${T.icon(ic)}<span>${esc(l)}</span>${k === "screen" ? `<i class="t-dot" aria-hidden="true"></i>` : ""}</button>`).join("")
+      // (the UI overhaul of 18 Nov 2026: the bar folds to one button, so it leaves the corner of a map free; remembered)
+      + `<button type="button" class="t-dmin" data-t2="dockmin" aria-pressed="${pref.get("dockmin") === "1"}" title="Fold the toolbar to one button, or open it again" aria-label="Fold or open the table toolbar">${T.icon("dice")}<span class="t-dmin-l">Tools</span><b aria-hidden="true">›</b></button>`;
+    if (pref.get("dockmin") === "1") dock.classList.add("min");
     const pop = document.createElement("div"); pop.id = "tPop"; pop.className = "t-pop keeper"; pop.hidden = true; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Table tool");
     const msg = document.createElement("p"); msg.id = "tDockNote"; msg.className = "t-docknote keeper"; msg.setAttribute("aria-live", "polite");
     app().append(pop, msg, dock);
@@ -1157,17 +1223,17 @@
     if (pref.get("intro") === "1" || $("#tIntro")) return;
     const nav = document.querySelector("nav.views"); if (!nav) return;
     const el = document.createElement("div"); el.id = "tIntro"; el.className = "t-intro keeper"; el.setAttribute("role", "note");
-    el.innerHTML = `${T.icon("play", "big")}<div class="ti-t"><b>New: everything for game night is under At the table.</b> A players' screen for your television, handouts, the villains' clocks, fights and dice, people and places made up on the spot. The quickest tools are always in the toolbar at the bottom right.</div><div class="t-row"><button type="button" class="t-btn prim" data-t="tab" data-tab="home">Show me</button><button type="button" class="t-btn" data-t2="introok">Got it</button></div>`;
-    nav.after(el);
+    el.innerHTML = `${T.icon("play", "big")}<div class="ti-t" title="A players' screen for your television, handouts, the villains' clocks, fights and dice, people and places made up on the spot. The quickest tools are always in the toolbar at the bottom right."><b>New:</b> everything for game night is under At the table.</div><div class="t-row"><button type="button" class="t-btn prim" data-t="tab" data-tab="home">Show me</button><button type="button" class="t-btn" data-t2="introok">Got it</button></div>`;
+    (nav.closest("header.mast") || nav).after(el);
   }
   function dismissIntro() { pref.set("intro", "1"); const el = $("#tIntro"); if (el) el.remove(); }
 
   /* ================================================================ connecting it to the page */
   A.tableUI = {
     twice, onlyTo: hid => onlyTo(hid), showTo: (to, doc) => showTo(to, doc),
-    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, handoutBtns, view, intensity, addTab, addDock, addCard,
+    stats: statBlock, roll: rollBadge, dossierBar, dossierExtra, addDossier, handoutBtns, view, intensity, addTab, addDock, addCard,
     // what another file's tool may use: the store, the page, notes, Claude, the campaign's passages, a place's button
-    api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s, m) => askRaw(p, f || (() => {}), s, m), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, tabs: () => TABS.filter(t => shownTab(t[0])).map(t => ({ key: t[0], label: t[1], desc: t[4] })), open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
+    api: { store: () => S, ctx: () => X, note: t => note(t), show: d => show(d), refresh: tabs => refresh(tabs), render: () => renderTab(), askRaw: (p, f, s, m) => askRaw(p, f || (() => {}), s, m), lookupBest: (q, k) => lookupBest(q, k), lookup: (q, k) => lookup(q, k), goBtn, placeName, tab: () => UI.tab, tabs: () => TABS.filter(t => shownTab(t[0])).map(t => ({ key: t[0], label: t[1], desc: t[4] })), open: k => { UI.tab = k; pref.set("tab", k); if (X && X.setView) X.setView("table"); view(); }, pop: () => renderPop(), dock: () => UI.dock, openDock: k => { if (UI.dock !== k) dockOpen(k); }, session: () => sessionNow(), notesOf: n => notesOf(n), saveNotes: (n, v) => saveNotes(n, v), clockAt: c => clockAt(c) },
     init(ctx) {
       X = ctx; S = T.makeStore(ctx.db, cfg().storageKey); found = T.foundIn(S);
       if (A.story && A.story.connect) A.story.connect(S);
@@ -1243,6 +1309,7 @@
         const x = t.closest("[data-t2]");
         if (x && x.dataset.t2 === "xok") { pref.set("xseen", x.dataset.at); const el = document.getElementById("tXcard"); if (el) el.hidden = true; return; }
         if (x && x.dataset.t2 === "introok") { dismissIntro(); return; }
+        if (x && x.dataset.t2 === "dockmin") { const d = $("#tDock"), m = !d.classList.contains("min"); d.classList.toggle("min", m); x.setAttribute("aria-pressed", String(m)); pref.set("dockmin", m ? "1" : "0"); if (m) dockClose(); return; }
         const dk = t.closest("[data-dock]"); if (dk) { if (dk.dataset.dock === "close") dockClose(); else dockOpen(dk.dataset.dock); return; }
         // (a click on something its own panel has just drawn again is still inside it)
         if (UI.dock && t.isConnected && !t.closest("#tPop, #tDock, dialog")) dockClose();
@@ -1268,6 +1335,10 @@
         else if (d.t === "lines" || d.t === "veils") { const z = Object.assign({}, S.get("safety", "zero") || {}); z[d.t] = t.value.split(/\n+/).map(s => s.trim()).filter(Boolean).slice(0, 60); S.set("safety", "zero", z); }
         else if (d.t === "cbset") { const c = cnow(), r = c.list.find(x => x.id === d.id); if (!r) return; r[d.f] = ["name", "note", "ac"].includes(d.f) ? t.value.slice(0, 120) : (t.value === "" ? null : +t.value); cset(c); }
       });
+      document.addEventListener("input", e => { const q = e.target.closest && e.target.closest("[data-t='navq']"); if (q) navFilter(q.value); });
+      document.addEventListener("toggle", e => { const d = e.target; if (!d.classList || d.dataset.filtering) return;
+        if (d.classList.contains("tvn-grp")) pref.set("fold-" + d.dataset.g, d.open ? "0" : "1");
+        else if (d.classList.contains("tvn-extra")) { if (d.dataset.auto) { delete d.dataset.auto; return; } pref.set("moretools", d.open ? "1" : "0"); } }, true);
       document.addEventListener("focusout", e => { if (UI.dirty && $("#tvBody") && $("#tvBody").contains(e.target)) setTimeout(() => { if (!$("#tvBody").contains(document.activeElement)) renderTab(); }, 0); });
       document.addEventListener("submit", e => {
         const f = e.target; if (!f.matches) return;

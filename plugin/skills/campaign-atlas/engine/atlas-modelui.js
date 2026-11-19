@@ -14,7 +14,7 @@
   // the library's state, remembered in this browser: what is searched and filtered, which model is open
   const L = Object.assign({ q: "", cat: "", sub: "", genre: [], fam: [], cond: "", env: "", sort: "best", view: "all", shown: 60, kind: "3d" }, store("ui", {}));
   L.pick = null; L.imp = null;
-  let favs = store("fav", []), recent = store("recent", []), api = null, preview = null, previewFor = "", observer = null;
+  let cols = store("cols", {}), favs = store("fav", []), recent = store("recent", []), api = null, preview = null, previewFor = "", observer = null;
   const saveUI = () => keep("ui", { q: L.q, cat: L.cat, sub: L.sub, genre: L.genre, fam: L.fam, cond: L.cond, env: L.env, sort: L.sort, view: L.view, kind: L.kind });
   const IC = {
     furnish: `<path d="M6 11V6.5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2V11"/><path d="M4 11.5h16v4H4zM6 15.5V20M18 15.5V20"/>`,
@@ -83,7 +83,7 @@
     onTop(p, skip);
     return p;
   }
-  const clean = p => { const o = { a: p.a, x: Math.round(p.x * 1000) / 1000, y: Math.round(p.y * 1000) / 1000 }; if (p.r) o.r = p.r; if (p.s && p.s !== 1) o.s = Math.round(p.s * 1000) / 1000; if (p.z) o.z = Math.max(0, Math.round(p.z * 1000) / 1000); for (const k of ["c", "m", "col", "h"]) if (p[k]) o[k] = p[k]; if (p.p && Object.keys(p.p).length) o.p = p.p; return o; };
+  const clean = p => { const o = { a: p.a, x: Math.round(p.x * 1000) / 1000, y: Math.round(p.y * 1000) / 1000 }; if (p.r) o.r = p.r; if (p.s && p.s !== 1) o.s = Math.round(p.s * 1000) / 1000; if (p.z) o.z = Math.max(0, Math.round(p.z * 1000) / 1000); for (const k of ["c", "m", "col", "h", "gp", "lk"]) if (p[k]) o[k] = p[k]; if (p.p && Object.keys(p.p).length) o.p = p.p; return o; };
   const remember = id => { recent = [id].concat(recent.filter(x => x !== id)).slice(0, 30); keep("recent", recent); };
 
   // a kit's arrangement is laid out in five-foot squares; on a map with other squares it keeps its real distances
@@ -186,8 +186,40 @@
   const handleNear = p => { const s = E().sel, r = s && s.kind === "room" && F().R[s.i]; return !!r && [[r[1], r[2]], [r[1] + r[3], r[2]], [r[1], r[2] + r[4]], [r[1] + r[3], r[2] + r[4]]].some(([x, y]) => Math.abs(x - p.x) < .4 && Math.abs(y - p.y) < .4); };
 
   /* ---- changing what is chosen */
+  // a placed model given another look (the asset library request of 17 Nov 2026: "material variants ... to expand
+  // variety without storing thousands of nearly identical files"): another material of the same family for its main
+  // part, its condition a step or two either way, a colour already given shifted a little in hue and lightness, its
+  // size within a tenth; a model brought in by the game master keeps its look and changes size only
+  function vary(p) {
+    const e = M.entry(p.a); if (!e) return; const r = Math.random;
+    p.s = Math.round((p.s || 1) * (.92 + r() * .16) * 100) / 100;
+    if (e.custom) return;
+    const main = Object.keys((e.p || {}).m || {})[0], cur = p.m || (main ? e.p.m[main] : ""), rich = /^(gold|silver|platinum|crystal|gem|jade|marble|ivory|pearl)/, alts = main ? M.alts(e.p.m[main]).filter(k => k !== cur && (rich.test(cur) || !rich.test(k))) : []; // (no gold crate: a precious material only for what is already one)
+    if (alts.length && r() < .75) p.m = alts[Math.floor(r() * alts.length)];
+    if ((e.k || []).length > 1 && r() < .6) { const i = Math.max(0, e.k.indexOf(p.c || "new")), j = Math.max(0, Math.min(e.k.length - 1, i + [-2, -1, 1, 1, 2][Math.floor(r() * 5)])); p.c = e.k[j]; if (p.c === "new") delete p.c; }
+    if (p.col && /^#[0-9a-f]{6}$/i.test(p.col)) { const n = parseInt(p.col.slice(1), 16), rgb = [n >> 16, (n >> 8) & 255, n & 255].map(v => v / 255), mx = Math.max(...rgb), mn = Math.min(...rgb), l = (mx + mn) / 2, d = mx - mn;
+      let h = 0, sa = 0; if (d) { sa = d / (1 - Math.abs(2 * l - 1)); h = mx === rgb[0] ? ((rgb[1] - rgb[2]) / d) % 6 : mx === rgb[1] ? (rgb[2] - rgb[0]) / d + 2 : (rgb[0] - rgb[1]) / d + 4; h *= 60; }
+      const H = (h + (r() - .5) * 24 + 360) % 360, L = Math.max(.08, Math.min(.92, l + (r() - .5) * .14)), C = (1 - Math.abs(2 * L - 1)) * sa, X = C * (1 - Math.abs((H / 60) % 2 - 1)), m0 = L - C / 2;
+      const [a, b, c] = H < 60 ? [C, X, 0] : H < 120 ? [X, C, 0] : H < 180 ? [0, C, X] : H < 240 ? [0, X, C] : H < 300 ? [X, 0, C] : [C, 0, X];
+      p.col = "#" + [a, b, c].map(v => Math.round((v + m0) * 255).toString(16).padStart(2, "0")).join(""); }
+  }
+  M.vary = vary;
+  // grouped models chosen together (p.gp), locked ones left where they are (p.lk: not dragged, turned, nudged or taken
+  // away until unlocked), and the game master's own sets: several models saved as one arrangement, to put down again
+  // anywhere like a kit (the asset library request of 17 Nov 2026: "group objects, lock objects, save custom arrangements
+  // as reusable prefabs"). Sets are kept in this browser, in the library's own store
+  let sets = store("sets", []);
+  const lockedIn = l => l.some(i => P()[i] && P()[i].lk);
+  function groupSel() { const l = sel(); if (l.length < 2) return api.tip("Choose two models or more to group them (Shift and click, or drag a box round them)."); const g = "g" + Date.now().toString(36); edit(p => { p.gp = g; }); api.tip(`Grouped: ${l.length} models, chosen and moved together. Ungroup to part them.`); }
+  function saveSet() {
+    const l = sel(); if (l.length < 2) return api.tip("Choose the models of the arrangement first (two or more).");
+    const name = (prompt("Name this set, to put it down again on any map:", "My set") || "").trim(); if (!name) return;
+    const ps = l.map(i => P()[i]), cx = ps.reduce((a, p) => a + p.x, 0) / ps.length, cy = ps.reduce((a, p) => a + p.y, 0) / ps.length, k = kitScale();
+    const set = ps.map(p => { const o = {}; for (const f of ["s", "z", "c", "m", "col", "h"]) if (p[f] != null) o[f] = p[f]; if (p.p) o.p = JSON.parse(JSON.stringify(p.p)); return [p.a, Math.round((p.x - cx) / k * 1000) / 1000, Math.round((p.y - cy) / k * 1000) / 1000, p.r || 0, o]; });
+    sets = [{ id: "s" + Date.now().toString(36), n: name.slice(0, 40), set }].concat(sets).slice(0, 60); keep("sets", sets); api.paintSide(); api.tip(`Saved as a set: ${name}. It is under Your sets, to put down on any map.`);
+  }
   function edit(fn) { const l = sel(); if (!l.length) return; api.change(() => { for (const i of l) fn(P()[i], i); for (const i of l) P()[i] = clean(P()[i]); }); }
-  function removeSel() { const l = sel(); if (!l.length) return; api.change(() => { const f = F(); f.P = P().filter((_, i) => !l.includes(i)); setSel([]); }); }
+  function removeSel() { const l0 = sel(), l = l0.filter(i => !P()[i].lk); if (l.length < l0.length) api.tip("Locked models stay: unlock them first."); if (!l.length) return; api.change(() => { const f = F(); f.P = P().filter((_, i) => !l.includes(i)); setSel([]); }); }
   function copySel(cut) {
     const l = sel(); if (!l.length) return;
     const ps = l.map(i => copy(P()[i])), cx = ps.reduce((a, p) => a + p.x, 0) / ps.length, cy = ps.reduce((a, p) => a + p.y, 0) / ps.length;
@@ -222,6 +254,11 @@
   const SYN = { hydroponics: "hydro plant", greenhouse: "plant", garden: "plant bush", airlock: "airlock spacesuit", gym: "treadmill", laundry: "washing", reactor: "reactor", engine: "reactor", smithy: "anvil forge", forge: "anvil forge", mill: "millstone sack", chapel: "altar pew", shrine: "altar", court: "bush", green: "bush", docking: "crate", hangar: "crate", fuel: "tank barrel" };
   const SKIPW = new Set(["room", "rooms", "deck", "main", "upper", "lower", "the", "and", "with", "first", "second", "third", "great", "small", "large", "little", "ring", "section"]);
   function eraGenres(kit) {
+    // (a place made from a description that named its age, "a 1920s doctor's office", is furnished in that age, whatever
+    // the campaign's or its kind's kit: the asset library request of 17 Nov 2026, "period-appropriate ... not futuristic
+    // consoles")
+    const own = (A.customs && E().id && A.customs[E().id] && A.customs[E().id].era) || "";
+    if (own) return own === "future" ? ["scifi", "futuristic"] : own === "medieval" || own === "fantasy" ? ["fantasy", "medieval"] : own === "modern" ? ["modern"] : ["historical"];
     if (kit && kit.g && kit.g.length) return kit.g;
     const e = String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase();
     return /future|scifi|space/.test(e) ? ["scifi", "futuristic"] : /medieval|fantasy|ancient/.test(e) ? ["fantasy", "medieval"] : /modern|now|today|20(1|2)\d/.test(e) ? ["modern"] : ["historical", "modern"];
@@ -245,6 +282,10 @@
   const roomAt = (x, y) => { let best = null; for (const r of F().R || []) if (x >= r[1] && x <= r[1] + r[3] && y >= r[2] && y <= r[2] + r[4] && (!best || r[3] * r[4] < best[3] * best[4])) best = r; return best; };
   function furnishRooms(ids, clear) {
     const kit = kitFor(); let n = 0, rooms = 0; const none = [], byKit = [];
+    const own = (A.customs && E().id && A.customs[E().id] && A.customs[E().id].era) || ""; A.__placeEra = own === "historical" ? "1920s" : own || null;
+    try { return furnishIn(ids, clear, kit, n, rooms, none, byKit); } finally { A.__placeEra = null; }
+  }
+  function furnishIn(ids, clear, kit, n, rooms, none, byKit) {
     api.change(() => {
       const f = F(), fin = api.finished(f);
       for (const r of (f.R || []).filter(q => ids.includes(q[0]))) {
@@ -292,7 +333,7 @@
     if (l.length > 1) return `<section class="me-fur"><h4>${icon("furnish")} ${l.length} models chosen</h4>
       <div class="me-row"><button type="button" data-pf="turn-15">⟲ 15°</button><button type="button" data-pf="turn15">⟳ 15°</button><button type="button" data-pf="turn90">⟳ 90°</button></div>
       <label class="me-ck"><input type="checkbox" data-pv="h"${l.every(i => P()[i].h) ? " checked" : ""}> Hidden from the players</label>
-      <div class="me-row"><button type="button" data-pf="dup">Duplicate</button><button type="button" data-pf="copy">Copy</button><button type="button" class="me-del" data-pf="del">Take them away</button></div>
+      <div class="me-row"><button type="button" data-pf="dup">Duplicate</button><button type="button" data-pf="copy">Copy</button><button type="button" data-pf="group" title="Group them: chosen and moved together">Group</button><button type="button" data-pf="ungroup">Ungroup</button><button type="button" data-pf="lock" title="Lock them where they are">Lock</button><button type="button" data-pf="unlock">Unlock</button><button type="button" data-pf="saveset" title="Save this arrangement as a set of your own, to put down again on any map">Save as a set…</button><button type="button" data-pf="vary" title="Give it another look: another fitting material, a little more or less worn, its colour shifted a little, a touch bigger or smaller. Each chosen one differently, so a row of chairs is not all alike">Vary it</button><button type="button" class="me-del" data-pf="del">Take them away</button></div>
       <p class="me-help">Drag any of them to move them all. Shift+click adds or takes one from the choice.</p></section>`;
     // nothing chosen: how it works, the library, what was used lately
     const rec = recent.filter(id => M.entry(id)).slice(0, 12);
@@ -301,6 +342,7 @@
       <button type="button" class="prim me-libbtn" data-pf="lib">${icon("lib")} Open the library</button>
       ${rec.length ? `<h5>Used lately</h5><div class="me-recent">${rec.map(id => `<button type="button" class="me-rc" data-qadd="${esc(id)}" title="${esc(M.entry(id).n)}"><img alt="${esc(M.entry(id).n)}" data-th='${esc(JSON.stringify({ a: id }))}'></button>`).join("")}</div>` : ""}
       <h5>Furnish the rooms I choose</h5><p class="me-help">Click the rooms, then Furnish them: each from what it is for, in the library's models.</p><button type="button" data-pf="pickrooms">Choose the rooms</button>
+      ${sets.length ? `<h5>Your sets</h5><div class="me-kits">${sets.map(k => `<span class="me-myset"><button type="button" data-myset="${k.id}" title="${k.set.length} models: put the set down">${esc(k.n)}</button><button type="button" class="me-x" data-mysetdel="${k.id}" title="Forget this set" aria-label="Forget ${esc(k.n)}">×</button></span>`).join("")}</div>` : ""}
       <h5>Kits</h5><div class="me-kits">${M.kits().map(k => `<button type="button" data-kitset="${k.id}" title="${esc(k.d)}">${esc(k.n)}</button>`).join("")}</div>
       <label class="me-f"><span>Snap models to</span><select data-pfs="step">${[[.25, "a quarter of a square"], [.5, "half a square"], [1, "whole squares"]].map(([v, n]) => `<option value="${v}"${v === step() ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <p class="me-help">Keys: <kbd>R</kbd> turn, <kbd>[</kbd> <kbd>]</kbd> smaller and bigger, <kbd>PgUp</kbd> <kbd>PgDn</kbd> raise and lower, arrows nudge, <kbd>Ctrl+C</kbd> <kbd>Ctrl+V</kbd> copy and paste, <kbd>Ctrl+D</kbd> duplicate, <kbd>Del</kbd> take away.</p></section>`;
@@ -326,7 +368,7 @@
         ${cols.map(k => `<label class="me-f me-colour"><span>${k === "col" ? "Its light" : k === "c1" ? "Main colour" : k === "c2" ? "Second colour" : "Third colour"}</span><input type="color" data-pq="${k}" value="${esc(pp[k])}"></label>`).join("")}
         ${p.p ? `<button type="button" data-pf="reshape">As the library has it</button>` : ""}</details>`}
       <label class="me-ck"><input type="checkbox" data-pv="h"${p.h ? " checked" : ""}> Hidden from the players</label>
-      <div class="me-row"><button type="button" data-pf="dup">Duplicate</button><button type="button" data-pf="copy">Copy</button><button type="button" data-pf="fav" aria-pressed="${favs.includes(p.a)}">${icon("star")}</button><button type="button" class="me-del" data-pf="del">Take it away</button></div></section>`;
+      <div class="me-row"><button type="button" data-pf="dup">Duplicate</button><button type="button" data-pf="copy">Copy</button><button type="button" data-pf="${p.lk ? "unlock" : "lock"}">${p.lk ? "Unlock" : "Lock"}</button>${p.gp ? `<button type="button" data-pf="ungroup">Ungroup</button>` : ""}${e.custom ? "" : `<button type="button" data-pf="vary" title="Give it another look: another fitting material, a little more or less worn, its colour shifted a little, a touch bigger or smaller. Each chosen one differently, so a row of chairs is not all alike">Vary it</button>`}<button type="button" data-pf="fav" aria-pressed="${favs.includes(p.a)}">${icon("star")}</button><button type="button" class="me-del" data-pf="del">Take it away</button></div></section>`;
   }
 
   /* ---- thumbnails, drawn as they come into view, a few at a time */
@@ -357,7 +399,7 @@
   const kitsNow = () => M.kits().filter(k => (k.kind || "3d") === (L.kind === "2d" ? "2d" : "3d"));
   function results() {
     const f = filters();
-    if (L.view === "fav") f.ids = favs.slice(); else if (L.view === "recent") f.ids = recent.slice(); else if (L.view === "mine") f.ids = M.custom.filter(x => !x.hidden).map(x => x.id); else if (L.view.startsWith("kit:")) { const k = M.kits().find(x => "kit:" + x.id === L.view); f.ids = k ? k.ids : []; }
+    if (L.view === "fav") f.ids = favs.slice(); else if (L.view === "recent") f.ids = recent.slice(); else if (L.view === "mine") f.ids = M.custom.filter(x => !x.hidden).map(x => x.id); else if (L.view.startsWith("col:")) f.ids = (cols[L.view.slice(4)] || []).slice(); else if (L.view.startsWith("kit:")) { const k = M.kits().find(x => "kit:" + x.id === L.view); f.ids = k ? k.ids : []; }
     let list = M.find(L.q, f);
     if (L.view === "recent" && !L.q) list.sort((a, b) => recent.indexOf(a.e.id) - recent.indexOf(b.e.id));
     return list;
@@ -368,6 +410,7 @@
     const item = (view, cat, sub, label, n, cls) => `<button type="button" class="ml-nv ${cls || ""}" data-nv="${esc(view)}" data-cat="${esc(cat || "")}" data-sub="${esc(sub || "")}" aria-pressed="${L.view === view && (L.cat || "") === (cat || "") && (L.sub || "") === (sub || "")}">${label}<i>${n}</i></button>`;
     const mine = M.custom.filter(x => !x.hidden).length;
     let h = item("all", "", "", "Everything", base.length) + item("fav", "", "", `${icon("star")} Favourites`, favs.filter(id => M.entry(id)).length) + item("recent", "", "", "Used lately", recent.filter(id => M.entry(id)).length) + item("kits", "", "", `${icon("cube")} ${L.kind === "2d" ? "Sets" : "Kits"}`, kitsNow().length) + (mine ? item("mine", "", "", "Your own models", mine) : "");
+    const cn = Object.keys(cols); if (cn.length) { h += `<div class="ml-nvh">My collections</div>`; for (const n of cn) h += item("col:" + n, "", "", esc(n), (cols[n] || []).filter(id => M.entry(id)).length); }
     h += `<div class="ml-nvh">Categories</div>`;
     for (const [c, ss] of M.cats()) {
       if (!by[c] && L.cat !== c) continue;
@@ -393,6 +436,16 @@
     const list = results(), shown = Math.min(list.length, L.shown);
     if (!more) box.scrollTop = 0;
     const narrowed = L.q || L.genre.length || L.fam.length || L.cond || L.env;
+    // (a search that finds nothing (the asset library request, "if the DM searches for an object that doesn't exist, help
+    // them create it"): the nearest models by any one of its words, with the honest ways on: choose one and Vary it
+    // (material, wear, colour, size), change its shape on its card, or bring in a model of your own. No pretending to
+    // make a new 3D model from words)
+    if (!list.length && L.q && L.view !== "fav" && L.view !== "recent") {
+      const near = new Map(); for (const w of String(L.q).toLowerCase().split(/[^a-z0-9']+/).filter(x => x.length >= 3)) for (const r of M.find(w, { kind: L.kind }).slice(0, 6)) if (!near.has(r.e.id)) near.set(r.e.id, r);
+      const nl = [...near.values()].slice(0, 12);
+      box.innerHTML = `<div class="ml-none ml-nearest"><p>Nothing in the library is called "${esc(L.q)}"${narrowed && (L.genre.length || L.fam.length || L.cond || L.env) ? " with these filters" : ""}. What you can do:</p><ul class="me-help"><li>Choose the nearest below, put it down, and on its card change what it is made of, how worn, its colour and its shape, or press Vary it.</li><li>Put several pieces together and Save as a set… to use again.</li><li>Bring in a model of your own (.glb), with the button above.</li></ul>${nl.length ? `<p><b>The nearest, by any of your words:</b></p>` : ""}</div>${nl.map(r => card(r)).join("")}`;
+      $("#mlLib .ml-count").textContent = nl.length ? `none exactly; ${nl.length} near` : "none"; mbox.innerHTML = ""; thumbs(box); return;
+    }
     box.innerHTML = list.length ? list.slice(0, shown).map(card).join("") : `<p class="ml-none">${narrowed ? "Nothing matches. Try fewer words, or clear the filters." : L.view === "fav" ? "No favourites yet: the star on a model keeps it here." : L.view === "recent" ? "Nothing used yet." : L.view === "mine" ? "Nothing brought in yet: Bring in a model takes a .glb file." : "Nothing here."}</p>`;
     const kit = L.view.startsWith("kit:") ? M.kits().find(x => "kit:" + x.id === L.view) : null;
     mbox.innerHTML = (shown < list.length ? `<button type="button" data-ml="more">Show more (${list.length - shown} left)</button>` : "") + (kit ? `<button type="button" class="prim" data-kitset="${kit.id}">Put the whole ${esc(kit.n.toLowerCase())} set down</button>` : "");
@@ -421,7 +474,7 @@
         <dt>In 3D</dt><dd>${esc(inThree(e, sp))}</dd><dt>Made by</dt><dd>${esc(e.src)}</dd><dt>Licence</dt><dd>${esc(e.lic)}</dd></dl>
       ${e.colour ? `<label class="me-f me-colour"><span>Colour</span><input type="color" data-pk="col" value="${esc(sp.col || e.colour)}"></label>` : ""}
       <details class="me-more"><summary>Its size</summary><div class="me-nums">${["w", "d"].map(k => `<label class="me-num"><span>${k === "w" ? "Wide" : "Deep"} (m)</span><input type="number" data-pk="${k}" value="${Math.round(Object.assign({}, e.p, sp.p || {})[k] * 100) / 100}" step=".05" min=".05"></label>`).join("")}</div></details>
-      <div class="me-row ml-go"><button type="button" class="prim" data-ml="place">Put it on the map</button><button type="button" data-fav="${esc(e.id)}" aria-pressed="${favs.includes(e.id)}" title="Favourite">${icon("star")}</button></div>`;
+      <div class="me-row ml-go"><button type="button" class="prim" data-ml="place">Put it on the map</button><button type="button" data-colto="${esc(e.id)}" title="Put it in one of your collections (a tavern's set, a villain's lair…)">To a collection…</button><button type="button" data-fav="${esc(e.id)}" aria-pressed="${favs.includes(e.id)}" title="Favourite">${icon("star")}</button></div>`;
   }
   function drawingPanel(p, e) {
     const [w, d] = M.dims(e, p), s = p.s || 1;
@@ -456,7 +509,7 @@
       ${e.custom ? "" : `<label class="me-f me-colour"><span>Colour</span><span class="me-row"><input type="color" data-pk="col" value="${esc(sp.col || "#a08060")}"><button type="button" data-ml="nocol"${sp.col ? "" : " disabled"}>As made</button></span></label>
       <details class="me-more"><summary>Its shape</summary><div class="me-nums">${["w", "d", "h"].map(k => `<label class="me-num"><span>${{ w: "Wide", d: "Deep", h: "High" }[k]} (m)</span><input type="number" data-pk="${k}" value="${Math.round(Object.assign({}, e.p, sp.p || {})[k] * 100) / 100}" step=".05" min=".01"></label>`).join("")}</div>
         ${"text" in e.p ? `<label class="me-f"><span>Its words</span><input data-pk="text" value="${esc(Object.assign({}, e.p, sp.p || {}).text || "")}" maxlength="40"></label>` : ""}</details>`}
-      <div class="me-row ml-go"><button type="button" class="prim" data-ml="place">Put it on the map</button><button type="button" data-fav="${esc(e.id)}" aria-pressed="${favs.includes(e.id)}" title="Favourite">${icon("star")}</button>${e.custom ? `<button type="button" class="me-del" data-ml="forget">Forget this model</button>` : ""}</div>`;
+      <div class="me-row ml-go"><button type="button" class="prim" data-ml="place">Put it on the map</button><button type="button" data-colto="${esc(e.id)}" title="Put it in one of your collections (a tavern's set, a villain's lair…)">To a collection…</button><button type="button" data-fav="${esc(e.id)}" aria-pressed="${favs.includes(e.id)}" title="Favourite">${icon("star")}</button>${e.custom ? `<button type="button" class="me-del" data-ml="forget">Forget this model</button>` : ""}</div>`;
     startPreview(sp);
   }
   async function startPreview(sp) {
@@ -622,14 +675,15 @@
       if (ed.place && !choose) { placeAt(p.x, p.y); return true; }
       if (ed.pickRooms && !choose) { const r = roomAt(p.x, p.y); if (r) { ed.pickRooms = ed.pickRooms.includes(r[0]) ? ed.pickRooms.filter(x => x !== r[0]) : ed.pickRooms.concat(r[0]); api.paintCanvas(); api.paintSide(); } return true; }
       const l = sel();
-      if (l.length === 1) { const q = P()[l[0]], [, d] = foot(q), a = (q.r || 0) * Math.PI / 180, hx = q.x + Math.sin(a) * (d / 2 + .55), hy = q.y - Math.cos(a) * (d / 2 + .55); if (Math.hypot(p.x - hx, p.y - hy) < .35) { ed.pdrag = { kind: "rot", i: l[0], r0: q.r || 0, a0: Math.atan2(p.y - q.y, p.x - q.x) }; return true; } }
+      if (l.length === 1 && !(P()[l[0]] || {}).lk) { const q = P()[l[0]], [, d] = foot(q), a = (q.r || 0) * Math.PI / 180, hx = q.x + Math.sin(a) * (d / 2 + .55), hy = q.y - Math.cos(a) * (d / 2 + .55); if (Math.hypot(p.x - hx, p.y - hy) < .35) { ed.pdrag = { kind: "rot", i: l[0], r0: q.r || 0, a0: Math.atan2(p.y - q.y, p.x - q.x) }; return true; } }
       if (choose && (markerNear(p) || handleNear(p))) { if (l.length) setSel([]); return false; }
       let i = propAt(p.x, p.y), took = false;
       if (i < 0) { i = adopt(p.x, p.y); took = i >= 0; }
       if (i >= 0) {
         if (choose) ed.sel = null;
         if (e.shiftKey && !took) { setSel(l.includes(i) ? l.filter(x => x !== i) : l.concat(i)); api.paintCanvas(); api.paintSide(); return true; }
-        if (!took && !l.includes(i)) setSel([i]);
+        if (!took && !l.includes(i)) { const g = P()[i].gp; setSel(g ? P().map((q, j) => q.gp === g ? j : -1).filter(j => j >= 0) : [i]); }
+        if (lockedIn(sel())) { api.tip("Locked: unlock it on its card to move it."); api.paintCanvas(); api.paintSide(); return true; }
         ed.pdrag = { kind: "move", x0: p.x, y0: p.y, idx: sel(), at: sel().map(j => [P()[j].x, P()[j].y]) };
         api.paintCanvas(); api.paintSide(); return true;
       }
@@ -669,8 +723,11 @@
       // choosing Furnish on a floor with nothing on it yet opens the library
       const tb = t.closest("button[data-tool]"); if (tb) { ed.place = null; setSel([]); if (tb.dataset.tool === "furnish" && !P().length) setTimeout(() => openLib(), 0); return false; }
       if (t.closest("[data-mf]")) { setSel([]); ed.place = ed.place && ed.place.spec ? ed.place : null; return false; }
+      const ct = t.closest("[data-colto]"); if (ct) { const id = ct.dataset.colto, names = Object.keys(cols), n = prompt(names.length ? `Which collection? (${names.join(", ")}, or a new name)` : "A name for the new collection", names[0] || "My set"); if (!n || !n.trim()) return; const k = n.trim().slice(0, 40), l = cols[k] || []; cols[k] = l.includes(id) ? l.filter(x => x !== id) : l.concat(id); if (!cols[k].length) delete cols[k]; keep("cols", cols); ct.textContent = (cols[k] || []).includes(id) ? "In " + k : "To a collection…"; return; }
       const fav = t.closest("[data-fav]"); if (fav) { const id = fav.dataset.fav; favs = favs.includes(id) ? favs.filter(x => x !== id) : [id].concat(favs); keep("fav", favs); document.querySelectorAll(`#meDlg [data-fav="${CSS.escape(id)}"]`).forEach(b => b.setAttribute("aria-pressed", favs.includes(id))); if (L.view === "fav") paintList(); paintNav(); return true; }
       const qa = t.closest("[data-qadd]"); if (qa) { const sp = { a: qa.dataset.qadd }; if (qa.dataset.c) sp.c = qa.dataset.c; startPlacing(sp); return true; }
+      const myd = t.closest("[data-mysetdel]"); if (myd) { const k = sets.find(x => x.id === myd.dataset.mysetdel); if (k && confirm(`Forget the set "${k.n}"? The models already on maps stay.`)) { sets = sets.filter(x => x !== k); keep("sets", sets); api.paintSide(); } return true; }
+      const ms = t.closest("[data-myset]"); if (ms) { const k = sets.find(x => x.id === ms.dataset.myset); if (k) startPlacing({ set: k.set }, k.n); return true; }
       const ks = t.closest("[data-kitset]"); if (ks) { const k = M.kits().find(x => x.id === ks.dataset.kitset); if (k) startPlacing({ set: k.set }, k.n + " set"); return true; }
       const mk = t.closest("[data-mlk]"); if (mk) { L.kind = mk.dataset.mlk; L.kindSet = true; L.view = "all"; L.cat = L.sub = ""; L.shown = 60; L.pick = null; saveUI(); paintKind(); paintNav(); paintList(); paintDetail(); return true; }
       const kv = t.closest("[data-kitshow]"); if (kv) { L.view = "kit:" + kv.dataset.kitshow; L.cat = L.sub = ""; L.shown = 60; saveUI(); paintNav(); paintList(); return true; }
@@ -703,6 +760,12 @@
           case "copy": copySel(); break;
           case "del": removeSel(); break;
           case "nocol": edit(p => { delete p.col; }); break;
+          case "group": groupSel(); api.paintSide(); break;
+          case "ungroup": { const g = new Set(sel().map(i => P()[i].gp).filter(Boolean)); if (g.size) { api.change(() => { for (const q of P()) if (g.has(q.gp)) delete q.gp; }); } api.tip("Ungrouped."); api.paintSide(); break; }
+          case "lock": edit(p => { p.lk = 1; }); api.paintSide(); break;
+          case "unlock": edit(p => { delete p.lk; }); api.paintSide(); break;
+          case "saveset": saveSet(); break;
+          case "vary": if (lockedIn(sel())) { api.tip("Locked: unlock it to vary it."); break; } edit(vary); api.tip("Varied. Again for another look; Ctrl+Z to undo."); break;
           case "reshape": edit(p => { delete p.p; }); break;
           case "fav": { const l = sel(); if (l.length === 1) { const id = P()[l[0]].a; favs = favs.includes(id) ? favs.filter(x => x !== id) : [id].concat(favs); keep("fav", favs); pf.setAttribute("aria-pressed", favs.includes(id)); } break; }
           case "pickrooms": ed.place = null; setSel([]); ed.pickRooms = []; ed.tool = "furnish"; api.paint(); api.tip("Click the rooms to furnish, then Furnish them. Esc stops."); break;
@@ -772,7 +835,7 @@
       if (k === "[" || k === "]") { edit(p => { p.s = Math.max(.1, Math.min(10, Math.round((p.s || 1) * (k === "]" ? 1.1 : 1 / 1.1) * 100) / 100)); }); return true; }
       if (k === "PageUp" || k === "PageDown") { e.preventDefault(); edit(p => { p.z = Math.max(0, Math.round(((p.z || 0) + (k === "PageUp" ? .1 : -.1)) * 100) / 100); }); return true; }
       const ar = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[k];
-      if (ar) { e.preventDefault(); const st = e.shiftKey ? 1 : snapOn() ? step() : .05; edit(p => { p.x = Math.max(0, Math.min(F().w, p.x + ar[0] * st)); p.y = Math.max(0, Math.min(F().h, p.y + ar[1] * st)); }); return true; }
+      if (ar) { e.preventDefault(); if (lockedIn(sel())) { api.tip("Locked: unlock it to move it."); return true; } const st = e.shiftKey ? 1 : snapOn() ? step() : .05; edit(p => { p.x = Math.max(0, Math.min(F().w, p.x + ar[0] * st)); p.y = Math.max(0, Math.min(F().h, p.y + ar[1] * st)); }); return true; }
       return false;
     }
   });

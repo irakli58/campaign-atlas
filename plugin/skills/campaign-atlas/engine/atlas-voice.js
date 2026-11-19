@@ -192,7 +192,7 @@
   const alertNote = m => { if (A.tableUI && A.tableUI.api) A.tableUI.api.note(m); else console.warn(m); };
   async function pollEngines(redraw) {
     if (!AI() || !window.ATLAS_APP || !window.ATLAS_APP.voices) return;
-    try { N.aiAll = await window.ATLAS_APP.voices.list(); N.aiEngines = N.aiAll.filter(e => e.installed).map(e => e.id); } catch (e) { N.aiAll = []; N.aiEngines = []; }
+    try { N.aiAll = (await window.ATLAS_APP.voices.list()).filter(e => e.kind !== "words"); N.aiEngines = N.aiAll.filter(e => e.installed).map(e => e.id); } catch (e) { N.aiAll = []; N.aiEngines = []; }
     // (with an engine installed and no choice made yet, the campaign's own narrator reads)
     if (!N.set.engine && N.aiEngines.length) { const p = AI().PRESETS.find(x => x.type === AI().typeFor() && N.aiEngines.includes(x.engine)); if (p) { N.set.engine = "ai"; N.set.preset = p.id; } }
     const d = document.getElementById("narDlg"); if (redraw && d && d.open) openSettings();
@@ -205,8 +205,20 @@
     const t = e.target.closest && e.target.closest("[data-narrate],[data-narrator]"); if (!t) return;
     if (t.dataset.narrator) { e.preventDefault(); openSettings(); return; }
     e.preventDefault(); e.stopPropagation();
+    if (N.btn !== t) whichVoice();
     if (N.btn === t) stop(); else speak(t.getAttribute("data-narrate"), t);
   });
+  // (never the old voice in silence: the user, 18 Nov 2026, heard the browser's Google voice and took it for the old
+  // system. Once a page, the first time it reads with this browser's voices, it says so, and why: the natural voices
+  // (Kokoro, Piper) are not installed, or they are and the browser's were chosen)
+  let told = false;
+  function whichVoice() {
+    if (told || aiOn()) return; told = true;
+    const inst = (N.aiEngines || []).length, hasApp = !!(window.ATLAS_APP && window.ATLAS_APP.voices);
+    alertNote(inst ? `Reading with this browser's voice${voice() ? " (" + voice().name + ")" : ""}, as chosen. The natural narrator (${N.aiEngines.map(e => e === "kokoro" ? "Kokoro" : "Piper").join(", ")}) is installed: Narrator, then "Read with the AI narrator".`
+      : hasApp ? `Reading with this browser's voice${voice() ? " (" + voice().name + ")" : ""}: the natural voices (Kokoro, or Piper) are not installed yet. Narrator, then install one (once, about 300 MB).`
+      : `Reading with this browser's voice${voice() ? " (" + voice().name + ")" : ""}. The natural voices (Kokoro, Piper) come with the Campaign Atlas app, opened from it.`);
+  }
   document.addEventListener("keydown", e => { if (e.key === "Escape" && N.btn && !(document.getElementById("narDlg") || {}).open) stop(); });
   SS.getVoices();      // (asking once starts the browser loading its voices, so they are there when the settings open)
   A.narrator = { speak: t => speak(t, null), stop, speaking: () => !!N.btn, settings: () => Object.assign({}, N.set), voices: () => voices().map(v => v.name), open: openSettings, sayAs: t => sayAs(t), engines: () => (N.aiEngines || []).slice(), refresh: () => pollEngines(true), set: o => { Object.assign(N.set, o); save(); } };

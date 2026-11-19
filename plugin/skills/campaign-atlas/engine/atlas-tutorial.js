@@ -67,7 +67,7 @@
 .tu-l .tu-ok{width:20px;text-align:center;color:#6fbf73}
 .tu-l > div{flex:1}
 .tu-feats{columns:2 220px;font-size:14px;margin-top:6px}.tu-feats a{color:inherit;cursor:pointer;text-decoration:underline dotted;display:inline-block;margin:1px 0}
-.tu-helpbtn{font:600 11px/1 var(--f-mono,monospace)!important;letter-spacing:.06em;text-transform:uppercase}
+.tu-helpbtn{font:500 11.5px/1 var(--f-mono,monospace)!important;letter-spacing:.06em;text-transform:uppercase}
 .tu-qb{display:inline-grid;place-items:center;width:20px;height:20px;margin-left:6px;border-radius:50%;border:1px solid currentColor;background:transparent;color:#e2b54a;font:700 11px/1 var(--f-mono,monospace);cursor:pointer;vertical-align:middle;opacity:.75}
 .tu-qb:hover{opacity:1}
 .tu-toast{position:fixed;left:16px;bottom:16px;z-index:2147482999;max-width:360px;background:var(--panel,#1b1a17);color:var(--ink,#ece5d6);border:1px solid #e2b54a;border-radius:12px;padding:12px 14px;box-shadow:0 12px 36px rgba(0,0,0,.4);font:14.5px/1.45 var(--f-body,Georgia,serif);animation:tuin .5s ease-out}
@@ -89,7 +89,9 @@
   const pickFor = s => { const m = /\[data-t='tab'\]\[data-tab='([\w-]+)'\]/.exec(s), pk = m && document.querySelector("[data-t='tabpick']"); if (!pk || !visible(pk) || ![...pk.options].some(o => o.value === m[1])) return null; pk.__tab = m[1]; return pk; };
   // (a tool folded under "All the tools", when some are pinned: the fold is opened for it)
   const unfold = s => { const L = [...document.querySelectorAll(s)], x = L.find(e => e.closest("details:not([open])")); if (!x) return null; for (let d = x.closest("details:not([open])"); d; d = d.parentElement && d.parentElement.closest("details:not([open])")) d.open = true; return L.find(visible) || null; };
-  async function find(sel, ms) { const list = [].concat(sel); const t0 = Date.now(); while (Date.now() - t0 < (ms || 3500)) { for (const s of list) { let el = null; try { el = [...document.querySelectorAll(s)].find(visible) || unfold(s) || pickFor(s); } catch (e) { el = null; } if (el) return el; } await sleep(120); } return null; }
+  async function find(sel, ms) { const list = [].concat(sel); const t0 = Date.now();
+    // (the table toolbar folded to Tools: opened for a step that shows one of its tools)
+    if (list.some(s => /#tDock \[/.test(s))) { const d = document.querySelector("#tDock.min"); if (d) { d.classList.remove("min"); const b = d.querySelector(".t-dmin"); if (b) b.setAttribute("aria-pressed", "false"); } } while (Date.now() - t0 < (ms || 3500)) { for (const s of list) { let el = null; try { el = [...document.querySelectorAll(s)].find(visible) || unfold(s) || pickFor(s); } catch (e) { el = null; } if (el) return el; } await sleep(120); } return null; }
   function light(el) {
     const r = el.getBoundingClientRect(), pad = 6;
     Object.assign(spot.style, { left: r.left - pad + "px", top: r.top - pad + "px", width: r.width + pad * 2 + "px", height: r.height + pad * 2 + "px" }); spot.classList.add("on");
@@ -274,6 +276,8 @@
   }
   function welcome() {
     if (P.seen || VIDEO || !(document.querySelector(".mode") || D.welcome)) return;
+    // (one prompt at a time: while the page's "New" banner asks to be read, the tour waits for another visit)
+    { const ban = document.getElementById("tIntro"); if (ban && ban.offsetParent) return; }
     P.seen = true; save();
     const t = document.createElement("div"); t.className = "tu-toast"; t.setAttribute("role", "note");
     t.innerHTML = `<p><b>New to Atlas?</b> A few minutes' tour: watch it done, or try it yourself.</p><div class="tu-bar"><button type="button" data-tw="show">Show me</button><button type="button" class="tu-p" data-tw="try">Let me try</button><button type="button" data-tw="no">Not now</button></div>`;

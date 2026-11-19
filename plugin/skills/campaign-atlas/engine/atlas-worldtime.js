@@ -117,7 +117,11 @@
   // (what cannot be put right again by itself, a death or a war, waits for the game master however the line is set:
   // the dashboard's safeguards, atlas-dashboard.js)
   // (while the world is run forward to see what would happen, nothing waits for the game master: whatIf below)
-  const needs = e => !SIM && (rank(e) >= ((ASK.find(a => a[0] === askNow()) || ASK[2])[2]) || !!(A.worldGuard && A.worldGuard(e)));
+  // (how the world moves, the game master's choice (the user, 17 Nov 2026, the manual world request): "dynamic" as before;
+  // "dm", the game master's: everything that comes due waits for them, nothing random; "static": nothing comes due of
+  // itself at all, the world as they left it until they make something happen)
+  const moveMode = () => opts().mode || "dynamic";
+  const needs = e => !SIM && (moveMode() === "dm" || rank(e) >= ((ASK.find(a => a[0] === askNow()) || ASK[2])[2]) || !!(A.worldGuard && A.worldGuard(e)));
   const tellable = e => !!(e.players || e.news);
 
   // it happens: recorded, the clock it moves moved, and the players told if the game master said so
@@ -152,7 +156,7 @@
   // the old hour with the events already taken back, and they would happen again: atlas-history.js)
   const hold = on => { held = Math.max(0, held + (on ? 1 : -1)); if (!held) setTimeout(evaluate, 50); };
   function evaluateNow() {
-    const st = S(); if (!st || held || WATCH.some(c => !loaded.has(c)) || opts().paused) return;
+    const st = S(); if (!st || held || WATCH.some(c => !loaded.has(c)) || opts().paused || (moveMode() === "static" && !SIM)) return;
     const said = [];
     for (let pass = 0; pass < 6; pass++) {
       let changed = false; const t = now();
@@ -182,7 +186,7 @@
     // (a day or more at once: the world is saved as it was first, to go back to: atlas-history.js)
     if (mins >= 1440 && A.history && !SIM) A.history.snapshot(`Before moving on to ${at(to).short}`, true);
     setNow(to);
-    if (o.random && mins >= 720) {
+    if (o.random && mins >= 720 && (o.mode || "dynamic") === "dynamic") {
       const tables = Object.entries(A.tablesData || {}), pick = tables.find(([k]) => k === o.table) || tables.find(([k]) => /event|rumou?r|street|encounter|weather|news/i.test(k)) || tables[0], p = (FREQ.find(f => f[0] === o.freq) || FREQ[1])[2];
       for (let d = 0; d < Math.min(3, Math.round(mins / 1440) || 1); d++) if (pick && Math.random() < p) {
         const line = T.rollTable(Array.isArray(pick[1]) ? pick[1] : pick[1].rows || pick[1].items || []); if (!line) continue;
@@ -337,6 +341,7 @@
         ${gone.length ? `<p class="t-small kn">Removed: ${gone.map(e => `${esc(e.title)} <button type="button" class="t-link" data-tw="restore" data-id="${esc(e.id)}">bring back</button>`).join(", ")}</p>` : ""}</section></div>
       <div><section class="t-card"><h3>The world's news</h3>${news.length ? news.slice(0, 12).map(([id, n]) => `<div class="tw-ev"><div class="tw-h"><b>${esc(n.headline)}</b><span class="kn">${esc(n.when || "")}${n.paper ? " · " + esc(n.paper) : ""}</span></div>${n.text ? `<p>${esc(n.text)}</p>` : ""}<div class="t-row"><button type="button" class="t-mini" data-tw="unnews" data-id="${esc(id)}">Take back</button></div></div>`).join("") : `<p class="kn">Nothing told to the players yet. What you let them hear of an event goes to their screen and their copy.</p>`}
         <form class="tw-own" data-tw="own"><input class="t-in" name="h" maxlength="120" placeholder="News of your own: a headline"><input class="t-in" name="p" maxlength="80" placeholder="How they hear it: a rumour, a bulletin"><textarea class="t-in" name="x" rows="2" maxlength="1200" placeholder="What the players hear"></textarea><button class="t-btn">Tell the players</button></form>${A.paper ? A.paper.html() : ""}</section>
+      <section class="t-card"><h3>How the world moves</h3><label class="t-small">The world <select class="t-in" data-tw="mode">${[["dynamic", "moves on its own: events come due; the big ones wait for you"], ["dm", "moves when you say: everything waits for you, nothing random"], ["static", "stays as you left it: nothing comes due by itself"]].map(([k, l]) => `<option value="${k}"${(o.mode || "dynamic") === k ? " selected" : ""}>${l}</option>`).join("")}</select></label><p class="t-small kn">Whatever you choose, nothing you made is changed or removed; an event can always be made to happen by hand.</p></section>
       <section class="t-card"><h3>Small happenings</h3><label class="t-fogck"><input type="checkbox" data-tw="random"${o.random ? " checked" : ""}> When half a day or more passes, roll for something small</label>${Object.keys(A.tablesData || {}).length ? `<div class="t-row"><label class="t-small">From <select class="t-in tw-sel" data-tw="table">${Object.keys(A.tablesData).map(k => `<option${k === o.table ? " selected" : ""}>${esc(k)}</option>`).join("")}</select></label><label class="t-small">How often <select class="t-in tw-sel" data-tw="freq">${FREQ.map(([k, l]) => `<option value="${k}"${(o.freq || "some") === k ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>` : `<p class="kn">The campaign has no random tables for it.</p>`}<p class="t-small">Only small, local things: a rumour, a quarrel, a delay. Never a disaster.</p></section>
       <section class="t-card"><h3>The calendar</h3>${calHTML()}</section></div></div>`;
   }
@@ -351,10 +356,10 @@
   }
 
   /* ---- the council's suggestions (Claude, from the campaign's own words; kept only when the game master adds them) */
-  function councilPrompt(q) {
+  async function councilPrompt(q) {
     const c = A.config || {}, d = at(now()), pls = A.order.filter(id => A.meta[id] && !String(id).startsWith("fly-"));
     const clues = []; for (const pl of pls) if (A.maps[pl]) for (const [cid, k] of Object.entries(A.get(pl, 99).clues || {})) clues.push(`${pl}/${cid}: ${k.t || cid}`);
-    const hits = api.lookup([q, "plan intends will next week tonight", ...(A.clocksData || []).map(x => x.name)].filter(Boolean).join(" "), 10);
+    const hits = await (api.lookupBest || api.lookup)([q, "plan intends will next week tonight", ...(A.clocksData || []).map(x => x.name)].filter(Boolean).join(" "), 10);
     const people = Object.entries(A.castData || {}).slice(0, 24).map(([k, p]) => `${p.n}${p.role ? ", " + p.role : ""}${p.want ? "; wants: " + p.want : ""}${p.secret ? "; hides: " + p.secret : ""}`).join("\n");
     const lately = A.copilot && A.copilot.lately ? A.copilot.lately() : "";
     return `You are the story council of the tabletop roleplaying campaign "${c.title || ""}"${c.system ? " (" + c.system + ")" : ""}${c.setting ? ", set in " + c.setting : ""}. The game master asks you to plan what happens in the world whether or not the party acts.${q ? " They ask: " + q : " Suggest what the world does next."}
@@ -375,7 +380,7 @@ ${pls.map(id => `${id}: ${placeName(id)}`).join("\n")}
 CLUES (place/id: title):
 ${clues.slice(0, 80).join("\n") || "(none)"}
 
-${people ? "PEOPLE:\n" + people + "\n\n" : ""}WHAT HAS HAPPENED AT THE TABLE LATELY:
+${people ? "PEOPLE:\n" + people + "\n\n" : ""}${A.lives && A.lives.relationsText ? (t => t ? t + "\n\n" : "")(A.lives.relationsText()) : ""}WHAT HAS HAPPENED AT THE TABLE LATELY:
 ${lately || "(nothing recorded)"}
 
 THE CAMPAIGN'S OWN WORDS:
@@ -402,7 +407,7 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
   }
   async function askCouncil(q) {
     UI.busy = true; UI.err = ""; UI.focus = q; paint();
-    let r = null; try { r = await api.askRaw(councilPrompt(q), () => {}, null, { kind: "suggesting", what: "what the world does next" + (q ? ": " + (q.length > 40 ? q.slice(0, 38) + "…" : q) : ""), uses: ["the villains' plans", "people's motives", "what the party did"] }); } catch (e) { r = null; }
+    let r = null; try { r = await api.askRaw(await councilPrompt(q), () => {}, null, { kind: "suggesting", what: "what the world does next" + (q ? ": " + (q.length > 40 ? q.slice(0, 38) + "…" : q) : ""), uses: ["the villains' plans", "people's motives", "what the party did"] }); } catch (e) { r = null; }
     UI.busy = false;
     if (!r) { UI.err = "Claude is not reachable from this page. Plan an event yourself: it works the same."; paint(); return; }
     let got = []; try { const t = String(r), a = t.indexOf("["), b = t.lastIndexOf("]"); got = JSON.parse(t.slice(a, b + 1)); } catch (e) { got = []; }
@@ -480,7 +485,7 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
       case "sgdrop": UI.sugg = []; break;
       case "sgagain": askCouncil(UI.focus || ""); return;
       // (one suggestion asked for again: the council gives one event in its place)
-      case "sgone": { const i = +b.dataset.i, x = (UI.sugg || [])[i]; if (!x) break; b.disabled = true; b.textContent = "Asking…"; (async () => { let r = null; try { r = await api.askRaw(councilPrompt(UI.focus || "") + `\n\nGive ONE event only, in the same shape (a JSON array of one), in place of this one, which the game master did not want as it was: "${x.title}".`, () => {}, null, { kind: "suggesting", what: "one event again, in place of “" + x.title + "”", uses: ["the campaign"] }); } catch (e) { r = null; } let got = []; try { const t = String(r || ""), a = t.indexOf("["), z = t.lastIndexOf("]"); got = JSON.parse(t.slice(a, z + 1)); } catch (e) { got = []; } const nx = (Array.isArray(got) ? got : []).map(cleanSugg).filter(Boolean)[0]; const j = (UI.sugg || []).indexOf(x); if (nx && j >= 0) UI.sugg[j] = nx; else api.note("The council gave nothing new for that one: it is as it was."); paint(); })(); return; }
+      case "sgone": { const i = +b.dataset.i, x = (UI.sugg || [])[i]; if (!x) break; b.disabled = true; b.textContent = "Asking…"; (async () => { let r = null; try { r = await api.askRaw(await councilPrompt(UI.focus || "") + `\n\nGive ONE event only, in the same shape (a JSON array of one), in place of this one, which the game master did not want as it was: "${x.title}".`, () => {}, null, { kind: "suggesting", what: "one event again, in place of “" + x.title + "”", uses: ["the campaign"] }); } catch (e) { r = null; } let got = []; try { const t = String(r || ""), a = t.indexOf("["), z = t.lastIndexOf("]"); got = JSON.parse(t.slice(a, z + 1)); } catch (e) { got = []; } const nx = (Array.isArray(got) ? got : []).map(cleanSugg).filter(Boolean)[0]; const j = (UI.sugg || []).indexOf(x); if (nx && j >= 0) UI.sugg[j] = nx; else api.note("The council gave nothing new for that one: it is as it was."); paint(); })(); return; }
       case "calreset": S().set("clock", "cal", null); setTimeout(() => setNow(now()), 60); break;
       case "wifkeep": if (UI.wif) { api.note(`Kept: it is now ${at(now()).short}. The moment before is under The world's history, Saved moments.`); UI.wif = null; } break;
       case "wifdrop": if (UI.wif && A.history) { const sid = UI.wif.snap, back = at(UI.wif.m0).short; UI.wif = null; Promise.resolve(A.history.restore(sid)).then(() => { S().set("snaps", sid, null); api.note(`Thrown away: the world is back at ${back}.`); setTimeout(paint, 120); }); } break;
@@ -492,8 +497,8 @@ A condition is one of {"clue": "place/id"}, {"visit": "place id"}, {"known": "pl
     // (a change in the world: its kind chosen, the form shows what that kind needs)
     if (e.target.dataset && e.target.dataset.twfx === "kind" && UI.edit && e.target.closest("form[data-tw='save']")) { const f = e.target.closest("form"); readForm(f); e.target.blur(); paint(); return; }
     const t = e.target; if (!t.dataset || !t.dataset.tw) return; const o = Object.assign({}, opts());
-    if (t.dataset.tw === "random") o.random = t.checked; else if (t.dataset.tw === "table") o.table = t.value; else if (t.dataset.tw === "freq") o.freq = t.value; else if (t.dataset.tw === "ask") o.ask = t.value; else if (t.dataset.tw === "wxshow") o.wxHide = !t.checked; else return;
-    S().set("clock", "opts", o); if (t.dataset.tw === "ask") setTimeout(evaluate, 60); if (t.dataset.tw === "wxshow") setTimeout(() => setNow(now()), 60);
+    if (t.dataset.tw === "random") o.random = t.checked; else if (t.dataset.tw === "table") o.table = t.value; else if (t.dataset.tw === "freq") o.freq = t.value; else if (t.dataset.tw === "ask") o.ask = t.value; else if (t.dataset.tw === "wxshow") o.wxHide = !t.checked; else if (t.dataset.tw === "mode") o.mode = t.value; else return;
+    S().set("clock", "opts", o); if (t.dataset.tw === "ask" || t.dataset.tw === "mode") setTimeout(evaluate, 60); if (t.dataset.tw === "wxshow") setTimeout(() => setNow(now()), 60);
   });
   document.addEventListener("submit", e => {
     const f = e.target; if (!f.dataset || !f.dataset.tw) return; e.preventDefault();

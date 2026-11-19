@@ -760,6 +760,18 @@ var ATLAS = (function () {
   //   ATLAS.cast({ vane: { n: "Harbour Master Vane", role: "...", look: "...", manner: "...", voice: "...", bg: "...", ties: { okafor: "..." }, want: "...", secret: "...", lie: "...", press: "...", fate: "..." } })
   // A person on a map who is one of them says who: "vane" and need not repeat the name or the description.
   A.cast = people => { A.castData = Object.assign(A.castData || {}, people); return A; };
+  // ONE answer to "what world is this campaign?", for every generator and renderer (the user, 18 Nov 2026: "Use a
+  // consistent campaign configuration that all generation systems can access"): its genre from campaign.js genre, else
+  // from its game (D&D, Pathfinder… are fantasy; Mothership, Traveller… science fiction), else its setting's words
+  A.campaignWorld = () => {
+    const c = A.config || {}, sys = String(c.system || ""), set = String(c.setting || "") + " " + String(c.subtitle || "");
+    let genre = ["fantasy", "scifi", "modern"].includes(c.genre) ? c.genre : "";
+    if (!genre) genre = /d&d|dungeons|pathfinder|13th age|shadowdark|dragonbane|old.school|osr|warhammer fantasy|the one ring/i.test(sys) ? "fantasy" : /mothership|traveller|\balien\b|starfinder|cyberpunk|stars without number|lancer|star wars/i.test(sys) ? "scifi" : /fantas|dragon|wizard|sorcer|elf|elves|dwar(f|ves)|kingdom|barovia|realm/i.test(set) ? "fantasy" : /space|star|planet|station|colony|ship/i.test(set) ? "scifi" : "";
+    return { genre, fantasy: genre === "fantasy", scifi: genre === "scifi" };
+  };
+  // an imported adventure (atlas.js from-adventure; references/import.md): its knowledge base, and its readiness report
+  A.adventure = kb => { A.adventureData = kb || null; return A; };
+  A.readiness = rep => { A.readinessData = rep || null; return A; };
   A.place = (id, def) => {
     const meta = Object.assign({}, def), map = meta.map, expand = meta.expand, guide = meta.guide;
     delete meta.map; delete meta.expand; delete meta.guide;

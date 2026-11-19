@@ -23,7 +23,28 @@
   const COLORS = ["#8a2432", "#2f6b3a", "#2b5d8a", "#9a6a12", "#6b3a8a", "#2f7a7a", "#8a4b24", "#555f6b"];
 
   /* ---- the factions as written, with what has changed since */
-  const defs = () => A.factionsData || {};
+  // (the powers the game master makes or details on the page (the user, 17 Nov 2026: "anything Atlas can generate
+  // automatically, I should also be able to create, edit, or control manually"; docs/requests/2026-11-17-manual-
+  // civilization-editor.md): collection "factiondefs", one document a power, laid over the written one of that id or
+  // standing alone; a removed one of their own is marked off, never deleted, so nothing joined to it breaks)
+  const ownDefs = () => { try { return (S() && S().get("factiondefs")) || {}; } catch (e) { return {}; } };
+  // (the powers the galaxy grew, in a science fiction campaign, are powers of the campaign too: in the factions' tab, with
+  // diplomacy, treaties and history like any other (the manual civilization editor's request, sections 12 and 14: "reuse
+  // the existing galaxy", "generated worlds must also be editable"). The galaxy reads the factions to know who holds what,
+  // so it is asked only when it is not itself asking)
+  let inGx = false;
+  const gxPowers = () => { if (inGx || !A.galaxyApi || !A.galaxyApi.G) return {}; inGx = true; try { const g = A.galaxyApi.G(), out = {}; for (const p of (g && g.powers) || []) if (p && p.id && p.name && !(A.factionsData || {})[p.id]) out[p.id] = { n: p.name, kind: "Interstellar power", fromGalaxy: true }; return out; } catch (e) { return {}; } finally { inGx = false; } };
+  const defs = () => { const out = Object.assign(gxPowers(), A.factionsData || {}); for (const [id, d] of Object.entries(ownDefs())) { if (!d) continue; if (d.off) { if (!(A.factionsData || {})[id]) delete out[id]; continue; } out[id] = Object.assign({}, out[id] || {}, d); } return out; };
+  // the kinds of power, by the campaign's age (science fiction has its own; none is forced on any campaign)
+  const KINDS_OLD = ["Kingdom", "Empire", "Country", "City-state", "Republic", "Principality", "Duchy", "Tribal confederation", "Theocracy", "Merchant guild", "Religious order", "Church", "Criminal organisation", "Noble house", "Rebel movement", "Secret society", "Political party", "Mercenary company", "Other"];
+  const KINDS_NEW = ["Interstellar empire", "Planetary government", "Federation", "Independent colony", "Corporation", "Corporate territory", "Star-system alliance", "Trade consortium", "Military junta", "Rebel movement", "Criminal syndicate", "Religious order", "Political party", "Secret society", "Other"];
+  const futureEra = () => { try { return String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase() === "future"; } catch (e) { return false; } };
+  // treaties and standing arrangements between two powers, beside how they stand (STANCE); "vassal" and "tributary"
+  // have a direction (which of the two is the vassal)
+  const TREATY = [["trade", "Trade partners"], ["nap", "Non-aggression pact"], ["defence", "Defensive alliance"], ["vassal", "Vassal and overlord"], ["tribute", "Tributary"], ["embargo", "Embargo"], ["ceasefire", "Ceasefire"], ["occupation", "Occupation"], ["dispute", "Territorial dispute"], ["blockade", "Blockade"], ["marriage", "Dynastic marriage"]];
+  const pairKey = (a, b) => [a, b].sort().join("~");
+  const diplo = (a, b) => { try { return (S() && S().get("diplomacy", pairKey(a, b))) || null; } catch (e) { return null; } };
+  const FIELDS = [["government", "Government"], ["leaderName", "Leader"], ["officials", "Officials"], ["population", "Population"], ["culture", "Culture"], ["religion", "Religion"], ["economy", "Economy and resources"], ["military", "Military strength"], ["laws", "Laws and policies"], ["history", "History"], ["custom", "Other (one 'name: value' a line)"]];
   const ids = () => Object.keys(defs());
   const stOf = id => (S() && S().get("factions", id)) || {};
   function fac(id) {
@@ -164,6 +185,12 @@
       ${bars(f)}${f.lacks ? row("Lacks", esc(f.lacks)) : ""}${row("Wants", esc(f.wants || ""))}
       ${plan.length ? `<div class="fa-plan"><span class="kn">Their plan</span><ol>${plan.map((p, i) => `<li class="${i < f.step ? "done" : i === f.step ? "now" : ""}">${esc(p)}</li>`).join("")}</ol><div class="t-row"><button type="button" class="t-mini" data-fa="step" data-id="${esc(f.id)}" data-d="-1">Back a step</button><button type="button" class="t-mini" data-fa="step" data-id="${esc(f.id)}" data-d="1">Next step</button>${f.clock ? `<span class="kn">and its clock: ${esc(((A.clocksData || []).find(c => c.id === f.clock) || {}).name || f.clock)}</span>` : ""}</div></div>` : ""}
       ${row("Doing now", esc(f.doing || ""))}
+      ${f.capital ? row("Capital", go(f.capital)) : ""}${[].concat(f.settlements || []).length ? row("Its towns and cities", [].concat(f.settlements).map(go).join(", ")) : ""}${FIELDS.filter(([k]) => k !== "custom" && f[k]).map(([k, l]) => row(l, esc(f[k]))).join("")}${f.custom ? String(f.custom).split("\n").filter(l => l.trim()).map(l => { const i = l.indexOf(":"); return i > 0 ? row(esc(l.slice(0, i).trim()), esc(l.slice(i + 1).trim())) : row("", esc(l)); }).join("") : ""}
+      ${(() => { let L = []; try { L = Object.entries((S() && S().get("world")) || {}).filter(([k, d]) => k.startsWith("l-") && d && d.owner === f.id && (d.res || d.imp)); } catch (e) { L = []; } return L.length ? row("Its towns produce", esc(L.map(([k, d]) => `${d.name || (A.meta[k.slice(2)] || {}).name || (((A.worldData || {}).locations || []).find(l => l.id === k.slice(2)) || {}).name || k.slice(2)}: ${[d.res, d.imp ? "needs " + d.imp : ""].filter(Boolean).join("; ")}`).join(" · "))) : ""; })()}
+      ${tradeRow(f)}
+      ${diploHTML(f, others)}
+      <div class="t-row"><button type="button" class="t-mini" data-fa="edit" data-id="${esc(f.id)}">Edit its details</button>${ownDefs()[f.id] && !(A.factionsData || {})[f.id] ? `<button type="button" class="t-mini" data-fa="remove" data-id="${esc(f.id)}">Remove</button>` : ""}</div>
+      ${UI.edit === f.id ? powerForm(f) : ""}
       <div class="fa-rels"><span class="kn">How they stand</span>${others.map(o => `<label class="fa-rel"><span>${esc(defs()[o].n || o)}</span> <select class="t-in" data-fa="rel" data-id="${esc(f.id)}" data-o="${esc(o)}">${stanceOpts(f.rels[o] || "neutral")}</select>${relWhy(f.id, o) ? `<small class="kn">${esc(relWhy(f.id, o))}</small>` : ""}</label>`).join("")}<label class="fa-rel"><span><b>Toward the party</b></span> <select class="t-in" data-fa="party" data-id="${esc(f.id)}">${stanceOpts(f.party)}</select></label></div>
       <details class="fa-more"><summary>What only you know</summary>${row("They know", esc(f.knows || ""))}${row("They believe, wrongly", esc(f.wrong || ""))}${row("Inside it", esc(f.inner || ""))}${row("Reputation", esc(f.rep || ""))}${row("Its past", esc(f.past || ""))}</details>
       ${f.log.length ? `<details class="fa-more"><summary>What has changed (${f.log.length})</summary><ol class="tw-hist" reversed>${f.log.slice().reverse().map(l => `<li><span class="kn">${esc(l.when || "")}</span> ${esc(l.what)}</li>`).join("")}</ol></details>` : ""}</details></article>`;
@@ -243,11 +270,94 @@
         ${mv ? `<form class="t-row fa-moveform" data-fa="moveto" data-id="${esc(id)}"><select class="t-in" name="at">${placeOpts("")}</select><input class="t-in" name="doing" placeholder="doing what"><label class="kn">for <input class="t-in t-n" type="number" name="hours" min="0" placeholder="all"> hours</label><button class="t-mini">Move</button></form>` : ""}</div>`;
     }).join("")}</div>`;
   }
+  /* ---- diplomacy between two powers: how they stand, their treaties, why and how things are now; edited in place */
+  // trade between the powers, from what their towns produce and need (the place form's "produces" and "needs" on the
+  // world map): what this power could buy from each other and sell to it, and what stands in the way (war, an
+  // embargo). Worked out each time, nothing kept: change a town's goods and it follows (the manual civilization
+  // editor's request of 17 Nov 2026)
+  const goodsOf = t => String(t || "").toLowerCase().split(/,|;|\band\b|\//).map(x => x.trim().replace(/^(some|fine|raw)\s+/, "").replace(/s$/, "")).filter(x => x.length > 2);
+  const sameGood = (a, b) => a === b || a.includes(b) || b.includes(a);
+  function tradeBook() {
+    let docs = {}; try { docs = (S() && S().get("world")) || {}; } catch (e) { docs = {}; }
+    const by = {}; for (const [k, d] of Object.entries(docs)) if (k.startsWith("l-") && d && d.owner) { const b = by[d.owner] = by[d.owner] || { res: [], imp: [] }; b.res.push(...goodsOf(d.res)); b.imp.push(...goodsOf(d.imp)); }
+    return by;
+  }
+  function tradeRow(f) { const out = tradeLines(f); return out.length ? `<div class="tw-f"><span class="kn">Trade with other powers</span> ${esc(out.join(" · "))}</div>` : ""; }
+  function tradeLines(f) {
+    const by = tradeBook(), me = f && by[f.id]; if (!me || !(me.res.length || me.imp.length)) return [];
+    const all = defs(), out = [];
+    for (const [o, them] of Object.entries(by)) {
+      if (o === f.id || !all[o]) continue;
+      const buy = [...new Set(me.imp.filter(g => them.res.some(h => sameGood(g, h))))], sell = [...new Set(me.res.filter(g => them.imp.some(h => sameGood(g, h))))];
+      if (!buy.length && !sell.length) continue;
+      const rel = (fac(f.id) || {}).rels || {}, st = rel[o], d = diplo(f.id, o), tr = ((d && d.treaties) || []).map(t => String(t).split(":")[0]);
+      const block = st === "war" ? "blocked: at war" : tr.includes("embargo") ? "blocked: an embargo" : st === "hostile" ? "hard: hostile" : tr.includes("trade") ? "trade partners" : "";
+      out.push(`${(all[o] || {}).n || o}: ${[buy.length && "buys " + buy.join(", "), sell.length && "sells " + sell.join(", ")].filter(Boolean).join("; ")}${block ? " (" + block + ")" : ""}`);
+    }
+    return out;
+  }
+  // how a power stands with each other one, for its side card: the stance (not neutral) and the treaties
+  function standings(id) {
+    const all = defs(), sOf = r => Array.isArray(r) ? r[0] : r && typeof r === "object" ? r.stance : r, out = [];
+    for (const o of Object.keys(all)) { if (o === id || all[o].off) continue; const st = sOf(((all[id] || {}).rels || {})[o]) || sOf((all[o].rels || {})[id]), d = diplo(id, o), tr = ((d && d.treaties) || []).map(t => ((TREATY.find(x => x[0] === String(t).split(":")[0]) || [0, t])[1]).toLowerCase());
+      if ((!st || st === "neutral") && !tr.length) continue; out.push({ id: o, n: all[o].n || o, stance: st && st !== "neutral" ? stanceOf(st)[1].toLowerCase() : "", treaties: tr, now: d && d.now || "" }); }
+    return out;
+  }
+  function diploHTML(f, others) {
+    const lines = others.map(o => { const d = diplo(f.id, o); if (!d || !((d.treaties || []).length || d.why || d.now)) return ""; const tr = (d.treaties || []).map(t => { const [k, who] = String(t).split(":"), L = (TREATY.find(x => x[0] === k) || [0, k])[1]; return k === "vassal" || k === "tribute" ? `${L}: ${esc((defs()[who] || {}).n || who)} the ${k === "vassal" ? "vassal" : "tributary"}` : L; }); return `<li><b>${esc(defs()[o].n || o)}</b>${tr.length ? ` <span class="fa-tr">${tr.map(esc).join(" · ")}</span>` : ""}${d.why ? `<br><span class="kn">Why:</span> ${esc(d.why)}` : ""}${d.now ? `<br><span class="kn">Now:</span> ${esc(d.now)}` : ""} <button type="button" class="t-mini" data-fa="diplo" data-id="${esc(f.id)}" data-o="${esc(o)}">Change</button></li>`; }).filter(Boolean);
+    const sel = UI.dip && UI.dip[0] === f.id ? UI.dip[1] : null;
+    return `<div class="fa-dip"><span class="kn">Diplomacy</span>${lines.length ? `<ul class="fa-dipl">${lines.join("")}</ul>` : ""}${others.length ? `<div class="t-row"><select class="t-in" data-fa="dippick" data-id="${esc(f.id)}"><option value="">Treaties, a dispute, a war's reason… with</option>${others.map(o => `<option value="${esc(o)}"${o === sel ? " selected" : ""}>${esc(defs()[o].n || o)}</option>`).join("")}</select></div>` : ""}${sel ? dipForm(f.id, sel) : ""}</div>`;
+  }
+  function dipForm(a, b) {
+    const d = diplo(a, b) || {}, has = new Set(d.treaties || []), nb = esc((defs()[b] || {}).n || b), na = esc((defs()[a] || {}).n || a);
+    const box = (k, l) => k === "vassal" || k === "tribute" ? `<label><input type="checkbox" name="t" value="${k}:${esc(b)}"${has.has(k + ":" + b) ? " checked" : ""}> ${l} (${nb} the ${k === "vassal" ? "vassal" : "tributary"})</label><label><input type="checkbox" name="t" value="${k}:${esc(a)}"${has.has(k + ":" + a) ? " checked" : ""}> ${l} (${na} the ${k === "vassal" ? "vassal" : "tributary"})</label>` : `<label><input type="checkbox" name="t" value="${k}"${has.has(k) ? " checked" : ""}> ${l}</label>`;
+    return `<form class="fa-dipf" data-fa="dipform" data-id="${esc(a)}" data-o="${esc(b)}"><p class="kn">${na} and ${nb}: how they stand is chosen above; here what binds or divides them.</p><div class="fa-tbox">${TREATY.map(([k, l]) => box(k, l)).join("")}</div>
+      <label>Why <input class="t-in" name="why" value="${esc(d.why || "")}" placeholder="e.g. both claim the Northern Mountains"></label><label>How things are now <input class="t-in" name="now" value="${esc(d.now || "")}" placeholder="e.g. border skirmishes and an unstable ceasefire"></label>
+      <div class="t-row"><button type="submit" class="t-btn prim">Keep it</button><button type="button" class="t-btn" data-fa="dipclose" data-id="${esc(a)}">Close</button></div></form>`;
+  }
+  /* ---- conflicts as their own entries (the user, 17 Nov 2026: "The Northern Border War. Participants: Valoria and
+          Drakmor. Cause: disputed territory. Status: ongoing"): collection "conflicts"; its sides are powers; nothing in
+          the world changes because of one unless the game master says (Set them at war) */
+  const CSTAT = [["brewing", "Brewing"], ["ongoing", "Ongoing"], ["ceasefire", "In a ceasefire"], ["frozen", "Frozen"], ["ended", "Ended"]];
+  const conflicts = () => { try { return Object.entries((S() && S().get("conflicts")) || {}).filter(([, c]) => c && !c.off); } catch (e) { return []; } };
+  function conflictsHTML() {
+    const L = conflicts(), nm = id => esc((defs()[id] || {}).n || id);
+    return `<section class="t-card fa-conf"><h3>Conflicts</h3>${L.length ? L.map(([id, c]) => `<div class="fa-cf"><b>${esc(c.n)}</b> <span class="kn">${esc((CSTAT.find(x => x[0] === c.status) || [0, ""])[1])}</span><br>${[].concat(c.a || []).map(nm).join(", ") || "—"} <i>against</i> ${[].concat(c.b || []).map(nm).join(", ") || "—"}${c.cause ? `<br><span class="kn">Cause:</span> ${esc(c.cause)}` : ""}${c.aims ? `<br><span class="kn">What each side wants:</span> ${esc(c.aims)}` : ""}${c.land ? `<br><span class="kn">Disputed:</span> ${esc(c.land)}` : ""}${[].concat(c.places || []).length ? `<br><span class="kn">Where it matters:</span> ${[].concat(c.places).map(go).join(", ")}` : ""}${c.outcomes ? `<br><span class="kn">How it might end:</span> ${esc(c.outcomes)}` : ""}${c.past ? `<br><span class="kn">So far:</span> ${esc(c.past)}` : ""}
+        <div class="t-row"><button type="button" class="t-mini" data-fa="cfedit" data-id="${esc(id)}">Change</button>${c.status !== "ended" && [].concat(c.a || []).length && [].concat(c.b || []).length ? `<button type="button" class="t-mini" data-fa="cfwar" data-id="${esc(id)}" title="Set every power on one side at war with every power on the other (their stances; you can set them back)">Set them at war</button>` : ""}<button type="button" class="t-mini" data-fa="cfoff" data-id="${esc(id)}">Remove</button></div>${UI.cf === id ? conflictForm(id, c) : ""}</div>`).join("") : `<p class="kn">None yet. A war, a rebellion, a feud between houses, a border dispute…</p>`}
+      <div class="t-row"><button type="button" class="t-btn" data-fa="cfnew">+ A conflict</button></div>${UI.cf === "+new" ? conflictForm("", {}) : ""}</section>`;
+  }
+  function conflictForm(id, c) {
+    const pw = ids().map(x => [x, (defs()[x] || {}).n || x]), places = Object.entries(A.meta || {}).filter(([, m]) => m && m.name).map(([pid, m]) => [pid, m.name]), side = (k, sel) => `<fieldset class="fa-setl"><legend>${k === "a" ? "One side" : "The other side"}</legend>${pw.map(([x, n]) => `<label><input type="checkbox" name="${k}" value="${esc(x)}"${[].concat(sel || []).includes(x) ? " checked" : ""}> ${esc(n)}</label>`).join("")}</fieldset>`;
+    return `<form class="fa-pf" data-fa="cfform" data-id="${esc(id)}"><label>Name <input class="t-in" name="n" required value="${esc(c.n || "")}" placeholder="e.g. The Northern Border War"></label>${side("a", c.a)}${side("b", c.b)}
+      <label>Status <select class="t-in" name="status">${CSTAT.map(([k, l]) => `<option value="${k}"${(c.status || "ongoing") === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+      <label>Cause <input class="t-in" name="cause" value="${esc(c.cause || "")}"></label><label>What each side wants <input class="t-in" name="aims" value="${esc(c.aims || "")}"></label><label>Disputed land <input class="t-in" name="land" value="${esc(c.land || "")}" placeholder="e.g. the Northern Mountains"></label>
+      <fieldset class="fa-setl"><legend>Where it matters</legend>${places.map(([pid, n]) => `<label><input type="checkbox" name="pl" value="${esc(pid)}"${[].concat(c.places || []).includes(pid) ? " checked" : ""}> ${esc(n)}</label>`).join("")}</fieldset>
+      <label>How it might end<textarea class="t-in" name="outcomes" rows="2">${esc(c.outcomes || "")}</textarea></label><label>What has happened so far<textarea class="t-in" name="past" rows="2">${esc(c.past || "")}</textarea></label>
+      <div class="t-row"><button type="submit" class="t-btn prim">Keep it</button><button type="button" class="t-btn" data-fa="cfclose">Cancel</button></div></form>`;
+  }
+  /* ---- a power made or detailed by hand: only its name is needed; everything else may come later */
+  function powerForm(f) {
+    f = f || {}; const places = Object.entries(A.meta || {}).filter(([, m]) => m && m.name).map(([id, m]) => [id, m.name]).sort((x, y) => x[1].localeCompare(y[1])), kinds = futureEra() ? KINDS_NEW : KINDS_OLD;
+    const setl = new Set([].concat(f.settlements || []));
+    return `<form class="fa-pf" data-fa="powerform" data-id="${esc(f.id || "")}"><h4 class="t-h4">${f.id ? "Its details" : "A new power"}</h4>
+      <label>Name <input class="t-in" name="n" required value="${esc(f.n || "")}" placeholder="e.g. The Kingdom of Valoria"></label>
+      <label>What it is <select class="t-in" name="kind"><option value="">—</option>${kinds.map(k => `<option${(f.kind || "") === k ? " selected" : ""}>${esc(k)}</option>`).join("")}</select></label>
+      <label>Its colour <input type="color" name="color" value="${esc(f.color || COLORS[ids().length % COLORS.length])}"></label>
+      <label>Capital <select class="t-in" name="capital"><option value="">—</option>${places.map(([id, n]) => `<option value="${esc(id)}"${f.capital === id ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
+      <details${f.id ? " open" : ""}><summary>More (all optional)</summary>
+        ${FIELDS.map(([k, l]) => k === "history" || k === "custom" || k === "laws" ? `<label>${esc(l)}<textarea class="t-in" name="${k}" rows="2">${esc(f[k] || "")}</textarea></label>` : `<label>${esc(l)} <input class="t-in" name="${k}" value="${esc(f[k] || "")}"></label>`).join("")}
+        <label>Wants <input class="t-in" name="wants" value="${esc(f.wants || "")}"></label>
+        <fieldset class="fa-setl"><legend>Its towns and cities</legend>${places.map(([id, n]) => `<label><input type="checkbox" name="setl" value="${esc(id)}"${setl.has(id) ? " checked" : ""}> ${esc(n)}</label>`).join("")}</fieldset>
+      </details>
+      <div class="t-row"><button type="submit" class="t-btn prim">${f.id ? "Keep it" : "Make it"}</button><button type="button" class="t-btn" data-fa="closeform">Cancel</button></div>
+      <p class="kn">Its borders are painted on the world map (Edit map, + Realm, held by it); its relations above, and Diplomacy for treaties.</p></form>`;
+  }
   function html() {
-    const L = ids().map(fac);
+    const L = ids().map(fac), addBar = `<section class="t-card fa-add"><div class="t-row"><button type="button" class="t-btn prim" data-fa="new">+ A power</button><span class="kn">A country, kingdom, empire, guild, church, rebels, corporation… made by hand; only a name is needed.</span></div>${UI.edit === "+new" ? powerForm(null) : ""}</section>`;
+    if (!L.length && !lived().length) return addBar + `<section class="t-card"><h3>${T.icon("board")} Factions and people</h3><p class="kn">No factions or people's days yet: make a power above, or the council gives them in table.js (ATLAS.factions).</p></section>`;
     if (!L.length && !lived().length) return `<section class="t-card"><h3>${T.icon("board")} Factions and people</h3><p class="kn">This campaign has no factions or people's days written yet. The council gives them in table.js (ATLAS.factions) and on the cast (home, work, sched): who holds power and what they have, what they want and are doing about it, and where each important person is at each hour (references/table.md, section 19).</p></section>`;
     const wb = web();
-    return `<div class="t-grid t-g2w"><div>${wb ? `<section class="t-card fw-card"><h3>The web</h3>${wb}</section>` : ""}${L.map(card).join("") || ""}</div><div><section class="t-card"><h3>The people, now</h3>${peopleHTML()}</section></div></div>`;
+    return `<div class="t-grid t-g2w"><div>${addBar}${ids().length ? conflictsHTML() : ""}${wb ? `<section class="t-card fw-card"><h3>The web</h3>${wb}</section>` : ""}${L.map(card).join("") || ""}</div><div><section class="t-card"><h3>The people, now</h3>${peopleHTML()}</section></div></div>`;
   }
 
   // (a faction's fold remembered while the page is open)
@@ -265,6 +375,17 @@
     // (a person of the web on the board: its card brought into view and marked for a moment)
     else if (k === "webboard") { api.open("board"); setTimeout(() => { const c = document.querySelector(`#tBoard [data-bd="${CSS.escape(id)}"]`); if (c) { c.scrollIntoView({ block: "center", inline: "center" }); c.classList.add("t-bflash"); setTimeout(() => c.classList.remove("t-bflash"), 2400); } }, 500); return; }
     else if (k === "back") { const L = Object.assign({}, lifeOf(id)); delete L.at; delete L.doing; delete L.until; S().set("npcstate", id, L); }
+    else if (k === "new") UI.edit = UI.edit === "+new" ? null : "+new";
+    else if (k === "edit") { UI.edit = UI.edit === id ? null : id; UI.open[id] = true; }
+    else if (k === "closeform") UI.edit = null;
+    else if (k === "remove" && f) { if (!confirm(`Remove ${f.n || id}? Its relations and what refers to it are kept, should it come back.`)) return; S().set("factiondefs", id, Object.assign({}, ownDefs()[id] || {}, { off: true })); }
+    else if (k === "diplo") { UI.dip = [id, b.dataset.o]; UI.open[id] = true; }
+    else if (k === "dipclose") UI.dip = null;
+    else if (k === "cfnew") UI.cf = UI.cf === "+new" ? null : "+new";
+    else if (k === "cfedit") UI.cf = UI.cf === id ? null : id;
+    else if (k === "cfclose") UI.cf = null;
+    else if (k === "cfoff") { const c = (S().get("conflicts") || {})[id]; if (c && confirm(`Remove ${c.n}?`)) S().set("conflicts", id, Object.assign({}, c, { off: true })); }
+    else if (k === "cfwar") { const c = (S().get("conflicts") || {})[id]; if (!c) return; for (const x of [].concat(c.a || [])) for (const y of [].concat(c.b || [])) for (const [p1, p2] of [[x, y], [y, x]]) setFac(p1, { rels: Object.assign({}, stOf(p1).rels || {}, { [p2]: "war" }) }, `at war with ${(defs()[p2] || {}).n || p2} (${c.n})`); }
     else return;
     setTimeout(paint, 60);
   });
@@ -272,8 +393,32 @@
     const t = e.target; if (!t.dataset || !t.dataset.fa) return; const id = t.dataset.id;
     if (t.dataset.fa === "rel") { const o = t.dataset.o; for (const [a, b2] of [[id, o], [o, id]]) setFac(a, { rels: Object.assign({}, stOf(a).rels || {}, { [b2]: t.value }) }, `now ${stanceOf(t.value)[1].toLowerCase()} with ${(defs()[b2] || {}).n || b2}`); }
     else if (t.dataset.fa === "party") setFac(id, { party: t.value }, `${stanceOf(t.value)[1].toLowerCase()} toward the party`);
+    else if (t.dataset.fa === "dippick") { UI.dip = t.value ? [id, t.value] : null; }
     else if (t.dataset.fa === "status") { const L = Object.assign({}, lifeOf(id), { status: t.value }); L.log = (L.log || []).concat({ when: when(), what: (STATUS.find(s => s[0] === t.value) || [0, ""])[1].toLowerCase() }).slice(-20); S().set("npcstate", id, L); }
     t.blur(); setTimeout(paint, 60);
+  });
+  document.addEventListener("submit", e => {
+    const fm = e.target; if (!fm.dataset || !["powerform", "dipform", "cfform"].includes(fm.dataset.fa)) return; e.preventDefault();
+    if (fm.dataset.fa === "cfform") {
+      const n = fm.elements.n.value.trim(); if (!n) return; const id = fm.dataset.id || "c" + Date.now().toString(36), vals = k => [...fm.querySelectorAll(`input[name="${k}"]:checked`)].map(x => x.value);
+      S().set("conflicts", id, { n, a: vals("a"), b: vals("b"), status: fm.elements.status.value, cause: fm.elements.cause.value.trim(), aims: fm.elements.aims.value.trim(), land: fm.elements.land.value.trim(), places: vals("pl"), outcomes: fm.elements.outcomes.value.trim(), past: fm.elements.past.value.trim(), t: Date.now() });
+      UI.cf = null; setTimeout(paint, 60); return;
+    }
+    if (fm.dataset.fa === "dipform") {
+      const a = fm.dataset.id, b = fm.dataset.o, treaties = [...fm.querySelectorAll('input[name="t"]:checked')].map(x => x.value);
+      S().set("diplomacy", pairKey(a, b), { treaties, why: fm.elements.why.value.trim(), now: fm.elements.now.value.trim(), t: Date.now() });
+      const said = treaties.map(t => (TREATY.find(x => x[0] === t.split(":")[0]) || [0, t])[1].toLowerCase()).join(", ") || "no treaty";
+      for (const [x, y] of [[a, b], [b, a]]) setFac(x, {}, `with ${(defs()[y] || {}).n || y}: ${said}`);
+      UI.dip = null; setTimeout(paint, 60); return;
+    }
+    const n = fm.elements.n.value.trim(); if (!n) return;
+    let id = fm.dataset.id; const isNew = !id;
+    if (isNew) { id = "p-" + n.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) + "-" + Math.random().toString(36).slice(2, 5); }
+    const d = Object.assign({}, ownDefs()[id] || {}, { n, kind: fm.elements.kind.value || undefined, color: fm.elements.color.value, capital: fm.elements.capital.value || undefined, wants: fm.elements.wants ? fm.elements.wants.value.trim() || undefined : undefined, settlements: [...fm.querySelectorAll('input[name="setl"]:checked')].map(x => x.value), own: isNew || !!(ownDefs()[id] || {}).own, t: Date.now() });
+    for (const [k] of FIELDS) { const v = fm.elements[k] ? fm.elements[k].value.trim() : ""; d[k] = v || undefined; }
+    if (d.capital && !(d.settlements || []).includes(d.capital)) d.settlements = [d.capital].concat(d.settlements || []);
+    if (!d.hq && d.capital) d.hq = d.capital;
+    S().set("factiondefs", id, JSON.parse(JSON.stringify(d))); UI.edit = null; UI.open[id] = true; setTimeout(paint, 60);
   });
   document.addEventListener("submit", e => {
     const f = e.target; if (!f.dataset || f.dataset.fa !== "moveto") return; e.preventDefault();
@@ -285,10 +430,24 @@
 
   TU.addTab({ key: "factions", label: "Factions and people", icon: "board", group: "play", after: "time", desc: "Who holds power, what they have and want, how they stand; where everyone is now",
     html, status: () => { const n = ids().length, p = lived().length; return n || p ? [n && `${n} faction${n > 1 ? "s" : ""}`, p && `${p} ${p > 1 ? "people" : "person"}`].filter(Boolean).join(" · ") : "None in this campaign"; },
-    init(store) { for (const c of ["factions", "npcstate", "clock", "world", "talks", "memory"]) store.watch(c, () => paint()); } });
+    init(store) { for (const c of ["factions", "npcstate", "clock", "world", "talks", "memory", "factiondefs", "diplomacy", "conflicts"]) store.watch(c, () => paint()); } });
 
   // the copilot: where someone is now and what they belong to; the investigation: the factions as things to join to
-  A.lives = { whereNow, factionsOf, about, fac, ids };
+  // the powers, how each pair stands, their treaties and the conflicts, as lines for a council's question (the world
+  // council and the consequences read it, so what the world does next keeps to the diplomacy the game master set)
+  function relationsText() {
+    const all = defs(), ids2 = Object.keys(all).filter(id => !all[id].off), out = [], sOf = r => Array.isArray(r) ? r[0] : r && typeof r === "object" ? r.stance : r;
+    for (const id of ids2) { const f = fac(id) || all[id]; out.push(`${id}: ${f.n || id}${f.kind ? " (" + f.kind + ")" : ""}${f.wants ? "; wants: " + f.wants : ""}; toward the party: ${f.party || "neutral"}`); }
+    const pairs = [];
+    for (let i = 0; i < ids2.length; i++) for (let j = i + 1; j < ids2.length; j++) {
+      const a = ids2[i], b = ids2[j], ra = sOf((all[a].rels || {})[b]), rb = sOf((all[b].rels || {})[a]), d = diplo(a, b), tr = ((d && d.treaties) || []).map(t => { const [k, who] = String(t).split(":"); return ((TREATY.find(x => x[0] === k) || [0, k])[1]) + (who ? " (" + ((all[who] || {}).n || who) + ")" : ""); });
+      if (!ra && !rb && !tr.length && !(d && (d.why || d.now))) continue;
+      pairs.push(`${all[a].n || a} and ${all[b].n || b}: ${ra || rb || "neutral"}${ra && rb && ra !== rb ? ` (${all[a].n || a} ${ra}, ${all[b].n || b} ${rb})` : ""}${tr.length ? "; treaties: " + tr.join(", ") : ""}${d && d.why ? "; why: " + d.why : ""}${d && d.now ? "; now: " + d.now : ""}`);
+    }
+    const cs = conflicts().map(([, c]) => `${c.n || "A conflict"} (${c.status || "ongoing"}): ${[].concat(c.a || []).map(x => (all[x] || {}).n || x).join(", ")} against ${[].concat(c.b || []).map(x => (all[x] || {}).n || x).join(", ")}${c.cause ? "; cause: " + c.cause : ""}${c.aims ? "; aims: " + c.aims : ""}${c.land ? "; over: " + c.land : ""}`);
+    return (out.length ? "THE POWERS (id: name; what they want):\n" + out.join("\n") : "") + (pairs.length ? "\n\nHOW THE POWERS STAND WITH EACH OTHER (keep to it: no alliance broken, war declared or treaty ignored without a cause the campaign gives):\n" + pairs.join("\n") : "") + (cs.length ? "\n\nCONFLICTS:\n" + cs.join("\n") : "");
+  }
+  A.lives = { whereNow, factionsOf, about, fac, ids, all: defs, diplomacy: diplo, TREATY, conflicts, relationsText, standings, trade: id => tradeLines(fac(id) || defs()[id]) };
   if (St && St.extraEntities) St.extraEntities.push(() => ids().map(id => { const d = defs()[id]; return { ref: "faction:" + id, kind: "item", ik: "faction", name: d.n || id, sub: "A faction" + (d.kind ? ": " + d.kind : ""), text: [d.n, d.kind, d.wants, d.doing, [].concat(d.plan || []).join(" "), d.knows, d.inner, d.past].filter(Boolean).join(" "), facts: [d.wants && "Wants: " + d.wants, d.doing && "Doing: " + d.doing].filter(Boolean) }; }));
   if (A.consistency) A.consistency.add("factions", () => {
     const out = [], cast = A.castData || {}, pl = p => !!A.meta[p], push = (sev, kind, id, title, why, suggest) => out.push({ area: "people", sev, kind, id, title, why, evidence: [{ text: "table.js: " + id.split(/[>@~]/)[0] }], refs: [], suggest });

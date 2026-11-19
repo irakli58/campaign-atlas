@@ -43,6 +43,9 @@
     // The default: the dark-mystery, cosmic-horror film score the user asked for. An orchestra, not a band: slow piano
     // and harp figures over low strings, a solo cello, voices, a celesta, and a deep drum where the dread gathers.
     arkham:        { label: "Dark mystery, orchestral horror", light: "aeolian", dark: "harmonic", root: 45, keys: "grand", wind: "cello", pad: "strings", bell: "grand", ost: "stab", cine: true },
+    // gothic horror in a fantasy world (Barovia and its kind: the user, 18 Nov 2026): a low organ under choir and strings,
+    // the cello's tune, a harp's cold plucking, a tolling bell; the harmonic minor of the dark places
+    gothic:        { label: "Gothic horror: organ, choir and strings", light: "aeolian", dark: "harmonic", root: 43, keys: "harp", wind: "cello", pad: "choir", bell: "bell", ost: "pizz", bass: "lowstr", drone: "organ", horn: "frhorn", cine: true },
     // a lute, a recorder, a portative organ, a hurdy-gurdy droning under it all; the vielle (the fiddle of the age)
     // in the tavern, the shawm in the market, the busine (the long war trumpet) and nakers in battle, monks' plainchant
     // in church and crypt; tabor and frame drum; chords of bare fifths, in the church modes
@@ -54,6 +57,11 @@
     industrial:    { label: "Industrial age, gaslight", light: "harmonic", dark: "phrygian", root: 48, keys: "upright", wind: "clarinet", pad: "quartet", bell: "musicbox", ost: "upright", bass: "cbass", drone: "harmonium",
                      swap: { choir: "choirF" }, kit: { dance: "waltz", frame: "barrel", march: "band", drum: "band", chase: "galop" },
                      moods: { tavern: { lead: "violin" }, market: { lead: "barrel" }, street: { lead: "barrel" }, sorrow: { lead: "violin", padInst: "harmonium" }, base: { lead: "cornet" }, battle: { lead: "cornet" } } },
+    // the jazz age, the 1920s and 30s: a small hot band in a speakeasy or a dance hall: clarinet and cornet on the tune,
+    // the upright piano comping, the double bass walking, brushes and the ride cymbal; chords in sevenths, swung
+    jazzage:       { label: "Jazz age, the 1920s and 30s", light: "mixolydian", dark: "dorian", root: 46, keys: "upright", wind: "clarinet", pad: "quartet", bell: "vibes", ost: "upright", bass: "cbass", drone: "harmonium", seventh: true,
+                     kit: { dance: "swing", frame: "swing", march: "swing", drum: "swing", chase: "hotswing" },
+                     moods: { tavern: { lead: "clarinet", rhythm: "swing" }, market: { lead: "cornet" }, street: { lead: "cornet" }, sorrow: { lead: "clarinet", padInst: "quartet", rhythm: "ballad" }, base: { lead: "clarinet" }, battle: { lead: "cornet" } } },
     // the world wars, 1914 to 1945: a lone violin over a string orchestra, an old upright piano, a cello in the dark
     // places, the double bass; an accordion and a clarinet in the cafés and streets, tango and polka; the military
     // snare and bass drum; men's voices; a field harmonium for the chaplain
@@ -118,6 +126,11 @@
     tango:      { div: 4, beats: 4, lanes: ["a..fc.c."], bass: "pizz" },
     polka:      { lanes: ["a.c.f.c.", "..s...s."], bass: "tuba" },
     funeral:    { lanes: ["K.......k......."] },
+    // (jazz: the ride cymbal's "ding, ding-a ding", the hi-hat's foot on two and four, brushes on the snare, a feathered
+    // bass drum, the walking bass on every beat (w), the piano comping the Charleston figure)
+    swing:      { swing: .3, lanes: ["R.RrR.RrR.RrR.Rr", "..h...h...h...h.", "..U...U...U...U.", "k...k...k...k...", "w.w.w.w.w.w.w.w.", "c..c....c..c...."], bass: "cbass", chord: "upright" },
+    hotswing:   { swing: .26, speed: 1.35, lanes: ["R.RrR.RrR.RrR.Rr", "..h...h...h...h.", "..S...S...S...SS", "k...k...k...k...", "w.w.w.w.w.w.w.w.", "c..c..c.c..c..c."], bass: "cbass", chord: "upright" },
+    ballad:     { swing: .3, speed: .7, lanes: ["U.......U.......", "r...r...r...r...", "w...w...w...w...", "c.......c......."], bass: "cbass", chord: "upright" },
     lofi:       { swing: .14, lanes: ["K.....K.K..K....", "....S.......S...", "h.h.h.h.h.h.h.h.", "c.......c......."], chord: "rhodes" },
     hybrid:     { lanes: ["V..V..V.V..V..VV", "....C.......C...", "1.1.1.1.1.1.1.1."] },
     electro:    { div: 4, beats: 4, lanes: ["K...K...K...K...", "..h...h...h...h.", "1131112311311123"] },
@@ -180,6 +193,8 @@
   // master). The quietest places, a cellar or a crypt, need most; the sparse ones still vary from tune to tune.
   const LEVELS = {
     //           calm  street night market tavern church temple crypt library manor palace docks sea  sewer cellar cave  lab   hosp  prison factory wareh station forest moor desert storm ritual dread myst sorrow chase battle base ruins ship
+    // (gothic, measured 18 Nov 2026 the same way; a cinematic style, so it multiplies the cinematic trim)
+    gothic:        [2.63, 3.8, 3.37, 1.36, 1.34, 3.09, 3.71, 3.82, 2.48, 3.27, 3.04, 3.24, 1.75, 3.76, 3.22, 3.24, 2.75, 1.27, 2.77, 1.56, 3.67, 2.73, 2.41, 2.04, 2.06, 2.66, 1.3, 1.41, 4.4, 3.03, 1.18, 1.27, 1.3, 3.44, 2.32],
     medieval:      [1.72, 1.51, 1.77, 1.62, 1.27, 1.54, 1.5, 3.45, 2.24, 1.78, 1.45, 1.8, 0.93, 4.37, 3.46, 3.16, 1.5, 0.96, 1.54, 1.01, 3.19, 1.83, 1.36, 1.45, 1.53, 1.17, 1.83, 1.15, 2.01, 1.58, 0.72, 0.79, 1.52, 1.43, 1.23],
     industrial:    [1.93, 1.72, 1.6, 1.74, 1.55, 1.52, 1.53, 2.89, 2.3, 1.98, 1.8, 1.6, 0.98, 3.54, 3.58, 2.3, 1.58, 1, 2.11, 1.02, 3.8, 1.97, 1.41, 1.15, 1.23, 1.15, 1.52, 1.14, 2.17, 1.75, 0.87, 1.09, 1.04, 1.11, 1.29],
     wartime:       [1.84, 1.57, 1.48, 1.79, 1.51, 1.61, 1.37, 2.22, 2.26, 1.96, 1.81, 1.8, 1.01, 2.65, 2.77, 2.29, 1.53, 0.97, 1.82, 1, 2.9, 1.47, 1.8, 1.24, 1.38, 1.1, 1.87, 1.05, 2.02, 1.65, 1.21, 1.5, 1.29, 1.23, 1.21],
@@ -191,7 +206,7 @@
     fantasy:       [1.51, 1.35, 1.03, 0.99, 0.75, 1.21, 0.92, 0.78, 2.15, 2.06, 2.04, 1.23, 0.88, 0.88, 0.99, 0.93, 1.18, 0.84, 0.78, 0.77, 1.06, 1.39, 1.55, 0.82, 0.84, 0.75, 0.56, 0.54, 1.34, 1.17, 0.5, 0.5, 0.5, 0.78, 0.81]
   };
   const ORDER = Object.keys(MOODS).filter(k => !MOODS[k].off);
-  const trimOf = (F, fl, mood) => F.cine ? TRIM_CINE[mood] || 1 : LEVELS[fl] ? LEVELS[fl][ORDER.indexOf(mood)] || 1 : TRIM[mood] || 1;
+  const trimOf = (F, fl, mood) => F.cine ? (TRIM_CINE[mood] || 1) * (LEVELS[fl] ? LEVELS[fl][ORDER.indexOf(mood)] || 1 : 1) : LEVELS[fl] ? LEVELS[fl][ORDER.indexOf(mood)] || 1 : TRIM[mood] || 1;
   // a place that does not say what it is: its name usually does
   const GUESS = [
     [/crypt|tomb|catacomb|ossuar|morgue|mortuar|mausole|graveyard|burial/, "crypt"], [/sewer|tunnel|drain|culvert|underground|catacomb/, "sewer"], [/cellar|vault|basement|undercroft|strongroom/, "cellar"], [/cave|cavern|grotto|mine\b|quarry/, "cave"],
@@ -214,6 +229,11 @@
   // the campaign's flavour: said outright, or taken from the look and region of its city, or from its paper
   function flavour() {
     const c = A.config.music || {}; if (c.flavour && FLAVOURS[c.flavour]) return c.flavour;
+    // (no flavour chosen: the campaign's own world, never the 1920s mystery for every campaign; the user, 18 Nov 2026, heard
+    // Curse of Strahd played as Arkham. A fantasy campaign of horror (a curse, the undead, a vampire, dread) is gothic)
+    if (!c.flavour && A.campaignWorld) { const W = A.campaignWorld(), cfg = A.config || {}, words = [cfg.setting, cfg.subtitle, cfg.title, cfg.subgenre, cfg.system].join(" ");
+      if (W.fantasy) return /horror|gothic|curse|vampire|undead|dread|ravenloft|strahd|barovia|haunt|grim|dark fantasy/i.test(words) ? "gothic" : "fantasy";
+      if (W.scifi) return "scifi"; }
     if (c.flavour !== "auto") return "arkham";         // flavour: "auto" takes it from the city instead
     const D = A.cityData;
     if (D) { if (D.region === "desert") return "arabic"; if (D.region === "eastasia") return "eastasia"; const look = typeof D.look === "object" ? D.look.base : D.look; if (look === "fantasy") return "fantasy"; if (look === "scifi" || look === "future") return "scifi"; if (look === "modern") return "modern"; if (look === "medieval") return D.region === "mediterranean" ? "mediterranean" : "medieval"; return D.region === "mediterranean" ? "mediterranean" : "industrial"; }
@@ -223,7 +243,10 @@
   function themeFor(id) {
     const m = A.meta[id] || {}, own = m.music, mood = (own && typeof own === "object" ? own.mood : own) || guess(m), fl = (own && typeof own === "object" && FLAVOURS[own.flavour]) ? own.flavour : flavour();
     const M = MOODS[mood] ? mood : "mystery";
-    return { mood: M, flavour: fl, seed: hashStr(id + "|" + M), label: MOODS[M].label, guessed: !own, place: id };
+    // (the 1920s of the dark mystery: its speakeasies, clubs, dance halls and taverns play the jazz age; the user, 17 Nov 2026)
+    const nm = String((m.name || "") + " " + (m.tagline || "")).toLowerCase(), jazzy = /speakeasy|jazz|night ?club|dance hall|cabaret|juke|ballroom|\bbar\b|saloon/.test(nm);
+    const fl2 = fl === "arkham" && (jazzy || M === "tavern") && FLAVOURS.jazzage && !(own && typeof own === "object" && own.flavour) ? "jazzage" : fl;
+    return { mood: M, flavour: fl2, seed: hashStr(id + "|" + M), label: MOODS[M].label, guessed: !own, place: id };
   }
   // A place's songs: the one suggested for it, and the moments there that call for another. A place says
   // music: { mood: "prison", also: { "The spot count": "dread", "After the gong": "night" } }; every song is one of the
@@ -605,6 +628,8 @@
       N: t => { ping(T, t, 165, 120, .34, .38); burst(T, t, .05, .12, "lowpass", 800); }, n: t => ping(T, t, 180, 135, .22, .2),
       O: t => { ping(T, t, 84, 44, .9, .6); burst(T, t, .14, .24, "lowpass", 280, 0, E.brown); }, o: t => { ping(T, t, 150, 98, .3, .28); burst(T, t, .05, .09, "lowpass", 600); },
       W: t => burst(T, t, .018, .2, "bandpass", 1900, 9),
+      R: t => { burst(T, t, .26, .045, "bandpass", 5200, 2.2); burst(T, t, .02, .03, "highpass", 9000); }, r: t => burst(T, t, .18, .028, "bandpass", 5400, 2.2),
+      U: t => { burst(T, t, .14, .05, "bandpass", 2400, .7, E.brown); burst(T, t + .02, .1, .03, "highpass", 4200); },
       M: t => { ping(T, t, 120, 74, .24, .4); burst(T, t, .05, .09, "lowpass", 1000); }, m: t => ping(T, t, 135, 88, .14, .2),
       P: t => { const f = hz(root - 12); ping(T, t, f * 1.03, f, 1.3, .5); burst(T, t, .07, .16, "lowpass", 320, 0, E.brown); },
       Q: t => { ping(T, t, 175, 88, .3, .36); burst(T, t, .06, .1, "lowpass", 1500); }
@@ -618,6 +643,7 @@
           const c = lane[j % lane.length];
           if (c === ".") continue;
           if (DR[c]) DR[c](tt);
+          else if (c === "w") { const b = Math.floor(j / div) % 4, iv = [0, (ch[1] - ch[0]), (ch[2] - ch[0]), b === 3 && (Math.floor(j / div) % 8) === 7 ? -1 : (ch[3] != null ? ch[3] - ch[0] : 9)][b]; voice(T, bi, lo + iv, tt, step * div * .9, .16); }
           else if (c === "a" || c === "f") voice(T, bi, c === "a" ? lo : lo - 5 >= 31 ? lo - 5 : lo + 7, tt, step * 1.8, .15);
           else if (c === "c") ch.forEach((m, i) => voice(T, ci, m, tt + i * .012, step * 1.5, .05));
           else voice(T, oi, c === "4" ? ch[0] : ch[+c - 1] - 12, tt, step * .9, j % div === 0 ? .13 : .1);
@@ -646,10 +672,16 @@
       // the harp remembers the tune, far off (it was a celesta, whose high glassy notes were too like the droplets)
       if (quiet && k % 4 === 2 && rnd() < .6) { let tt = t + 6 * u; for (const nt of T.motif.slice(0, 3)) { voice(T, "harp", root + 12 + note(Math.min(9, nt.d + deg)), tt, 1, .055); tt += nt.u * u * .9; } }
     }
+    // the fifth of the scale (the half close); a phrase's loudness, rising to its height in the seventh bar
+    const FIFTH = (() => { for (let i = 0; i < N; i++) if (note(i) === 7) return i; return Math.min(4, N - 1); })(), SHAPE = [.86, .94, 1.02, .9, .88, .98, 1.14, .84];
     let bar = 0, nextBar = t0 + .6;
     T.mods.push({ next: t0, step(until) {
       while (nextBar < until) {
-        const t = nextBar, deg = T.prog[bar % T.prog.length], ch = chord(deg), len = T.barLen;
+        // (a phrase of eight bars, a question and its answer (the music request of 17 Nov 2026: "phrases, motifs, endings
+        // that resolve"): the fourth bar closes half-way, on the fifth; the eighth comes home, on the keynote; the
+        // orchestral dread keeps its own four-bar breathing, below)
+        const ph = bar % 8, shaped = !(F.cine && !M.pulse), t = nextBar, len = T.barLen;
+        const deg = shaped && ph === 7 ? 0 : shaped && ph === 3 && T.prog.length > 2 ? FIFTH : T.prog[bar % T.prog.length], ch = chord(deg);
         // (orchestral style) four bars make a phrase that gathers and lets go; now and then a bar is all but silent
         if (T.mus && !M.pulse) T.mus.gain.linearRampToValueAtTime(Math.min(1.2, [.26, .58, 1.1, .42][bar % 4] * (.85 + rnd() * .3) * (rnd() < .14 ? .4 : 1)), t + len * .5);
         const sw = !!F.cine && !M.pulse;
@@ -657,15 +689,27 @@
         const bassI = F.bass === undefined ? "bass" : F.bass;
         if (bassI && M.pad > .25 && !M.pulse && !F.cine) voice(T, bassI, ch[0] - 24 >= 30 ? ch[0] - 24 : ch[0] - 12, t, len * .8, M.pad * .2);
         if (F.drone && M.drone) for (const [s, lv] of [[-12, 1], [-5, .6]]) voice(T, F.drone, root + s, t, len * 1.04, M.drone * .12 * lv);
-        if (T.lead && rnd() < (M.rate || .5)) {
-          const v = Math.floor(rnd() * 4); let notes = T.motif.slice(); if (v === 2) notes.reverse(); if (v === 3) notes = notes.slice(0, Math.ceil(notes.length / 2));
+        if (T.lead && (shaped && (ph === 3 || ph === 7) ? rnd() < Math.min(.95, (M.rate || .5) + .4) : rnd() < (M.rate || .5))) {
+          // (the tune through the phrase: stated; a step higher (a sequence); its first half, twice, rising; the half
+          // close; stated again; turned back on itself; quicker and higher, the phrase's height; home, held long)
+          let notes = T.motif.slice(), lift = 0;
+          if (!shaped) { const v = Math.floor(rnd() * 4); if (v === 1) lift = 2; if (v === 2) notes.reverse(); if (v === 3) notes = notes.slice(0, Math.ceil(notes.length / 2)); }
+          else if (ph === 1) lift = 1;
+          else if (ph === 2) { const h = notes.slice(0, Math.ceil(notes.length / 2)); notes = h.concat(h.map(x => ({ d: x.d + 1, u: x.u }))); }
+          else if (ph === 5) notes.reverse();
+          else if (ph === 6) { notes = notes.map(x => ({ d: x.d, u: Math.max(1, x.u - 1) })); lift = 2; }
+          else if (ph === 3 || ph === 7) { notes = notes.slice(0, Math.max(2, Math.ceil(notes.length / 2))); notes[notes.length - 1] = { goal: ph === 7 ? 0 : FIFTH, u: Math.max(4, notes[notes.length - 1].u + 2) }; }
           // in the orchestral style the piano states the tune and, two bars on, the cello answers it
           const lead = F.cine && T.lead === "grand" && bar % 4 === 2 ? "cello" : T.lead;
-          let tt = t + T.unit * Math.floor(rnd() * 3); const shift = deg + (v === 1 ? 2 : 0), held = !INST[lead].d, down = lead === "cello" && T.lead !== "cello" ? 12 : 0;
+          let tt = t + T.unit * (shaped && (ph === 3 || ph === 7) ? 0 : Math.floor(rnd() * 3)); const shift = deg + lift, held = !INST[lead].d, down = lead === "cello" && T.lead !== "cello" ? 12 : 0;
+          let prev = null;
           for (const nt of notes) {
             if (tt > t + len * 1.15) break;
-            let dd = nt.d + shift; while (dd > 10) dd -= N;
-            const m = root + 12 * (1 + (M.reg || 0)) + note(dd) - down, dur = nt.u * T.unit * (held ? 1.02 : .92), vel = (held ? .13 : .19) * (.85 + rnd() * .3);
+            // (the closing note is the keynote or the fifth itself, in the octave nearest the note before it)
+            let dd = nt.goal != null ? nt.goal : nt.d + shift;
+            if (nt.goal != null && prev != null) { while (dd < prev - N / 2) dd += N; while (dd > prev + N / 2) dd -= N; }
+            while (dd > 10) dd -= N; prev = dd;
+            const m = root + 12 * (1 + (M.reg || 0)) + note(dd) - down, dur = nt.u * T.unit * (held ? 1.02 : .92), vel = (held ? .13 : .19) * (.85 + rnd() * .3) * (shaped ? SHAPE[ph] : 1);
             // the style's ornaments on the longer notes: a quick note from above (the middle ages, the Arab world), or
             // the note bent up into (Japan: the koto pressed, the shakuhachi's breath)
             const orn = F.orn && nt.u > 1 && rnd() < .3 ? F.orn : "";
@@ -880,8 +924,19 @@
     return mood === "own" ? !!c.own : mood.startsWith("mix:") ? !c.own && c.mixId === mood.slice(4) : !c.own && !c.mix && c.mood === mood;
   };
   function tick() { if (!P.eng) return; const until = P.ac.currentTime + (typeof document !== "undefined" && document.hidden ? 70 : 2.8); P.eng.advance(until); if (P.bed) P.bed.advance(until); }
+  // the game master's push, over whatever plays (the music request of 17 Nov 2026: adaptive music "driven by the game master
+  // only", never by itself): calm takes the tension out and the drums away; tense darkens it, slows the tune, deepens
+  // the drone; fight plays the style's battle music. Crossfaded on change, like a change of place
+  function pushed(th) {
+    if (!th || !P.push) return th;
+    if (P.push === "fight") return Object.assign({}, th, { mood: "battle", mix: undefined, seed: (th.seed || 1) + 7 });
+    const F = FLAVOURS[th.flavour] || FLAVOURS.industrial, base = th.mix ? Object.assign({}, th.mix) : Object.assign({}, MOODS[th.mood] || MOODS.mystery, F.moods && F.moods[th.mood]);
+    if (P.push === "calm") { base.tension = Math.min(base.tension || 0, .15); base.rate = (base.rate || .5) * .75; base.drone = (base.drone || 0) * .5; delete base.pulse; delete base.rhythm; }
+    if (P.push === "tense") { base.tension = Math.max(base.tension || 0, .78); base.rate = Math.min(base.rate || .5, .35); base.drone = Math.max(base.drone || 0, .45); }
+    return Object.assign({}, th, { mood: "mix", mix: base });
+  }
   function apply() {
-    const th = current(), synth = th && (th.mix || (MOODS[th.mood] && !MOODS[th.mood].off)) ? th : null;
+    const th0 = current(), th = th0 && P.on ? pushed(th0) : th0, synth = th && (th.mix || (MOODS[th.mood] && !MOODS[th.mood].off)) ? th : null;
     if (P.on && P.eng) { P.eng.setTheme(synth, P.ac.currentTime + .05); tick(); }
     audioTo(P.on && th && th.own && (th.own.kind === "file" || th.own.kind === "rec" || linkPlays(th.own)) ? th.own.url : "");
     paint();
@@ -902,7 +957,7 @@
     if (P.root) {
       const b = P.root.querySelector("#mus-play"), now = P.root.querySelector("#mus-now"), sb = P.root.querySelector("#mus-songs");
       if (b) { b.setAttribute("aria-pressed", String(P.on)); b.title = P.on ? "Stop the music" : "Play the music"; }
-      if (now) now.innerHTML = nowLine(th);
+      if (now) now.innerHTML = nowLine(th) + (P.on && P.push ? ` <b class="mus-push">· ${({ calm: "calmed", tense: "tense", fight: "fight" })[P.push]}</b>` : "");
       if (sb) sb.setAttribute("aria-expanded", String(P.open));
       if (P.open) renderPanel();
     }
@@ -922,10 +977,19 @@
     studioRefresh();
     apply();
   }
+  // (said once, the first time music plays: what it is played on. The real sampled instruments (the music plan of
+  // 17 Nov 2026) are not installed yet, so it is Atlas's own synthesised instruments, never passed off as more; the
+  // user, 18 Nov 2026: "Do not fall back to generic or outdated music without notifying the DM")
+  let toldInst = false;
+  function sayInstruments() {
+    if (toldInst) return; toldInst = true; const F = FLAVOURS[flavour()] || {};
+    const m = `Music: ${F.label || flavour()}, played on Atlas's own synthesised instruments (the sampled orchestra is not installed yet).${(A.config.music || {}).flavour ? "" : " Its style follows the campaign's world; choose another under Audio."}`;
+    if (A.tableUI && A.tableUI.api && A.tableUI.api.note) A.tableUI.api.note(m); else console.info(m);
+  }
   function play() {
     if (off()) return;
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-    if (!P.ac) { P.ac = new AC(); P.eng = new Engine(P.ac); P.eng.master.gain.value = P.vol; }
+    if (!P.ac) { P.ac = new AC(); P.eng = new Engine(P.ac); P.eng.master.gain.value = P.vol; sayInstruments(); }
     P.ac.resume(); P.on = true; if (!P.timer) P.timer = setInterval(tick, 300);
     if (P.bed) { P.bed.end(P.ac.currentTime + .05, 2); P.bed = null; }      // the music takes over from the narrator's bed
     apply();
@@ -1319,7 +1383,7 @@
     MOODS, FLAVOURS, guess, flavour, themeFor, songsOf, describe, moment: momentMood,
     html() {
       if (off()) return "";
-      return `<div class="music" role="group" aria-label="Music"><button type="button" id="mus-play" aria-pressed="false" title="Play the music"><span aria-hidden="true">♪</span> Music</button><button type="button" id="mus-songs" aria-expanded="false" aria-controls="mus-panel">Songs <span aria-hidden="true">▾</span></button><label><span class="vh">Volume</span><input type="range" id="mus-vol" min="0" max="100" step="1"></label><span id="mus-now" class="musnow" aria-live="polite"></span></div><div id="mus-panel" class="mus-panel" role="dialog" aria-label="Choose the music" hidden></div>`;
+      return `<div class="music" role="group" aria-label="Music"><button type="button" id="mus-play" aria-pressed="false" title="Play the music"><span aria-hidden="true">♪</span> Music</button><button type="button" id="mus-songs" aria-expanded="false" aria-controls="mus-panel">Songs <span aria-hidden="true">▾</span></button><label><span class="vh">Volume</span><input type="range" id="mus-vol" min="0" max="100" step="1"></label><select id="mus-push" class="keeper" aria-label="How the music feels now" title="Push the music: calmer, tenser, or into a fight; As the scene follows the place again"><option value="">As the scene</option><option value="calm">Calm</option><option value="tense">Tense</option><option value="fight">Fight</option></select><span id="mus-now" class="musnow" aria-live="polite"></span></div><div id="mus-panel" class="mus-panel" role="dialog" aria-label="Choose the music" hidden></div>`;
     },
     // the card at the top right of a place: the referee's own song if they gave it one, its suggested song, a way to
     // choose one's own, and (for the referee) a song for each moment there
@@ -1345,6 +1409,7 @@
       if (off()) return; P.root = root;
       P.tab = mem.get("tab") || "";
       const v = parseFloat(mem.get("vol")); if (v >= 0 && v <= 1) P.vol = v; else if (A.config.music && A.config.music.volume >= 0) P.vol = Math.min(1, A.config.music.volume);
+      const push = root.querySelector("#mus-push"); if (push) { push.value = P.push || ""; push.addEventListener("change", () => { P.push = push.value; apply(); }); }
       const vol = root.querySelector("#mus-vol"); if (vol) { vol.value = Math.round(P.vol * 100); vol.addEventListener("input", () => { P.vol = vol.value / 100; mem.set("vol", String(P.vol)); if (P.eng) P.eng.master.gain.setTargetAtTime(P.vol * (P.duck || 1), P.ac.currentTime, .05); if (P.audio) { clearInterval(P.audio._fade); P.audio.volume = Math.min(1, P.vol * AUDIO_LEVEL * (P.duck || 1)); } }); }
       const b = root.querySelector("#mus-play"); if (b) b.addEventListener("click", () => (P.on ? pause() : play()));
       const sb = root.querySelector("#mus-songs"); if (sb) sb.addEventListener("click", () => openPanel(!P.open));

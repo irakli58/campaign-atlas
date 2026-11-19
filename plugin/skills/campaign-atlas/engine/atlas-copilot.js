@@ -25,6 +25,7 @@
     ["next", "What could happen next", "Options from the story's open threads"],
     ["encounter", "An encounter now", "Something to meet, fitting the place and the moment"],
     ["check", "Does it fit?", "Whether something fits what the campaign has established, from the consistency check and the campaign's words"],
+    ["loot", "Things and loot", "Loot for a place, a person's things, a shop's stock or a unique artifact, from the campaign and its game's own items: each proposed for you to keep or leave"],
     ["remember", "What do we remember?", "Anything from earlier sessions, with the session and time where it was said"]
   ];
   const S = () => api.store();
@@ -136,9 +137,9 @@
       ${UI.err ? `<p class="t-small cp-err">${esc(UI.err)}</p>` : ""}</div>`;
   }
   function impHTML() {
-    const I = UI.imp, k = IMP.find(x => x[0] === I.kind) || IMP[0], placed = ["describe", "details", "encounter", "next", "consequence", "check"].includes(I.kind), two = I.kind === "dialogue", one = I.kind === "react" || I.kind === "check";
+    const I = UI.imp, k = IMP.find(x => x[0] === I.kind) || IMP[0], placed = ["describe", "details", "encounter", "next", "consequence", "check", "loot"].includes(I.kind), two = I.kind === "dialogue", one = I.kind === "react" || I.kind === "check" || I.kind === "loot";
     const pick = (name, cur) => `<select class="t-in" data-cp="${name}"><option value="">${name === "place" ? "Where (optional)" : "Who"}</option>${name === "place" ? A.order.filter(id => !String(id).startsWith("fly-")).map(id => `<option value="${esc(id)}"${id === cur ? " selected" : ""}>${esc(placeName(id))}</option>`).join("") : people().map(p => `<option value="${esc(p.ref)}"${p.ref === cur ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>`;
-    const ph = { describe: "The room they just entered, the weather, the mood (optional)", react: "What the players did or said", dialogue: "What they talk about", consequence: "What the players did", details: "What is going on around them (optional)", next: "Where things stand (optional)", encounter: "The mood or danger you want (optional)", check: "Does she know something she shouldn't? Can they reach the clue? Does this new scene fit?" }[I.kind];
+    const ph = { describe: "The room they just entered, the weather, the mood (optional)", react: "What the players did or said", dialogue: "What they talk about", consequence: "What the players did", details: "What is going on around them (optional)", next: "Where things stand (optional)", encounter: "The mood or danger you want (optional)", check: "Does she know something she shouldn't? Can they reach the clue? Does this new scene fit?", loot: "Loot for this bandit · what this merchant sells · an artifact tied to the cult · five ordinary objects for this room · a magical sword for a level 5 party" }[I.kind];
     return `<form class="cp-imp" data-cp="imp"><div class="cp-kinds" role="group" aria-label="What you need">${IMP.map(([v, l, h]) => `<button type="button" class="t-mini" data-cp="kind" data-k="${v}" aria-pressed="${v === I.kind}" title="${esc(h)}">${esc(l)}</button>`).join("")}</div>
       <p class="t-small">${esc(k[2])}.</p>
       <div class="t-row">${placed ? pick("place", I.place) : ""}${one || two ? pick("a", I.a) : ""}${two ? pick("b", I.b) : ""}</div>
@@ -150,9 +151,27 @@
       ${I.hits && I.hits.length && !I.out ? `<details open><summary>What the campaign says</summary><ol class="t-hits">${I.hits.map(h => `<li><b>${esc(h.src)}</b><p>${esc(h.text)}</p></li>`).join("")}</ol></details>` : ""}
       ${UI.err && UI.mode === "imp" ? `<p class="t-small cp-err">${esc(UI.err)}</p>` : ""}`;
   }
+  // the players' hand-drawn maps (atlas-pmap.js): places the party has learned of that a map given to them lacks,
+  // offered one by one; nothing goes on a map unless the game master says so
+  function pmapState() {
+    if (!A.pmap || !A.worldOV || !A.worldPrepare || !A.worldData) return null;
+    const docs = Object.entries(S().get("world") || {}), OV = A.worldOV(docs), maps = Object.values(OV.pm || {}).filter(m => m && m.given);
+    if (!maps.length) return null;
+    const WD = A.worldPrepare(A.worldData, A.worldTerrainData, OV, { noLand: true }), out = [];
+    for (const m of maps) { const on = new Set((m.els || []).filter(e => e.loc).map(e => e.loc)); for (const l of WD.locs) if (Array.isArray(l.at) && ["known", "visited", "done", "rumoured"].includes(l.state) && !on.has(l.id) && !(UI.pmSkip || {})[m.id + "|" + l.id]) out.push({ m, l, WD }); }
+    // (tonight's places first: the session's plan; the user, "linking map additions to session events")
+    const n = pmSession(), plan = ((A.sessionsData || []).find(x => +x.n === n) || {}).places, tonight = new Set(Array.isArray(plan) ? plan : plan ? String(plan).split(/[,\s]+/) : []);
+    for (const x of out) x.tonight = tonight.has(x.l.id);
+    return out.sort((p, q) => (q.tonight ? 1 : 0) - (p.tonight ? 1 : 0));
+  }
+  function pmSession() { try { const v = +((S().get("log", "now") || {}).n); if (v) return v; const ss = (A.sessionsData || []).map(x => +x.n).filter(Boolean).sort((p, q) => p - q); return ss[0] || 0; } catch (e) { return 0; } }
+  function pmapHTML() {
+    let st = null; try { st = pmapState(); } catch (e) { st = null; } if (!st || !st.length) return "";
+    return `<div class="cp-pm t-small"><b>The players' maps</b>: the party knows of places a map given to them lacks. Add them? ${st.slice(0, 4).map(({ m, l, tonight }) => `<span class="t-row"><span>${esc(l.name)}${l.state === "rumoured" ? " (a rumour)" : ""}${tonight ? " <i>(tonight)</i>" : ""} on ${esc(m.name)}</span><button type="button" class="t-mini" data-cp="pmadd" data-map="${esc(m.id)}" data-loc="${esc(l.id)}">Add it</button><button type="button" class="t-mini" data-cp="pmskip" data-map="${esc(m.id)}" data-loc="${esc(l.id)}">Not now</button></span>`).join("")}</div>`;
+  }
   function panelHTML(compact, liveD) {
     return `<div class="cp${compact ? " cp-sm" : ""}"><div class="cp-modes" role="tablist"><button type="button" role="tab" data-cp="mode" data-m="talk" aria-selected="${UI.mode === "talk"}">Talk</button><button type="button" role="tab" data-cp="mode" data-m="imp" aria-selected="${UI.mode === "imp"}">Improvise</button></div>
-      ${UI.mode === "talk" ? talkHTML(compact, liveD) : impHTML()}</div>`;
+      ${compact ? "" : pmapHTML()}${UI.mode === "talk" ? talkHTML(compact, liveD) : impHTML()}</div>`;
   }
   // drawn again where it stands: the tab, and the toolbar's panel
   function paint(liveD) {
@@ -163,11 +182,11 @@
   function paintTalk(liveD) { document.querySelectorAll(".cp-turns").forEach(box => { const ref = UI.who, turns = liveD.turns, sm = !!box.closest(".cp-sm"); box.innerHTML = turns.slice(sm ? -3 : -12).map((t, i, a) => turnHTML(ref, t, turns.length - a.length + i, i === a.length - 1)).join(""); }); }
 
   /* ---- Improvise: a prompt from the campaign's passages */
-  function impPrompt(again) {
+  async function impPrompt(again) {
     const I = UI.imp, c = A.config || {}, k = IMP.find(x => x[0] === I.kind) || IMP[0];
     const who = [I.a, I.b].filter(Boolean).map(ref => { const e = St.ent(ref) || {}, n = npcOf(ref), cast = ref.startsWith("cast:") ? (A.castData || {})[ref.slice(5)] || {} : {}, g = f => n[f] || cast[f] || ""; return `${e.name}${e.role ? ", " + e.role : ""}: ${[g("manner") && "manner: " + g("manner"), g("voice") && "voice: " + g("voice"), g("want") && "wants: " + g("want"), g("secret") && "hides: " + g("secret"), St.knowledgeOf(ref).length ? "knows: " + St.knowledgeOf(ref).map(x => x.text || St.name(x.about)).join("; ") : ""].filter(Boolean).join("; ")}`; }).join("\n");
     const q = [I.text, I.place && placeName(I.place), ...[I.a, I.b].filter(Boolean).map(nameOf)].filter(Boolean).join(" ");
-    const hits = api.lookup(q || k[1], 10); I.hits = hits;
+    const hits = await (api.lookupBest || api.lookup)(q || k[1], 10); I.hits = hits;
     const asks = {
       describe: `Describe ${I.place ? placeName(I.place) : "where the players are"}${I.text ? " (" + I.text + ")" : ""} as the players come in, to be read aloud: what they see, hear and smell, in three to five sentences. Only what is there for anyone to notice: no secrets.`,
       react: `How would ${I.a ? nameOf(I.a) : "this person"} react to this: ${I.text || "(the players' latest action)"}? Their likely reaction in two to four sentences, what they say if anything, and what they do next. Keep to who they are.`,
@@ -177,6 +196,7 @@
       next: `Where things stand: ${I.text || "(as the passages and the table's state say)"}. Suggest three things that could happen next, each from the story's open threads (the villains' clocks, leads not yet followed), with what sets it off. One short paragraph each.`,
       encounter: `Suggest an encounter for right now${I.place ? " at " + placeName(I.place) : ""}${I.text ? " (" + I.text + ")" : ""}: who or what, what they want, how it could go (talk, flight or fight), and how it ties to the story. Name stat blocks only if the passages give them.`,
       check: `The game master asks: ${I.text || "are there contradictions in the campaign?"}${I.place ? " (about " + placeName(I.place) + ")" : ""}${I.a ? " (about " + nameOf(I.a) + ")" : ""}. Answer from the consistency check's findings, what the table remembers and the campaign's words below: say whether it fits what is established, quote what it would contradict (with its session and time when it was said at the table), tell a deliberate lie or mystery apart from a mistake (a character's claim may be false; the game master may change the story on purpose), and say what would need to change for it to make sense. Do not invent problems the material does not show.`,
+      loot: lootAsk(I),
       remember: `The game master asks: ${I.text || "what unfinished business could come back to haunt the party?"}${I.place ? " (about " + placeName(I.place) + ")" : ""}${I.a ? " (about " + nameOf(I.a) + ")" : ""}. Answer from what the table remembers and the words said at the table, below, giving each fact's [S# time]. Keep apart what happened, what someone only claimed, what the players merely suggested or suspect, and what you infer yourself. If nothing remembered answers it, say so plainly. A few lines.`
     }[I.kind];
     // (what the table remembers of it, from the recorded sessions: atlas-sessions.js; only what the game master kept)
@@ -185,7 +205,9 @@
     // (the consistency check's findings that bear on it: atlas-consistency.js, the same the Consistency tab lists)
     const found = I.kind === "check" && A.consistency ? A.consistency.about([I.text, I.place && placeName(I.place), I.a && nameOf(I.a)].filter(Boolean).join(" ") || "contradiction") : [];
     const findings = found.length ? "THE CONSISTENCY CHECK FOUND:\n" + found.map(f => `- (${f.sev === "error" ? "certain" : "possible"}) ${f.title}: ${f.why}`).join("\n") + "\n\n" : I.kind === "check" ? "THE CONSISTENCY CHECK FOUND: nothing bearing on this.\n\n" : "";
-    return `You help the game master of the tabletop roleplaying campaign "${c.title || ""}"${c.system ? " (" + c.system + ")" : ""} improvise during play. Ground everything in the campaign's own words below; never contradict them, and never decide what the players do or how the dice fall. Where you add something the campaign does not say, keep it small and consistent with it. Plain prose, no headings, no lists unless asked.
+    return `You help the game master of the tabletop roleplaying campaign "${c.title || ""}"${c.system ? " (" + c.system + ")" : ""} improvise during play. Ground everything in the campaign's own words below; never contradict them, and never decide what the players do or how the dice fall. Where you add something the campaign does not say, keep it small and consistent with it. Plain prose, no headings, no lists unless asked.${A.adventureData ? `
+
+This campaign is an adventure the game master imported, and it is the bible. Follow, in this order: first what the game master has changed or decided (the campaign's current files and notes, which outrank the book where they differ); then what has happened at the table; then the adventure as written; and only then, where all of these are silent, a small improvisation of your own. Passages whose source begins "The adventure" are the book itself: give what they establish as "The adventure says (with its page)". Never rewrite, rebalance or "improve" it, and never present your own idea as the book's: anything of your own is "A suggestion", kept apart, minor, and consistent with all the above. Where the adventure says nothing on the question, say so plainly, then offer an optional improvisation that fits it. The results of its setup${A.adventureMechanics ? " (" + A.adventureMechanics() + ")" : ""} are fixed for this game: use them.` : ""}
 
 ${asks}${again ? `\n\nGive something different from this: "${again.slice(0, 600)}"` : ""}
 
@@ -194,10 +216,36 @@ ${findings}${remembered}${who ? "THE PEOPLE:\n" + who + "\n\n" : ""}WHAT HAS HAP
 THE CAMPAIGN'S OWN WORDS:
 ${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n") || "(nothing found)"}`;
   }
+  // (the item and loot system, atlas-items.js: the game's own items by name, the place's and the person's context; the
+  // answer is a list Atlas reads back, each thing a proposal the game master keeps or leaves)
+  function lootAsk(I) {
+    const IT = A.items; if (!IT) return "Suggest some loot.";
+    const lib = IT.catalogue(), own = lib.filter(x => x.src === "srd" || x.src === "names" || x.src === "rulebook"), magic = IT.magicHere();
+    const here = I.place ? IT.all().filter(x => x.owner === "place:" + I.place).map(x => x.n) : [], theirs = I.a ? IT.all().filter(x => x.owner === I.a).map(x => x.n) : [];
+    return `The game master asks: ${I.text || "what could the players find here?"}${I.place ? ` At ${placeName(I.place)}.` : ""}${I.a ? ` It is about ${nameOf(I.a)}.` : ""}
+Propose things that belong in this campaign: its age, its people, factions, places and story, and ${magic ? "its magic" : "no magic (this game has none, or it is not called for)"}. Believable first: a poor person or an empty place may have little or nothing, and saying so is a good answer. A rusty knife needs no story; keep histories for the things that deserve them.
+${own.length ? `This game's own items (use these exact names when one fits; never invent official statistics for them or for anything else): ${[...new Set(own.map(x => x.n))].slice(0, 160).join("; ")}.` : "This game has no item list here: describe things in the story's own terms, without inventing game statistics."}
+${here.length ? `Already at this place: ${here.join("; ")}.` : ""}${theirs.length ? ` Already theirs: ${theirs.join("; ")}.` : ""}
+Answer with one thing a line, in this form and nothing else:
+ITEM: name | category (weapon, armour, ammo, consumable, medicine, food, gear, tool, clothing, jewellery, book, document, key, personal, valuable, trade, container, relic, device, household) | rarity (common, uncommon, rare, very rare, legendary) | what the players see | the game master's secret, or - | homebrew statistics, or -
+Statistics you write yourself are homebrew and will be marked so; leave them out for an item of the game's own list.`;
+  }
+  function lootRead(text) {
+    const IT = A.items; if (!IT) return null; const lib = IT.catalogue(), I = UI.imp, out = [];
+    for (const line of String(text || "").split("\n")) {
+      const m = /^\s*ITEM:\s*(.+)$/i.exec(line); if (!m) continue;
+      const [n, cat, rar, see, sec, st] = m[1].split("|").map(x => (x || "").trim()); if (!n) continue;
+      const known = lib.find(x => x.n.toLowerCase() === n.toLowerCase());
+      const base = known ? IT.particular(known) : IT.particular({ n, cat: IT.CATS.some(c => c[0] === cat) ? cat : "personal", rarity: ["common", "uncommon", "rare", "very rare", "legendary"].includes(rar) ? rar : "common", src: st && st !== "-" ? "homebrew" : "narrative" });
+      out.push(Object.assign(base, { desc: see && see !== "-" ? see : base.desc || "", secret: sec && sec !== "-" ? sec : "", stats: known ? base.stats : st && st !== "-" ? st : "", fromAI: true }));
+    }
+    return out.length ? { items: out, coins: 0, why: "Proposed by Claude, from the campaign: keep what you like", owner: I.a || (I.place ? "place:" + I.place : "library") } : null;
+  }
   async function improvise(again) {
     UI.busy = true; UI.err = ""; const I = UI.imp, prev = again ? I.out : ""; I.out = ""; paint();
-    let r = null; try { r = await api.askRaw(impPrompt(prev), t => { I.out = t; document.querySelectorAll(".cp-out .cp-a").forEach(x => { x.value = t; }); }, null, { kind: "writing", what: "an idea for the scene", uses: ["where the party is", "what has happened lately"] }); } catch (e) { r = null; }
+    let r = null; try { r = await api.askRaw(await impPrompt(prev), t => { I.out = t; document.querySelectorAll(".cp-out .cp-a").forEach(x => { x.value = t; }); }, null, { kind: "writing", what: "an idea for the scene", uses: ["where the party is", "what has happened lately"] }); } catch (e) { r = null; }
     I.out = r ? String(r).replace(/\*\*([^*]+)\*\*/g, "$1").trim() : ""; if (!r) UI.err = "Claude is not reachable from this page: here is what the campaign says.";
+    if (r && I.kind === "loot") { const got = lootRead(I.out); if (got && A.items) { A.items.propose(got); I.out = got.items.map(x => "• " + x.n + (x.desc ? ": " + x.desc : "")).join("\n") + "\n\nEach is waiting under Items and loot, to keep or leave."; } }
     UI.busy = false; paint();
   }
 
@@ -209,6 +257,10 @@ ${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n") || "(nothing
     const k = b.dataset.cp, ref = UI.who, d = ref ? talk(ref) : null, i = +b.dataset.i;
     switch (k) {
       case "mode": UI.mode = b.dataset.m; UI.err = ""; paint(); break;
+      case "pmskip": UI.pmSkip = Object.assign(UI.pmSkip || {}, { [b.dataset.map + "|" + b.dataset.loc]: 1 }); paint(); break;
+      case "pmadd": { const st = pmapState() || [], hit = st.find(x => x.m.id === b.dataset.map && x.l.id === b.dataset.loc); if (!hit) break; const { m, l, WD } = hit, d = JSON.parse(JSON.stringify(m)), sc = Math.max(d.frame[2], d.frame[3]) / 320, SYMK = { capital: "city", city: "city", town: "town", village: "village", hamlet: "village", port: "port", castle: "castle", keep: "castle", fort: "castle", tower: "tower", ruin: "ruin", temple: "temple", shrine: "temple", monastery: "temple", inn: "inn", bridge: "bridge", cave: "cave", dungeon: "cave", lair: "danger" };
+        d.els.push({ id: A.pmap.uid(), k: "sym", s: SYMK[l.kind] || "village", at: A.pmap.warpFn(WD, d)(l.at), size: sc * 11, label: l.name, layer: "places", st: l.state === "rumoured" ? "r" : "c", loc: l.id, sn: pmSession() || undefined });
+        S().set("world", "pm-" + d.id, d); paint(); break; }
       case "talkto": A.copilot.talkTo(b.dataset.who); break;
       case "kind": UI.imp.kind = b.dataset.k; UI.imp.out = ""; UI.imp.hits = null; paint(); break;
       case "again": answer(true); break;

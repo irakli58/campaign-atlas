@@ -88,14 +88,16 @@
   /* ---- a starting interior: each floor a hall with its rooms on both sides, each with a door onto the hall, the
           floors joined by stairs at the hall's end, the cellar by stairs at its start. Nothing in it is fixed. */
   function interior(kind, ext, o) {
-    const K = (KIND[kind] || KIND.other)[2], [W, H] = GRID[ext.size] || GRID.medium, nUp = Math.max(0, (+ext.floors || 1) - 1), fut = future();
+    // (o.rooms: the rooms asked for, { g, u, c } as a kind has them, over the kind's own (atlas-quickplace.js); o.bare:
+    // no furniture preset in any room)
+    const K = Object.assign({}, (KIND[kind] || KIND.other)[2], o && o.rooms || {}), [W, H] = GRID[ext.size] || GRID.medium, nUp = Math.max(0, (+ext.floors || 1) - 1), fut = o && o.era ? o.era === "future" : future(); // (a place's own era, as its description named it, before the campaign's)
     const kindFor = k => fut && ["boards", "flag", "carpet-r", "carpet-g", "carpet-b", "stone", "brick"].includes(k) ? (k === "flag" || k === "stone" || k === "brick" ? "metal" : "lino") : k;
     let rid = 0, sid = 0;
     const floorOf = (n, rooms, hallName) => {
       const hy = Math.floor(H / 2) - 1, hh = 2, R = [], D = [];
       R.push(["R" + (++rid), 0, hy, W, hh, hallName, kindFor(rooms[0] ? rooms[0][1] : "boards")]);
       const top = rooms.slice(0, Math.ceil(rooms.length / 2)), bot = rooms.slice(top.length);
-      const row = (list, y, h, doorY) => { const step = W / Math.max(1, list.length); list.forEach(([nm, k, fx], i) => { const x0 = Math.round(i * step), x1 = Math.round((i + 1) * step), r = ["R" + (++rid), x0, y, x1 - x0, h, nm, kindFor(k)]; if (fx) r.push({ fx }); R.push(r); D.push([x0 + Math.floor((x1 - x0) / 2), doorY, "h", "d", 1]); }); };
+      const row = (list, y, h, doorY) => { const step = W / Math.max(1, list.length); list.forEach(([nm, k, fx], i) => { if (o && o.bare) fx = ""; const x0 = Math.round(i * step), x1 = Math.round((i + 1) * step), r = ["R" + (++rid), x0, y, x1 - x0, h, nm, kindFor(k)]; if (fx) r.push({ fx }); R.push(r); D.push([x0 + Math.floor((x1 - x0) / 2), doorY, "h", "d", 1]); }); };
       row(top, 0, hy, hy); row(bot, hy + hh, H - hy - hh, hy + hh);
       return { n, w: W, h: H, R, D, ST: [], M: [], I: [] };
     };

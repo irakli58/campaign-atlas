@@ -26,7 +26,7 @@
   // the look of the map: a parchment map (fantasy, and the past), an atlas (the modern world) or a star map (the future)
   // (27 Oct 2026: the past has its own look, an engraved atlas plate; a planet in science fiction a survey; the game
   // master may choose another, kept as the world's "style": atlas-world-art.js draws each)
-  // (27 Oct 2026: fantasy is painted in colour by default, as the user asked; parchment stays one choice)
+  // (17 Nov 2026: fantasy wears the geological look, hydro, by default, as the user asked; painted and parchment stay choices)
   const LOOK_OF = { hydro: "hydro", hydrographic: "hydro", print: "hydro", relief: "relief", shaded: "relief", natural: "relief", painted: "painted", fantasy: "hydro", colour: "painted", color: "painted", parchment: "parchment", medieval: "parchment",
     engraved: "engraved", old: "engraved", antique: "engraved", industrial: "engraved", historical: "engraved", victorian: "engraved", "1920s": "engraved",
     atlas: "atlas", modern: "atlas", political: "atlas", planet: "planet", holo: "holo", survey: "holo", alien: "holo",
@@ -246,7 +246,7 @@
   // (27 Oct 2026: the brush also lays any kind of land of atlas-world-biomes.js: a jungle, a glacier, a volcano, a
   // glowing lake... kept in the land's cover; "natural" clears what was laid, back to what the climate makes)
   const coverKind = m => !BRUSH[m] && A.worldBiomes && A.worldBiomes.BY[m] || null;
-  const brushName = m => BRUSH[m] || (coverKind(m) ? coverKind(m).name : m);
+  const brushName = m => BRUSH[m] || (coverKind(m) ? coverKind(m).name : /^p:/.test(m || "") && A.terrainPresets && A.terrainPresets.BY[m] ? A.terrainPresets.BY[m].name : /^my:/.test(m || "") ? "your preset" : m);
   function stroke(G, s) {
     const { cols, rows, cell, sea } = G, r = Math.max(4, Math.min(240, +s.r || 30)), pts = (s.p || []).filter(q => Array.isArray(q));
     const bio = coverKind(s.m);
@@ -255,11 +255,14 @@
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
     const i0 = clamp(Math.floor((x0 - r) / cell), 0, cols - 1), i1 = clamp(Math.ceil((x1 + r) / cell), 0, cols - 1), j0 = clamp(Math.floor((y0 - r) / cell), 0, rows - 1), j1 = clamp(Math.ceil((y1 + r) / cell), 0, rows - 1);
     const line = pts.length > 1 ? pts : [pts[0], pts[0]], Hh = G.H, M = G.M;
+    // (a preset's colour (atlas-terrain-presets.js), laid with its kind as a tint the map's look reads: its own palette
+    // entry; a stroke without one clears the tint where it lays its kind)
+    let tint = -1; if (bio && /^#[0-9a-f]{6}$/i.test(s.tint || "")) { if (!G.TW) { G.TW = new Uint8Array(cols * rows); G.TI = new Uint16Array(cols * rows); G.TP = [null]; } tint = G.TP.indexOf(s.tint.toLowerCase()); if (tint < 0) { tint = G.TP.length; G.TP.push(s.tint.toLowerCase()); } }
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const x = (i + .5) * cell, y = (j + .5) * cell, d = lineDist(x, y, line); if (d >= r) continue;
       // full strength over the brush's inner half, softening to nothing at its edge
       const t = Math.min(1, (1 - d / r) * 1.8), w = t * t * (3 - 2 * t), n = j * cols + i, h = Hh[n], land = h > sea, toward = (v, tg) => Math.round(v + (tg - v) * w);
-      if (bio) { coverCell(G, bio, n, i, j, w, h, land, d / r, toward); continue; }
+      if (bio) { coverCell(G, bio, n, i, j, w, h, land, d / r, toward); if (tint >= 0 || G.TW) tintCell(G, n, w, tint, bio, land, i, j); continue; }
       switch (s.m) {
         case "land": if (h < sea + 16) Hh[n] = toward(h, sea + 18); break;
         case "sea": if (h > sea - 40) Hh[n] = toward(h, sea - 42); break;
@@ -272,6 +275,12 @@
         case "grass": M[n] = toward(M[n], 128); break;
       }
     }
+  }
+  // a preset's tint on a cell the brush laid its kind on (where it is laid: on land, or on water for a liquid)
+  function tintCell(G, n, w, tint, bio, land, i, j) {
+    if (!(bio.water || land) || !(w > .3 + hash(i, j, 13) * .35)) return;
+    if (tint < 0 || bio.id === "natural") { G.TW[n] = 0; return; }
+    G.TW[n] = 255; G.TI[n] = tint;
   }
   // one cell under the brush of a kind of land: laid where the brush is strong (its edge ragged), the height changed as
   // the kind asks (mountains raised, a volcano's cone, lowland for a marsh, water for a lake of any liquid)
@@ -309,8 +318,8 @@
   // the referee's changes as the page keeps them (docs of the collection "world"): l- a location, r- a route, f- a river,
   // name or realm, and the reshaped land, the party, the look
   function ovFrom(docs) {
-    const OV = { loc: {}, route: {}, feat: {}, party: null, style: null, shape: null, gen: null };
-    for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id.startsWith("f-")) OV.feat[id.slice(2)] = d; else if (id === "party") OV.party = d; else if (id === "style") OV.style = d; else if (id === "shape") OV.shape = d; else if (id === "gen") OV.gen = d && d.size ? d : null; }
+    const OV = { loc: {}, route: {}, feat: {}, party: null, style: null, shape: null, gen: null, pm: {}, pmset: null };
+    for (const [id, d] of docs) { if (id.startsWith("l-")) OV.loc[id.slice(2)] = d; else if (id.startsWith("r-")) OV.route[id.slice(2)] = d; else if (id.startsWith("f-")) OV.feat[id.slice(2)] = d; else if (id === "party") OV.party = d; else if (id === "style") OV.style = d; else if (id === "shape") OV.shape = d; else if (id === "gen") OV.gen = d && d.size ? d : null; else if (id.startsWith("pm-")) { if (d && d.els) OV.pm[id.slice(3)] = d; } else if (id === "pmset") OV.pmset = d; }
     return OV;
   }
   A.worldOV = ovFrom;
@@ -352,7 +361,7 @@
     if (want && (want === "stars") === starry) look = want;
     const size = Array.isArray(W.size) && W.size[0] > 0 ? W.size.slice(0, 2) : T.w ? [T.w, T.h] : [1000, 700];
     const SH = shapeOf(W, OV);
-    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: T.sea == null ? 128 : T.sea, H: unb64(T.height), M: unb64(T.moist), C: unb64(T.cover), B: unb64(T.biome), Cn: unb64(T.canopy), Tc: unb64(T.tempC), Gr: unb64(T.ground) } : null;
+    let G = opt.noLand ? null : T.height && T.cols ? { cols: T.cols, rows: T.rows, cell: T.cell, sea: (T.sea == null ? 128 : T.sea) + Math.max(-10, Math.min(20, +(OV.style && OV.style.sea) || 0)), /* (an ice age's low sea, some 120 m down, to the high seas of a hothouse age, a few hundred metres up) */ H: unb64(T.height), M: unb64(T.moist), C: unb64(T.cover), B: unb64(T.biome), Cn: unb64(T.canopy), Tc: unb64(T.tempC), Gr: unb64(T.ground) } : null;
     if (!opt.noLand && !G && SH.base && !T.stars && !T.drawing) G = blankLand(size, SH.base);
     if (G) {
       if (!G.M) G.M = new Uint8Array(G.cols * G.rows).fill(128); if (!G.C || G.C.length !== G.cols * G.rows) G.C = new Uint8Array(G.cols * G.rows);
@@ -736,9 +745,12 @@
   // what the city is told: its age and people as the campaign's own city has them, its size by what kind of place it is
   function cityFlags(WD, L) {
     const main = A.cityData || {}, look = typeof main.look === "string" ? main.look : (main.look || {}).base || "", inv = main.invented || {};
-    const fantasy = look === "fantasy" || /fantas/i.test(String((A.config || {}).setting || "")) || inv.era === "fantasy";
-    const era = fantasy ? "fantasy" : WD.look === "atlas" || look === "modern" ? "modern" : look === "old" || look === "industrial" ? "industrial" : "medieval";
-    const g = whereItLies(WD, L), size = /capital/.test(L.kind) && era === "modern" ? "metropolis" : /capital|city|port/.test(L.kind) ? "city" : "town";
+    // (the campaign's own genre first, so a fantasy campaign's settlements are fantasy ones, whatever look its main city
+    // has: the user's Curse of Strahd came out as 1888 towns, 18 Nov 2026)
+    const W = A.campaignWorld ? A.campaignWorld() : {}, fantasy = W.fantasy || look === "fantasy" || /fantas/i.test(String((A.config || {}).setting || "")) || inv.era === "fantasy";
+    const era = fantasy ? "fantasy" : W.scifi ? "future" : WD.look === "atlas" || look === "modern" ? "modern" : look === "old" || look === "industrial" ? "industrial" : "medieval";
+    // its size by what kind of place it is, and its own name: a hamlet, a village, a town, a city (never every place a town)
+    const nk = String(L.kind || "") + " " + String(L.name || ""), g = whereItLies(WD, L), size = /capital/.test(L.kind) && era === "modern" ? "metropolis" : /capital|city|port/.test(L.kind) ? "city" : /hamlet|farm|homestead|camp|outpost|hut|mill|inn\b|tavern|shrine|lodge|tower/i.test(nk) ? "hamlet" : /village|abbey|monaster|priory/i.test(nk) ? "village" : /town|market/i.test(nk) ? "town" : "village";
     const f = { era, size, site: g.site, culture: inv.culture || (fantasy ? "fantasy" : "english") };
     for (const k of ["sea", "river", "roads", "hills"]) if (g[k] != null) f[k] = g[k];
     if (main.region) f.region = main.region;
@@ -820,17 +832,24 @@
         <span class="wm-title">${esc(WD.title || "The world")}</span>
         <select class="wm-look keeper" aria-label="How the map is drawn" title="How the map is drawn: the players see it the same way" hidden></select>
         <details class="wm-filt"><summary>Filters</summary><div class="wm-fbody"></div></details>
-        <span class="wm-sp"></span>
-        <span class="wm-editbar keeper"></span>
-        ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
+        <details class="wm-filt wm-layers"><summary title="What the map shows over the land: plates, rocks, relations, trade, currents, coasts, the road network">Layers</summary><div class="wm-fbody wm-lbody">
+        <button type="button" class="wm-btn wm-pltog" data-w="plates" aria-pressed="false" hidden title="Show the tectonic plates: their borders, what happens at each, which way each plate moves">Plates</button>
+        <button type="button" class="wm-btn wm-rktog" data-w="rocks" aria-pressed="false" hidden title="Show the rocks of each region, and the ores, gems, coal, oil, salt, hot springs and caves in them, with why each is there">Rocks and resources</button>
+        <button type="button" class="wm-btn wm-dptog keeper" data-w="diplo" aria-pressed="false" hidden title="Show how the powers stand: a line between their seats, coloured from war to alliance, with their treaties (keeper only)">Relations</button>
+        <button type="button" class="wm-btn wm-trtog" data-w="trade" aria-pressed="false" hidden title="Show the trade routes: their goods, how much moves along them and whether war or an embargo stands in the way">Trade</button>
         <button type="button" class="wm-btn" data-w="currents" aria-pressed="false" hidden title="The ocean's currents: warm and cold, the gyres, the equator and the lines of latitude">Ocean currents</button>
         <button type="button" class="wm-btn" data-w="coasts" aria-pressed="false" hidden title="What kind each coast is and why it formed there: fjords, rias, deltas, barrier islands, cliffs, reefs">Coasts</button>
         <button type="button" class="wm-btn" data-w="roadnet" aria-pressed="false" hidden title="The roads, sea lanes, river routes, towns, villages and borders grown over the ages from the land and its trade (on trial: atlas.js roads)">Road network (trial)</button>
+        </div></details>
+        <label class="wm-drift" hidden title="Run the plates back: where the land lay so many million years ago, today's motions run backward (a sketch)">Ago <input type="range" min="0" max="100" step="5" value="0" aria-label="Million years ago"> <span class="wm-drift-v">today</span></label>
+        <span class="wm-sp"></span>
+        <span class="wm-editbar keeper"></span>
+        ${DRAW ? `<button type="button" class="wm-btn" data-w="drawn" aria-pressed="false" title="Show the map as it was drawn, or redrawn in Atlas's look">Your drawing</button>` : ""}
         <span class="wm-dev" hidden><label><span class="kn">Development</span> <input type="range" min="1" max="5" step="1" value="3" aria-label="How developed the land's roads are: 1 tribal, 2 early, 3 medieval, 4 industrialising, 5 modern"></label> <span class="wm-devn"></span> <button type="button" class="wm-btn" data-w="devreset" hidden title="Back to the network as it was made">Default</button></span>
         ${A.ux ? `<span class="keeper wm-uxs">${A.ux.saveMark()}${A.ux.keysBtn("world")}</span>` : ""}<button type="button" class="wm-btn keeper" data-w="edit" aria-pressed="false" title="Edit the map (E)">Edit map</button>
       </div>
       <div class="wm-stage" tabindex="0" aria-label="World map. Arrow keys move the map, plus and minus zoom.">
-        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
+        <svg class="wm-svg" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="${esc(WD.title || "World map")}"><g class="wm-cam"><g class="wm-land"></g><g class="wm-rk"></g><g class="wm-pl"></g><g class="wm-trd"></g><g class="wm-dip"></g><g class="wm-cc"></g><g class="wm-cur"></g><g class="wm-coa"></g><g class="wm-net"></g><g class="wm-routes"></g><g class="wm-netp"></g><g class="wm-jour"></g><g class="wm-fx"></g></g><g class="wm-over"></g><g class="wm-hdl"></g></svg>
         <div class="wm-grain"></div>
         <div class="wm-ctl" role="group" aria-label="Map controls"><button type="button" data-z="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-z="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-z="home" aria-label="Whole world" title="Whole world">⌂</button><button type="button" data-z="full" aria-label="Full screen" title="Full screen">⤢</button></div>
         <div class="wm-scale" aria-hidden="true"></div>
@@ -988,6 +1007,7 @@
     const CUR = { on: (() => { try { return ctx.store.get("world-currents") === "1"; } catch (e) { return false; } })(), names: (() => { try { return ctx.store.get("world-curnames") !== "0"; } catch (e) { return true; } })() };
     function along(p, t) { let s = 0; for (let i = 1; i < p.length; i++) { const l = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); if (s + l >= t) { const q = (t - s) / (l || 1); return [p[i - 1][0] + (p[i][0] - p[i - 1][0]) * q, p[i - 1][1] + (p[i][1] - p[i - 1][1]) * q, Math.atan2(p[i][1] - p[i - 1][1], p[i][0] - p[i - 1][0]) * 180 / Math.PI]; } s += l; } const a = p[p.length - 2], b = p[p.length - 1]; return [b[0], b[1], Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI]; }
     function drawCurrents() {
+      if (typeof drawGeoLayers === "function") drawGeoLayers();
       const g = $(".wm-cur"), C = WD.T && WD.T.currents, btn = $('[data-w="currents"]');
       if (btn) { btn.hidden = !C; btn.setAttribute("aria-pressed", !!(C && CUR.on)); }
       if (!g) return; if (!C || !CUR.on) { g.innerHTML = ""; return; }
@@ -1178,7 +1198,9 @@
       if (P.at && P.plan.length && gm()) {
         const legs = [P.at, ...P.plan], next = WD.byId[P.plan[0]];
         J.hidden = false;
-        J.innerHTML = `<span class="kl">The party's journey</span><span>${legs.map(id => esc(WD.byId[id].name)).join(" → ")}</span>${A.journey ? `<span class="wm-jb">${A.journey.bar(JH)}</span>` : ""}<span class="wm-jb"><button type="button" data-w="arrive">Arrived at ${esc(next.name)}</button><button type="button" data-w="cancel">Call it off</button></span>`;
+        J.innerHTML = `<span class="kl">The party's journey</span><span>${legs.map(id => esc(WD.byId[id].name)).join(" → ")}</span>${A.journey ? `<span class="wm-jb">${A.journey.bar(JH)}</span>` : ""}<details class="wm-jmore"><summary title="Rest a day, arrived, call it off, the road so far">More</summary><div class="wm-jmb"><button type="button" data-w="arrive">Arrived at ${esc(next.name)}</button><button type="button" data-w="cancel">Call it off</button></div></details>`;
+        // (the uncluttered pass, 18 Nov 2026: one line on the map: the way, how far, Travel a day; the rest under More)
+        { const mb = J.querySelector(".wm-jmb"); for (const b of J.querySelectorAll(".wm-jb [data-w='restday'], .wm-jb [data-w='jlog']")) mb.prepend(b); }
       } else J.hidden = true;
       root.classList.toggle("journeying", !J.hidden);
     }
@@ -1247,6 +1269,197 @@
     // the sharper land where the map is zoomed in (the shaded reliefs): once the camera rests, the window in view is
     // drawn again as fine as the screen shows it and laid over the land, so a continent of a whole planet holds its
     // valleys and streams up close; zoomed back out, the whole map's own picture is enough
+    const LAY = { trade: (() => { try { return ctx.store.get("world-trade") === "1"; } catch (e) { return false; } })(), plates: (() => { try { return ctx.store.get("world-plates") === "1"; } catch (e) { return false; } })(), rocks: (() => { try { return ctx.store.get("world-rocks") === "1"; } catch (e) { return false; } })(), diplo: (() => { try { return ctx.store.get("world-diplo") === "1"; } catch (e) { return false; } })() };
+    function drawGeoLayers() {
+      const art = A.worldArt, hasP = !!(WD.T && WD.T.tect && art && art.plateLayer), hasR = !!(WD.T && WD.T.rocks && art && art.rockLayer);
+      const bp = $(".wm-pltog"), br = $(".wm-rktog"); bp.hidden = !hasP; br.hidden = !hasR; bp.setAttribute("aria-pressed", hasP && LAY.plates); br.setAttribute("aria-pressed", hasR && LAY.rocks);
+      // (with the plates on, the slider runs them back; at 0, today's plates)
+      const dl = $(".wm-drift"); if (dl) { dl.hidden = !(hasP && LAY.plates && art.driftLayer); const inp = dl.querySelector("input"), rg = art.driftRange && art.driftRange(WD); if (inp && rg && inp.max !== String(rg.max)) { inp.max = rg.max; inp.step = rg.step; if (+inp.value > rg.max) { inp.value = 0; LAY.drift = 0; } } if (inp && !inp._bound) { inp._bound = 1; inp.addEventListener("input", () => { LAY.drift = +inp.value; dl.querySelector(".wm-drift-v").textContent = LAY.drift ? LAY.drift + " million years" : "today"; drawGeoLayers(); }); } }
+      $(".wm-pl").innerHTML = hasP && LAY.plates ? (LAY.drift && art.driftLayer ? art.driftLayer(WD, LAY.drift) : art.plateLayer(WD)) : "";
+      { const sv = $(".wm-svg"); if (sv) sv.classList.toggle("drifting", !!(hasP && LAY.plates && LAY.drift)); } $(".wm-rk").innerHTML = hasR && LAY.rocks ? art.rockLayer(WD) : "";
+      // (the trade routes: each route with trade, in gold, thicker the more moves along it; dashed where suspended or
+      // closed, marked where war or an embargo stands in the way; the trade route's name and goods at its middle)
+      const tr = WD.routes.filter(r => r.trade && !r.gone && (gm() || !r.hidden)), bt = $(".wm-trtog");
+      if (bt) { bt.hidden = !tr.length; bt.setAttribute("aria-pressed", !!(tr.length && LAY.trade)); }
+      drawDiplo();
+      const g = $(".wm-trd"); if (!g) return;
+      if (!tr.length || !LAY.trade) { g.innerHTML = ""; return; }
+      const K = Math.max(1, Math.min(WD.size[0], WD.size[1]) / 900), named = new Set();
+      g.innerHTML = tr.map(r => { const way = typeof wayFor === "function" ? wayFor(r) : [WD.byId[r.from].at, WD.byId[r.to].at], w = ({ low: 2, medium: 3.4, high: 5 }[r.trade.vol] || 2.6) * K, off = ["suspended", "closed"].includes(r.trade.status), trouble = gm() && tradeTrouble(r), mid = way[Math.floor(way.length / 2)], first = r.trade.name && !named.has(r.trade.name); if (first) named.add(r.trade.name);
+        return `<path d="${pathD(way)}" fill="none" stroke="${trouble ? "#b0161b" : "#c99a1e"}" stroke-opacity=".85" stroke-width="${w}" stroke-linecap="round"${off ? ` stroke-dasharray="${8 * K} ${6 * K}"` : ""}><title>${esc([r.trade.name, r.trade.goods, r.trade.vol, r.trade.status, trouble].filter(Boolean).join(" · "))}</title></path>${first ? `<text x="${mid[0]}" y="${mid[1] - 8 * K}" text-anchor="middle" font-size="${13 * K}" fill="#6b4e0a" stroke="#fbf5e3" stroke-width="${3 * K}" paint-order="stroke" font-style="italic">${esc(r.trade.name)}${r.trade.goods ? ": " + esc(r.trade.goods) : ""}</text>` : ""}`; }).join("");
+    }
+    /* ---- Connect Cities and Add More Life (the user, 18 Nov 2026: docs/requests/2026-11-18-connect-cities.md): the roads
+            between the game master's settlements laid by Atlas over the land, the map's own pathfinder routing each one
+            (wayOf over pathGrid: slopes, rivers, the sea) and its own travel times; which pairs to join chosen as real
+            networks grow: the cheapest joins first, every road already there counted as joined (so the game master's
+            roads are kept and built around), the bigger places first, villages by the density, a few loops where the
+            network is a long way round; borders between powers at war or hostile costed dearer, allies cheaper, never
+            forbidden. Add More Life: the places the land would hold (the road network's own settling, scripts/
+            world-roads.js suggestPlaces), as many as the Settlement Density slider says. Shown first; nothing is
+            written until Accept; the roads made are ordinary routes (added, hidden from the players until revealed) */
+    const CC = { open: false, props: null, places: null, busy: false, sugg: null, seed: 1 };
+    const TIER_OF = k => /capital|city/.test(k) ? 1 : /town|port|castle|keep|fort|monastery|base|station/.test(k) ? 2 : 3;
+    const eraWord = () => { try { return String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase(); } catch (e) { return ""; } };
+    const ccDefaultDensity = () => { const e = eraWord(); return /future|modern|now|today|20|19|victorian|historical/.test(e) ? "dense" : /ancient|tribal|stone|bronze/.test(e) ? "sparse" : "balanced"; };
+    function ccClear() { CC.props = null; CC.places = null; const g = $(".wm-cc"); if (g) g.innerHTML = ""; }
+    function ccSuggest() {
+      if (CC.sugg) return CC.sugg; if (!(A.roadGen && A.roadGen.suggestPlaces) || !WD.G) return (CC.sugg = { extra: [] });
+      try { const e = eraWord(); CC.sugg = A.roadGen.suggestPlaces(WD, { seed: (WD.T && WD.T.seed) || 1, era: /future|scifi/.test(e) ? "future" : /modern|19|20|victorian|historical/.test(e) ? "modern" : /ancient/.test(e) ? "ancient" : "medieval" }, A.worldBiomes); } catch (err) { console.warn("atlas: add more life", err); CC.sugg = { extra: [] }; }
+      return CC.sugg;
+    }
+    // how many new places a density gives, and which: the best-placed first; villages and hamlets alone at low
+    // density, towns from the middle, a city only near the top (the user: 0 none, 25 a few villages and hamlets, 50
+    // moderately peopled, 75 many villages, farms and trading posts, 100 all the land would feed)
+    function ccPick(d) {
+      if (!(d > 0)) return [];
+      // (the countryside about the game master's own settlements, not every continent of a planet: within a couple of the
+      // usual distances between their places, at least a day's walk or so; with none placed, the whole land)
+      const own = WD.locs.filter(l => SETTLED.includes(l.kind) && Array.isArray(l.at) && !l.gone);
+      let X = ccSuggest().extra || [];
+      if (own.length) { const nn = own.map(a => Math.min(...own.filter(b => b !== a).map(b => Math.hypot(a.at[0] - b.at[0], a.at[1] - b.at[1])), 1e9)).filter(v => v < 1e9).sort((a, b) => a - b), med = nn.length ? nn[nn.length >> 1] : 60, R = Math.max(40, med * 2.2);
+        X = X.filter(x => own.some(l => Math.hypot(l.at[0] - x.at[0], l.at[1] - x.at[1]) < R)); }
+      const ok = X.filter(p => p.tier === "village" || (p.tier === "town" && d >= 50) || (p.tier === "city" && d >= 85));
+      return ok.slice(0, Math.round(ok.length * Math.pow(d / 100, 1.35)));
+    }
+    function ccStance(a, b) {
+      const L = A.lives, oa = (WD.byId[a] || {}).owner, ob = (WD.byId[b] || {}).owner; if (!oa || !ob || oa === ob || !L || !L.all) return { f: oa && ob && oa !== ob ? 1.15 : 1 };
+      const all = L.all(), sOf = r => Array.isArray(r) ? r[0] : r && typeof r === "object" ? r.stance : r, st = sOf(((all[oa] || {}).rels || {})[ob]) || sOf(((all[ob] || {}).rels || {})[oa]) || "neutral", d = L.diplomacy ? L.diplomacy(oa, ob) : null, tr = ((d && d.treaties) || []).map(t => String(t).split(":")[0]);
+      let f = { war: 2.6, hostile: 1.8, wary: 1.3, friendly: .95, allied: .85 }[st] || 1.15; if (tr.includes("trade")) f *= .85; if (tr.includes("embargo") || tr.includes("blockade")) f *= 1.5;
+      return { f, st, war: st === "war" };
+    }
+    async function ccRun() {
+      if (CC.busy) return; CC.busy = true; ccPanel("Laying the roads over the land…");
+      const box = $(".wm-ccbox"), val = n => { const e = box && box.querySelector(`[name="${n}"]`); return e ? (e.type === "checkbox" ? e.checked : e.value) : ""; };
+      const dens = val("dens") || ccDefaultDensity(), life = !!val("life"), sd = +val("sd") || 0, scope = val("scope") || "all", own = val("own") || "";
+      const chosen = new Set([...(box ? box.querySelectorAll('[name="pick"]:checked') : [])].map(x => x.value));
+      if (!PG && WD.G) PG = pathGrid(WD);
+      // the places: the map's settlements (all, those chosen, or one power's), and the new ones Add More Life would add
+      let P = WD.locs.filter(l => SETTLED.includes(l.kind) && Array.isArray(l.at) && !l.gone).map(l => ({ id: l.id, at: l.at, tier: TIER_OF(l.kind), name: l.name, owner: l.owner }));
+      if (scope === "chosen") P = P.filter(p => chosen.has(p.id)); else if (scope === "power" && own) P = P.filter(p => p.owner === own);
+      const fresh = life ? ccPick(sd).map((x, k) => ({ id: "new~" + k, at: x.at, tier: x.tier === "city" ? 1 : x.tier === "town" ? 2 : 3, name: x.name, kind: x.tier === "village" ? (x.score < .35 ? "hamlet" : "village") : x.port ? "port" : x.tier, fresh: true })) : [];
+      // (a new place too near one of the game master's own is not added)
+      const keep = fresh.filter(f => !P.concat(WD.locs.map(l => ({ at: l.at }))).some(p => p.at && Math.hypot(p.at[0] - f.at[0], p.at[1] - f.at[1]) < 14));
+      const ALL = P.concat(keep), byId = new Map(ALL.map(p => [p.id, p]));
+      // joined already: every road there is (the game master's own kept as they are)
+      const par = new Map(); const find = x => { while (par.has(x) && par.get(x) !== x) x = par.get(x); return x; }, join = (a, b) => { a = find(a); b = find(b); if (a !== b) par.set(a, b); };
+      for (const p of ALL) par.set(p.id, p.id);
+      const have = new Set(); for (const r of WD.routes) if (!r.gone && byId.has(r.from) && byId.has(r.to)) { join(r.from, r.to); have.add([r.from, r.to].sort().join("~")); }
+      for (const r of WD.routes) if (!r.gone && (byId.has(r.from) || byId.has(r.to))) { const o = byId.has(r.from) ? r.to : r.from; if (!byId.has(o)) { par.set(o, par.get(o) || o); join(r.from, r.to); } }
+      // the candidates: each place's nearest few, each routed over the land by the map's own pathfinder
+      const K = dens === "dense" ? 7 : dens === "balanced" ? 5 : 4, pairs = new Map();
+      for (const a of ALL) ALL.filter(b => b !== a).map(b => [b, Math.hypot(b.at[0] - a.at[0], b.at[1] - a.at[1])]).sort((x, y) => x[1] - y[1]).slice(0, K).forEach(([b]) => { const k = [a.id, b.id].sort().join("~"); if (!have.has(k)) pairs.set(k, [a, b]); });
+      const tmp = Object.assign({}, WD.byId); for (const f of keep) tmp[f.id] = { id: f.id, at: f.at, kind: f.kind };
+      const WDx = Object.assign({}, WD, { byId: tmp }), cand = []; let k0 = 0;
+      for (const [k, [a, b]] of pairs) {
+        if (++k0 % 6 === 0) { ccPanel(`Laying the roads over the land… ${k0} of ${pairs.size} looked at`); await new Promise(r => setTimeout(r, 0)); if (!CC.open) { CC.busy = false; return; } }
+        const r = { id: "cc~" + k, from: a.id, to: b.id, kind: "road" }, way = wayOf(WDx, PG, r); if (!way || way.length < 2) continue;
+        const tv = travel(WDx, r, way) || {}, days = tv.days || Math.hypot(b.at[0] - a.at[0], b.at[1] - a.at[1]) / 30, pol = ccStance(a.id, b.id);
+        // (high ground along it: a mountain trail; a village at one end: a track)
+        let hi = 0; if (PG) for (const q of way) { const i = clamp(Math.floor(q[1] / PG.size), 0, PG.nr - 1) * PG.nc + clamp(Math.floor(q[0] / PG.size), 0, PG.nc - 1); hi = Math.max(hi, PG.H[i]); }
+        cand.push({ k, a, b, way, days, w: days * pol.f * (1 + .22 * (a.tier + b.tier - 2)), pol, high: PG ? hi > PG.sea + (255 - PG.sea) * .55 : false });
+      }
+      cand.sort((x, y) => x.w - y.w);
+      const props = [], deg = new Map(), add = c => { props.push(c); join(c.a.id, c.b.id); deg.set(c.a.id, (deg.get(c.a.id) || 0) + 1); deg.set(c.b.id, (deg.get(c.b.id) || 0) + 1); };
+      // 1. the spanning network of the places that count at this density
+      const counts = p => dens === "dense" || p.tier <= 2; for (const c of cand) if (counts(c.a) && counts(c.b) && find(c.a.id) !== find(c.b.id)) add(c);
+      // 2. villages: at balanced density each one joins the network by its cheapest road; sparse leaves them as they are
+      if (dens === "balanced") for (const p of ALL.filter(p => p.tier === 3)) { if (find(p.id) !== p.id && deg.get(p.id)) continue; const c = cand.find(c => (c.a === p || c.b === p) && find(c.a.id) !== find(c.b.id)); if (c) add(c); }
+      // 3. a few loops where the network makes a long way round (graph distance against the road's own)
+      const loops = dens === "dense" ? 1.45 : dens === "balanced" ? 2.2 : 0;
+      if (loops) { let extra = 0; const cap = Math.ceil(ALL.length * (dens === "dense" ? .5 : .2));
+        const gdist = (s, t) => { const adj = new Map(); for (const c of props) { for (const [u, v] of [[c.a.id, c.b.id], [c.b.id, c.a.id]]) { if (!adj.has(u)) adj.set(u, []); adj.get(u).push([v, c.days]); } } for (const r of WD.routes) if (!r.gone) { const d = (r.days || 2); for (const [u, v] of [[r.from, r.to], [r.to, r.from]]) { if (!adj.has(u)) adj.set(u, []); adj.get(u).push([v, d]); } }
+          const D = new Map([[s, 0]]), q = [[0, s]]; while (q.length) { q.sort((x, y) => x[0] - y[0]); const [d, u] = q.shift(); if (u === t) return d; if (d > (D.get(u) || 0)) continue; for (const [v, w] of adj.get(u) || []) { const nd = d + w; if (nd < (D.has(v) ? D.get(v) : Infinity)) { D.set(v, nd); q.push([nd, v]); } } } return Infinity; };
+        for (const c of cand) { if (extra >= cap) break; if (props.includes(c) || !(counts(c.a) && counts(c.b))) continue; if (gdist(c.a.id, c.b.id) > c.days * loops) { add(c); extra++; } } }
+      // the kind and class of each road: by the places it joins, the land it crosses and the age
+      const e = eraWord(), modern = /future|modern|now|today|20|19|victorian|historical/.test(e), classes = roadClasses().map(x => x[0]);
+      for (const c of props) {
+        const top = Math.min(c.a.tier, c.b.tier), low = Math.max(c.a.tier, c.b.tier);
+        c.kind = c.high && low >= 2 ? "trail" : c.high ? "pass" : "road";
+        c.cls = c.pol.war ? "military" : top === 1 && low <= 2 ? (modern && classes.includes("highway") ? "highway" : "trade") : low === 3 ? "dirt" : (modern ? "paved" : "dirt");
+        if (!classes.includes(c.cls)) c.cls = "dirt";
+        c.on = true;
+      }
+      CC.props = props; CC.places = keep.filter(f => props.some(c => c.a === f || c.b === f) || life); CC.busy = false; ccDraw(); ccPanel();
+    }
+    function ccDraw() {
+      const g = $(".wm-cc"); if (!g) return; if (!CC.props) { g.innerHTML = ""; return; }
+      const K = Math.max(1, Math.min(WD.size[0], WD.size[1]) / 900), COL = { highway: "#c0392b", trade: "#b4791f", paved: "#8a5a2b", military: "#7a1f1f", dirt: "#6f5b3e", causeway: "#5a6f7a", bridge: "#5a6f7a", maglev: "#2f6fb0" };
+      g.innerHTML = CC.props.filter(c => c.on).map(c => `<path d="${pathD(c.way)}" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="${r1(4.2 * K)}" stroke-linecap="round"/><path d="${pathD(c.way)}" fill="none" stroke="${COL[c.cls] || "#6f5b3e"}" stroke-width="${r1((c.cls === "dirt" ? 1.6 : 2.6) * K)}" stroke-dasharray="${c.kind === "trail" ? `${r1(2 * K)} ${r1(3 * K)}` : `${r1(7 * K)} ${r1(4 * K)}`}" stroke-linecap="round"><title>${esc(c.a.name + " — " + c.b.name + " · " + c.cls + (c.kind !== "road" ? " " + c.kind : ""))}</title></path>`).join("")
+        + (CC.places || []).map(f => `<circle cx="${r1(f.at[0])}" cy="${r1(f.at[1])}" r="${r1((f.tier === 3 ? 3.2 : 4.6) * K)}" fill="#fffaf0" stroke="#b4791f" stroke-width="${r1(1.4 * K)}" stroke-dasharray="${r1(2 * K)} ${r1(1.5 * K)}"><title>${esc("New: " + f.name + " (" + f.kind + ")")}</title></circle><text x="${r1(f.at[0] + 6 * K)}" y="${r1(f.at[1] + 3 * K)}" font-size="${r1(9 * K)}" font-style="italic" fill="#6f4a1f" stroke="#fffaf0" stroke-width="${r1(2 * K)}" paint-order="stroke">${esc(f.name)}</text>`).join("");
+    }
+    function ccPanel(busy) {
+      let box = $(".wm-ccbox"); if (!CC.open) { if (box) box.remove(); return; }
+      if (!box) { box = document.createElement("div"); box.className = "wm-ccbox keeper"; root.appendChild(box); box.addEventListener("click", ccClick); box.addEventListener("input", ccInput); box.addEventListener("change", ccInput); }
+      const prev = {}; for (const el of box.querySelectorAll("[name]")) prev[el.name + (el.value && el.type === "checkbox" && el.name === "pick" ? ":" + el.value : "")] = el.type === "checkbox" ? el.checked : el.value;
+      const settled = WD.locs.filter(l => SETTLED.includes(l.kind) && !l.gone), owners = [...new Set(settled.map(l => l.owner).filter(Boolean))], dens = prev.dens || ccDefaultDensity(), sd = prev.sd != null ? prev.sd : 45, life = !!prev.life, scope = prev.scope || "all";
+      const est = life ? ccPick(+sd).length : 0, opt = (v, l, cur) => `<option value="${esc(v)}"${String(v) === String(cur) ? " selected" : ""}>${esc(l)}</option>`;
+      box.innerHTML = `<h4>Connect Cities</h4>
+        <p class="kn">Roads between your settlements, laid over the land: up the valleys, over the passes, across the rivers where they can be crossed. Your own roads stay as they are; the new ones are shown first.</p>
+        <label>Which places <select name="scope">${opt("all", "All the settlements", scope)}${opt("chosen", "Only those I tick", scope)}${owners.length ? opt("power", "One power's", scope) : ""}</select></label>
+        ${scope === "power" ? `<label>Whose <select name="own">${owners.map(o => opt(o, facName(o), prev.own)).join("")}</select></label>` : ""}
+        ${scope === "chosen" ? `<div class="wm-ccpick">${settled.map(l => `<label><input type="checkbox" name="pick" value="${esc(l.id)}"${prev["pick:" + l.id] !== false ? " checked" : ""}> ${esc(l.name)}</label>`).join("")}</div>` : ""}
+        <label>Road density <select name="dens">${opt("sparse", "Sparse: the main places only", dens)}${opt("balanced", "Balanced: towns joined, villages by one road", dens)}${opt("dense", "Dense: almost everywhere joined", dens)}</select></label>
+        <label class="wm-cclife"><input type="checkbox" name="life"${life ? " checked" : ""}> Add More Life: new villages and towns where the land would feed them</label>
+        ${life ? `<label>Settlement density <input type="range" name="sd" min="0" max="100" step="1" value="${esc(sd)}"> <b class="wm-ccsd">${esc(sd)}</b></label><p class="kn wm-ccest">About ${est} new place${est === 1 ? "" : "s"}${+sd === 0 ? "" : +sd < 50 ? ", villages and hamlets" : +sd < 85 ? ", villages, hamlets and towns" : ", towns, villages and a city or two"}, on fed land, by rivers and coasts, apart from your own.</p>` : ""}
+        <div class="t-row"><button type="button" class="wm-btn prim" data-cc="run"${CC.busy ? " disabled" : ""}>${CC.props ? "Propose again" : "Propose roads"}</button><button type="button" class="wm-btn" data-cc="close">Cancel</button></div>
+        ${busy ? `<p class="kn">${esc(busy)}</p>` : ""}
+        ${CC.props ? `<h5>Proposed: ${CC.props.filter(c => c.on).length} road${CC.props.length === 1 ? "" : "s"}${CC.places && CC.places.length ? `, ${CC.places.length} new place${CC.places.length === 1 ? "" : "s"}` : ""}</h5>
+          <ul class="wm-cclist">${CC.props.map((c, i) => `<li><label><input type="checkbox" data-cci="${i}"${c.on ? " checked" : ""}> ${esc(c.a.name)} — ${esc(c.b.name)}</label> <select data-ccc="${i}">${roadClasses().map(([k, l]) => opt(k, l, c.cls)).join("")}</select> <span class="kn">${c.days ? Math.round(c.days * 10) / 10 + " d" : ""}${c.kind !== "road" ? " · " + c.kind : ""}${c.pol.st && c.pol.st !== "neutral" ? " · " + c.pol.st : ""}</span></li>`).join("")}</ul>
+          <div class="t-row"><button type="button" class="wm-btn prim" data-cc="accept">Accept</button><span class="kn">Each becomes an ordinary road to move, retype or take away; hidden from the players until you reveal it.</span></div>` : ""}`;
+    }
+    function ccInput(e) {
+      const t = e.target;
+      if (t.name === "sd") { const b = $(".wm-ccbox .wm-ccsd"), est = $(".wm-ccbox .wm-ccest"), n = ccPick(+t.value).length; if (b) b.textContent = t.value; if (est) est.textContent = `About ${n} new place${n === 1 ? "" : "s"}${+t.value === 0 ? "" : +t.value < 50 ? ", villages and hamlets" : +t.value < 85 ? ", villages, hamlets and towns" : ", towns, villages and a city or two"}, on fed land, by rivers and coasts, apart from your own.`; return; }
+      if (t.dataset.cci != null && CC.props) { CC.props[+t.dataset.cci].on = t.checked; ccDraw(); return; }
+      if (t.dataset.ccc != null && CC.props) { CC.props[+t.dataset.ccc].cls = t.value; ccDraw(); return; }
+      if (e.type === "change" && ["scope", "life", "own"].includes(t.name)) ccPanel();
+    }
+    function ccClick(e) {
+      const b = e.target.closest("[data-cc]"); if (!b) return;
+      if (b.dataset.cc === "close") { CC.open = false; ccClear(); ccPanel(); renderBars(); return; }
+      if (b.dataset.cc === "run") { ccClear(); ccRun(); return; }
+      if (b.dataset.cc === "accept" && CC.props) {
+        // the new places first (each its own id), then the roads that reach them; nothing else touched
+        const idOf = new Map(); for (const f of CC.places || []) { if (!CC.props.some(c => c.on && (c.a === f || c.b === f)) && !(CC.places || []).includes(f)) continue; let id = String(f.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "place"; while (WD.byId[id] || OV.loc[id] || [...idOf.values()].includes(id)) id += "-" + Math.floor(Math.random() * 90 + 10); idOf.set(f.id, id); save("l-" + id, { name: f.name, kind: f.kind, state: "unknown", at: [r1(f.at[0]), r1(f.at[1])], added: true, gen: "life" }); }
+        let n = 0; for (const c of CC.props) { if (!c.on) continue; const from = idOf.get(c.a.id) || c.a.id, to = idOf.get(c.b.id) || c.b.id; if (String(from).startsWith("new~") || String(to).startsWith("new~")) continue; save("r-x" + Date.now().toString(36) + (n++), { from, to, kind: c.kind, cls: c.cls, added: true, hidden: true, gen: "connect", state: c.pol.war ? "damaged" : undefined, danger: c.pol.war ? "Crosses a border between powers at war: watched, or closed" : undefined }); }
+        note(`${n} road${n === 1 ? "" : "s"}${idOf.size ? " and " + idOf.size + " new place" + (idOf.size === 1 ? "" : "s") : ""} added. Your own roads are as they were; the new ones are hidden from the players until you reveal them.`);
+        CC.open = false; ccClear(); ccPanel(); renderBars(); return;
+      }
+    }
+    // how the powers stand, on the map (the manual civilization editor's request of 17 Nov 2026; keeper only): each
+    // power's seat (its capital; else its largest place; else the middle of its realm), and between two seats a line
+    // coloured from war to alliance, bowed so two lines between the same seats do not lie on each other; the treaties
+    // (atlas-factions.js, "diplomacy") in its title and a short mark at its middle. Neutral powers with no treaty: no line
+    function drawDiplo() {
+      const g = $(".wm-dip"), bt = $(".wm-dptog"); if (!g) return;
+      const L = A.lives, all = L && L.all ? L.all() : {}, RANK = { capital: 0, city: 1, port: 2, town: 3, castle: 4, keep: 4, fort: 5, village: 6 };
+      const seat = {};
+      for (const fid of Object.keys(all)) {
+        const own = WD.locs.filter(l => l.owner === fid && l.at).sort((a, b) => (RANK[a.kind] ?? 9) - (RANK[b.kind] ?? 9));
+        if (own.length) { seat[fid] = own[0].at; continue; }
+        const rg = (WD.realms || []).find(x => x.owner === fid && Array.isArray(x.pts) && x.pts.length > 2);
+        if (rg) { let cx = 0, cy = 0; for (const p of rg.pts) { cx += p[0]; cy += p[1]; } seat[fid] = [cx / rg.pts.length, cy / rg.pts.length]; }
+      }
+      const ids = Object.keys(seat), show = gm() && ids.length >= 2;
+      if (bt) { bt.hidden = !show; bt.setAttribute("aria-pressed", !!(show && LAY.diplo)); }
+      if (!show || !LAY.diplo) { g.innerHTML = ""; return; }
+      const COL = { war: ["#b0161b", 5, ""], hostile: ["#d0602a", 3.6, ""], wary: ["#8a8478", 2.4, "7 6"], neutral: ["#8a8478", 2, "2 6"], friendly: ["#4f8a3a", 3, ""], allied: ["#2f6fb0", 4.6, ""] };
+      const WORD = { war: "war", hostile: "hostile", wary: "wary", neutral: "", friendly: "friendly", allied: "allied" };
+      const K = Math.max(1, Math.min(WD.size[0], WD.size[1]) / 900); let s = "";
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i], b = ids[j], sOf = r => Array.isArray(r) ? r[0] : r && typeof r === "object" ? r.stance : r, ra = sOf((all[a].rels || {})[b]), rb = sOf((all[b].rels || {})[a]), st = ra || rb || "neutral", d = L.diplomacy ? L.diplomacy(a, b) : null, tr = (d && d.treaties) || [];
+        if (st === "neutral" && !tr.length) continue;
+        const [col, w, dash] = COL[st] || COL.neutral, p = seat[a], q = seat[b], mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2, dx = q[0] - p[0], dy = q[1] - p[1], len = Math.hypot(dx, dy) || 1, bow = len * .12;
+        const cx = mx - dy / len * bow, cy = my + dx / len * bow, lx = (p[0] + 2 * cx + q[0]) / 4, ly = (p[1] + 2 * cy + q[1]) / 4;
+        const trs = tr.map(t => { const [k] = String(t).split(":"); return ((L.TREATY || []).find(x => x[0] === k) || [0, k])[1]; });
+        const title = `${all[a].n || a} and ${all[b].n || b}: ${st}${ra && rb && ra !== rb ? ` (${all[a].n || a} ${ra}, ${all[b].n || b} ${rb})` : ""}${trs.length ? "; " + trs.join(", ") : ""}${d && d.now ? "; now: " + d.now : ""}`;
+        const mark = [WORD[st], ...trs.map(x => x.split(" ")[0].toLowerCase())].filter(Boolean).slice(0, 2).join(" · ");
+        s += `<path d="M${p[0].toFixed(1)} ${p[1].toFixed(1)}Q${cx.toFixed(1)} ${cy.toFixed(1)} ${q[0].toFixed(1)} ${q[1].toFixed(1)}" fill="none" stroke="${col}" stroke-opacity=".8" stroke-width="${(w * K).toFixed(2)}" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash.split(" ").map(x => (x * K).toFixed(1)).join(" ")}"` : ""}><title>${esc(title)}</title></path>`;
+        if (mark) s += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" font-size="${(13 * K).toFixed(1)}" fill="${col}" stroke="#fff" stroke-width="${(3 * K).toFixed(1)}" paint-order="stroke" font-family="Georgia, serif" font-style="italic">${esc(mark)}</text>`;
+      }
+      for (const fid of ids) { const [x, y] = seat[fid], c = all[fid].color || "#444"; s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(7 * K).toFixed(1)}" fill="${esc(c)}" stroke="#fff" stroke-width="${(2 * K).toFixed(1)}"><title>${esc((all[fid].n || fid) + "'s seat")}</title></circle>`; }
+      g.innerHTML = s;
+    }
     function refine() {
       const slot = cam.querySelector(".wm-detail"); if (!slot || !A.worldArt || !A.worldArt.detail || gone || anim) return;
       const base = A.worldArt.detailBase(WD, WD.look); if (!base || V.k < base * 1.4) { slot.innerHTML = ""; refine.at = null; return; }
@@ -1321,7 +1534,7 @@
         <div class="eyebrow"><span>${esc((KINDS[L.kind] || [0, L.kind])[1])}</span>${L.region ? `<span>${esc(L.region)}</span>` : ""}${realm && (keeper || !realm.hidden) && realm.name !== L.region ? `<button type="button" class="wm-rlink" data-wfeat="${esc(realm.id)}">${esc(realm.name || "A realm")}</button>` : ""}${here ? `<span class="wm-here">The party is here</span>` : ""}</div>
         <h3>${esc(L.name)}</h3>
         ${keeper && A.ux && (L.added || L.edited) ? `<p>${A.ux.hand(L.added ? "Your own place: never redrawn" : "Changed by you: kept when the map is made again")}</p>` : ""}
-        ${L.owner && keeper ? `<p class="kn">Held by ${esc(facName(L.owner))}</p>` : ""}
+        ${L.owner && keeper ? `<p class="kn">Held by ${A.nav && A.lives && A.lives.fac && A.lives.fac(L.owner) ? `<button type="button" class="t-link" data-uxpeek="faction:${esc(L.owner)}">${esc(facName(L.owner))}</button>` : esc(facName(L.owner))}</p>` : ""}${L.res || L.imp ? `<p class="kn">${L.res ? "Produces " + esc(L.res) : ""}${L.res && L.imp ? "; " : ""}${L.imp ? "brings in " + esc(L.imp) : ""}</p>` : ""}
         ${keeper ? `<div class="wm-stseg" role="group" aria-label="What the party knows">${STATES.map(([v, l]) => `<button type="button" data-wstate="${v}" aria-pressed="${L.state === v}" title="${esc(l)}"><span class="sd st-w-${v}"></span>${esc(l.split(" ")[0])}</button>`).join("")}</div>` : L.state !== "known" ? `<p class="kn">${esc(stName)}</p>` : ""}
         ${acts.length ? `<div class="meta">${acts.map(a => `<span class="tag">Act ${a}</span>`).join("")}</div>` : ""}
         ${L.desc ? `<p class="wm-desc">${esc(L.desc)}</p>` : ""}
@@ -1370,6 +1583,9 @@
           <div><dt>Travel</dt><dd>${tv.days != null ? `${esc(daysText(tv.days))} <span class="kn">(${esc(tv.basis)})</span>` : `<span class="kn">Not known${keeper ? ": set the days in Edit map" : ""}.</span>`}</dd></div>
           ${r.danger ? `<div><dt>Danger</dt><dd class="wm-dgr">${esc(r.danger === true ? "A dangerous way." : r.danger)}</dd></div>` : ""}
           ${r.blocked ? `<div><dt>Blocked</dt><dd class="wm-bad">${esc(r.blocked === true ? "The way is shut." : r.blocked)}</dd></div>` : ""}
+          ${r.cls ? `<div><dt>Road</dt><dd>${esc((roadClasses().concat([["highway", "A highway or motorway"], ["maglev", "A maglev or transit line"]]).find(x => x[0] === r.cls) || [0, r.cls])[1])}</dd></div>` : ""}
+          ${r.state ? `<div><dt>State</dt><dd class="wm-bad">${esc(r.state === "damaged" ? "Damaged" : "Abandoned")}</dd></div>` : ""}
+          ${r.trade ? `<div><dt>Trade</dt><dd>${esc([r.trade.name, r.trade.goods, r.trade.vol ? r.trade.vol + " volume" : "", r.trade.status && r.trade.status !== "active" ? r.trade.status : ""].filter(Boolean).join("; "))}${keeper && tradeTrouble(r) ? `<br><span class="wm-dgr">${esc(tradeTrouble(r))}</span>` : ""}</dd></div>` : ""}
         </dl>
         ${r.desc ? `<p class="wm-desc">${esc(r.desc)}</p>` : ""}
         ${keeper && r.gm ? `<div class="sec secret"><p>${esc(r.gm)}</p></div>` : ""}
@@ -1388,7 +1604,7 @@
       return `<button type="button" class="wm-x" data-w="close" aria-label="Close">×</button>
         <div class="eyebrow"><span>${esc(k === "realm" ? (REALM_KINDS.find(x => x[0] === f.kind) || [0, "Realm"])[1] : k === "river" ? "River" : "A name on the map")}</span>${f.hidden ? `<span>Hidden from the players</span>` : ""}</div>
         <h3>${esc(title)}</h3>
-        ${k === "realm" && f.owner ? `<p><span class="kn">Held by</span> ${esc(facName(f.owner))}</p>` : ""}
+        ${k === "realm" && f.owner ? `<p><span class="kn">Held by</span> ${A.nav && A.lives && A.lives.fac && A.lives.fac(f.owner) ? `<button type="button" class="t-link" data-uxpeek="faction:${esc(f.owner)}" title="Its card: how it stands with the others, its treaties, its towns, what it trades">${esc(facName(f.owner))}</button>` : esc(facName(f.owner))}</p>` : ""}
         ${f.desc ? `<p class="wm-desc">${esc(f.desc)}</p>` : ""}
         ${keeper && f.gm ? `<div class="sec secret"><p>${esc(f.gm)}</p></div>` : ""}
         ${inside.length ? `<h4>Places in it</h4><ul class="wm-rl2">${inside.slice(0, 40).map(L => `<li><button type="button" class="wm-rt" data-wloc="${esc(L.id)}"><span class="wm-rn">${esc(L.name)}</span><span class="wm-rf">${esc((KINDS[L.kind] || [0, L.kind])[1])}</span></button></li>`).join("")}</ul>` : ""}
@@ -1418,14 +1634,16 @@
       { const tt = ctx.title && ctx.title(WID, S.sel && WD.byId[S.sel] ? WD.byId[S.sel].name : ""), te = $(".wm-title"); if (tt && te && te.__t !== tt) { te.__t = tt; te.innerHTML = tt; } }
       if (A.ux) A.ux.editing(stage, S.edit && gm() ? ({ loc: "+ Place", route: "+ Route", brush: "Shape the land", river: "+ River", realm: WD.look === "stars" ? "+ Territory" : "+ Realm", label: "+ Name" }[S.tool] || "the map") : null);
       const tb = (w, l, on, title) => `<button type="button" class="wm-btn" data-w="${w}" aria-pressed="${!!on}"${title ? ` title="${esc(title)}"` : ""}>${l}</button>`, landy = WD.look !== "stars" && !drawn();
-      eb.innerHTML = S.edit && gm() ? tb("addloc", "+ Place", S.tool === "loc") + tb("addroute", "+ Route", S.tool === "route")
+      eb.innerHTML = S.edit && gm() ? tb("addloc", "+ Place", S.tool === "loc") + tb("addroute", "+ Route", S.tool === "route") + (WD.look !== "stars" && WD.G ? tb("connect", "Connect Cities", !!CC.open, "Let Atlas lay the roads between your settlements, over the land, and add villages where the land would feed them: shown first, nothing changes until you accept") : "")
         + (landy ? tb("brush", "Shape the land", S.tool === "brush", "Paint land, sea, mountains, forests, deserts and swamps") + tb("river", "+ River", S.tool === "river") : "")
         + tb("realm", WD.look === "stars" ? "+ Territory" : "+ Realm", S.tool === "realm", "Draw a kingdom, province or territory, and say who holds it") + tb("label", "+ Name", S.tool === "label", "Write a name on the map: a sea, a range, a forest")
         + `<button type="button" class="wm-btn" data-w="undo"${HIST.length ? "" : " disabled"} title="Undo (Ctrl+Z)">Undo</button><button type="button" class="wm-btn" data-w="redo"${REDO.length ? "" : " disabled"} title="Redo (Ctrl+Y)">Redo</button>`
         + (A.worldGenSrc && WD.look !== "stars" && !DRAW ? (wData() || {}).planet ? tb("newworld", "Draw its surface", false, "Paint its land or give a drawing of your own: its physics decide what the low ground holds, whether rivers run and whether anything grows") : tb("newworld", "Make a new world", false, "Generate a whole new land: how big, its shape (from your own drawing if you like), its climate") : "")
+        + (A.pmap && WD.look !== "stars" ? tb("pmaps", "Players' maps", false, "Hand-drawn parchment maps for the players: what their characters know, drawn as they would draw it; you draw and reveal on them as the game goes") : "")
+        + (landy ? `<label class="wm-sealv" title="Raise the sea to drown the low coasts and shelves, or lower it to bare them, as in an ice age; the land, your places and roads stay as they are">Sea level <input type="range" class="wm-sea" min="-10" max="20" step="1" value="${esc((OV.style && OV.style.sea) || 0)}" aria-label="Sea level"> <span class="kn">${(OV.style && OV.style.sea) ? ((OV.style.sea > 0 ? "+" : "") + OV.style.sea) : "as made"}</span></label>` : "")
         + tb("export", "Copy as world.js")
         + (vers() && vers().list(WID).length ? tb("vers", "Earlier versions", S.panelV, "The map as it was before each visit's changes, to look at and bring back") : "")
-        + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
+        + (S.tool === "brush" ? `<span class="wm-brushbar">${WD.G ? `<label><span class="kn">Paint</span> <select data-wb="m">${brushOptions()}</select></label><label class="wm-bsize"><span class="kn">Brush size</span> <input type="range" data-wb="r" min="4" max="200" step="2" value="${S.size}" aria-label="Brush size"> <span class="wm-bsz">${S.size}</span></label>${presetBar()}` : `<span>This map has no land yet. Start with</span> <button type="button" class="wm-btn" data-w="base" data-base="sea">All sea</button> <button type="button" class="wm-btn" data-w="base" data-base="land">All land</button>`}</span>` : "") : "";
       $('[data-w="edit"]').setAttribute("aria-pressed", S.edit);
       const dw = $('[data-w="drawn"]'); if (dw) { dw.setAttribute("aria-pressed", !!drawn()); dw.hidden = WD.look === "stars" || !DRAW.trace; }
       // how the map is drawn: the game master chooses among the looks this world can wear
@@ -1456,7 +1674,7 @@
       if (CUR.on && WD.T && WD.T.currents) $(".wm-hint").insertAdjacentHTML("afterbegin", `<span class="lg"><svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" class="wc-s w" style="stroke-width:3px"/></svg>Warm current</span><span class="lg"><svg width="28" height="10" aria-hidden="true"><line x1="1" y1="5" x2="27" y2="5" class="wc-s c" style="stroke-width:3px"/></svg>Cold current</span><button type="button" class="wm-btn wc-nb" data-w="curnames">${CUR.names ? "Hide their names" : "Show their names"}</button>`);
     }
     // what the land is drawn from: when it changes (a stroke of the brush, a river, a realm, a name), it is drawn again
-    const landKey = () => JSON.stringify([GEN.ver, WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.liquid, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
+    const landKey = () => JSON.stringify([GEN.ver, WD.G ? WD.G.sea : 0, WD.shape, WD.rivers.map(r => [r.id, r.name, r.w, r.liquid, r.pts.length, r.pts[0], r.pts[r.pts.length - 1], r.pts[r.pts.length >> 1]]), WD.labels, WD.realms.map(g => [g.id, g.name, g.pts, g.colour, g.owner, g.hidden, g.at]), gm()]);
     let lastLand = landKey();
     // the recipe changed: its land from this browser's keeping, or made afresh (the generator in a worker, so the page
     // stays free); no recipe: back to the campaign's own land
@@ -1509,6 +1727,7 @@
         <label>Climate <select name="climate">${opt(clim, g.climate || "varied")}</select></label>
         <label>Where the deserts and rains fall <select name="rules">${opt([["earth", "As on the Earth: the winds, the seas, the mountains decide"], ["classic", "Atlas's older, simpler rules"]], g.rules || "earth")}</select></label>
         <label>The ocean's currents <select name="currents">${opt([["on", "Worked out: they warm and cool the coasts, bring fog and coastal deserts"], ["retro", "Worked out, on a world turning the other way"], ["", "Not worked out"]], g.currents != null ? g.currents : "on")}</select></label>
+        <label title="The same world as it stood that long ago: its plates carried back, its mountains, rivers, coasts and climate made for that time. Leave it at 0 for today. The map it replaces is kept under Earlier versions">How long ago <input type="number" name="ago" min="0" max="500" step="5" value="${esc(g.ago || 0)}" style="width:6em"> million years (0: today)</label>
         <label>The coasts <select name="coast">${opt([["geologic", "Shaped by their history: rock, ice-age glaciers, the sea's rise, rivers and waves (fjords, rias, deltas, reefs)"], ["natural", "Formed by waves, drift and sand only: beaches, cliffs, marsh, dunes, barrier islands"], ["", "Simple: beaches where the shore is low and gentle"]], g.coast != null ? g.coast : "geologic")}</select></label>
         <label>Kind of world <select name="realism">${opt([["fantasy", "Fantasy: its own places (enchanted woods, ...)"], ["realistic", "Realistic: only what the Earth would make"]], g.realism || (WD.T && WD.T.realism) || "fantasy")}</select></label>
         <label>Look <select name="look">${opt(looks, g.look || (looks.some(l => l[0] === "hydro") ? "hydro" : WD.look))}</select></label>
@@ -1587,7 +1806,7 @@
       });
       f.addEventListener("submit", e => {
         if (!e.submitter || e.submitter.value !== "make") return; e.preventDefault();
-        const v = { size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, currents: f.elements.currents ? f.elements.currents.value : "", coast: f.elements.coast ? f.elements.coast.value : "", realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
+        const v = { ago: f.elements.ago ? Math.max(0, Math.min(500, +f.elements.ago.value || 0)) : 0, size: f.elements.size.value, climate: f.elements.climate.value, rules: f.elements.rules.value, currents: f.elements.currents ? f.elements.currents.value : "", coast: f.elements.coast ? f.elements.coast.value : "", realism: f.elements.realism.value, look: f.elements.look.value, seed: Math.max(1, parseInt(f.elements.seed.value, 10) || 1) };
         const whole = v.size === "planet";
         if (f.elements.land.value === "paint" || f.elements.land.value === "sketch") v.loose = +f.elements.loose.value;
         if (f.elements.land.value === "paint") {
@@ -1612,6 +1831,19 @@
       });
       if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
     }
+    // the players' hand-drawn maps (atlas-pmap.js): the referee's desk over the map
+    let PM = null;
+    function openPmaps() {
+      if (!A.pmap || !gm()) return;
+      let host = root.querySelector(".pm-host"); if (!host) { host = document.createElement("div"); host.className = "pm-host"; root.appendChild(host); }
+      host.hidden = false;
+      PM = A.pmap.editor(host, { session: () => { let st = null; try { st = A.tableUI && A.tableUI.api && A.tableUI.api.store ? A.tableUI.api.store() : null; } catch (e) { st = null; } st = st || scr(); const n = st ? +((st.get("log", "now") || {}).n) : 0; if (n) return n; const ss = (A.sessionsData || []).map(x => +x.n).filter(Boolean).sort((p, q) => p - q); return ss[0] || 1; }, WD: () => WD, maps: () => OV.pm, setting: () => OV.pmset, save: (id, d) => save("pm-" + id, d), saveSetting: d => save("pmset", d), undo: () => undo(true), redo: () => undo(false), show: id => showOnScreen({ kind: "pmap", id }), close: () => { host.hidden = true; PM = null; } });
+      PM.open();
+    }
+    // (the players' screen is the table's: its store, as the table keeps it)
+    let SCR = null;
+    const scr = () => { try { if (!SCR && A.table && A.table.makeStore && ctx.db) SCR = A.table.makeStore(ctx.db, (A.config || {}).storageKey || "atlas"); } catch (e) { SCR = null; } return SCR; };
+    function showOnScreen(doc) { try { if (!SCR && A.table && A.table.makeStore && ctx.db) SCR = A.table.makeStore(ctx.db, (A.config || {}).storageKey || "atlas"); if (SCR) { SCR.set("screen", "now", Object.assign({ t: Date.now() }, doc)); note("On the players' screen now."); } } catch (e) { console.warn("world map: the players' screen could not be reached", e); } }
     function genRun(g) {
       if (!A.worldGenSrc || typeof Worker === "undefined") return Promise.reject(new Error("this page cannot make worlds (build it again with atlas.js build)"));
       const W0 = JSON.parse(JSON.stringify(wData() || {})); delete W0.size;
@@ -1626,6 +1858,9 @@
         return A.worldGenerate(fl, W0).then(T => Object.assign({}, T, { look: "planet", planetPalette: pal }));
       }
       const flags = { size: g.size, land: g.land, climate: g.climate, realism: g.realism, look: g.look, seed: g.seed, replace: true, regions: true };
+      // (a past age of the same world: the user, 18 Nov 2026, "play the game in the past"; world-geology.js 1b)
+      // (the same world: this one's seed, land, size, climate and tectonics, whatever the dialog's own seed says)
+      if (g.ago > 0) { flags.age = g.ago; const T0 = WD.T || {}; if (T0.seed) flags.seed = T0.seed; if (T0.land) flags.land = T0.land; if (T0.sizeName) flags.size = T0.sizeName; if (T0.climate) flags.climate = T0.climate; if (T0.tectonics) flags.tectonics = T0.tectonics; }
       flags["climate-model"] = g.rules === "classic" ? "classic" : "earth"; if (g.currents && g.rules !== "classic") { flags.currents = true; if (g.currents === "retro") flags.spin = "retrograde"; } else flags.currents = "off"; flags.coast = (g.coast === "natural" || g.coast === "geologic") && g.rules !== "classic" ? g.coast : "plain"; if (g.loose != null) flags.loose = g.loose; if (g.land === "masses") { flags.landmasses = g.masses; flags.landshare = g.share; } if (g.dims) flags.dims = g.dims; if (g.sketch) flags.sketch = g.sketch;
       const msg = { A: { worldKit: { KINDS: JSON.parse(JSON.stringify(KINDS)), LOOK_OF }, worldData: W0, worldTerrainData: {}, config: JSON.parse(JSON.stringify(A.config || {})) }, flags };
       return new Promise((ok, no) => {
@@ -1658,7 +1893,7 @@
     let DB = null;
     function fromDocs(docs) { Object.assign(OV, ovFrom(docs)); }
     const localAll = () => { try { return JSON.parse(ctx.store.get("world-edits") || "{}") || {}; } catch (e) { return {}; } };
-    const docNow = doc => { const v = doc === "party" ? OV.party : doc === "style" ? OV.style : doc === "shape" ? OV.shape : doc === "gen" ? OV.gen : doc.startsWith("l-") ? OV.loc[doc.slice(2)] : doc.startsWith("r-") ? OV.route[doc.slice(2)] : doc.startsWith("f-") ? OV.feat[doc.slice(2)] : null; return v == null ? null : JSON.parse(JSON.stringify(v)); };
+    const docNow = doc => { const v = doc === "party" ? OV.party : doc === "style" ? OV.style : doc === "shape" ? OV.shape : doc === "gen" ? OV.gen : doc === "pmset" ? OV.pmset : doc.startsWith("pm-") ? OV.pm[doc.slice(3)] || null : doc.startsWith("l-") ? OV.loc[doc.slice(2)] : doc.startsWith("r-") ? OV.route[doc.slice(2)] : doc.startsWith("f-") ? OV.feat[doc.slice(2)] : null; return v == null ? null : JSON.parse(JSON.stringify(v)); };
     // undo and redo: every change but where the party is (that is play, not the map) can be taken back, and done again
     // (the map as it stands in the referee's changes: every document of them, for a version)
     function ovAll() { const o = {}; if (OV.style) o.style = OV.style; if (OV.shape) o.shape = OV.shape; if (OV.gen) o.gen = OV.gen; for (const [k, v] of Object.entries(OV.loc || {})) o["l-" + k] = v; for (const [k, v] of Object.entries(OV.route || {})) o["r-" + k] = v; for (const [k, v] of Object.entries(OV.feat || {})) o["f-" + k] = v; return JSON.parse(JSON.stringify(o)); }
@@ -1671,8 +1906,8 @@
     function put(doc, data) {
       // the change shows at once; the database follows
       const all = DB ? null : localAll();
-      if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc === "shape") OV.shape = data; else if (doc === "gen") OV.gen = data; else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; } else if (doc.startsWith("f-")) { if (data) OV.feat[doc.slice(2)] = data; else delete OV.feat[doc.slice(2)]; }
-      rebuild();
+      if (doc === "party") OV.party = data; else if (doc === "style") OV.style = data; else if (doc === "shape") OV.shape = data; else if (doc === "gen") OV.gen = data; else if (doc === "pmset") OV.pmset = data; else if (doc.startsWith("pm-")) { if (data) OV.pm[doc.slice(3)] = data; else delete OV.pm[doc.slice(3)]; } else if (doc.startsWith("l-")) { if (data) OV.loc[doc.slice(2)] = data; else delete OV.loc[doc.slice(2)]; } else if (doc.startsWith("r-")) { if (data) OV.route[doc.slice(2)] = data; else delete OV.route[doc.slice(2)]; } else if (doc.startsWith("f-")) { if (data) OV.feat[doc.slice(2)] = data; else delete OV.feat[doc.slice(2)]; }
+      rebuild(); if (PM) PM.refresh();
       const track = p => A.ux ? A.ux.track(p) : p;
       if (DB) { const ref = DB.collection(WCOLL).doc(doc); return track(Promise.resolve(data ? ref.set(data) : ref.delete()).then(() => true, e => { console.warn("world map: not saved", e); note("That change could not be saved" + (e && e.code === "invalid_argument" ? ": you can look at this page but not change it." : ".")); return false; })); }
       if (data) all[doc] = data; else delete all[doc];
@@ -1702,7 +1937,7 @@
     (async function connect() {
       let db = null; try { db = ctx.db ? await ctx.db : null; } catch (e) { db = null; }
       if (gone) return;
-      if (db) { DB = db; try { db.collection(WCOLL).onSnapshot(s => { if (gone) return; fromDocs(s.docs.map(d => [d.id, d.data() || {}])); rebuild(); }, e => console.warn("world map", e)); } catch (e) { console.warn("world map", e); } }
+      if (db) { DB = db; try { db.collection(WCOLL).onSnapshot(s => { if (gone) return; fromDocs(s.docs.map(d => [d.id, d.data() || {}])); rebuild(); if (PM) PM.refresh(); }, e => console.warn("world map", e)); } catch (e) { console.warn("world map", e); } }
       else { fromDocs(Object.entries(localAll())); rebuild(); }
     })();
 
@@ -1757,6 +1992,34 @@
       const K2 = A.worldBiomes, sh = [["land", BRUSH.land], ["sea", PW && PW.brush ? PW.brush : BRUSH.sea], ["mountains", BRUSH.mountains], ["hills", BRUSH.hills], ["flat", BRUSH.flat]], wet = [["forest", nl("Wetter (forest grows)")], ["swamp", nl("Wettest (swamp)")], ["grass", nl("Middling (grassland)")], ["desert", "Drier (desert)"]];
       let h = `<optgroup label="The shape of the land">${opt(sh, S.brush)}</optgroup><optgroup label="How wet the land is">${opt(wet, S.brush)}</optgroup>`;
       if (K2) { h += `<optgroup label="Clear">${opt([["natural", "As the climate makes it (erase what was painted)"]], S.brush)}</optgroup>`; for (const [label, list] of K2.brushKinds(K2.settingOf(WD.look))) h += `<optgroup label="${esc(label)}">${opt(list, S.brush)}</optgroup>`; }
+      // (an alien world's terrain presets, by category, filtered and searched; and the game master's own)
+      if (presetsOn()) {
+        const TP = A.terrainPresets, q = (S.pq || "").trim().toLowerCase(), f = S.pf || "all", ok = p => (f === "all" || (f === "sci") === p.sci) && (!q || (p.name + " " + p.why + " " + (p.ref || "")).toLowerCase().includes(q));
+        const mine = myPresets().filter(p => !q || p.name.toLowerCase().includes(q));
+        if (mine.length && f !== "sci") h += `<optgroup label="My presets">${opt(mine.map(p => [p.id, p.name]), S.brush)}</optgroup>`;
+        for (const [c, label] of TP.CATS) { const l = TP.LIST.filter(p => p.cat === c && ok(p)); if (l.length) h += `<optgroup label="Presets: ${esc(label)}">${opt(l.map(p => [p.id, p.name + (p.ref ? " (" + p.ref.split(/[;,(]/)[0].trim() + ")" : "")]), S.brush)}</optgroup>`; }
+      }
+      return h;
+    }
+    /* ---- terrain presets on an alien world (atlas-terrain-presets.js; the user, 17 Nov 2026): a look over a kind of
+            land that exists, painted with its colour; scientific ones say why they look so and where they are plausible.
+            The game master's own presets are kept in this browser, for every world and campaign. */
+    const futureCampaign = () => { try { return String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase() === "future"; } catch (e) { return false; } };
+    const presetsOn = () => !!(A.terrainPresets && A.worldBiomes && WD.G && (A.worldBiomes.settingOf(WD.look) === "scifi" || planetNow() || (WD.T && WD.T.env) || futureCampaign()));
+    const MYP = "atlas-terrain-presets-mine";
+    const myPresets = () => { try { return JSON.parse(localStorage.getItem(MYP) || "[]"); } catch (e) { return []; } };
+    const presetOf = id => !id ? null : String(id).startsWith("my:") ? myPresets().find(p => p.id === id) || null : A.terrainPresets && A.terrainPresets.BY[id] || null;
+    const planetFacts = () => { const PL = planetNow(); if (!PL || !PL.p) return null; const p = PL.p, env = PL.env || {}, liq = env.liquid && env.liquid.kind || (WD.T && WD.T.env && WD.T.env.liquid); return { tempC: p.tempC != null ? +p.tempC : null, pressure: p.pressure != null ? +p.pressure : null, liquid: liq || null, volcanic: p.volcanic != null ? !!p.volcanic : undefined }; };
+    function presetBar() {
+      if (!presetsOn()) return "";
+      const TP = A.terrainPresets, p = presetOf(S.brush), col = S.pcol || (p && p.col) || "#888888", [hh, ss, ll] = TP.toHsl(col);
+      let h = `<label class="wm-pf"><span class="kn">Show</span> <select data-wb="pf">${opt([["all", "All presets"], ["sci", "Scientific only"], ["creative", "Creative only"]], S.pf || "all")}</select></label><label class="wm-pq"><span class="kn">Find</span> <input type="search" data-wb="pq" value="${esc(S.pq || "")}" placeholder="sulfur, ice, Mars…" aria-label="Find a terrain preset"></label>`;
+      if (!p) return h;
+      const warn = p.sci ? TP.advise(p, planetFacts()) : "", out = p.sci && !TP.inRange(p, col);
+      h += `<span class="wm-psw" style="background:${esc(col)}" title="The colour it paints"></span><label><span class="kn">Colour</span> <input type="color" data-wb="pcol" value="${esc(col)}"></label>`
+        + `<label class="wm-hsl"><span class="kn">Hue</span> <input type="range" data-wb="ph" min="0" max="359" value="${hh}"></label><label class="wm-hsl"><span class="kn">Saturation</span> <input type="range" data-wb="ps" min="0" max="100" value="${ss}"></label><label class="wm-hsl"><span class="kn">Brightness</span> <input type="range" data-wb="pl" min="5" max="95" value="${ll}"></label>`
+        + `<button type="button" class="wm-btn" data-w="psave" title="Keep this colour and kind as your own preset, for every world">Save as my preset</button>`
+        + `<span class="wm-pinfo">${p.sci ? `<b>${esc(p.name)}</b>: ${esc(p.why)}${p.where ? ` <i>Plausible on: ${esc(p.where)}</i>` : ""}${p.ref ? ` Like ${esc(p.ref)}.` : ""} Paints as ${esc(brushName(p.base))}.${out ? ` <span class="wm-pcre">This colour is outside what its materials usually show: a creative choice.</span>` : ""}${warn ? ` <span class="wm-pwarn">${esc(warn)}</span>` : ""}` : `<b>${esc(p.name)}</b>: ${esc(p.why || "your own")} Creative: any colour. Paints as ${esc(brushName(p.base))}.`}</span>`;
       return h;
     }
     /* "Ask for a change" on a place of the world map (atlas-ask.js; the user's master plan: "Add a road connecting these
@@ -1800,8 +2063,10 @@
         <label><span>What it is (the players may read this)</span><textarea name="desc" rows="3" maxlength="1200">${esc(L && L.desc || "")}</textarea></label>
         <label><span>For the referee only</span><textarea name="gm" rows="3" maxlength="2000">${esc(L && L.gm || "")}</textarea></label>
         <label><span>Its 3D map</span><select name="city">${opt([["", "None"], ...cities], L && L.city || "")}</select></label>
-        ${facList().length ? `<label><span>Held by</span><select name="owner">${opt([["", "No one in particular"], ...facList()], L && L.owner || "")}</select></label>` : ""}`, v => {
-        const body = { name: v.name.slice(0, 80), kind: v.kind, state: v.state, region: v.region, desc: v.desc, gm: v.gm, city: v.city || undefined };
+        ${facList().length ? `<label><span>Held by</span><select name="owner">${opt([["", "No one in particular"], ...facList()], L && L.owner || "")}</select></label>` : ""}
+        <label><span>What it produces (optional)</span><input name="res" maxlength="160" value="${esc(L && L.res || "")}" placeholder="e.g. iron, timber, fish"></label>
+        <label><span>What it must bring in (optional)</span><input name="imp" maxlength="160" value="${esc(L && L.imp || "")}" placeholder="e.g. grain, salt"></label>`, v => {
+        const body = { name: v.name.slice(0, 80), kind: v.kind, state: v.state, region: v.region, desc: v.desc, gm: v.gm, city: v.city || undefined, res: v.res || null, imp: v.imp || null };
         if (v.owner != null) body.owner = v.owner || null;
         if (L) save("l-" + L.id, Object.assign(ownOf("l", L.id), body, L.added ? { at: L.at } : {}));
         else {
@@ -1810,6 +2075,22 @@
           save("l-" + id, Object.assign(body, { at: [r1(at[0]), r1(at[1])] }));
         }
       });
+    }
+    // (the kinds of road, by the campaign's age: no motorway in a medieval kingdom; the user, 17 Nov 2026)
+    function roadClasses() {
+      let e = ""; try { e = String((A.table && A.table.era ? A.table.era() : "") || (A.config || {}).era || "").toLowerCase(); } catch (_) {}
+      const base = [["dirt", "A dirt road"], ["paved", "A paved road"], ["trade", "A trade road"], ["military", "A military road"], ["causeway", "A causeway"], ["bridge", "A bridge"]];
+      if (/modern|now|today|19|20|historical|victorian|future/.test(e)) base.push(["highway", "A highway or motorway"]);
+      if (/future/.test(e)) base.push(["maglev", "A maglev or transit line"]);
+      return base;
+    }
+    // (trade along a route, and what stands in its way: the powers at its two ends at war, or an embargo or blockade
+    // between them; said, never acted on: the route and its trade stay as the game master made them)
+    function tradeTrouble(r) {
+      const a = WD.byId[r.from], b = WD.byId[r.to], oa = a && a.owner, ob = b && b.owner; if (!oa || !ob || oa === ob || !A.lives || !A.lives.fac) return "";
+      const fa = A.lives.fac(oa), st = fa && fa.rels ? fa.rels[ob] : "", d = A.lives.diplomacy ? A.lives.diplomacy(oa, ob) : null, tr = (d && d.treaties) || [];
+      const say = []; if (st === "war") say.push("their holders are at war"); if (tr.includes("embargo")) say.push("an embargo stands between them"); if (tr.includes("blockade")) say.push("a blockade stands between them");
+      return say.length ? `${facName(oa)} and ${facName(ob)}: ${say.join("; ")}. Trade may well be disrupted (nothing is changed unless you change it).` : "";
     }
     function routeForm(r, from, to) {
       const a = WD.byId[r ? r.from : from], b = WD.byId[r ? r.to : to];
@@ -1820,10 +2101,18 @@
         <label><span>Days to travel (leave empty to work it out from the map)</span><input name="days" type="number" min="0" step="0.5" value="${r && typeof r.days === "number" ? r.days : ""}"></label>
         <label><span>Danger (leave empty if none)</span><input name="danger" maxlength="200" value="${esc(r && typeof r.danger === "string" ? r.danger : r && r.danger ? "A dangerous way" : "")}"></label>
         <label><span>Blocked: why (leave empty if open)</span><input name="blocked" maxlength="200" value="${esc(r && typeof r.blocked === "string" ? r.blocked : r && r.blocked ? "The way is shut" : "")}"></label>
+        ${WD.look === "stars" ? "" : `<label><span>What kind of road (for a road)</span><select name="cls">${opt([["", "Not said"]].concat(roadClasses()), r && r.cls || "")}</select></label>`}
+        <label><span>Its state</span><select name="state">${opt([["", "In use"], ["damaged", "Damaged"], ["abandoned", "Abandoned"]], r && r.state || "")}</select></label>
+        <fieldset class="wm-trf"><legend>Trade along it (optional)</legend>
+          <label><span>Trade route's name (the same name on several routes makes one trade route)</span><input name="tname" maxlength="80" value="${esc(r && r.trade && r.trade.name || "")}" placeholder="e.g. The Silver Road"></label>
+          <label><span>Goods</span><input name="goods" maxlength="160" value="${esc(r && r.trade && r.trade.goods || "")}" placeholder="e.g. silver, grain and textiles"></label>
+          <label><span>How much</span><select name="vol">${opt([["", "—"], ["low", "Low"], ["medium", "Medium"], ["high", "High"]], r && r.trade && r.trade.vol || "")}</select></label>
+          <label><span>Status</span><select name="tstat">${opt([["", "Active"], ["reduced", "Reduced"], ["suspended", "Suspended"], ["closed", "Closed"]], r && r.trade && r.trade.status || "")}</select></label></fieldset>
         <label class="wm-ck"><input type="checkbox" name="hidden"${r && r.hidden ? " checked" : ""}> Hidden from the players (a secret way)</label>
         <label><span>For the referee only</span><textarea name="gm" rows="2" maxlength="1500">${esc(r && r.gm || "")}</textarea></label>`, v => {
-        const body = { kind: v.kind, name: v.name || undefined, days: v.days === "" ? undefined : Math.max(0, +v.days), danger: v.danger || undefined, blocked: v.blocked || undefined, hidden: v.hidden || undefined, gm: v.gm || undefined };
-        if (r) { const own = ownOf("r", r.id); for (const k of ["name", "days", "danger", "blocked", "hidden", "gm"]) if (body[k] === undefined) own[k] = null; save("r-" + r.id, Object.assign(own, JSON.parse(JSON.stringify(body)), r.added ? { from: r.from, to: r.to } : {})); }
+        const trade = v.tname || v.goods || v.vol ? JSON.parse(JSON.stringify({ name: v.tname || undefined, goods: v.goods || undefined, vol: v.vol || undefined, status: v.tstat || undefined })) : undefined;
+        const body = { kind: v.kind, name: v.name || undefined, days: v.days === "" ? undefined : Math.max(0, +v.days), danger: v.danger || undefined, blocked: v.blocked || undefined, hidden: v.hidden || undefined, gm: v.gm || undefined, cls: v.cls || undefined, state: v.state || undefined, trade };
+        if (r) { const own = ownOf("r", r.id); for (const k of ["name", "days", "danger", "blocked", "hidden", "gm", "cls", "state", "trade"]) if (body[k] === undefined) own[k] = null; save("r-" + r.id, Object.assign(own, JSON.parse(JSON.stringify(body)), r.added ? { from: r.from, to: r.to } : {})); }
         else { const id = "x" + Date.now().toString(36); S.selRoute = id; S.sel = null; save("r-" + id, Object.assign({ from, to }, JSON.parse(JSON.stringify(body)))); }
       });
     }
@@ -1872,8 +2161,8 @@
     function exportJS() {
       const W0 = wData() || {}, keep = (o, ks) => { const x = {}; for (const k of ks) if (o[k] != null && o[k] !== "") x[k] = o[k]; return x; };
       const out = Object.assign(keep(W0, ["title", "look", "size", "scale", "speeds"]), {
-        locations: WD.locs.map(l => keep(Object.assign({}, l, { at: [r1(l.at[0]), r1(l.at[1])] }), ["id", "name", "kind", "at", "city", "state", "region", "owner", "desc", "gm", "people", "events", "tags"])),
-        routes: WD.routes.map(r => keep(r, ["id", "from", "to", "kind", "name", "via", "days", "danger", "blocked", "hidden", "desc", "gm", "enc"])),
+        locations: WD.locs.map(l => keep(Object.assign({}, l, { at: [r1(l.at[0]), r1(l.at[1])] }), ["id", "name", "kind", "at", "city", "state", "region", "owner", "desc", "gm", "people", "events", "tags", "res", "imp"])),
+        routes: WD.routes.map(r => keep(r, ["id", "from", "to", "kind", "name", "via", "days", "danger", "blocked", "hidden", "desc", "gm", "enc", "cls", "state", "trade"])),
         party: WD.party
       });
       // the land as reshaped, and the rivers and names: those the land came with (world-terrain.js) stay there, so the
@@ -1928,7 +2217,7 @@
       if (ptr.size === 1) {
         gest = { p0: p, t0: [V.tx, V.ty], loc: S.edit && gm() && !S.tool && m ? m.dataset.loc : null };
         // the brush paints from the first touch; a river, a realm or a name is picked up to be moved, or by a corner
-        if (S.edit && gm() && S.tool === "brush" && WD.G) { S.stroke = { m: S.brush, r: S.size, p: [world(p[0], p[1]).map(Math.round)] }; gest.brush = true; drawFx(); }
+        if (S.edit && gm() && S.tool === "brush" && WD.G) { const pp = presetOf(S.brush); S.stroke = pp ? { m: pp.base, r: S.size, p: [world(p[0], p[1]).map(Math.round)], tint: S.pcol || pp.col, pre: pp.id } : { m: S.brush, r: S.size, p: [world(p[0], p[1]).map(Math.round)] }; gest.brush = true; drawFx(); }
         else if (S.edit && gm() && !S.tool && !m) {
           const vx = e.target.closest("[data-vx]"), fe = e.target.closest(".wm-fx [data-feat], .wm-rk");
           const id = vx ? S.selFeat : fe ? fe.dataset.feat : null, [k, f] = id ? featOf(id) : [null, null];
@@ -2068,6 +2357,7 @@
         case "devreset": { const R = netData(); if (R) setDev(R.level); break; }
         case "netenter": { const p = NET.R && NET.R.places[NET.sel]; if (!p) break; const NL = { id: "net-" + p.id, name: p.name, kind: p.tier === "city" ? (p.port ? "port" : "city") : p.tier === "town" ? (p.port ? "port" : "town") : "village", at: p.at, netRoads: netRoadsAt(p.at) || [] }; const cid = A.worldCity.can(WD) ? A.worldCity.make(WD, NL) : null; if (cid && ctx.hasCity(cid)) ctx.enter(cid, null); break; }
         case "brush": case "river": case "realm": case "label": { const w = b.dataset.w; S.tool = S.tool === w ? null : w; S.first = null; S.draft = null; S.cur = null; if (S.tool) { S.sel = null; S.selRoute = null; S.selFeat = null; renderPanel(); } renderBars(); drawFx(); break; }
+        case "psave": { const pp = presetOf(S.brush); if (!pp) break; const nm = prompt("Name your preset", pp.name + (S.pcol && S.pcol !== pp.col ? " (mine)" : "")); if (!nm) break; const list = myPresets(); const id = "my:" + Date.now().toString(36); list.push({ id, name: nm.slice(0, 60), base: pp.base, col: S.pcol || pp.col, why: pp.sci ? "From " + pp.name + "." : pp.why || "", sci: false }); try { localStorage.setItem(MYP, JSON.stringify(list)); } catch (e) {} S.brush = id; renderBars(); note("Saved: " + nm + ", in your presets for every world."); break; }
         case "base": save("shape", { base: b.dataset.base, strokes: (OV.shape && OV.shape.strokes) || [] }); break;
         case "finish": finishDraft(); break;
         case "undo": undo(true); break;
@@ -2079,6 +2369,7 @@
         case "duploc": if (L) { let id = L.id + "-2"; while (WD.byId[id] || OV.loc[id]) id = L.id + "-" + Math.floor(Math.random() * 900 + 100); const c = {}; for (const k of ["name", "kind", "state", "region", "owner", "desc", "gm"]) if (L[k] != null) c[k] = L[k]; c.name = L.name + " (copy)"; c.at = [r1(clamp(L.at[0] + 22, 0, W)), r1(clamp(L.at[1] + 16, 0, H))]; S.sel = id; save("l-" + id, c); } break;
         case "enter": if (L) { let cid = L.city || L.id; if (!ctx.hasCity(cid) && A.worldCity.can(WD)) { if (netOn()) L.netRoads = netRoadsAt(L.at) || []; A.worldCity.make(WD, L); delete L.netRoads; cid = L.city || cid; } if (ctx.hasCity(cid)) ctx.enter(cid, L.id); } break;
         case "make": if (L && ctx.makeCity) { b.disabled = true; b.textContent = "Making the map…"; Promise.resolve(ctx.makeCity(L, WD)).catch(err => { b.disabled = false; b.textContent = "Make its 3D map now"; note("The map could not be made: " + ((err && err.message) || err)); }); } break;
+        case "connect": CC.open = !CC.open; if (!CC.open) ccClear(); ccPanel(); renderBars(); break;
         case "edit": S.edit = !S.edit; S.tool = null; S.first = null; S.draft = null; S.cur = null; root.classList.toggle("editing", S.edit); renderBars(); renderPanel(); drawFx(); break;
         case "addloc": S.tool = S.tool === "loc" ? null : "loc"; S.first = null; renderBars(); break;
         // (a place of the campaign at this location: its page and its inside, made with the city's own place maker)
@@ -2090,6 +2381,8 @@
         case "currents": CUR.on = !CUR.on; try { ctx.store.set("world-currents", CUR.on ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
         case "coasts": COA.on = !COA.on; try { ctx.store.set("world-coasts", COA.on ? "1" : "0"); } catch (_) {} drawCoasts(); renderBars(); break;
         case "curnames": CUR.names = !CUR.names; try { ctx.store.set("world-curnames", CUR.names ? "1" : "0"); } catch (_) {} drawCurrents(); renderBars(); break;
+        case "pmaps": openPmaps(); break;
+        case "plates": case "rocks": case "trade": case "diplo": { const k = b.dataset.w; LAY[k] = !LAY[k]; try { ctx.store.set("world-" + k, LAY[k] ? "1" : ""); } catch (_) {} drawGeoLayers(); break; }
         case "drawn": DRAW.mode = drawn() ? "redrawn" : "drawn"; try { ctx.store.set("world-drawn", DRAW.mode); } catch (_) {} drawLand(); renderBars(); break;
         case "copy": { const ta = dlg.querySelector("textarea"); ta.select(); const done = () => { b.textContent = "Copied"; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => { try { document.execCommand("copy"); done(); } catch (_) {} }); else { try { document.execCommand("copy"); done(); } catch (_) {} } break; }
         case "dlgclose": closeDlg(); break;
@@ -2117,8 +2410,20 @@
     function onChange(e) {
       const t = e.target;
       // the map drawn another way: kept with the world (the players' screen and copy follow)
-      if (t.matches(".wm-look")) { if (gm()) save("style", { look: t.value }); return; }
-      if (t.matches("[data-wb]")) { if (t.dataset.wb === "m") { S.brush = t.value; renderBars(); const lw = lifeWarn(S.brush); if (lw) note(lw); } else S.size = +t.value || 30; drawFx(); return; }
+      if (t.matches(".wm-look")) { if (gm()) save("style", Object.assign({}, OV.style || {}, { look: t.value })); return; }
+      // (the sea raised or lowered over the land as it is, the user's realistic continents request, section 7: "allow
+      // sea-level adjustments to expose or submerge continental shelves without regenerating the entire world")
+      if (t.matches(".wm-sea") && e.type === "change") { if (gm()) save("style", Object.assign({}, OV.style || {}, { sea: +t.value || 0 })); return; }
+      if (t.matches("[data-wb]")) {
+        const k = t.dataset.wb;
+        if (k === "m") { S.brush = t.value; const pp = presetOf(S.brush); S.pcol = pp ? pp.col : null; renderBars(); const lw = lifeWarn(pp ? pp.base : S.brush); if (lw) note(lw); }
+        else if (k === "pf") { S.pf = t.value; renderBars(); }
+        else if (k === "pq") { S.pq = t.value; renderBars(); const q = root.querySelector('[data-wb="pq"]'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+        else if (k === "pcol") { S.pcol = t.value; renderBars(); }
+        else if (k === "ph" || k === "ps" || k === "pl") { const TP = A.terrainPresets, [h0, s0, l0] = TP.toHsl(S.pcol || (presetOf(S.brush) || {}).col || "#888888"); S.pcol = TP.fromHsl(k === "ph" ? +t.value : h0, k === "ps" ? +t.value : s0, k === "pl" ? +t.value : l0); renderBars(); }
+        else S.size = +t.value || 30;
+        drawFx(); return;
+      }
       if (t.matches("[data-fk]")) filt.kinds[t.dataset.fk] = t.checked;
       else if (t.matches("[data-fr]")) filt.routes[t.dataset.fr] = t.checked;
       else if (t.matches("[data-fknow]")) filt.know = t.value;
@@ -2231,5 +2536,5 @@
   };
 
   // for the checker (atlas.js check) and the generator
-  A.worldKit = { prepareWorld, KINDS, ROUTES, STATES, LOOK_OF, SETTLED, OVERLAND, travel, plen, unb64 };
+  A.worldKit = { prepareWorld, KINDS, ROUTES, STATES, LOOK_OF, SETTLED, OVERLAND, travel, plen, unb64, wayOf: (WD, r) => { if (!WD.G) return null; if (!WD._pg) WD._pg = pathGrid(WD); return wayOf(WD, WD._pg, r); } };
 })(ATLAS);

@@ -115,6 +115,8 @@
     const lim = S.ac.createDynamicsCompressor(); lim.threshold.value = -6; lim.knee.value = 4; lim.ratio.value = 12; lim.attack.value = .003; lim.release.value = .25;
     S.out = S.ac.createGain(); S.out.gain.value = S.vol; S.out.connect(lim); lim.connect(S.ac.destination);
     for (const b of ["amb", "fx", "voice"]) { S.buses[b] = S.ac.createGain(); S.buses[b].connect(S.out); }
+    // (ambience and effects each at their own level, as the game master set them: the music request of 17 Nov 2026)
+    S.buses.amb.gain.value = pref.get("vamb", 1); S.buses.fx.gain.value = pref.get("vfx", 1);
     S.an = S.ac.createAnalyser(); S.an.fftSize = 2048; S.out.connect(S.an);   // (how loud it is now: for the tests, which cannot listen either)
     return S.ac;
   }
@@ -230,7 +232,7 @@
     el.innerHTML = `<div class="snd-head"><h3>Sounds</h3><button type="button" class="snd-close" data-snd="close" aria-label="Close">Close</button></div>
       ${has ? "" : `<p class="snd-empty">No sound packs are installed yet. ${appAudio() ? "Install one below: it is downloaded once, then works with no internet." : "In the Atlas app they install with a click; here you can add your own sound files below."}</p>`}
       ${appAudio() && (!has || S.showPacks) ? packsHTML() : ""}
-      <div class="snd-bar"><input type="search" class="snd-q" placeholder="Search: abandoned spaceship, tavern, storm…" value="${esc(S.q)}" aria-label="Search the sounds"><label class="snd-vol">Volume <input type="range" min="0" max="1" step=".02" value="${S.vol}" data-sndmaster="1"></label><button type="button" data-snd="stopall"${S.layers.size || S.events.size ? "" : " disabled"}>Stop all</button></div>
+      <div class="snd-bar"><input type="search" class="snd-q" placeholder="Search: abandoned spaceship, tavern, storm…" value="${esc(S.q)}" aria-label="Search the sounds"><label class="snd-vol">Volume <input type="range" min="0" max="1" step=".02" value="${S.vol}" data-sndmaster="1"></label><label class="snd-vol" title="The sounds that loop: rain, a crowd, the hum of a ship">Ambience <input type="range" min="0" max="1.5" step=".02" value="${pref.get("vamb", 1)}" data-sndbus="amb"></label><label class="snd-vol" title="The sounds that play once: a door, a shot, a scream">Effects <input type="range" min="0" max="1.5" step=".02" value="${pref.get("vfx", 1)}" data-sndbus="fx"></label><button type="button" data-snd="stopall"${S.layers.size || S.events.size ? "" : " disabled"}>Stop all</button></div>
       ${playing ? `<div class="snd-now"><h4>Playing</h4>${playing}<button type="button" class="snd-save" data-snd="savescene">Keep this as a scene…</button></div>` : ""}
       ${R ? `<div class="snd-sec"><h4>Found</h4>${R.scenes.length ? `<div class="snd-grid">${R.scenes.map(sceneBtn).join("")}</div>` : ""}<div class="snd-grid">${R.sounds.slice(0, 40).map(sndBtn).join("") || `<p class="kn">Nothing found for “${esc(q)}”.</p>`}</div></div>` : `
       <div class="snd-sec"><h4>Scenes</h4><div class="snd-grid">${allScenes().filter(sc => playable(sc) || sc.genre === "yours").map(sceneBtn).join("") || `<p class="kn">The scenes appear when sound packs are installed.</p>`}</div></div>
@@ -280,6 +282,7 @@
       if (t.classList.contains("snd-q")) { S.q = t.value; clearTimeout(S.qt); S.qt = setTimeout(() => { const pos = t.selectionStart; paint(); const q = el.querySelector(".snd-q"); if (q) { q.focus(); q.setSelectionRange(pos, pos); } }, 160); return; }
       if (t.dataset.sndv) { setLayer(t.dataset.sndv, +t.value); return; }
       if (t.dataset.sndev) { const E = S.events.get(t.dataset.sndev); if (E) E.v = +t.value; return; }
+      if (t.dataset.sndbus) { const b = t.dataset.sndbus, v = +t.value; pref.set(b === "amb" ? "vamb" : "vfx", v); if (S.buses[b]) S.buses[b].gain.setTargetAtTime(v, S.ac.currentTime, .1); }
       if (t.dataset.sndmaster) { S.vol = +t.value; pref.set("vol", S.vol); if (S.out) S.out.gain.setTargetAtTime(S.vol, S.ac.currentTime, .1); }
     });
     el.addEventListener("change", async e => {

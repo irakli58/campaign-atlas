@@ -8,11 +8,13 @@
 "use strict";
 if (+process.versions.node.split(".")[0] < 18) { console.error("\n  Campaign Atlas needs Node.js 18 or newer; this is " + process.version + ". Get the LTS version from https://nodejs.org/\n"); process.exit(1); }
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto"), { spawn, execFile } = require("child_process");
-const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch"), Ask = require("./lib/ask");
+const deps = require("./lib/deps"), Jobs = require("./lib/jobs"), LocalDB = require("./lib/localdb"), launcher = require("./lib/launch"), Ask = require("./lib/ask"), AILocal = require("./lib/ai-local"), AICompare = require("./lib/ai-compare"), Hardware = require("./lib/hardware");
 const PlayersLan = require("./lib/players-lan"), RecorderLan = require("./lib/recorder-lan"), Audio = require("./lib/audio"), Voices = require("./lib/voices");
 
 const ROOT = __dirname, PORT = +process.env.ATLAS_PORT || 4747;
 const UI = path.join(ROOT, "ui"), DATA = path.join(ROOT, "data"), WORK = path.join(ROOT, "workspace"), CAMPS = path.join(WORK, "campaigns");
+// adventures the game master owns, pasted into imports/ (never committed: imports/.gitignore), to import without choosing them
+const IMPORTS = path.join(ROOT, "imports");
 const SHIPPED = path.join(ROOT, "plugin", "skills", "campaign-atlas"), SKILL = path.join(WORK, ".claude", "skills", "campaign-atlas");
 const ATLAS_JS = path.join(SKILL, "scripts", "atlas.js"), TEMPLATE = path.join(SKILL, "template");
 const TOKEN = crypto.randomBytes(24).toString("hex");
@@ -62,6 +64,14 @@ const settings = {
   get() { try { return JSON.parse(fs.readFileSync(SETTINGS, "utf8")); } catch (e) { return {}; } },
   set(s) { fs.writeFileSync(SETTINGS, JSON.stringify(s, null, 2)); try { fs.chmodSync(SETTINGS, 0o600); } catch (e) {} }
 };
+// the local AI choice (data/settings.json, localAI): Cloud (as before) or Local (Ollama on this computer), the model, the
+// game master's own figures for the computer, the benchmarks, and whether Claude may answer when the local model cannot
+const COMPARE = { running: false, now: null, step: 0, of: 0, err: null };
+const localConf = () => Object.assign({ mode: "cloud", model: "", fallback: false, bench: {} }, settings.get().localAI || {});
+// (Hybrid: each kind of work the pages ask for (answering, reading, suggesting, checking, writing) set Local or Cloud)
+const KINDS_AI = ["answering", "reading", "suggesting", "checking", "writing"];
+const localFor = kind => { const L = localConf(); if (!L.model) return false; if (L.mode === "local") return true; if (L.mode === "hybrid") return (L.kinds || {})[KINDS_AI.includes(kind) ? kind : "answering"] === "local"; return false; };
+const localMode = () => { const L = localConf(); return (L.mode === "local" || L.mode === "hybrid") && !!L.model; };
 const runners = { claude: require("./lib/run-claude"), openai: require("./lib/run-codex"), own: { MODELS: {}, DEFAULT_MODEL: null } };
 const hint = k => k ? k.slice(0, 7) + "…" + k.slice(-4) : "";
 
@@ -222,6 +232,20 @@ async function route(req, res) {
         catch (e) { return fail(res, 400, e.message); }
       }
     }
+    // an imported adventure's locations: what is generated, and generating the ones the game master chooses (atlas.js
+    // locations / generate, then a build), one place a call so the page shows each as it is done
+    if (rest === "locations" || rest === "generate") {
+      if (!authed) return fail(res, 403, "forbidden");
+      const dir = path.join(CAMPS, mm[1]); if (!fs.existsSync(path.join(dir, "story", "adventure.json"))) return fail(res, 404, "This campaign has no imported adventure.");
+      const run = args => new Promise((ok, no) => execFile(process.execPath, [ATLAS_JS, ...args], { windowsHide: true, timeout: 1800000, maxBuffer: 1 << 26 }, (err, so, se) => err ? no(new Error(String(se || err.message).trim().split("\n").pop())) : ok(String(so))));
+      try {
+        if (m === "GET" && rest === "locations") return send(res, 200, { places: JSON.parse((await run(["locations", dir, "--json"])).trim().split("\n").pop()) });
+        if (m === "POST" && rest === "generate") { const o = await body(req, 1 << 14), ids = (Array.isArray(o.ids) ? o.ids : []).map(String).filter(x => /^[\w-]{1,80}$/.test(x)).slice(0, 40);
+          const args = ["generate", dir, ...ids].concat(["exterior", "playable", "complete"].includes(o.depth) ? ["--depth", o.depth] : [], o.rooms && /^[\w ,.-]{1,400}$/.test(o.rooms) ? ["--rooms", o.rooms] : [], o.start ? ["--start"] : [], o.all ? ["--all"] : [], o.force ? ["--force"] : []);
+          const out = await run(args); if (o.build !== false) { await run(["build", dir]); await run(["ready", dir]).catch(() => ""); }
+          return send(res, 200, { out: out.trim().split("\n").filter(l => /^[✓✗]/.test(l)), places: JSON.parse((await run(["locations", dir, "--json"])).trim().split("\n").pop()) }); }
+      } catch (e) { return fail(res, 400, e.message); }
+    }
     // the world map's "Make its 3D map now"
     if (m === "POST" && rest === "make-city") {
       if (!authed) return fail(res, 403, "forbidden");
@@ -318,12 +342,24 @@ async function route(req, res) {
     // the map editor: a floor plan or sketch read into rooms by the game master's own Claude Code
     if (m === "POST" && rest === "trace") {
       if (!authed) return fail(res, 403, "forbidden");
+      // (in Local mode nothing goes to Claude: reading a picture needs a model that sees, not offered yet)
+      if (localConf().mode === "local" && localConf().model) return fail(res, 400, "Local AI is chosen, and reading a picture needs a model that can see: not offered yet. Draw the rooms by hand, or choose Cloud for this.");
       try { const o = await body(req, 12 << 20); return send(res, 200, { plan: await Ask.readPlan(o.image, o.prompt) }); } catch (e) { return fail(res, 400, e.message); }
     }
+    // where a kind of work is answered now: on this computer (a local model, with its small context) or by Claude
+    // search by meaning: the campaign's passages turned into numbers by the embedding model on this computer, when the
+    // local model answers or reads; else none (the page then finds passages by their words, as before)
+    if (m === "POST" && rest === "embed") { if (!authed) return fail(res, 403, "forbidden"); if (!localFor("answering") && !localFor("reading")) return send(res, 200, { none: true, why: "cloud" }); const o = await body(req, 1 << 22); const tag = localConf().embedModel || AILocal.EMBED.tag; try { return send(res, 200, { vectors: await AILocal.embed(tag, Array.isArray(o.texts) ? o.texts : []), model: tag }); } catch (e) { return send(res, 200, { none: true, why: String(e.message || e).slice(0, 200) }); } }
+    if (m === "GET" && rest === "aiwhere") { if (!authed) return fail(res, 403, "forbidden"); const kind = url.searchParams.get("kind") || "answering"; return send(res, 200, { local: localFor(kind), model: localFor(kind) ? localConf().model : null }); }
     // "Ask the campaign" and "Previously on...": answered by the game master's own Claude Code, on their own plan
     if (m === "POST" && rest === "ask") {
       if (!authed) return fail(res, 403, "forbidden");
-      try { return send(res, 200, { text: await Ask.ask(String((await body(req, 1 << 17)).prompt || "")) }); } catch (e) { return fail(res, 400, e.message); }
+      const qb = await body(req, 1 << 17), prompt = String(qb.prompt || ""), kind = String(qb.kind || "answering");
+      // (Local AI chosen: the chosen model on this computer answers, and nothing is sent anywhere; to Claude only if the
+      // game master turned the fallback on themselves: the user, 17 Nov 2026, "Never silently send campaign data to a
+      // cloud service when Local AI mode is selected")
+      if (localFor(kind)) { const L = localConf(); try { return send(res, 200, { text: await AILocal.ask(L.model, prompt, { kind, careful: L.careful !== false && ["writing", "checking"].includes(kind) }), by: "local" }); } catch (e) { if (!L.fallback) return fail(res, 400, "Local AI could not answer (" + e.message + "). Is Ollama running, and the model downloaded? (Connections, Local AI)"); } }
+      try { return send(res, 200, { text: await Ask.ask(prompt) }); } catch (e) { return fail(res, 400, e.message); }
     }
     // the players on their own phones: the campaign's link on this computer's network, switched on or off (players-lan.js)
     if (rest === "players-lan") {
@@ -352,6 +388,25 @@ async function route(req, res) {
   if (!authed || !ours) return fail(res, 403, "Reload the app's page.");
   try {
     if (m === "GET" && p === "/api/state") return send(res, 200, await state(url.searchParams.get("fresh") === "1"));
+    // local AI: this computer, Ollama, the recommendations; the choice; a download and a benchmark only when pressed
+    if (m === "GET" && p === "/api/local-ai") { const L = localConf(), hw = await Hardware.detect(DATA); return send(res, 200, { conf: L, hw, ollama: await AILocal.status(), rec: AILocal.recommend(hw, { ramGB: L.ramGB, vramGB: L.vramGB }, L.bench), catalogue: AILocal.CATALOGUE, embed: AILocal.EMBED, pulls: AILocal.PULLS, compare: COMPARE }); }
+    if (m === "POST" && p === "/api/local-ai/settings") { const o = await body(req, 1 << 12), st = settings.get(), L = localConf(); for (const k of ["mode", "model", "ramGB", "vramGB", "fallback", "careful"]) if (o[k] !== undefined) L[k] = o[k]; if (o.kind && KINDS_AI.includes(o.kind)) L.kinds = Object.assign({}, L.kinds || {}, { [o.kind]: o.where === "local" ? "local" : "cloud" }); if (!["cloud", "local", "hybrid"].includes(L.mode)) L.mode = "cloud"; st.localAI = L; settings.set(st); return send(res, 200, { conf: L }); }
+    if (m === "POST" && p === "/api/local-ai/pull") { const o = await body(req, 1 << 10); return send(res, 200, { pull: await AILocal.pull(String(o.tag || "")) }); }
+    // the quality comparison (lib/ai-compare.js): the chosen models, one after another, in the background; each one's
+    // checks passed kept with the settings (the summary) and in data/ai-compare.json (the answers, to read)
+    if (m === "POST" && p === "/api/local-ai/compare") {
+      const o = await body(req, 1 << 12); if (COMPARE.running) return send(res, 200, { compare: COMPARE });
+      const have = ((await AILocal.status()).models || []).map(x => x.tag), tags = (Array.isArray(o.tags) ? o.tags : []).map(String).filter(t => have.includes(t)).slice(0, 8);
+      const who = tags.map(t => ({ id: t, ask: (q, kind) => AILocal.ask(t, q, { careful: false, kind }) })); if (o.claude) who.push({ id: "claude", ask: q => Ask.ask(q) });
+      if (!who.length) return fail(res, 400, "Choose a downloaded model (or Claude) to compare.");
+      Object.assign(COMPARE, { running: true, now: null, step: 0, of: who.length * AICompare.TESTS.length, err: null });
+      (async () => { const file = path.join(DATA, "ai-compare.json"); let all = {}; try { all = JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { all = {}; }
+        for (const w of who) { COMPARE.now = w.id; try { const r = await AICompare.run(w.ask, () => { COMPARE.step++; }); all[w.id] = r; fs.writeFileSync(file, JSON.stringify(all, null, 1)); const st = settings.get(), L = localConf(); L.compare = Object.assign({}, L.compare || {}, { [w.id]: { pass: r.pass, of: r.of, ms: r.ms, t: r.t } }); st.localAI = L; settings.set(st); } catch (e) { COMPARE.err = String(e.message || e).slice(0, 200); } }
+      })().finally(() => { COMPARE.running = false; COMPARE.now = null; });
+      return send(res, 200, { compare: COMPARE });
+    }
+    if (m === "GET" && p === "/api/local-ai/compare") { let all = {}; try { all = JSON.parse(fs.readFileSync(path.join(DATA, "ai-compare.json"), "utf8")); } catch (e) { all = {}; } return send(res, 200, { compare: COMPARE, results: all }); }
+    if (m === "POST" && p === "/api/local-ai/bench") { const o = await body(req, 1 << 10), r = await AILocal.bench(String(o.tag || "")), st = settings.get(), L = localConf(); L.bench = Object.assign({}, L.bench || {}, { [r.tag]: r }); st.localAI = L; settings.set(st); return send(res, 200, { bench: r }); }
     if (m === "POST" && p === "/api/connect") {
       const o = await body(req, 1 << 14), prov = o.provider, key = String(o.key || "").trim();
       if (!["claude", "openai"].includes(prov)) return fail(res, 400, "Which AI?");
@@ -365,6 +420,11 @@ async function route(req, res) {
     }
     if (m === "POST" && p === "/api/disconnect") { const o = await body(req, 1 << 12), s = settings.get(); delete s[o.provider]; settings.set(s); return send(res, 200, await state()); }
     if (m === "POST" && p === "/api/campaigns") { const j = await jobs.add(await body(req, 16 << 20)); return send(res, 200, { job: j, state: await state() }); }
+    // an imported adventure's files, each streamed straight to disk; then the import starts (lib/jobs.js addImport)
+    if ((mm = p.match(/^\/api\/campaigns\/([a-z0-9-]+)\/(source|import-start)$/))) {
+      if (m === "PUT" && mm[2] === "source") return send(res, 200, await jobs.source(mm[1], url.searchParams.get("name"), req));
+      if (m === "POST" && mm[2] === "import-start") { const o = await body(req, 1 << 14); return send(res, 200, { job: await jobs.importStart(mm[1], Array.isArray(o.fromImports) ? o.fromImports.map(n => path.join(IMPORTS, path.basename(String(n)))) : []), state: await state() }); }
+    }
     if ((mm = p.match(/^\/api\/campaigns\/([a-z0-9-]+)\/(events|stop|continue|report|open|launch)$/))) {
       const slug = mm[1], j = jobs.get(slug); if (!j) return fail(res, 404, "No such campaign.");
       if (m === "GET" && mm[2] === "events") { res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive" }); const ping = setInterval(() => res.write(": ping\n\n"), 20000); res.on("close", () => clearInterval(ping)); return jobs.subscribe(slug, res); }
@@ -375,6 +435,8 @@ async function route(req, res) {
       if (m === "POST" && mm[2] === "launch") return send(res, 200, { job: await jobs.launch(slug, (await body(req, 1 << 12)).tool) });
     }
     if (m === "POST" && p === "/api/open-workspace") { openFolder(WORK); return send(res, 200, { ok: true }); }
+    if (m === "GET" && p === "/api/imports") { fs.mkdirSync(IMPORTS, { recursive: true }); return send(res, 200, { folder: IMPORTS, files: fs.readdirSync(IMPORTS).filter(f => /\.(pdf|txt|md|markdown|json)$/i.test(f) && f !== "README.md").sort((a, b) => a.localeCompare(b, "en", { numeric: true })).map(f => ({ name: f, size: fs.statSync(path.join(IMPORTS, f)).size })) }); }
+    if (m === "POST" && p === "/api/open-imports") { fs.mkdirSync(IMPORTS, { recursive: true }); openFolder(IMPORTS); return send(res, 200, { ok: true }); }
     if (m === "GET" && p === "/api/examples") return send(res, 200, { examples: Object.entries(EXAMPLES).filter(([id]) => fs.existsSync(path.join(EXDIR, id, "campaign.js"))).map(([id, e]) => Object.assign({ id, ready: fs.existsSync(path.join(CAMPS, "example-" + id, "dist", "preview.html")) }, e)) });
     if (m === "POST" && p === "/api/example") return send(res, 200, await example(String((await body(req, 1 << 10)).id || "")));
     return fail(res, 404, "not found");

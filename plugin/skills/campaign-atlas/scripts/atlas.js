@@ -6,6 +6,21 @@
                                                  start a campaign folder from the template (--maps 3d: rooms in 3D;
                                                  --blank: a campaign the game master makes by hand, empty, no council)
    node atlas.js council <dir>                   who sits on this campaign's council, and what its kind asks it to make
+   node atlas.js import <dir> <file> [<file> ...] --i-own-this [--system S] [--chunk N]
+                                                 IMPORT an adventure the game master owns (PDF, text, Markdown, several parts in order,
+                                                 or Atlas's adventure JSON): read into story/source/, cut into chunks (references/import.md)
+   node atlas.js import-status <dir>             what is read, and the next chunk
+   node atlas.js import-mark <dir> <chunk>       check story/extract/<chunk>.json and mark the chunk read
+   node atlas.js adventure <dir>                 merge the chunks' readings into story/adventure.json; check its links and coverage
+   node atlas.js from-adventure <dir> [--force]  write the campaign from it (imported.js, places/, adventure.js); never over your changes
+   node atlas.js ready <dir>                     the readiness check and completion report (story/report.md, ready.js)
+   node atlas.js locations <dir> [--json]        the adventure's places as a tree, each with what is generated
+   node atlas.js generate <dir> <place> [...] [--depth exterior|playable|complete] [--rooms K1,K2] [--start] [--all] [--force]
+                                                 generate only the places chosen: a settlement's streets at its size, its buildings'
+                                                 rooms, or a few rooms and their neighbours; a failed one tried again alone
+   node atlas.js map-from-source <dir> [<place> ...] [--force]
+                                                 each place's map from the book: a room for every keyed area, its size, its exits
+                                                 as doors, arches, secret doors and stairs, its people, encounters and clues in it
    node atlas.js galaxy <dir> [--systems 300] [--seed S] [--type barred|spiral|flocculent|lenticular|elliptical|dwarf|ring]
                     [--scope neighbourhood|sector|arm|galaxy] [--span 100] [--milky-way] [--no-browns] [--name "The Verge"]
                                                  a GALAXY grown from a seed (galaxy.js) and from the real kind of galaxy named (model 2):
@@ -38,7 +53,7 @@
                                                  a REAL city: its true streets, water, parks and landmarks
    node atlas.js city <dir> --invent "Saltreach" [--year 1350 | --era ...] [--site river|coast|harbour|lake|plain]
                       [--culture english|american|french|italian|spanish|german|arabic|japanese|fantasy]
-                      [--plan organic|grid] [--size town|city|metropolis] [--region ...] [--seed N]
+                      [--plan organic|grid] [--size hamlet|village|town|city|metropolis] [--population N] [--region ...] [--seed N]
                       [--sea north|south|east|west] [--river ns|ew] [--roads "270:Harrowgate,0:Eldermere"] [--hills 315]
                                                  where it lies in its world: the sea's side, the river's run, the roads
                                                  to other places (bearings, 0 north), the high ground (the world map gives them)
@@ -71,7 +86,7 @@ const fs = require("fs"), path = require("path"), crypto = require("crypto");
 const ROOT = path.resolve(__dirname, ".."), ENGINE = path.join(ROOT, "engine");
 const argv = process.argv.slice(2), cmd = argv[0];
 const flags = {}, pos = [];
-for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare", "sea", "river", "roads", "hills", "levels", "craters", "liquid", "locked", "lid", "temp", "cover", "env", "palette", "from", "type", "scope", "layout", "star", "system-name", "galaxy-name", "model"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
+for (let i = 1; i < argv.length; i++) { const a = argv[i]; if (a.startsWith("--")) { const k = a.slice(2); if (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") && ["title", "age", "tectonics", "currents", "spin", "coast", "level", "year", "era", "km", "around", "center", "landmarks", "must", "lang", "region", "seed", "ground", "kind", "name", "ruin", "invent", "site", "culture", "plan", "size", "id", "look", "land", "across", "names", "drawing", "real", "unit", "genre", "cat", "max", "maps", "complexity", "chambers", "tunnels", "vertical", "water", "geology", "env", "danger", "explore", "light", "encounters", "traps", "riddles", "secrets", "ways", "levels", "w", "h", "tier", "nTraps", "nRiddles", "systems", "shape", "arms", "span", "near", "within", "decks", "rooms", "system", "biome", "location", "climate", "planet", "setting", "regions", "realism", "geology", "biomes", "gravity", "air", "water", "warmth", "km", "plates", "climate-model", "sketch", "loose", "landmasses", "landshare", "sea", "river", "roads", "hills", "levels", "craters", "liquid", "locked", "lid", "temp", "cover", "env", "palette", "from", "type", "scope", "layout", "star", "system-name", "galaxy-name", "model", "chunk", "population", "depth", "rooms"].includes(k)) flags[k] = argv[++i]; else flags[k] = true; } else pos.push(a); }
 const die = m => { console.error(m); process.exit(2); };
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "atlas";
 
@@ -89,6 +104,8 @@ function sources(dir) {
   if (fs.existsSync(path.join(dir, "galaxy.js"))) files.push(path.join(dir, "galaxy.js"));  // the galaxy's settings (atlas.js galaxy)
   if (fs.existsSync(path.join(dir, "cosmos.js"))) files.push(path.join(dir, "cosmos.js"));  // the dimensions and planes beyond the world (references/dimensions.md)
   if (fs.existsSync(path.join(dir, "table.js"))) files.push(path.join(dir, "table.js"));   // for the table: clocks, sessions, the players' characters, tables, handouts
+  // an imported adventure (atlas.js from-adventure, ready): what it brings, its knowledge base, its readiness report
+  for (const f of ["imported.js", "adventure.js", "ready.js"]) if (fs.existsSync(path.join(dir, f))) files.push(path.join(dir, f));
   if (fs.existsSync(pd)) for (const f of fs.readdirSync(pd).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(pd, f));
   const ed = path.join(dir, "edits");                                                       // maps the game master redrew (the map editor)
   if (fs.existsSync(ed)) for (const f of fs.readdirSync(ed).filter(f => f.endsWith(".js") && !f.startsWith("_")).sort()) files.push(path.join(ed, f));
@@ -124,6 +141,10 @@ const hasWorld = dir => fs.existsSync(path.join(dir, "world.js"));
 // map opens the existing city generator). Its own functions of a point come back as functions.
 // the ship maker (ship.js, as atlas.js ship runs it), for a ship made a place from the page: its decks, rooms and their
 // guide, and a first draft of what is aboard (the editing plan of 10 Nov 2026, stage 5)
+// the road network's settling, for the world map's Add More Life (scripts/world-roads.js suggestPlaces), in the page
+function roadGenJS() {
+  return "(function (A) { var module = { exports: {} }; (function (module, exports) {\n" + fs.readFileSync(path.join(__dirname, "world-roads.js"), "utf8") + "\n})(module, module.exports); A.roadGen = module.exports; })(ATLAS);";
+}
 function shipGenJS() {
   return "(function (A) { var module = { exports: {} }; (function (module, exports) {\n" + fs.readFileSync(path.join(__dirname, "ship.js"), "utf8") + "\n})(module, module.exports); A.shipGen = module.exports; })(ATLAS);";
 }
@@ -141,7 +162,7 @@ function cityGenJS() {
 // world-geology.js, world-ecology.js and the shared biomes and sketch files), put together to run in a worker in the
 // page, with the little of Node they use stood in for
 function worldGenJS() {
-  const mods = { "./world-invent.js": path.join(__dirname, "world-invent.js"), "./world-geology.js": path.join(__dirname, "world-geology.js"), "./world-ecology.js": path.join(__dirname, "world-ecology.js"), "./world-ocean.js": path.join(__dirname, "world-ocean.js"), "./world-coast.js": path.join(__dirname, "world-coast.js"), "./world-shore.js": path.join(__dirname, "world-shore.js"), "../engine/atlas-world-biomes.js": path.join(ENGINE, "atlas-world-biomes.js"), "../engine/atlas-world-sketch.js": path.join(ENGINE, "atlas-world-sketch.js") };
+  const mods = { "./world-invent.js": path.join(__dirname, "world-invent.js"), "./world-geology.js": path.join(__dirname, "world-geology.js"), "./world-ecology.js": path.join(__dirname, "world-ecology.js"), "./world-ocean.js": path.join(__dirname, "world-ocean.js"), "./world-coast.js": path.join(__dirname, "world-coast.js"), "./world-tectonics.js": path.join(__dirname, "world-tectonics.js"), "./world-shore.js": path.join(__dirname, "world-shore.js"), "../engine/atlas-world-biomes.js": path.join(ENGINE, "atlas-world-biomes.js"), "../engine/atlas-world-sketch.js": path.join(ENGINE, "atlas-world-sketch.js") };
   const mul = fs.readFileSync(path.join(__dirname, "city-common.js"), "utf8").match(/const mulberry32 = .*;/)[0];
   let src = "\"use strict\";\nvar process = { env: {} };\nvar Buffer = { from: function (a) { var u = a instanceof Uint8Array ? a : Uint8Array.from(a); return { toString: function () { var s = \"\"; for (var i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s); } }; } };\nvar __f = {\n";
   for (const [k, f] of Object.entries(mods)) src += JSON.stringify(k) + ": function (module, exports, require) {\n" + fs.readFileSync(f, "utf8") + "\n},\n";
@@ -349,7 +370,7 @@ function checkGuide(A, id, P, N) {
 function checkStandard(A, id, P) {
   const m = A.meta[id], M = A.get(id, 99);
   // (a handmade campaign, made: "hand" in campaign.js: a place is as big as its maker makes it; the standards are for the council)
-  if (A.config.made === "hand") return;
+  if (A.config.made === "hand" || A.config.made === "import") return;   // (an imported adventure: its places are as the book has them, checked against it by atlas.js ready)
   if (![1, 2, 3].includes(m.tier)) return P("no tier: say how much the story depends on this place (tier: 1 the story cannot run without it, 2 the trail passes through it, 3 colour)");
   const S = standardFor(A, m.tier), rooms = new Set();
   M.floors.forEach(F => F.R.forEach(r => { if (A.isRoom(r[0])) rooms.add(r[0]); }));
@@ -645,7 +666,7 @@ function checkCast(A) {
     if (!p.n) { out.push(`   ! ${k} has no name (n)`); problems++; }
     const lack = [...PERSON, "want", "secret", "press"].filter(f => !(f === "ties" ? tieText(p.ties) : p[f]));
     // (a person the game master made by hand, or any in a handmade campaign: what they lack is still to write, not wrong)
-    if (lack.length && (p.made === "hand" || A.config.made === "hand")) { out.push(`   - ${k} (made by hand): still to write: ${lack.join(", ")}`); notes++; }
+    if (lack.length && (p.made === "hand" || A.config.made === "hand" || A.config.made === "import")) { out.push(`   - ${k} (made by hand): still to write: ${lack.join(", ")}`); notes++; }
     else if (lack.length) { out.push(`   ! ${k} lacks: ${lack.map(f => PERSON_SAYS[f] || ({ want: "what they want (want)", secret: "what they hide (secret)", press: "what makes them talk (press)" })[f]).join(", ")}`); problems++; }
     for (const t of strayTies(A, p.ties)) { out.push(`   - ${k}'s ties name "${t}", who is not in the cast: use a cast id, or write the name out in full`); notes++; }
     if (!met.has(k) && !p.offstage && !(p.at && p.at.pl)) { out.push(`   - ${k} is in the cast but is met nowhere: give a person on some map who: "${k}" (or mark the cast entry offstage: true)`); notes++; }
@@ -844,8 +865,22 @@ function checkTable(A) {
   const line = `the table: ${clocks.length} clock${clocks.length === 1 ? "" : "s"} · ${ses.length} session${ses.length === 1 ? "" : "s"} · ${Object.keys(pcs).length} character${Object.keys(pcs).length === 1 ? "" : "s"} · ${hs.length} handout${hs.length === 1 ? "" : "s"} · ${stats} stat block${stats === 1 ? "" : "s"}${evs.length ? ` · ${evs.length} world event${evs.length === 1 ? "" : "s"}` : ""}${Object.keys(facs).length ? ` · ${Object.keys(facs).length} faction${Object.keys(facs).length === 1 ? "" : "s"}` : ""}`;
   return { line, out, problems, notes };
 }
+// the campaign's settlements against its own world: the look its genre calls for, and a size that fits its name (the user,
+// 18 Nov 2026: a fantasy Barovia drawn as an 1888 city filling the sheet; never again in silence)
+function checkWorldFit(A) {
+  const out = [], W = A.campaignWorld ? A.campaignWorld() : {}, cities = Object.assign({}, A.cities || {}); if (A.cityData && !Object.values(cities).includes(A.cityData)) cities.main = A.cityData;
+  const lookOf = d => typeof d.look === "string" ? d.look : d.look && d.look.base || "";
+  for (const [id, d] of Object.entries(cities)) {
+    if (!d || d.real) continue; const name = (d.invented && d.invented.name) || d.title || id, look = lookOf(d), size = (d.invented || {}).size || "";
+    if (W.fantasy && look && !["fantasy", "medieval"].includes(look)) out.push(`the city "${name}" wears the ${look} look, in a fantasy campaign: make it again (atlas.js city --invent, which now takes the campaign's genre), or give it look: "fantasy"`);
+    if (W.scifi && look && !["future", "scifi"].includes(look)) out.push(`the city "${name}" wears the ${look} look, in a science fiction campaign`);
+    if (/\b(village|hamlet)\b/i.test(name) && /^(town|city|metropolis)$/.test(size)) out.push(`"${name}" is a ${/hamlet/i.test(name) ? "hamlet" : "village"} by its name but was laid out as a ${size}: make it again with --size ${/hamlet/i.test(name) ? "hamlet" : "village"} (or --population N)`);
+  }
+  return out;
+}
 function cmdCheck(dir, want) {
   const A = load(dir); let problems = 0, notes = 0;
+  for (const m of checkWorldFit(A)) { console.log(`!! ${m}`); problems++; }
   const list = (want.length ? want : A.order);
   for (const id of list) {
     if (!A.meta[id]) { console.log(`!! ${id}: no such place`); problems++; continue; }
@@ -858,7 +893,7 @@ function cmdCheck(dir, want) {
     // (in a handmade campaign a room still to describe is a draft, not a fault)
     // (what a place's guide is still to say: a clue's description, how it is found, the overview, the words to read aloud,
     // a floor's note. Broken data stays a problem)
-    if (A.config.made === "hand") for (const [m, lv] of [...prob]) if (/rooms? incomplete|has no name on the map|needs a description|needs how it is found|needs a hint|needs what the players|no overview|no exterior description|has no floor note|needs a player|is not described|lacks:/.test(m)) { prob.delete(m); note.set(m + " (still to write)", lv); }
+    if (A.config.made === "hand" || A.config.made === "import") for (const [m, lv] of [...prob]) if (/rooms? incomplete|has no name on the map|needs a description|needs how it is found|needs a hint|needs what the players|no overview|no exterior description|has no floor note|needs a player|is not described|lacks:/.test(m)) { prob.delete(m); note.set(m + " (still to write)", lv); }
     checkCave(A, id, m => prob.set(m, n), m => note.set(m, n));
     const M = A.get(id, 99), tag = lv => n ? ` [${A.sizeName(lv)}]` : "";
     console.log(`${id}: tier ${A.meta[id].tier || "?"} · ${g.rooms} rooms · ${M.floors.length} floor${M.floors.length > 1 ? "s" : ""}${n ? ` · ${n + 1} sizes` : ""} · guide ${g.done}/${g.rooms}${prob.size ? "" : "  OK"}`);
@@ -872,7 +907,7 @@ function cmdCheck(dir, want) {
     const leads = A.leads(), inb = {}; for (const l of leads) if (A.meta[l.to] && l.to !== l.from) (inb[l.to] = inb[l.to] || new Set()).add(l.from + "/" + l.via);
     const living = ["sandbox", "hybrid"].includes(A.config.kind), out = [];
     // (in a handmade campaign the trail is the game master's to make, a piece at a time: what it lacks is still to make)
-    const hand = A.config.made === "hand", before = problems;
+    const hand = A.config.made === "hand" || A.config.made === "import", before = problems;
     for (const id of A.order) {
       const m = A.meta[id], k = (inb[id] || new Set()).size, need = standardFor(A, m.tier).inbound; if (m.start) continue;
       const road = living && !!m.location && !!A.worldData;
@@ -1031,12 +1066,12 @@ function pageParts(dir) {
   const drawingJS = pic && fs.existsSync(pic) ? "ATLAS.worldDrawingSrc = \"data:" + ({ ".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif" }[path.extname(pic).toLowerCase()] || "image/png") + ";base64," + fs.readFileSync(pic).toString("base64") + "\";" : "";
   // what this campaign uses (campaign.js features; atlas-modules.js): the files of a module switched off are left out of
   // the page, and the page is told which, so its settings can say they come back when it is built again
-  const FILE_MOD = { "atlas-people.js": ["people.editor"], "atlas-portrait.js": ["people.portraits"], "atlas-handouts.js": ["handouts"], "atlas-plot.js": ["plot"], "atlas-sound.js": ["sounds"], "atlas-narrator.js": ["music", "voice"], "atlas-sessions.js": ["recorded"], "atlas-economy.js": ["money"], "atlas-dashboard.js": ["living", "advanced"], "atlas-deeds.js": ["living", "advanced"], "atlas-factions.js": ["living", "advanced"], "atlas-worldtime.js": ["living"], "atlas-rumours.js": ["living"], "atlas-paper.js": ["living"], "atlas-word.js": ["living"], "atlas-history.js": ["living"], "atlas-copilot.js": ["copilot"], "atlas-consistency.js": ["consistency"], "atlas-galaxy.js": ["stars"], "atlas-galaxy-art.js": ["stars"], "atlas-starsystem.js": ["stars"], "atlas-space.js": ["stars"], "atlas-library.js": ["stars"], "atlas-pixelplanet.js": ["stars"], "atlas-cosmos.js": ["dimensions"], "atlas-facility.js": ["stars"], "atlas-caveui.js": ["caves"] };
+  const FILE_MOD = { "atlas-people.js": ["people.editor"], "atlas-quickplace.js": ["makeup.describe"], "atlas-portrait.js": ["people.portraits"], "atlas-handouts.js": ["handouts"], "atlas-plot.js": ["plot"], "atlas-sound.js": ["sounds"], "atlas-narrator.js": ["music", "voice"], "atlas-sessions.js": ["recorded"], "atlas-economy.js": ["money"], "atlas-dashboard.js": ["living", "advanced"], "atlas-deeds.js": ["living", "advanced"], "atlas-factions.js": ["living", "advanced"], "atlas-worldtime.js": ["living"], "atlas-rumours.js": ["living"], "atlas-paper.js": ["living"], "atlas-word.js": ["living"], "atlas-history.js": ["living"], "atlas-copilot.js": ["copilot"], "atlas-consistency.js": ["consistency"], "atlas-galaxy.js": ["stars"], "atlas-galaxy-art.js": ["stars"], "atlas-starsystem.js": ["stars"], "atlas-space.js": ["stars"], "atlas-library.js": ["stars"], "atlas-pixelplanet.js": ["stars"], "atlas-cosmos.js": ["dimensions"], "atlas-facility.js": ["stars"], "atlas-caveui.js": ["caves"] };
   const MODS = A.modules, outMods = new Set();
   const keep = f => { const r = FILE_MOD[f]; if (r && MODS && !MODS.on(r[0], r[1])) { outMods.add(r[0]); return `/* ${f}: left out (${r[0]} is switched off in campaign.js features) */`; } return fs.readFileSync(path.join(ENGINE, f), "utf8"); };
-  const raw = [path.join(ENGINE, "atlas-engine.js"), path.join(ENGINE, "atlas-modules.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-biomes.js"), path.join(ENGINE, "atlas-world-nature.js"), path.join(ENGINE, "atlas-world-art.js"), path.join(ENGINE, "atlas-world-sketch.js"), path.join(ENGINE, "atlas-weather.js"), path.join(ENGINE, "atlas-journey.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js"), path.join(ENGINE, "atlas-sound.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-planet.js"), path.join(ENGINE, "atlas-galaxy-model.js"), path.join(ENGINE, "atlas-galaxy-gen.js"), ...sources(dir), path.join(ENGINE, "atlas-narrator.js"), path.join(ENGINE, "atlas-voice.js")].map(f => { { const r = FILE_MOD[path.basename(f)]; if (r && MODS && !MODS.on(r[0], r[1])) { outMods.add(r[0]); return `/* ${path.basename(f)}: left out (${r[0]} is switched off in campaign.js features) */`; } } const src = campaignSrc(dir, f); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir, A), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-ux.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapmarks.js"), "utf8"), keep("atlas-copilot.js"), keep("atlas-consistency.js"), keep("atlas-worldtime.js"), keep("atlas-rumours.js"), keep("atlas-paper.js"), keep("atlas-word.js"), keep("atlas-factions.js"), keep("atlas-cosmos.js"), fs.readFileSync(path.join(ENGINE, "atlas-journal.js"), "utf8"), ...["atlas-history.js", "atlas-deeds.js", "atlas-economy.js", "atlas-dashboard.js", "atlas-sessions.js"].map(keep), keep("atlas-pixelplanet.js"), keep("atlas-galaxy-art.js"), keep("atlas-space.js"), keep("atlas-library.js"), keep("atlas-mylib.js"), keep("atlas-starsystem.js"), keep("atlas-galaxy.js"), keep("atlas-facility.js"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), keep("atlas-caveui.js"), fs.readFileSync(path.join(ENGINE, "atlas-ask.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), keep("atlas-portrait.js"), keep("atlas-people.js"), keep("atlas-handouts.js"), keep("atlas-plot.js"), fs.readFileSync(path.join(ENGINE, "atlas-knowledge.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-encyclopedia.js"), "utf8"), ...(city ? [fs.readFileSync(path.join(ENGINE, "atlas-cityedit.js"), "utf8")] : []), fs.readFileSync(path.join(ENGINE, "atlas-nav.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
+  const raw = [path.join(ENGINE, "atlas-engine.js"), path.join(ENGINE, "atlas-modules.js"), ...(city ? [path.join(ENGINE, "atlas-city.js")] : []), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-biomes.js"), path.join(ENGINE, "atlas-terrain-presets.js"), path.join(ENGINE, "atlas-world-nature.js"), path.join(ENGINE, "atlas-world-art.js"), path.join(ENGINE, "atlas-pmap.js"), path.join(ENGINE, "atlas-world-sketch.js"), path.join(ENGINE, "atlas-weather.js"), path.join(ENGINE, "atlas-journey.js")] : []), ...(A.config.music === false ? [] : [path.join(ENGINE, "atlas-music.js"), path.join(ENGINE, "atlas-sound.js")]), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-planet.js"), path.join(ENGINE, "atlas-galaxy-model.js"), path.join(ENGINE, "atlas-galaxy-gen.js"), ...sources(dir), path.join(ENGINE, "atlas-narrator.js"), path.join(ENGINE, "atlas-voice.js")].map(f => { { const r = FILE_MOD[path.basename(f)]; if (r && MODS && !MODS.on(r[0], r[1])) { outMods.add(r[0]); return `/* ${path.basename(f)}: left out (${r[0]} is switched off in campaign.js features) */`; } } const src = campaignSrc(dir, f); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; }).concat(storyJS(dir, A), drawingJS, modelsJS(dir), fs.readFileSync(path.join(ENGINE, "atlas-ux.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-table-gm.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapedit.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-modelui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-clueui.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-mapmarks.js"), "utf8"), keep("atlas-copilot.js"), keep("atlas-consistency.js"), keep("atlas-worldtime.js"), keep("atlas-rumours.js"), keep("atlas-paper.js"), keep("atlas-word.js"), keep("atlas-factions.js"), keep("atlas-cosmos.js"), fs.readFileSync(path.join(ENGINE, "atlas-journal.js"), "utf8"), ...["atlas-history.js", "atlas-deeds.js", "atlas-economy.js", "atlas-items-rules.js", "atlas-items.js", "atlas-adventure.js", "atlas-dashboard.js", "atlas-sessions.js"].map(keep), keep("atlas-pixelplanet.js"), keep("atlas-galaxy-art.js"), keep("atlas-space.js"), keep("atlas-library.js"), keep("atlas-mylib.js"), keep("atlas-starsystem.js"), keep("atlas-galaxy.js"), keep("atlas-facility.js"), fs.readFileSync(path.join(ENGINE, "atlas-room3d.js"), "utf8"), keep("atlas-caveui.js"), fs.readFileSync(path.join(ENGINE, "atlas-ask.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-locations.js"), "utf8"), keep("atlas-quickplace.js"), keep("atlas-portrait.js"), keep("atlas-people.js"), keep("atlas-handouts.js"), keep("atlas-plot.js"), fs.readFileSync(path.join(ENGINE, "atlas-knowledge.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-encyclopedia.js"), "utf8"), ...(city ? [fs.readFileSync(path.join(ENGINE, "atlas-cityedit.js"), "utf8")] : []), fs.readFileSync(path.join(ENGINE, "atlas-nav.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-shell.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial-data.js"), "utf8"), fs.readFileSync(path.join(ENGINE, "atlas-tutorial.js"), "utf8")).join("\n;\n");
   // (a page with a world map can make a new world itself: the generator rides along, for a worker)
-  const js = ((world ? raw + "\n;\n" + worldGenJS() + "\n;\n" + cityGenJS() : raw) + "\n;\n" + shipGenJS() + "\n;\nATLAS.config.featuresBuilt = " + JSON.stringify({ out: [...outMods] }) + ";").replace(/<\/script/gi, "<\\/script");
+  const js = ((world ? raw + "\n;\n" + worldGenJS() + "\n;\n" + cityGenJS() + "\n;\n" + roadGenJS() : raw) + "\n;\n" + shipGenJS() + "\n;\nATLAS.config.featuresBuilt = " + JSON.stringify({ out: [...outMods] }) + ";").replace(/<\/script/gi, "<\\/script");
   const body = `<title>${A.esc(cfg.title)}</title>\n${link}<style>\n${css}\n${over}\n</style>\n<div class="wrap" id="app" data-mode="gm"></div>\n${three}<script>\n${js}\n</script>\n`;
   return { A, body, raw, link, style: css + "\n" + over, world, drawingJS };
 }
@@ -1056,7 +1091,7 @@ function playersPage(parts, dir) {
   // (not the story store, which holds the game master's investigation, nor the cave generator's words, riddles and
   // traps, whose lists of answers a player could look a riddle up in: only the cave's drawing, atlas-cave.js)
   const leave = new Set(["atlas-story.js", "atlas-puzzles.js", "atlas-traps.js", "atlas-cave-words.js"]);
-  const files = [path.join(ENGINE, "atlas-engine.js"), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-biomes.js"), path.join(ENGINE, "atlas-world-nature.js"), path.join(ENGINE, "atlas-world-art.js"), path.join(ENGINE, "atlas-world-sketch.js")] : []), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.filter(f => !leave.has(f)).map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-room3d.js"), path.join(ENGINE, "atlas-galaxy.js")];
+  const files = [path.join(ENGINE, "atlas-engine.js"), ...(world ? [path.join(ENGINE, "atlas-world.js"), path.join(ENGINE, "atlas-world-biomes.js"), path.join(ENGINE, "atlas-terrain-presets.js"), path.join(ENGINE, "atlas-world-nature.js"), path.join(ENGINE, "atlas-world-art.js"), path.join(ENGINE, "atlas-world-sketch.js"), path.join(ENGINE, "atlas-pmap.js")] : []), path.join(ENGINE, "atlas-table.js"), ...MODEL_FILES.filter(f => !leave.has(f)).map(f => path.join(ENGINE, f)), path.join(ENGINE, "atlas-share.js"), path.join(ENGINE, "atlas-room3d.js"), path.join(ENGINE, "atlas-galaxy.js")];
   const raw = files.map(f => { const src = fs.readFileSync(f, "utf8"); return /^atlas-(models-x\d\d|sprites)/.test(path.basename(f)) ? `try {\n${src}\n} catch (e) { console.error("Atlas: the library file ${path.basename(f)} could not load, and is left out:", e); }` : src; })
     .concat("ATLAS.configure(" + JSON.stringify(cfg) + ");", terrain, world ? drawingJS : "", modelsJS(dir), ...customModels(dir), "ATLAS.share.boot();").join("\n;\n");
   try { new Function(raw); } catch (e) { die("The players' copy does not parse: " + e.message); }
@@ -1392,6 +1427,8 @@ switch (cmd) {
   case "ship": cmdShip(pos[0], pos[1]); break;
   case "wild": cmdWild(pos[0], pos[1]); break;
   case "check": cmdCheck(pos[0], pos.slice(1)); break;
+  // importing an adventure the game master owns (references/import.md)
+  case "import": case "import-status": case "import-mark": case "adventure": case "from-adventure": case "ready": case "map-from-source": case "locations": case "generate": require("./atlas-import.js").run(cmd, pos, flags, { load }).catch(e => die(e.message)); break;
   case "ascii": cmdAscii(pos[0], pos[1], pos[2]); break;
   case "dump": cmdDump(pos[0], pos.slice(1)); break;
   case "status": cmdStatus(pos[0]); break;

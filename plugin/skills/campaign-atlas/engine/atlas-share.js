@@ -98,7 +98,7 @@
   const SEEN = ["did", "decision", "talk", "promise", "threat", "clue", "visit", "item", "fate", "bond", "theory", "mystery"];
   function chronicleShare(S) {
     const J = journal(S), out = {};
-    if (J.purse) { const p = S.get("econ", "purse"); if (p && p.n != null) out.purse = A.money && A.money.fmt ? A.money.fmt(+p.n) : String(p.n); out.carry = Object.values(S.get("stash") || {}).filter(x => x && x.n).sort((a, b) => (b.t || 0) - (a.t || 0)).map(x => ({ n: x.n, qty: x.qty || 1 })); }
+    if (J.purse) { const p = S.get("econ", "purse"); if (p && p.n != null) out.purse = A.money && A.money.fmt ? A.money.fmt(+p.n) : String(p.n); out.carry = Object.values(S.get("stash") || {}).filter(x => x && x.n && (!x.owner || x.owner === "party" || String(x.owner).startsWith("pc:"))).sort((a, b) => (b.t || 0) - (a.t || 0)).map(x => ({ n: x.n, qty: x.qty || 1 })); }
     if (J.memories) out.mems = Object.values(S.get("memory") || {}).filter(m => m && m.text && m.state === "kept" && SEEN.includes(m.kind) && ["canon", "narration", "player"].includes(m.src)).sort((a, b) => (b.t || b.t0 || 0) - (a.t || a.t0 || 0)).slice(0, 30).map(m => ({ text: m.text, quote: m.quote || "", session: m.session || "" }));
     return out;
   }
@@ -107,6 +107,13 @@
     const out = {}, screen = S.get("screen", "now") || {};
     for (const id of A.order) { const d = placeShare(S, id, screen); if (d) out["place:" + id] = d; }
     const w = worldShare(S, prefs); if (w) out.world = w;
+    // the players' hand-drawn maps (atlas-pmap.js): only those given them, with the referee's own layer and anything
+    // hidden taken out; and, if the referee chose, the hand-drawn map instead of the real one (the real one then not
+    // sent at all)
+    if (A.pmap && A.worldOV) { let docs = Object.entries(S.get("world") || {}); if (!docs.length && prefs) { try { docs = Object.entries(JSON.parse(prefs.get("world-edits") || "{}") || {}); } catch (e) { docs = []; } }
+      const OV = A.worldOV(docs);
+      for (const m of Object.values(OV.pm || {})) if (m && m.given) out["pmap:" + m.id] = A.pmap.forPlayers(m);
+      if (OV.pmset && OV.pmset.mode === "parchment") { delete out.world; const m = OV.pm[OV.pmset.map]; out.pmset = { mode: "parchment", map: m && m.given ? m.id : null }; } }
     out.board = boardShare(S);
     out.chronicle = chronicleShare(S);
     // the star chart: only what is charted (atlas-galaxy.js), never the seed the galaxy grows from

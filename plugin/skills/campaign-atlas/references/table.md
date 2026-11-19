@@ -527,3 +527,79 @@ they are first drawn, and the city is drawn after the page (measured with the wo
 
 The tests are the workspace's dev/ux-test.js (every item, in the realm and Kestrel) and dev/ux-phone.js (the new
 pieces at a phone's width). Both must end "all well". A new editor or tool of Claude's uses these pieces.
+
+## 26. Items and loot
+
+At the table's **Items and loot** tab (engine/atlas-items.js; plan: docs/plans/2026-11-18-item-loot-plan.md) holds
+every thing of the campaign. They live in one store, collection `stash`, the same one Money and goods uses. Each record
+has an `owner`:
+
+| `owner` | Meaning |
+|---|---|
+| `party`, or none | What the party carries (Money and goods shows only these) |
+| `pc:<id>` | A player's character |
+| `cast:<id>`, `npc:<place>/<id>` | A person |
+| `place:<id>` | A place |
+| `merchant:<id>` | A shop |
+| `in:<item id>` | Inside a chest or a bag |
+| `library` | The item library |
+
+Moving a thing changes its owner; the record stays the same, so nothing is duplicated.
+
+A record can also carry these optional fields:
+
+| Field | Meaning |
+|---|---|
+| `cat` | One of 20 categories |
+| `rarity`, `quality`, `cond` | Rarity, quality and condition: three separate things |
+| `value`, `weight`, `qty`, `equipped` | Worth, weight, how many, worn or carried ready |
+| `desc` | What the players see |
+| `secret` | The game master's only |
+| `reveals: [{ text, shown }]` | Facts found out later |
+| `stats`, `src` | Statistics, and where they come from (below) |
+| `attune`, `magic`, `img` | Requirements, magic, a picture |
+| `role` | `loot`, `plot` or `clue` |
+| `story` | Its history: `made`, `maker`, `age`, `origin`, `prev`, `faction`, `significance`, `wants`, `rumours` |
+
+Where a thing's statistics come from (`src`):
+
+| `src` | Meaning |
+|---|---|
+| `srd` | The open rules text: for D&D 5e, the System Reference Document 5.1 (Wizards of the Coast LLC, CC-BY-4.0), credited |
+| `rulebook` | The game master's own, from their book |
+| `names` | Named in the game, with its statistics in the book (Atlas copies no closed game's rules) |
+| `campaign` | table.js `ATLAS.economy` |
+| `homebrew` | Atlas's or Claude's suggestion, never presented as official |
+| `narrative` | No game statistics |
+
+**The game's own items** (engine/atlas-items-rules.js) are chosen from campaign.js `system`:
+- **D&D 5e:** the SRD's weapons, armour, gear and tools with their statistics, and its magic items with rarity and
+  attunement.
+- **Mothership, Call of Cthulhu, Alien, Traveller, Cyberpunk RED and Blades in the Dark:** their equipment's names. A
+  game's named equipment is used only when the campaign is set in that game's usual age.
+- **Any game:** the game master writes their book's items under "Your game's own items", one a line:
+  `name | category | cost | statistics | weight | rarity`. These are kept in collection `rulebook` and come first in
+  everything generated.
+
+**Generating** proposes; nothing is kept until the game master says so.
+- **For a place:** what it is (from its name, kind, words, rooms and people), whose ground it is, what happened there,
+  and its wealth. A ruin or a cave may hold nothing.
+- **A person's things:** their trade, wealth and faction. One of the cast may carry a thing of their own story.
+- **A shop's stock:** the merchant's trade and the town.
+- **A unique artifact:** tied to the campaign's people, factions, events and places.
+- **Ordinary objects.**
+- **From a loot table:** collection `loottables`, each `{ n, rolls, rows: [{ w, what, qty }], mundane }`. `what` is
+  a thing's name, `cat:<category>`, `lib:<item id>` or `nothing`.
+
+The choices are: how many, the category, rarity, mundane or supernatural, and allowing things from other ages.
+
+**Make it a clue** adds the thing to the investigation (`St.putClue`, logged) only when the game master confirms.
+
+**Show the players** sends the thing's name, what the players see, and what has been revealed, never `secret`. The
+players' copy lists only the party's things.
+
+The same generators are on:
+- Make it up, as a card;
+- every place's page: Things here, and Generate loot here;
+- every person's card: Carries, and Their things;
+- the Copilot's "Things and loot", whose answer is read back as proposals.

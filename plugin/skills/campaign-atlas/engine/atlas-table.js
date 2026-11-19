@@ -671,6 +671,12 @@
         stage.innerHTML = `<div class="ps-fit"><div class="ps-person">${now.img && /^data:image\//.test(now.img) ? `<img class="ps-face" src="${esc(now.img)}" alt="">` : PERSON_SIL}<h2>${esc(now.name || "A stranger")}</h2>${now.role ? `<p class="ps-role">${esc(now.role)}</p>` : ""}${now.look ? `<p>${esc(now.look)}</p>` : ""}</div></div>`;
       } else if (k === "scene") {
         stage.innerHTML = `<div class="ps-fit"><div class="ps-scene">${now.title ? `<h2>${esc(now.title)}</h2>` : ""}${paras(now.text)}</div></div>`;
+      } else if (k === "pmap" || k === "world" && (st.get("share", "pmset") || {}).mode === "parchment") {
+        // a hand-drawn map the referee gave the players (atlas-pmap.js); in place of the world map, if so chosen
+        const id = k === "pmap" ? now.id : (st.get("share", "pmset") || {}).map, m = id && st.get("share", "pmap:" + id);
+        if (world) { world.dispose(); world = null; }
+        if (A.pmap) A.pmap.loadFonts();
+        stage.innerHTML = m && A.pmap ? `<div class="ps-pmap">${A.pmap.render(m, { player: true })}</div>` : `<div class="ps-fit"><div class="ps-scene"><p>No map yet.</p></div></div>`;
       } else if (k === "world" && A.worldMount && A.worldData) {
         // (the players' copy has the world as the game master's page shared it, the referee's changes already in it)
         const copy = !!A.playersCopy;
@@ -791,7 +797,7 @@
       // their purse and what they carry (Money and goods, as the game master keeps it)
       // (in the players' copy, as the game master's page shared it: only what may be seen ever reaches it, atlas-share.js)
       const CH = A.playersCopy ? A.shareChronicle || {} : null;
-      if (J.purse && (CH || A.money)) { const p = CH ? (CH.purse != null ? CH.purse : null) : (st.get("econ", "purse") || {}).n != null ? A.money.fmt(+st.get("econ", "purse").n) : null, items = CH ? CH.carry || [] : Object.values(st.get("stash") || {}).filter(x => x && x.n).sort((a, b) => (b.t || 0) - (a.t || 0)); if (p != null || items.length) out.push(`<section class="ps-jsec"><h3>What we carry</h3>${p != null ? `<p class="ps-purse"><b>In the purse:</b> ${esc(p)}</p>` : ""}${items.length ? `<ul class="ps-carry">${items.map(x => `<li>${esc(x.n)}${x.qty > 1 ? ` ×${x.qty}` : ""}</li>`).join("")}</ul>` : ""}</section>`); }
+      if (J.purse && (CH || A.money)) { const p = CH ? (CH.purse != null ? CH.purse : null) : (st.get("econ", "purse") || {}).n != null ? A.money.fmt(+st.get("econ", "purse").n) : null, items = CH ? CH.carry || [] : Object.values(st.get("stash") || {}).filter(x => x && x.n && (!x.owner || x.owner === "party" || String(x.owner).startsWith("pc:"))).sort((a, b) => (b.t || 0) - (a.t || 0)); if (p != null || items.length) out.push(`<section class="ps-jsec"><h3>What we carry</h3>${p != null ? `<p class="ps-purse"><b>In the purse:</b> ${esc(p)}</p>` : ""}${items.length ? `<ul class="ps-carry">${items.map(x => `<li>${esc(x.n)}${x.qty > 1 ? ` ×${x.qty}` : ""}</li>`).join("")}</ul>` : ""}</section>`); }
       // what the table remembers that they saw, did and said (Recorded sessions: kept, of those kinds and that truth only)
       if (J.memories) { const SEEN = ["did", "decision", "talk", "promise", "threat", "clue", "visit", "item", "fate", "bond", "theory", "mystery"], l = CH ? CH.mems || [] : Object.values(st.get("memory") || {}).filter(m => m && m.text && m.state === "kept" && SEEN.includes(m.kind) && ["canon", "narration", "player"].includes(m.src)).sort((a, b) => (b.t || b.t0 || 0) - (a.t || a.t0 || 0)).slice(0, 30); if (l.length) out.push(`<section class="ps-jsec"><h3>What we remember</h3><ul class="ps-mems">${l.map(m => `<li>${esc(m.text)}${m.quote ? `<q>${esc(m.quote)}</q>` : ""}${m.session ? `<span class="ps-when">Session ${esc(m.session)}</span>` : ""}</li>`).join("")}</ul></section>`); }
       if (J.quests) { const q = all("pquests"); out.push(`<section class="ps-jsec"><h3>Our quests</h3>${q.length ? `<ul class="ps-quests">${q.map(x => `<li class="${x.done ? "done" : ""}">${esc(x.text)}${x.done ? " <span class=\"ps-when\">done</span>" : ""}</li>`).join("")}</ul>` : `<p class="ps-empty">No quests yet.</p>`}</section>`); }
@@ -834,7 +840,7 @@
     });
     st.watch("fog", () => { if (now.kind === "map") render(); if (tab === "places") renderPage(); });
     st.watch("board", () => { if (now.kind === "board") render(); if (tab === "board") renderPage(); });
-    st.watch("share", () => { if (now.kind === "galaxy") render(); });
+    st.watch("share", () => { if (now.kind === "galaxy" || now.kind === "pmap" || now.kind === "world" && (st.get("share", "pmset") || {}).mode === "parchment") render(); });
     st.watch("safety", () => { if (now.kind === "safety") render(); });
     for (const c of ["clues", "status"]) st.watch(c, () => { if (now.kind === "board") render(); if (tab === "board" || tab === "places") renderPage(); });
     st.watch("given", () => { badges(); if (tab === "handouts") renderPage(); });

@@ -181,7 +181,7 @@
   }
   // Claude's suggestion for mending one finding, from its evidence and the passages around it
   async function suggestFix(f) {
-    const hits = api.lookup([f.title, f.why, ...(f.refs || []).map(r => St.name(r))].join(" "), 8);
+    const hits = await (api.lookupBest || api.lookup)([f.title, f.why, ...(f.refs || []).map(r => St.name(r))].join(" "), 8);
     const prompt = `In the tabletop roleplaying campaign "${(A.config || {}).title || ""}", this does not fit:\n${f.title}\nWhy: ${f.why}\nEvidence:\n${(f.evidence || []).map(e => "- " + e.text).join("\n")}\n\nSuggest the smallest change that makes it consistent while keeping the story, its mysteries and what the players have already seen: say exactly what to change and where, in two to four sentences. If it could be intentional (a lie, a misunderstanding), say how to make that clear instead. Plain prose.\n\nThe campaign's own words:\n${hits.map((h, i) => `[${i + 1}] ${h.src}\n${h.text}`).join("\n\n")}`;
     return api.askRaw(prompt, null, null, { kind: "suggesting", what: "a way to mend “" + String(f.title || "").slice(0, 40) + "”", uses: ["its evidence", "the passages around it"] });
   }

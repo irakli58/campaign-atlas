@@ -521,9 +521,64 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
           <div class="t-row"><button type="button" class="t-mini" data-sm="linknew">A new link</button><button type="button" class="t-mini" data-sm="linkoff">Close the link</button></div></div></div>`}
       ${d && d.error ? `<p class="t-err">${esc(d.error)}</p>` : ""}</section>`;
   }
+  // the words written on this computer, by Whisper in the page (the local AI plan's phase 5; the user's local AI request
+  // of 17 Nov 2026): the sound read a part at a time, ten minutes to a slice, nothing sent anywhere. The engine is
+  // downloaded once by the app, as the narrator's voices are (lib/voices.js, "whisper")
+  const WCODE = root => `import { pipeline, env } from ${JSON.stringify(root + "transformers.min.js")};
+env.allowRemoteModels = false; env.allowLocalModels = true; env.localModelPath = ${JSON.stringify(root + "model/")}; env.backends.onnx.wasm.wasmPaths = ${JSON.stringify(root)};
+let asr = null; const make = device => pipeline("automatic-speech-recognition", "whisper-base", { device, dtype: { encoder_model: "fp32", decoder_model_merged: "q8" } });
+onmessage = async e => { const { id, op } = e.data; try {
+  if (op === "load") { let dev = e.data.device; try { asr = await make(dev); } catch (x) { if (dev === "wasm") throw x; dev = "wasm"; asr = await make(dev); } postMessage({ id, ok: true, device: dev }); }
+  if (op === "hear") { const r = await asr(e.data.pcm, Object.assign({ return_timestamps: true, chunk_length_s: 30, stride_length_s: 5, task: "transcribe" }, e.data.lang ? { language: e.data.lang } : {})); postMessage({ id, ok: true, chunks: (r.chunks || []).map(c => [c.timestamp[0], c.timestamp[1], c.text]), text: r.text || "" }); }
+} catch (err) { postMessage({ id, ok: false, error: String((err && err.message) || err).slice(0, 400) }); } };`;
+  async function whEngine(again) {
+    if (!window.ATLAS_APP || !window.ATLAS_APP.voices) { UI.whEng = null; return; }
+    try { UI.whEng = (await window.ATLAS_APP.voices.list()).find(e => e.id === "whisper") || null; } catch (e) { UI.whEng = null; }
+    if (UI.whEng && UI.whEng.installing) setTimeout(() => whEngine(true).then(paint), 2500); else if (again) paint();
+  }
+  async function whisperWords(rec) {
+    const m = recOf(rec); if (!m || UI.wh && UI.wh.busy) return;
+    UI.wh = { rec, busy: true, say: "Loading Whisper…" }; UI.whStop = false; paint();
+    const root = new URL(window.ATLAS_APP.voices.base + "whisper/", location.href).href;
+    const w = new Worker(URL.createObjectURL(new Blob([WCODE(root)], { type: "text/javascript" })), { type: "module" });
+    let n = 0; const call = (msg, tr) => new Promise((ok, no) => { const id = ++n, f = e => { if (!e.data || e.data.id !== id) return; w.removeEventListener("message", f); e.data.ok ? ok(e.data) : no(new Error(e.data.error)); }; w.addEventListener("message", f); w.addEventListener("error", e => no(new Error(e.message || "Whisper could not start")), { once: true }); w.postMessage(Object.assign({ id }, msg), tr || []); });
+    const lang = String(UI.lang || m.lang || "").slice(0, 2).toLowerCase() || null, segs = [];
+    try {
+      await call({ op: "load", device: navigator.gpu ? "webgpu" : "wasm" });
+      for (const p of m.parts || []) {
+        const url = await partURL(rec, p.n, m); if (!url) continue;
+        // (decoded at 16 kHz, Whisper's own rate: the browser resamples it)
+        const ab = await new OfflineAudioContext(1, 16000, 16000).decodeAudioData(await (await fetch(url)).arrayBuffer());
+        let pcm = ab.getChannelData(0); if (ab.numberOfChannels > 1) { pcm = new Float32Array(pcm); for (let c = 1; c < ab.numberOfChannels; c++) { const d = ab.getChannelData(c); for (let i = 0; i < pcm.length; i++) pcm[i] += d[i]; } for (let i = 0; i < pcm.length; i++) pcm[i] /= ab.numberOfChannels; }
+        const SL = 16000 * 600;
+        for (let s = 0; s < pcm.length; s += SL) {
+          if (UI.whStop) throw new Error("Stopped. Nothing was changed.");
+          const t0 = (p.at || 0) + s / 16000; UI.wh.say = `Writing the words: ${hms(t0)} of ${hms(m.dur || pcm.length / 16000)}…`; paint();
+          const slice = pcm.slice(s, Math.min(pcm.length, s + SL)), r = await call({ op: "hear", pcm: slice, lang }, [slice.buffer]);
+          for (const [a, b, t] of r.chunks || []) { const x = String(t || "").trim(); if (!x) continue; const st = a || 0; segs.push([r1(t0 + st), r1(Math.max(.5, (b != null ? b : st + 3) - st)), "", x]); }
+        }
+      }
+      if (!segs.length) throw new Error("Whisper heard no words in it.");
+      segs.sort((x, y) => x[0] - y[0]); putRec(rec, Object.assign({}, recOf(rec), { words: "whisper" })); saveSegs(rec, segs);
+      UI.wh = null; UI.sub = "words"; api.note(`${segs.length} lines of words written on this computer by Whisper.`);
+    } catch (e) { UI.wh = { rec, err: String(e.message || e) }; }
+    finally { w.terminate(); paint(); }
+  }
+  function whisperHTML(rec) {
+    const m = recOf(rec) || {}, sound = m.where === "app" || (m.where === "here" && !m.audioGone);
+    if (!rec || !sound || !window.ATLAS_APP || !window.ATLAS_APP.voices) return "";
+    if (UI.whEng === undefined) { UI.whEng = 0; whEngine(true); }
+    const E = UI.whEng, W = UI.wh && UI.wh.rec === rec ? UI.wh : null, had = segsOf(rec).length;
+    return `<section class="t-card"><h3>Write its words here, privately</h3><p class="t-small">Whisper, on this computer: the sound is read here and nothing is sent anywhere (the browser's live words go to Google in Chrome). An hour takes a few minutes on a graphics card, longer on the processor alone.</p>
+      ${!E ? `<p class="kn">Looking for Whisper…</p>` : E.installing ? `<p class="kn">Downloading Whisper… ${E.progress ? `${E.progress.done} of ${E.progress.of} files, ${Math.round(E.progress.mb)} MB` : ""}</p>`
+        : !E.installed ? `<div class="t-row"><button type="button" class="t-btn" data-sm="whget">Download Whisper (about ${E.mb} MB, ${esc(E.licence)})</button><span class="t-small kn">once; it works without the internet after</span></div>`
+        : W && W.busy ? `<div class="t-row"><span class="kn">${esc(W.say)}</span><button type="button" class="t-mini" data-sm="whstop">Stop</button></div>`
+        : `<div class="t-row"><button type="button" class="t-btn" data-sm="whisper" data-id="${esc(rec)}">${had ? "Write its words again with Whisper (replaces the " + had + " lines there are)" : "Write its words with Whisper"}</button></div>`}
+      ${W && W.err ? `<p class="t-err">${esc(W.err)}</p>` : ""}</section>`;
+  }
   function addHTML(rec) {
     const ss = sessionsKnown(), cur = rec ? (recOf(rec) || {}).session : +api.session() || 1;
-    return `<section class="t-card"><h3>${rec ? "Add its words" : "Add a recording or its words"}</h3>
+    return `${whisperHTML(rec)}<section class="t-card"><h3>${rec ? "Add its words" : "Add a recording or its words"}</h3>
       ${rec ? "" : `<label class="t-small">For <select class="t-in tw-sel" data-sm="addsess">${ss.map(n => opt(n, sessionTitle(n), cur)).join("")}</select></label>
       <label class="sm-file">A recording made anywhere (a phone's recorder app, a laptop): <input type="file" accept="audio/*,video/mp4,video/webm,.m4a,.mp3,.wav,.ogg,.opus,.webm" data-sm="audio"></label>`}
       <label class="sm-file">${rec ? "Its words" : "Or the words alone"}, from any tool: <input type="file" accept=".txt,.srt,.vtt,.json,text/plain,application/json" data-sm="words"${rec ? ` data-id="${esc(rec)}"` : ""}></label>
@@ -554,7 +609,7 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
     const o = opts();
     return `<section class="t-card"><h3>Privacy and keeping</h3>
       <p class="t-small">The sound stays where it was recorded: in this browser on this device, or, from the recorder link, on the computer that runs Atlas. The words and what is remembered are kept with the campaign's table, like your notes. None of it reaches the players' screen, their copy or their phones.</p>
-      <p class="t-small">The words are made where you choose: live, by the browser's speech service (Google's in Chrome, Apple's in Safari); afterwards, by whatever tool made the transcript you add. What to remember is read by your own Claude.</p>
+      <p class="t-small">The words are made where you choose: live, by the browser's speech service (Google's in Chrome, Apple's in Safari); afterwards, by Whisper on this computer (Add words, once it is downloaded: nothing is sent), or by whatever tool made the transcript you add. What to remember is read by your own Claude.</p>
       <label class="t-small">Keep the sound <select class="t-in tw-sel" data-sm="keep">${[["", "until I delete it"], ["30", "for 30 days"], ["7", "for 7 days"], ["words", "only until its words are added"]].map(([k, l]) => opt(k, l, o.keep || "")).join("")}</select></label>
       ${SR && /Chrome|Edg/.test(navigator.userAgent) ? `<label class="t-fogck"><input type="checkbox" data-sm="local"${o.local ? " checked" : ""}> Live words on this device when the browser can (newer Chrome on a computer)</label>` : ""}</section>`;
   }
@@ -756,6 +811,9 @@ Answer with only JSON: {"summary": "what happened in this part, three to six sen
       case "sumopen": UI.edit = "sum"; break;
       case "sumnotes": { const n = +b.dataset.n, sm = S().get("sessmem", "s" + n), cur = (api.notesOf(n) || {}).notes || ""; if (sm && !cur.includes(sm.summary.slice(0, 60))) api.saveNotes(n, (cur ? cur + "\n\n" : "") + sm.summary); api.note(`In the notes of session ${n}: "Previously on…" under Tonight is made from them.`); break; }
       case "dropsound": twice(b, () => { dropSound(id).then(paint); }); return;
+      case "whisper": whisperWords(id); return;
+      case "whstop": UI.whStop = true; return;
+      case "whget": if (window.ATLAS_APP && window.ATLAS_APP.voices) window.ATLAS_APP.voices.install("whisper").then(() => whEngine(true), e => api.note(e.message)); setTimeout(() => whEngine(true), 600); return;
       case "dropwords": twice(b, () => { saveSegs(id, []); paint(); }); return;
       case "dropall": twice(b, async () => { await dropSound(id); saveSegs(id, []); for (const [mid, m] of mems()) if (m.rec === id) { if (A.history) A.history.remove("s_" + mid); S().set("memory", mid, null); } S().set("recs", id, null); UI.rec = ""; paint(); }); return;
       default: return;

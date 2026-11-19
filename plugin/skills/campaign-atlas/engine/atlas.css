@@ -5,16 +5,16 @@
   --bg: #e6e9e4;
   --panel: #f3f4f0;
   --ink: #1c2320;
-  --muted: #59645e;
+  --muted: #4d5752;
   --rule: #c5ccc5;
   --accent: #8a2432;
   --accent-soft: rgba(138, 36, 50, 0.09);
-  --bone: #8c7347;
+  --bone: #725b33;
   --bone-soft: rgba(140, 115, 71, 0.14);
   --river: #b7c4c3;
   --secret: #ece6e2;
   --ok: #3f8a4f;
-  --mk-c: #9a6414; --mk-n: #2c5a85; --mk-s: #6a3f9e; --mk-e: #a12a2a; --mk-k: #2f6b3a;
+  --mk-c: #835410; --mk-n: #2c5a85; --mk-s: #6a3f9e; --mk-e: #a12a2a; --mk-k: #2f6b3a;
   --map-paper: #f1e8d0;
   --f-display: "IM Fell English", "Iowan Old Style", Georgia, serif;
   --f-sc: "IM Fell English SC", "IM Fell English", Georgia, serif;
@@ -1008,9 +1008,9 @@ details.ci[open] > summary.cn { margin-bottom: 4px; }
 .tv-nav button { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 10px; align-items: start; text-align: left; border: 0; border-radius: 4px; background: transparent; padding: 8px 9px; cursor: pointer; color: var(--muted); }
 .tv-nav button .ic { grid-row: span 2; margin-top: 1px; }
 .tv-nav button:hover { background: var(--accent-soft); color: var(--ink); }
-.tv-nav button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+.tv-nav button[aria-current="true"] { background: var(--ink); color: var(--bg); }
 .tvn-l { font-size: 15.5px; line-height: 1.25; color: inherit; font-weight: 600; }
-.tv-nav button:not([aria-selected="true"]) .tvn-l { color: var(--ink); }
+.tv-nav button:not([aria-current="true"]) .tvn-l { color: var(--ink); }
 .tvn-d { font-size: 12.5px; line-height: 1.3; opacity: .85; }
 .tvn-g { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 12px 9px 4px; border-top: 1px solid var(--rule); margin-top: 6px; }
 /* (on a phone the table's tools are a menu, grouped as the list is, and kept in view at the top) */
@@ -2988,7 +2988,7 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .tv-nav .tvn-pin { position: absolute; top: 6px; right: 4px; display: block; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); font-size: 15px; line-height: 26px; text-align: center; cursor: pointer; opacity: 0; }
 .tvn-it:hover .tvn-pin, .tv-nav .tvn-pin:focus-visible, .tv-nav .tvn-pin[aria-pressed="true"] { opacity: 1; }
 .tv-nav .tvn-pin[aria-pressed="true"] { color: var(--bone); }
-.tvn-it > [aria-selected="true"] ~ .tvn-pin { color: var(--bg); }
+.tvn-it > [aria-current="true"] ~ .tvn-pin { color: var(--bg); }
 .tvn-more > summary { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 12px 9px 4px; border-top: 1px solid var(--rule); margin-top: 6px; cursor: pointer; }
 .tvn-hint { font-size: 12.5px; padding: 8px 9px 2px; margin: 0; }
 @media (hover: none) { .tv-nav .tvn-pin { opacity: 1; } }
@@ -3172,3 +3172,321 @@ html[data-m-music="off"] .nar-set, html[data-m-music="music"] .nar-set, html[dat
 .city-form .cty-how label { display: flex; gap: 8px; align-items: center; }
 .city-form [hidden] { display: none !important; }
 .city-form .cty-msg:empty { display: none; }
+/* the players' hand-drawn maps (atlas-pmap.js): the referee's desk over the world map */
+.pm-host { position: absolute; inset: 0; z-index: 30; background: var(--paper, #f3efe4); display: flex; }
+.pm-host[hidden] { display: none; }
+.pm-ed { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 560px; }
+.pm-hd { display: flex; align-items: center; gap: .8rem; padding: .4rem .7rem; border-bottom: 1px solid var(--rule, #ccc); }
+.pm-hd h3 { margin: 0; font-size: 1.05rem; }
+.pm-mode { flex: 1; font-style: italic; opacity: .75; font-size: .85rem; }
+.pm-body { display: flex; flex: 1; min-height: 0; }
+.pm-left, .pm-right { width: 250px; overflow: auto; padding: .4rem; font-size: .85rem; flex: none; }
+.pm-mid { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.pm-tools { display: flex; flex-wrap: wrap; gap: .25rem; padding: .3rem; align-items: center; font-size: .82rem; }
+.pm-tools label { display: inline-flex; align-items: center; gap: .25rem; }
+.pm-t[aria-pressed="true"] { outline: 2px solid var(--accent, #7a2e1d); }
+.pm-stage { flex: 1; position: relative; overflow: hidden; background: #5b5146; touch-action: none; cursor: crosshair; }
+.pm-stage svg { width: 100%; height: 100%; display: block; }
+.pm-hint { padding: .2rem .5rem; font-size: .8rem; }
+.pm-box { border: 1px solid var(--rule, #ccc); border-radius: 4px; margin: 0 0 .5rem; padding: .35rem .5rem; }
+.pm-box legend { font-weight: 600; font-size: .82rem; }
+.pm-box label { display: block; margin: .2rem 0; }
+.pm-box select[size] { width: 100%; }
+.pm-row { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; margin: .25rem 0; justify-content: space-between; }
+.pm-ask { position: absolute; z-index: 2; font: 16px 'Caveat', cursive; padding: 2px 6px; min-width: 160px; }
+.pm-empty { color: #eee; padding: 2rem; }
+.ps-pmap { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #2b2520; }
+.ps-pmap svg { width: 100%; height: 100%; }
+
+.pm-sl{display:flex;align-items:center;gap:6px;margin-top:2px}.pm-sl input{flex:1;min-width:0}.pm-sl .kn{font-size:.85em}
+
+/* ---- terrain presets on an alien world's brush (atlas-terrain-presets.js, 17 Nov 2026) */
+.wm-brushbar .wm-psw { display: inline-block; width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(0,0,0,.35); vertical-align: middle; }
+.wm-brushbar .wm-hsl input { width: 80px; }
+.wm-brushbar .wm-pq input { width: 130px; }
+.wm-brushbar .wm-pinfo { display: block; flex-basis: 100%; font-size: .82em; line-height: 1.35; margin-top: .25rem; max-width: 70ch; }
+.wm-brushbar .wm-pwarn { color: #9a4a12; }
+.wm-brushbar .wm-pcre { color: #6a4a8a; }
+
+/* ---- a building's inside from a description (atlas-quickplace.js) */
+.qp-dlg { max-width: 560px; width: calc(100% - 32px); }
+.qp-form textarea { width: 100%; box-sizing: border-box; }
+.qp-heard { min-height: 1.3em; margin: .3rem 0 .5rem; font-size: .88em; }
+.qp-detail { display: grid; gap: .35rem; margin: .5rem 0; }
+
+/* ---- powers made by hand and their diplomacy (atlas-factions.js, 17 Nov 2026) */
+.fa-pf, .fa-dipf { display: grid; gap: .35rem; margin: .5rem 0; padding: .6rem; border: 1px solid var(--line, #c9b98f); border-radius: 6px; }
+.fa-pf label, .fa-dipf label { display: grid; gap: .15rem; }
+.fa-setl, .fa-tbox { display: flex; flex-wrap: wrap; gap: .25rem .8rem; border: 0; padding: 0; }
+.fa-setl label, .fa-tbox label { display: inline-flex; gap: .3rem; align-items: center; }
+.fa-dip { margin-top: .5rem; }
+.fa-dipl { margin: .25rem 0; padding-left: 1.1rem; }
+.fa-tr { font-size: .85em; padding: 0 .35rem; border-radius: 4px; background: rgba(120, 90, 40, .12); }
+.wm-trf { display: grid; gap: .3rem; border: 1px solid var(--line, #c9b98f); border-radius: 6px; padding: .4rem .6rem; }
+.fa-cf { padding: .4rem 0; border-bottom: 1px solid var(--line, #e2d6b5); }
+/* the world map looking back in time (the plates run back): today's towns, roads, names and marks hidden */
+.wm-svg.drifting .wm-trd, .wm-svg.drifting .wm-dip, .wm-svg.drifting .wm-cur, .wm-svg.drifting .wm-coa, .wm-svg.drifting .wm-net, .wm-svg.drifting .wm-routes, .wm-svg.drifting .wm-netp, .wm-svg.drifting .wm-jour, .wm-svg.drifting .wm-fx, .wm-svg.drifting .wm-over, .wm-svg.drifting .wm-hdl { display: none; }
+/* Connect Cities (the world map editor): its panel beside the map */
+.wm-ccbox { position: fixed; right: 16px; top: 120px; z-index: 40; width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 160px); overflow: auto; background: var(--paper, #faf6ec); color: var(--ink, #2a2016); border: 1px solid rgba(0,0,0,.18); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 12px 14px; font-size: 14px; }
+.wm-ccbox h4 { margin: 0 0 6px; } .wm-ccbox label { display: block; margin: 6px 0; } .wm-ccbox select { max-width: 100%; }
+.wm-ccpick { max-height: 140px; overflow: auto; border: 1px solid rgba(0,0,0,.1); padding: 4px 6px; border-radius: 6px; }
+.wm-cclist { list-style: none; padding: 0; margin: 6px 0; } .wm-cclist li { padding: 3px 0; border-bottom: 1px solid rgba(0,0,0,.06); } .wm-cclist label { display: inline; }
+
+/* ---- the UI overhaul (18 Nov 2026; the user: "its not very intuitive"): one compact bar at the top, always there: the
+        campaign's name, its views, search, the DM / players' switch, help, the switches and the audio */
+.mast { position: sticky; top: 0; z-index: 35; background: var(--bg); grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px 18px; padding: 8px 0; margin-bottom: 8px; }
+.mast .mast-id { min-width: 0; }
+.mast .kicker { font-size: 10px; letter-spacing: .1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45vw; }
+.mast h1 { font-size: clamp(20px, 2.2vw, 30px); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45vw; }
+.mast .views { grid-column: 1 / -1; order: 3; margin: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding: 2px 0; }
+.mast .views button { white-space: nowrap; }
+.mast .tools { flex-wrap: nowrap; }
+.audiobtn { border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; color: var(--ink); white-space: nowrap; }
+.audiobtn[aria-expanded="true"] { background: var(--ink); color: var(--bg); }
+.mast { position: sticky; }
+.musicbar.mb-pop { display: none; position: absolute; right: 0; top: 100%; z-index: 36; margin: 4px 0 0; background: var(--bg); border: 1px solid var(--rule); border-radius: 12px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.16); flex-wrap: wrap; gap: 8px; max-width: min(640px, calc(100vw - 24px)); }
+.musicbar.mb-pop.open { display: flex; }
+.t-intro.keeper { margin: 8px 0 12px; }
+@media (max-width: 1100px) { .mast { grid-template-columns: minmax(0, 1fr) auto auto; } .mast .views { grid-column: 1 / -1; order: 3; } .mast h1, .mast .kicker { max-width: 60vw; } }
+@media (max-width: 700px) { .mast .tools { flex-wrap: wrap; } .mast .kicker { display: none; } }
+
+/* ---- At the table's tools (the UI overhaul, 18 Nov 2026): a box to find one, groups that fold, each tool's line of what it
+        does shown for the one open only (the others say it on hover), so the list fits a screen */
+.tvn-q { width: 100%; box-sizing: border-box; margin: 2px 0 6px; padding: 7px 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
+.tvn-none { padding: 6px 9px; margin: 0; }
+.tvn-grp > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.tvn-grp > summary::-webkit-details-marker { display: none; }
+.tvn-grp > summary::after { content: "▾"; margin-left: auto; font-size: 11px; transition: transform .15s; }
+.tvn-grp:not([open]) > summary::after { transform: rotate(-90deg); }
+.tvn-grp { display: grid; gap: 2px; }
+@media (min-width: 861px) { #app:not([data-tablet="1"]) .tv-nav button:not([aria-current="true"]) .tvn-d { display: none; } #app:not([data-tablet="1"]) .tv-nav button { padding: 6px 9px; } }
+@media (max-width: 860px) { .tvn-q, .tvn-none { display: none; } .tvn-grp { display: contents; } .tvn-grp > summary { display: none; } }
+#app[data-tablet="1"] .tvn-q, #app[data-tablet="1"] .tvn-none, #app[data-tablet="1"] .tvn-grp > summary { display: none; }
+#app[data-tablet="1"] .tvn-grp { display: contents; }
+.tv-nav .tvn-it[hidden], .tv-nav .tvn-grp[hidden], .tv-nav .tvn-more[hidden], .tv-nav .tvn-g[hidden], .tv-nav .tvn-hint[hidden] { display: none; }
+@media (min-width: 861px) { #app:not([data-tablet="1"]) .tvn-grp:not([open]) > .tvn-it { display: none; } }
+/* (a phone: the name on its own line, then the tools and Audio, then the views; the bar scrolls away, there is no room
+   to keep it) */
+@media (max-width: 700px) {
+  .mast { position: static; grid-template-columns: minmax(0, 1fr) auto; }
+  .mast .mast-id { grid-column: 1 / -1; }
+  .mast h1 { max-width: 100%; font-size: 24px; white-space: normal; }
+  .mast .tools { gap: 6px; }
+  .mast .audiobtn { align-self: start; }
+}
+.tracker.trk-empty #trk:not([open]) > summary { padding-top: 4px; padding-bottom: 4px; }
+.tracker.trk-empty #trk:not([open]) .trh { font-size: 15px; }
+.tracker.trk-empty #trk:not([open]) { background: transparent; border-style: dashed; }
+.tracker.trk-empty { margin-bottom: 14px; }
+/* (the UI overhaul, 18 Nov 2026: the world map's layer switches together under Layers; hidden when the map has none) */
+.wm-lbody { display: flex; flex-wrap: wrap; gap: 6px; width: max-content; max-width: min(460px, 86vw); }
+.wm-layers:not(:has(.wm-lbody > .wm-btn:not([hidden]))) { display: none; }
+.wm-layers:has(.wm-lbody [aria-pressed="true"]) > summary { border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.mf-q { width: 100%; box-sizing: border-box; margin: 6px 0 4px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--ink); font: inherit; }
+.mf .mf-row[hidden], .mf .mf-list[hidden], .mf h4.mf-g[hidden] { display: none; }
+/* (the table toolbar folds to one button: Tools) */
+.t-dock .t-dmin { min-width: 30px; padding: 7px 4px 5px; color: var(--muted); }
+.t-dock .t-dmin .ic, .t-dock .t-dmin .t-dmin-l { display: none; }
+.t-dock .t-dmin b { font-size: 16px; line-height: 22px; font-weight: 400; }
+.t-dock.min > button:not(.t-dmin) { display: none; }
+.t-dock.min .t-dmin { min-width: 58px; color: var(--ink); }
+.t-dock.min .t-dmin .ic, .t-dock.min .t-dmin .t-dmin-l { display: block; }
+.t-dock.min .t-dmin b { display: none; }
+/* (the UI overhaul, 18 Nov 2026: a place's empty sections are one quiet line each, and the map that is not made yet comes
+   last, so what the place has comes first) */
+.dossier .sec:has(> .sec-none), .dossier .sec:has(> .links > .sec-none) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 14px; margin-bottom: 14px; }
+.dossier .sec:has(> .sec-none) > h3, .dossier .sec:has(> .links > .sec-none) > h3 { margin: 0; padding: 0; border: 0; color: var(--muted); }
+.dossier .sec-none { margin: 0; font-size: 14px; color: var(--muted); }
+.dossier .sec:has(> .sec-none) .fold-all { display: none; }
+
+/* ==== the uncluttered pass (18 Nov 2026; the user: "work on it being uncluttered") ==== */
+/* the top: one line on a wide screen: the name, the views, search, DM / players, help, the gear, the music */
+.mast .search { width: 170px; transition: width .15s; }
+.mast .search:focus { width: 260px; }
+.mast .mode button { padding: 6px 10px; font-size: 11px; }
+.mast .views button { padding: 5px 12px; font-size: 11.5px; }
+.mast { border-bottom: 1px solid var(--rule); padding: 6px 0; gap: 6px 14px; }
+@media (min-width: 1240px) {
+  .mast { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .mast .views { grid-column: auto; order: 0; }
+  .mast .kicker { display: none; }
+  .mast h1 { font-size: 22px; max-width: 22vw; }
+  .mast .ab-l { display: none; }
+  .mast .audiobtn { padding: 6px 10px; }
+}
+.mast .views button { letter-spacing: .04em; padding: 5px 10px; }
+.mast .views { gap: 4px; }
+.mast .search { width: 150px; }
+/* the "New" banner: one slim line */
+.t-intro.keeper { padding: 6px 12px; gap: 8px 12px; font-size: 15px; margin: 6px 0 10px; }
+.t-intro.keeper > .ic { width: 20px; height: 20px; }
+.t-intro.keeper .t-btn { padding: 4px 10px; font-size: 14px; }
+.t-intro.keeper .ti-t { flex: 1; min-width: 200px; }
+/* the tracker, empty, is not shown until asked for */
+.tracker.trk-empty:not(.trk-want) { display: none; }
+.enc-trk { border: 0; background: none; padding: 4px 0; margin-left: 10px; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.wrap { padding-top: 8px; }
+/* At the table, its start: a short head, the checklist one line a step, the two big cards without their long words, no
+   second copy of the tools' list (the list is beside it), the how-to folded */
+@media (min-width: 861px) {
+  #app:not([data-tablet="1"]) .tv-head .st-kicker, #app:not([data-tablet="1"]) .tv-lead { display: none; }
+  #app:not([data-tablet="1"]) .tv-h { font-size: 30px; margin: 0; }
+  #app:not([data-tablet="1"]) .tv-head { align-items: center; margin-bottom: 12px; }
+  #app:not([data-tablet="1"]) .th-h, #app:not([data-tablet="1"]) .th-grid, #app:not([data-tablet="1"]) .th-mods { display: none; }
+  #app:not([data-tablet="1"]) .th-big .th-say { display: none; }
+}
+.th-check ol { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.th-check li { flex: 0 1 auto; }
+.th-check .th-ckb span { display: none; }
+.th-check .th-ckb b { font-size: 15px; }
+.th-check { padding: 10px 14px; }
+.th-how > summary { cursor: pointer; list-style: none; }
+.th-how > summary::-webkit-details-marker { display: none; }
+.th-how > summary h3 { display: inline; }
+.th-how > summary::after { content: " ▾"; color: var(--muted); }
+.th-how[open] > summary::after { content: " ▴"; }
+/* a place's page is for running the game; ✎ Edit shows the tools that change it (empty notes too) */
+.dossier:not(.dedit) .ed-only { display: none !important; }
+.dossier:not(.dedit) .ed-notes .nt:has(textarea:placeholder-shown) { display: none; }
+.dossier:not(.dedit) .ed-notes:not(:has(textarea:not(:placeholder-shown))) { display: none; }
+.d-editsw { margin-left: auto; border: 1px solid var(--rule); background: transparent; border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 11px; letter-spacing: .06em; color: var(--muted); cursor: pointer; }
+.d-editsw[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.dossier .eyebrow { display: flex; align-items: center; flex-wrap: wrap; }
+.dossier.dedit .sec:has(> .sec-none) { display: block; }
+/* the party's journey on the map: one line; Rest, Arrived, Call it off and the road so far under More */
+.wm-journey { flex-wrap: nowrap; align-items: center; white-space: nowrap; max-width: calc(100% - 140px); }
+.wm-journey > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wm-journey .wm-jb { flex-wrap: nowrap; }
+.wm-jmore { position: relative; }
+.wm-jmore > summary { list-style: none; cursor: pointer; border: 1px solid var(--rule); border-radius: 4px; padding: 3px 9px; font-size: 13.5px; }
+.wm-jmore > summary::-webkit-details-marker { display: none; }
+.wm-jmb { position: absolute; bottom: calc(100% + 6px); right: 0; display: grid; gap: 4px; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.wm-jmb button { white-space: nowrap; text-align: left; }
+@media (max-width: 700px) { .wm-journey { flex-wrap: wrap; white-space: normal; max-width: calc(100% - 20px); } }
+
+/* ==== The design system (18 Nov 2026; the user: "i want consistency and also ease of use") ====
+   Four kinds of control, the same in every view:
+   1. NAVIGATION and switches (where you are, what is shown): a mono, upper-case pill: the views, DM / players, Help,
+      the map's Filters and Layers and its layers, a list's chips.
+   2. ACTIONS (do something): the body's serif, plain case, a rounded rectangle. Each area has at most one MAIN action,
+      filled dark (.prim); the others are plain, with a border.
+   3. LINKS (go somewhere, or a small extra): the accent colour, underlined.
+   4. ICON buttons (the gear, music, ?, a map's zoom): a 32 px square or circle.
+   Every one shows the same ring when reached by the keyboard. */
+:root { --ctl-h: 32px; --r-act: 6px; --t-act: 14.5px; --t-nav: 11.5px; }
+
+/* 1. navigation and switches */
+.views button, .mode button, .wm-btn, .wm-filt > summary, .tu-helpbtn, .chip, .tvn-g {
+  font-family: var(--f-mono); font-size: var(--t-nav); letter-spacing: .05em; text-transform: uppercase; }
+.views button, .wm-btn, .wm-filt > summary, .tu-helpbtn, .chip { min-height: 30px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--rule); background: transparent; color: var(--ink); }
+.mode { border-radius: 999px; }
+.mode button { min-height: 30px; }
+.views button:hover, .wm-btn:hover, .wm-filt > summary:hover, .tu-helpbtn:hover, .chip:hover { border-color: var(--ink); }
+.views button[aria-pressed="true"], .wm-btn[aria-pressed="true"], .wm-filt[open] > summary, .chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* 2. actions */
+.t-btn, .t-mini, .mx-b, .enc-add, .enc-know, .addclue, .d-editsw, .sc-edit, .wm-jmore > summary, .wm-journey button, .wm-jmb button,
+.dossier button.prim, .leads button, .ka button, .mf-pb, .stseg button, .t-intro .t-btn, .wm-panel button:not(.wm-x):not(.t-link), .wm-dlg button:not(.wm-x):not(.t-link) {
+  font-family: var(--f-body); font-size: var(--t-act); letter-spacing: 0; text-transform: none; line-height: 1.2;
+  min-height: var(--ctl-h); padding: 5px 12px; border-radius: var(--r-act); border: 1px solid var(--rule); background: var(--panel); color: var(--ink); cursor: pointer; }
+.t-btn:hover, .t-mini:hover, .mx-b:hover, .enc-add:hover, .enc-know:hover, .addclue:hover, .d-editsw:hover, .sc-edit:hover, .wm-jmore > summary:hover,
+.wm-journey button:hover, .wm-jmb button:hover, .leads button:hover, .ka button:hover, .mf-pb:hover, .stseg button:hover,
+.wm-panel button:not(.wm-x):not(.t-link):hover, .wm-dlg button:not(.wm-x):not(.t-link):hover { border-color: var(--ink); }
+/* the main action: one an area, filled */
+.prim, .t-btn.prim, button.prim, .mx-b.prim, .wm-journey button.prim { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.prim:hover, .t-btn.prim:hover, button.prim:hover { opacity: .9; }
+/* a chosen one of a set (a status, a preset, a switch that is on) */
+.t-btn[aria-pressed="true"], .stseg button[aria-pressed="true"], .mf-pb[aria-pressed="true"], .d-editsw[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* 3. links */
+.t-link, .enc-trk, .fold-all, [data-ckoff], [data-ckon] { font-family: var(--f-body); font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* 4. icon buttons */
+.featbtn, .audiobtn, .ux-keysb, .tu-qb { width: var(--ctl-h); height: var(--ctl-h); min-width: var(--ctl-h); padding: 0; display: inline-grid; place-items: center; border-radius: 50%; border: 1px solid var(--rule); background: transparent; color: var(--ink); font-family: var(--f-mono); font-size: 13px; margin: 0; }
+.featbtn:hover, .audiobtn:hover, .ux-keysb:hover, .tu-qb:hover { border-color: var(--ink); }
+.audiobtn[aria-expanded="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.wm-ctl button, .mctl button { border-radius: var(--r-act); }
+@media (max-width: 1239px) { .mast .audiobtn { width: auto; padding: 0 12px; border-radius: 999px; } }
+
+/* the one keyboard ring */
+:where(button, summary, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* steady spacing between controls side by side */
+.t-row, .ka, .wm-jb, .wm-jmb, .enc-new { gap: 8px; }
+/* (the stragglers: rules of their own that out-weighed the system) */
+#app .mast .mode button, #app .mast .tu-helpbtn { font-size: var(--t-nav); letter-spacing: .05em; }
+#app .songcard .sc-edit { font-family: var(--f-body); font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+#app .mx-b { font-family: var(--f-body); font-size: var(--t-act); letter-spacing: 0; text-transform: none; border-radius: var(--r-act); min-height: var(--ctl-h); }
+#app .tu-qb { width: 28px; height: 28px; min-width: 28px; border-radius: 50%; }
+/* At the table's list: the core tools, then More tools, folded */
+.tvn-extra { display: grid; gap: 2px; }
+.tvn-extra > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.tvn-extra > summary::-webkit-details-marker { display: none; }
+.tvn-extra > summary::after { content: "▾"; margin-left: auto; font-size: 11px; transition: transform .15s; }
+.tvn-extra:not([open]) > summary::after { transform: rotate(-90deg); }
+@media (min-width: 861px) { #app:not([data-tablet="1"]) .tvn-extra:not([open]) > .tvn-it { display: none; } }
+@media (max-width: 860px) { .tvn-extra { display: contents; } .tvn-extra > summary { display: none; } }
+#app[data-tablet="1"] .tvn-extra { display: contents; } #app[data-tablet="1"] .tvn-extra > summary { display: none; }
+.tv-nav .tvn-extra[hidden] { display: none; }
+/* (a person's card button beside their fold, not inside its summary: a button inside a summary is out of reach for a screen reader) */
+.ppl > li { position: relative; }
+.ppl > li > .ux-pkb-out { position: absolute; top: 6px; right: 0; }
+.ppl > li > details > summary { padding-right: 110px; }
+.ho-tag { cursor: inherit; }
+
+/* ---- the campaign's things (atlas-items.js) */
+.itg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.t-card h3 .itg.ic { width: 20px; height: 20px; vertical-align: -3px; margin-right: 4px; }
+.it-ph { flex: none; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 6px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); }
+.it-ph.age-medieval, .it-ph.age-old, .it-ph.age-1920s { background: #efe5cc; color: #4a3520; border-color: #c9b98f; }
+.it-ph.age-future { background: #0f1d24; color: #8fd3e8; border-color: #2a4b57; border-radius: 2px; }
+.it-ph.age-modern { background: #e9edf0; color: #2c3a44; }
+.it-img { flex: none; width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--rule); }
+.it-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.it-row { display: flex; gap: 10px; align-items: flex-start; padding: 6px; border: 1px solid var(--rule); border-radius: 6px; background: var(--panel); }
+.it-row.on { border-color: var(--ink); }
+.it-b { flex: 1; min-width: 0; text-align: left; }
+button.it-pick { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.it-d { margin: 2px 0 0; font-size: 14.5px; }
+.it-st { margin: 2px 0 0; font-size: 13.5px; font-family: var(--f-mono); }
+.it-src { display: inline-block; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; padding: 0 5px; border-radius: 3px; border: 1px solid var(--rule); color: var(--muted); }
+.it-src-srd { border-color: var(--ok); color: var(--ok); } .it-src-homebrew { border-color: var(--bone); color: var(--bone); }
+.it-sec { margin: 2px 0 0; font-size: 14px; background: var(--secret); padding: 2px 6px; border-radius: 4px; }
+.it-acts { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.it-res { margin-top: 10px; }
+.it-ed .it-g2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 12px; }
+.it-f { display: grid; gap: 2px; font-size: 13px; color: var(--muted); margin: 6px 0; }
+.it-f .t-in { color: var(--ink); width: 100%; box-sizing: border-box; }
+.it-edh { display: flex; gap: 10px; align-items: center; }
+.it-edh h4 { margin: 0; }
+.it-h5 { margin: 12px 0 2px; font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.it-rv { margin: 4px 0; padding-left: 18px; } .it-rv li.done { color: var(--muted); }
+.it-clue { margin-top: 10px; padding: 10px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent-soft); }
+.it-person { margin: 8px 0; font-size: 14.5px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.it-chip { border: 1px solid var(--rule); border-radius: 999px; padding: 1px 8px; font-size: 13px; }
+.it-more > summary { cursor: pointer; margin: 6px 0; }
+.it-lt { margin: 8px 0; }
+.it-gen .t-row { flex-wrap: wrap; }
+.it-gen .t-in { width: auto; max-width: 100%; }
+
+/* ---- an imported adventure (atlas-adventure.js) */
+.adv-card .tw-hh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.adv-state { font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .05em; text-transform: uppercase; padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; }
+.adv-ok { color: var(--ok); } .adv-rv { color: var(--bone); } .adv-no { color: var(--accent); }
+.adv-ready ul, .adv-q, .adv-p, .adv-res { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 4px; }
+.adv-mark { display: inline-block; width: 1.2em; font-weight: 700; }
+.adv-c-ready .adv-mark { color: var(--ok); } .adv-c-review .adv-mark { color: var(--bone); } .adv-c-incomplete .adv-mark { color: var(--accent); }
+.adv-ref { font-family: var(--f-mono); font-size: 11px; color: var(--muted); border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+.adv-added { color: var(--bone); border-color: var(--bone); }
+.adv-m { border-top: 1px solid var(--rule); padding: 8px 0; }
+.adv-card-name, .adv-card { } .adv-res .adv-card { font-family: var(--f-display); }
+.adv-q-done b { text-decoration: line-through; color: var(--muted); } .adv-q-failed b { color: var(--accent); }
+.adv-areas { padding-left: 0; list-style: none; display: grid; gap: 8px; } .adv-areas p { margin: 2px 0; }
+.adv-here { font-size: 14px; }
+.adv-go { margin-top: 10px; align-items: center; gap: 10px; }
+.adv-go [disabled] { opacity: .5; cursor: not-allowed; }
+.adv-q select.t-in { width: auto; min-width: 7em; margin-right: 6px; }
+.adv-q li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
+.adv-locs { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 4px; }
+.adv-locs li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.adv-loc select.t-in { width: auto; max-width: 100%; }

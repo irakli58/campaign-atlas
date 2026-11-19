@@ -83,19 +83,21 @@
 
   /* ---- the frame */
   const kicker = [cfg.system, cfg.setting, gm + "'s gazetteer"].filter(Boolean).join(" · ");
+  // (the empty tracker is not shown: the Gazetteer's side has a button that brings it out, open)
+  document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-trk-show]"); if (!b) return; const t = document.getElementById("tracker"), d = document.getElementById("trk"); if (!t) return; t.classList.add("trk-want"); if (d) d.open = true; t.scrollIntoView({ block: "nearest", behavior: "smooth" }); });
+  // (a place's page: for running the game; Edit shows the tools that change it; remembered)
+  document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-dedit]"); if (!b) return; DEDIT = !DEDIT; try { localStorage.setItem("atlas-dossier-edit", DEDIT ? "1" : "0"); } catch (er) {} const d = document.getElementById("dossier"); if (d) d.classList.toggle("dedit", DEDIT); b.setAttribute("aria-pressed", String(DEDIT)); b.textContent = DEDIT ? "✎ Editing" : "✎ Edit"; });
+  // (the world map's Filters and Layers fold away at a click elsewhere)
+  document.addEventListener("click", e => { if (!e.target.closest) return; for (const d of document.querySelectorAll(".wm-filt[open]")) if (!d.contains(e.target)) d.open = false; });
+  document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("#audio-btn"), pop = document.getElementById("audio-pop"); if (!pop) return;
+    if (b) { const open = !pop.classList.contains("open"); pop.classList.toggle("open", open); b.setAttribute("aria-expanded", open); return; }
+    if (!e.target.closest("#audio-pop") && !e.target.closest(".mus-panel, .snd-panel, dialog")) { pop.classList.remove("open"); const bb = document.getElementById("audio-btn"); if (bb) bb.setAttribute("aria-expanded", "false"); } });
+  if (!document.documentElement.lang) document.documentElement.lang = "en";   // (the page's language, for screen readers)
   app.dataset.mode = state.mode;
   app.innerHTML = `
   <header class="mast">
-    <div><div class="kicker">${esc(kicker)}</div><h1>${esc(cfg.title)}${cfg.strap ? `: <em>${esc(cfg.strap)}</em>` : ""}</h1></div>
-    <div class="tools">
-      <span class="ux-qwrap"><input id="q" class="search" type="search" placeholder="Search everything (Ctrl+K)" aria-label="Search everything in the campaign" autocomplete="off"></span>
-      ${ACTS.length ? `<select id="act" class="actsel" aria-label="Filter by act"><option value="all">All acts</option>${ACTS.map(a => `<option value="${a}">${esc(actTitle(a))}</option>`).join("")}</select>` : ""}
-      <div class="mode" role="group" aria-label="View mode"><button id="m-keeper" type="button" aria-pressed="${state.mode === "gm"}">${esc(gm)}</button><button id="m-player" type="button" aria-pressed="${state.mode === "player"}">Player-safe</button></div>
-      ${A.modules ? `<button type="button" class="featbtn keeper" data-mf-open title="What this campaign uses: switch parts of Atlas on and off" aria-label="What this campaign uses"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>` : ""}
-    </div>
-  </header>
-  ${A.music ? `<div class="musicbar">${A.music.html()}${A.sound ? A.sound.html() : ""}</div>` : ""}
-  <nav class="views" aria-label="View">
+    <div class="mast-id" title="${esc(kicker)}"><div class="kicker">${esc(kicker)}</div><h1>${esc(cfg.title)}${cfg.strap ? `: <em>${esc(cfg.strap)}</em>` : ""}</h1></div>
+    <nav class="views" aria-label="View">
     ${A.nav ? A.nav.btnsHTML() : ""}<button type="button" id="v-gaz" aria-pressed="true">Gazetteer</button>
     ${A.worldMount && A.worldList && A.worldList().length ? `<button type="button" id="v-world" aria-pressed="false">World map</button>${A.worldList().length > 1 ? `<select id="v-worldsel" class="v-worldsel" aria-label="Which world" title="This campaign's worlds: its own, and the others it holds (a planet, a moon, a plane's layer)">${A.nav ? A.nav.worldOptions("main") : A.worldList().map(w => `<option value="${esc(w.id)}">${esc(w.name)}</option>`).join("")}</select>` : ""}` : ""}
     ${A.galaxyParams && A.galaxyMount ? `<button type="button" id="v-galaxy" class="keeper" aria-pressed="false">Star chart</button>` : ""}
@@ -103,6 +105,15 @@
     ${(A.storyData || []).length ? `<button type="button" id="v-story" class="keeper" aria-pressed="false">The story</button>` : ""}
     ${A.music && A.music.enabled && A.music.enabled() ? `<button type="button" id="v-music" aria-pressed="false">Music</button>` : ""}
   </nav>
+    <div class="tools">
+      <span class="ux-qwrap"><input id="q" class="search" type="search" placeholder="Search (Ctrl+K)" aria-label="Search everything in the campaign" autocomplete="off"></span>
+      ${ACTS.length ? `<select id="act" class="actsel" aria-label="Filter by act"><option value="all">All acts</option>${ACTS.map(a => `<option value="${a}">${esc(actTitle(a))}</option>`).join("")}</select>` : ""}
+      <div class="mode" role="group" aria-label="View mode"><button id="m-keeper" type="button" aria-pressed="${state.mode === "gm"}">${esc(gm)}</button><button id="m-player" type="button" aria-pressed="${state.mode === "player"}">Player-safe</button></div>
+      ${A.modules ? `<button type="button" class="featbtn keeper" data-mf-open title="What this campaign uses: switch parts of Atlas on and off" aria-label="What this campaign uses"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg></button>` : ""}
+    </div>
+    ${A.music ? `<button type="button" class="audiobtn" id="audio-btn" aria-expanded="false" aria-controls="audio-pop" title="Music and sounds" aria-label="Music and sounds">♪<span class="ab-l"> Audio</span></button>` : ""}
+    ${A.music ? `<div class="musicbar mb-pop" id="audio-pop">${A.music.html()}${A.sound ? A.sound.html() : ""}</div>` : ""}
+  </header>
   <section class="story keeper" id="story" aria-label="The whole story"></section>
   <section class="studio" id="studio" aria-label="Make your own music"></section>
   ${A.tableUI ? `<section class="tablev keeper" id="tablev" aria-label="At the table"></section>` : ""}
@@ -266,6 +277,7 @@
 
   /* ---- the dossier */
   // "Open all" / "Close all" for a list of folding entries (clues, people, rooms, scenes, connections)
+  let DEDIT = (() => { try { return localStorage.getItem("atlas-dossier-edit") === "1"; } catch (e) { return false; } })();
   const FOLDALL = `<button type="button" class="fold-all" data-foldall="1">Open all</button>`;
   // referee only: why each connected place is connected, and through whom
   function connWhy(p) {
@@ -305,7 +317,7 @@
     // the head of the dossier, with the place's suggested song at its top right (the user asked for it there)
     $("#dossier").innerHTML = `
       <div class="dhead"><div class="dtop"><div class="dtitle">
-      ${trail}<div class="eyebrow"><span>No. ${pad(p.n)}</span><span>${esc(CATS[p.cat] || "")}</span><span>${esc(p.dist)}</span></div>
+      ${trail}<div class="eyebrow"><span>No. ${pad(p.n)}</span><span>${esc(CATS[p.cat] || "")}</span><span>${esc(p.dist)}</span>${state.mode === "gm" ? `<button type="button" class="d-editsw keeper" data-dedit aria-pressed="${DEDIT}" title="Show the tools that change this place: add clues and ways in, notes on forcing it and what closes it (off: the page for running the game)">${DEDIT ? "✎ Editing" : "✎ Edit"}</button>` : ""}</div>
       <h2>${esc(p.name)}</h2>
       ${p.sub ? `<p class="subt keeper">${esc(p.sub)}</p>` : ""}
       <div class="meta">${acts}${bone}</div>
@@ -315,20 +327,21 @@
       ${A.locations && A.customs && A.customs[p.id] ? A.locations.panel(p) : ""}
       ${M.ext ? `<section class="sec readaloud"><h3>First impressions · read aloud${A.narrateBtn ? `<span class="nar-h">${A.narrateBtn(M.ext, "first impressions")}${A.narrateSet()}</span>` : ""}</h3><p class="lead">${esc(M.ext)}</p></section>` : ""}
       ${A.ux && state.mode === "gm" && (A.mapEdits && A.mapEdits[p.id] && !A.mapEdits[p.id].off || (A.customs && A.customs[p.id])) ? `<p class="keeper ux-handp">${A.ux.hand(A.customs && A.customs[p.id] ? "A place of your own: nothing Atlas makes again draws over it" : "Its map is yours, as you drew it: never redrawn")}</p>` : ""}
-      ${p.M ? A.section(p.id) : `<section class="sec"><h3>Maps of the location</h3><p class="empty">This place has not been mapped yet.</p></section>`}
+      ${p.M ? A.section(p.id) : ""}
       ${M.ov ? `<section class="sec secret keeper"><h3>What's really going on</h3><p>${esc(M.ov)}</p></section>` : ""}
       <section class="sec keeper" id="peopleSlot"><h3>People here${FOLDALL}</h3>${peopleList(p)}</section>
       <div class="keeper" id="clueSlot">${clueSection(p)}</div>
       ${A.tableUI ? A.tableUI.dossierExtra(p) : ""}
       ${hooks.length ? `<section class="sec keeper"><h3>Scenes and hooks${FOLDALL}</h3><ul class="hks">${hooks.join("")}</ul></section>` : ""}
-      <section class="sec"><h3>Connected places</h3><div class="links">${links || `<span class="kn">None.</span>`}</div></section>
+      <section class="sec"><h3>Connected places</h3><div class="links">${links || `<span class="kn sec-none">None.</span>`}</div></section>
+      ${p.M ? "" : `<section class="sec"><h3>Maps of the location</h3><p class="empty sec-none">This place has not been mapped yet.</p></section>`}
       ${connWhy(p)}
       <div id="leadsSlot">${leadsPanel(p.id)}</div>
       <nav class="pager" aria-label="Previous and next place">
         <button type="button" data-go="${esc(prev.id)}">← ${pad(prev.n)} ${esc(prev.name)}</button>
         <button type="button" data-go="${esc(next.id)}">${pad(next.n)} ${esc(next.name)} →</button>
       </nav>`;
-    const d = $("#dossier");
+    const d = $("#dossier"); d.classList.toggle("dedit", DEDIT);
     if (flash) { d.classList.remove("flash"); void d.offsetWidth; d.classList.add("flash"); }
   }
   function renderAll(flash) {
@@ -475,7 +488,9 @@
     const body = $("#trk-body"), sum = $("#trk-sum"); if (!body) return;
     if (!TR.ready) { body.innerHTML = `<p class="trnote">${TR.db === false ? "The tracker saves to this page's database, which isn't available here. Open the page on claude.ai while signed in to use it." : "Loading the tracker…"}</p>`; sum.textContent = ""; return; }
     const found = TR.keys.filter(isFound), ticked = Object.values(TR.clues).reduce((n, a) => n + a.length, 0), total = Object.values(ROWS).reduce((n, a) => n + a.length, 0);
-    sum.textContent = `${ticked} of ${total} clues found · ${found.length} of ${TR.keys.length} keys · ${TR.party.length} ${TR.party.length === 1 ? "character" : "characters"}`;
+    // (the UI overhaul of 18 Nov 2026: an empty tracker is one quiet line, not a bar of noughts)
+    const empty = !total && !TR.keys.length && !TR.party.length; { const sec = $("#tracker"); if (sec) sec.classList.toggle("trk-empty", empty); }
+    sum.textContent = empty ? "nothing to track yet: open it to add the characters or a key" : `${ticked} of ${total} clues found · ${found.length} of ${TR.keys.length} keys · ${TR.party.length} ${TR.party.length === 1 ? "character" : "characters"}`;
     const places = allPlaces();
     const ready = places.filter(p => ["unknown", "rumoured", "known"].includes(stOf(p.id)) && accessInfo(p.id).via.length > 0);
     const fragile = places.filter(p => !["resolved", "closed"].includes(stOf(p.id)) && accessInfo(p.id).ways.length === 1 && !accessInfo(p.id).free);
@@ -533,7 +548,7 @@
     const rows = ROWS[p.id] || [];
     const lead = (r, done) => r.to.length ? `<div class="cl-to"><span class="kn">${TR.ready ? (done ? "Opened" : "Would open") : "Leads to"}</span>${r.to.map(t => `<span class="pc">${accBadge(t)}<button type="button" class="pcg" data-go="${esc(t)}">${esc(placeName(t))}</button></span>`).join("")}</div>` : "";
     const hint = r => r.hint ? `<details class="chint"><summary>${r.to.length === 1 ? "How to hint at " + esc(placeName(r.to[0])) : r.to.length ? "How to hint where it leads" : "If it is missed"}</summary><p>${esc(r.hint)}</p></details>` : "";
-    const fold = (r, done) => `<details class="clf"><summary>${esc(r.short)}${r.roll && A.tableUI ? " " + A.tableUI.roll(r.roll) : ""}${r.handout && A.tableUI ? ` <button type="button" class="ho-b" data-t="hview" data-id="${esc(r.handout)}" title="Read this handout, or give it to the players">${A.table.icon("handout")}Handout</button>` : ""}</summary><p class="clx">${esc(r.text)}</p>${lead(r, done)}${hint(r)}${r.rescue ? `<details class="chint"><summary>If they're stuck</summary><p>${esc(r.rescue)}</p></details>` : ""}${r.handout && A.tableUI ? `<p class="cl-ho">${A.tableUI.handoutBtns(r.handout)}</p>` : ""}</details>`;
+    const fold = (r, done) => `<details class="clf"><summary>${esc(r.short)}${r.roll && A.tableUI ? " " + A.tableUI.roll(r.roll) : ""}${r.handout && A.tableUI ? ` <span class="ho-b ho-tag" title="This clue has a handout: open the clue to read it or give it to the players">${A.table.icon("handout")}Handout</span>` : ""}</summary><p class="clx">${esc(r.text)}</p>${lead(r, done)}${hint(r)}${r.rescue ? `<details class="chint"><summary>If they're stuck</summary><p>${esc(r.rescue)}</p></details>` : ""}${r.handout && A.tableUI ? `<p class="cl-ho">${A.tableUI.handoutBtns(r.handout)}</p>` : ""}</details>`;
     if (!TR.ready) return `<section class="sec sec-clues"><h3>Clues to find${rows.length ? FOLDALL : ""}</h3>${rows.length ? `<ul class="cls">${rows.map(r => `<li class="cl"><span class="ckx"></span>${fold(r)}</li>`).join("")}</ul>` : `<p class="kn">None here.</p>`}</section>`;
     const ro = TR.canWrite ? "" : " disabled";
     const main = rows.map(r => { const done = clueDone(p.id, r.k); return `<li class="cl${done ? " done" : ""}"><input type="checkbox" data-clue="${esc(p.id)}" data-ck="${esc(r.k)}" aria-label="Found: ${esc(r.short)}"${done ? " checked" : ""}${ro}>${fold(r, done)}</li>`; }).join("");
@@ -543,8 +558,8 @@
       return `<li class="cl${done ? " done" : ""}"><input type="checkbox" data-found="${esc(k.id)}" aria-label="Found: ${esc(k.title)}"${done ? " checked" : ""}${ro}><details class="clf"><summary>${esc(k.title)}</summary>${k.from ? `<p class="clx kn">From ${esc(k.from)}</p>` : ""}${leads}</details></li>`;
     }).join("");
     const n = rows.filter(r => clueDone(p.id, r.k)).length + keysFoundAt(p.id).filter(isFound).length, tot = rows.length + keysFoundAt(p.id).length;
-    return `<section class="sec sec-clues"><h3>Clues to find <span class="cl-n">${n} of ${tot} found</span>${tot ? FOLDALL : ""}</h3><ul class="cls">${main}${extra}</ul>
-      ${TR.canWrite ? `<button type="button" class="addclue" data-kfound="${esc(p.id)}">+ Add a clue found here</button>` : ""}</section>`;
+    return `<section class="sec sec-clues"><h3>Clues to find <span class="cl-n">${n} of ${tot} found</span>${tot ? FOLDALL : ""}</h3>${tot ? `<ul class="cls">${main}${extra}</ul>` : `<p class="kn sec-none">None here.</p>`}
+      ${TR.canWrite ? `<button type="button" class="addclue ed-only" data-kfound="${esc(p.id)}">+ Add a clue found here</button>` : ""}</section>`;
   }
   function accHead(id) {
     const a = accessInfo(id), st = TR.status[id] || {};
@@ -558,16 +573,16 @@
     const a = accessInfo(id), st = TR.status[id] || {}, ro = TR.canWrite ? "" : " disabled";
     const warn = a.ways.length === 1 && !["resolved", "closed"].includes(a.s) ? `<p class="warn">Only one way in. If the party misses it, they can't find this place. Consider another lead.</p>` : "";
     return `<section class="sec keeper leads"><h3>Access, leads and keys</h3>
-      ${accHead(id)}
-      <label class="freeck"><input type="checkbox" data-free="${esc(id)}"${a.free ? " checked" : ""}${ro}> Open from the start (a public place, or somewhere they already know)</label>
+      <div class="ed-only">${accHead(id)}</div>
+      <label class="freeck ed-only"><input type="checkbox" data-free="${esc(id)}"${a.free ? " checked" : ""}${ro}> Open from the start (a public place, or somewhere they already know)</label>
       <div class="stseg" role="group" aria-label="Status">${STATUSES.map(([v, l]) => `<button type="button" data-st="${v}" data-pl="${esc(id)}" aria-pressed="${a.s === v}"${ro}><span class="sd st-${v}"></span>${l}</button>`).join("")}</div>
       <h4>Ways in (${a.via.length} of ${a.ways.length} found)</h4>
       ${a.ways.length ? `<ul class="wl">${a.ways.map(wayLine).join("")}</ul>` : `<p class="kn">No clue points here.</p>`}${warn}
-      <div class="grid2">
+      <div class="grid2 ed-notes">
         <label class="nt"><span>Forcing it without a lead</span><textarea data-note="force" data-pl="${esc(id)}" rows="3" placeholder="What it costs: a roll, a bribe, someone noticing…"${ro}>${esc(st.force || "")}</textarea></label>
         <label class="nt"><span>What closes it</span><textarea data-note="closes" data-pl="${esc(id)}" rows="3" placeholder="What happens if the party waits or gets caught…"${ro}>${esc(st.closes || "")}</textarea></label>
       </div>
-      ${TR.canWrite ? `<button type="button" class="prim" data-knew="${esc(id)}">+ Add another way in</button>` : ""}
+      ${TR.canWrite ? `<button type="button" class="prim ed-only" data-knew="${esc(id)}">+ Add another way in</button>` : ""}
     </section>`;
   }
   function renderClues() { const p = byId[state.sel], slot = $("#clueSlot"); if (p && slot) slot.innerHTML = clueSection(p); }
@@ -661,12 +676,13 @@
     return `<div class="prof"><dl>
       ${row("Where", n.at ? ((A.nameOf && A.nameOf(M, n.at)) ? n.at + " · " + A.nameOf(M, n.at) : n.at) : "")}${row("Looks", g("look"))}${row("Manner", g("manner"))}${row("Sounds", g("voice"))}${row("Doing", n.doing)}${row("Story", g("bg"))}${tiesRows(n)}${row("Wants", g("want"))}${row("Knows", n.knows)}${row("Secret", g("secret"), "sec-k")}${row("Lie", g("lie"))}${row("Talks", g("press"))}${row("Reveals", n.rev)}${row("Fate", c.fate)}
     </dl>${A.tableUI ? A.tableUI.stats(n.stats || c.stats) : ""}
+    ${A.items && state.mode === "gm" ? A.items.personHTML(A.story && A.story.personRef ? A.story.personRef(pid, k) : n.who ? "cast:" + n.who : "npc:" + pid + "/" + k) : ""}
     ${TR.ready ? `<label class="cnote"><span>Your notes on ${esc(who(n)[0])}</span><textarea data-cnote="${esc(cid)}" rows="3" placeholder="What the party has learned, how you've played them, changes…"${TR.canWrite ? "" : " disabled"}>${esc(notes)}</textarea></label>` : ""}</div>`;
   }
   function peopleList(p) {
     const np = Object.entries((p.M || {}).npcs || {});
-    if (!np.length) return `<p class="kn">Nobody is posted here.</p>`;
-    return `<ul class="ppl">${np.map(([k, n]) => { const [name, role] = who(n), ref = A.story && A.story.personRef ? A.story.personRef(p.id, k) : n.who ? "cast:" + n.who : "npc:" + p.id + "/" + k; return `<li><details class="npc" id="pp-${esc(p.id)}-${esc(k)}"><summary><span class="npn">${esc(name)}</span>${role ? `<span class="npr"> — ${esc(role)}</span>` : ""}${A.nav && state.mode === "gm" ? `<button type="button" class="t-mini ux-pkb" data-uxpeek="person:${esc(ref)}" title="Everything Atlas knows of them, without leaving this page">Their card</button>` : ""}</summary>${profile(p.id, k, n)}</details></li>`; }).join("")}</ul>`;
+    if (!np.length) return `<p class="kn sec-none">Nobody is posted here.</p>`;
+    return `<ul class="ppl">${np.map(([k, n]) => { const [name, role] = who(n), ref = A.story && A.story.personRef ? A.story.personRef(p.id, k) : n.who ? "cast:" + n.who : "npc:" + p.id + "/" + k; return `<li><details class="npc" id="pp-${esc(p.id)}-${esc(k)}"><summary><span class="npn">${esc(name)}</span>${role ? `<span class="npr"> — ${esc(role)}</span>` : ""}</summary>${profile(p.id, k, n)}</details>${A.nav && state.mode === "gm" ? `<button type="button" class="t-mini ux-pkb ux-pkb-out" data-uxpeek="person:${esc(ref)}" title="Everything Atlas knows of them, without leaving this page">Their card</button>` : ""}</li>`; }).join("")}</ul>`;
   }
   function syncCharNotes() {
     document.querySelectorAll("textarea[data-cnote]").forEach(t => {

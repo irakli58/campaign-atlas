@@ -180,7 +180,10 @@
     // a campaign's own changes to a city that was fetched or generated for it: ATLAS.cityEdit(c => { ... }), applied once
     // an edit with no city named is for the campaign's main city (city.js); ATLAS.cityEdit(fn, "id") is for that city
     if (raw && A.cityEdits && !raw.__edited) { Object.defineProperty(raw, "__edited", { value: true }); const rid = raw.id || "main", main = raw === A.cityData; for (const e of A.cityEdits) { const f = typeof e === "function" ? e : e.fn, id = typeof e === "function" ? null : e.id; if (id ? id === rid : main) f(raw); } }
-    const D = Object.assign({ seed: 1888, look: "old", title: "", subtitle: "", scaleLabel: "", roads: [], rivers: [], basins: [], parks: [], squares: [], rails: [], forts: [], towers: [], gasworks: [], signs: [], districts: {}, roofs: {}, roof: "#7a2e3a", plazas: [], open: [], walls: [], landmarks: [], rows: [], footprints: [], ruin: 0, credit: "", real: false }, raw || {});
+    // (a city with no look of its own wears the campaign's world: a fantasy campaign's is fantasy, a science fiction one's
+    // the future; only a campaign of our own world falls back to the old look: the 1888 default made Barovia Victorian)
+    const W0 = A.campaignWorld ? A.campaignWorld() : {}, look0 = W0.fantasy ? "fantasy" : W0.scifi ? "future" : "old";
+    const D = Object.assign({ seed: 1888, look: look0, title: "", subtitle: "", scaleLabel: "", roads: [], rivers: [], basins: [], parks: [], squares: [], rails: [], forts: [], towers: [], gasworks: [], signs: [], districts: {}, roofs: {}, roof: "#7a2e3a", plazas: [], open: [], walls: [], landmarks: [], rows: [], footprints: [], ruin: 0, credit: "", real: false }, raw || {});
     D.sheet = Object.assign({ w: 320, h: 200, margin: 30 }, (raw && raw.sheet) || {});
     // a landmark given only its outline (pts) stands at the outline's centre (without this it was skipped, and a place
     // that said it was that landmark stood somewhere else entirely: Birkenau's Crematorium III, 14 Oct 2026)
@@ -1875,24 +1878,33 @@ function createMap3D(host, C, planCanvas, hooks) {
     renderer.render(scene, camera);
     // overlay
     const W = host.clientWidth, H = host.clientHeight, named = dist < 150;
+    // (the UI overhaul of 18 Nov 2026: the places' numbered marks win; a district's name or a landmark's moves off them,
+    // up or down, rather than be written under a mark: "THE W(12)RENS")
+    const marks = [];
+    const clear = (x, y, w, h) => !marks.some(m => x - w / 2 < m[2] && x + w / 2 > m[0] && y - h / 2 < m[3] && y + h / 2 > m[1]);
+    const dodge = (x, y, w, h) => { if (clear(x, y, w, h)) return y; for (let k = 1; k <= 4; k++) for (const sg of [-1, 1]) { const y2 = y + sg * k * (h * .55 + 6); if (clear(x, y2, w, h)) return y2; } return y; };
     for (const id in LM) {
       const o = LM[id], el = pins[id];
       pv.set(o.grp.position.x, o.top + .8, o.grp.position.z).project(camera);
       if (pv.z > 1 || pv.x < -1.1 || pv.x > 1.1 || pv.y < -1.1 || pv.y > 1.2) { el.classList.add("off"); continue; }
       el.classList.remove("off"); el.classList.toggle("named", named);
-      el.style.transform = `translate(${((pv.x + 1) / 2 * W).toFixed(1)}px, ${((1 - pv.y) / 2 * H).toFixed(1)}px) translate(-50%, -100%)`;
+      const px = (pv.x + 1) / 2 * W, py = (1 - pv.y) / 2 * H;
+      el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) translate(-50%, -100%)`;
+      marks.push([px - 17, py - 36, px + 17, py]);
     }
     for (const d of dl) {
       pv.set(d.x, 0, d.z).project(camera);
       const off = pv.z > 1 || dist < 45;
       d.el.classList.toggle("off", off);
-      if (!off) d.el.style.transform = `translate(${((pv.x + 1) / 2 * W).toFixed(1)}px, ${((1 - pv.y) / 2 * H).toFixed(1)}px) translate(-50%, -50%)`;
+      if (!off) { if (!d.w) { d.w = d.el.offsetWidth; d.h = d.el.offsetHeight; } const x = (pv.x + 1) / 2 * W, y = dodge(x, (1 - pv.y) / 2 * H, d.w || 80, d.h || 16);
+        d.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`; if (d.w) marks.push([x - d.w / 2, y - d.h / 2, x + d.w / 2, y + d.h / 2]); }
     }
     for (const o of ll) {
       pv.set(o.x, o.y, o.z).project(camera);
       const off = pv.z > 1 || dist > o.far || pv.x < -1.05 || pv.x > 1.05 || pv.y < -1.05 || pv.y > 1.05;
       o.el.classList.toggle("off", off);
-      if (!off) o.el.style.transform = `translate(${((pv.x + 1) / 2 * W).toFixed(1)}px, ${((1 - pv.y) / 2 * H).toFixed(1)}px) translate(-50%, -100%)`;
+      if (!off) { if (!o.w) { o.w = o.el.offsetWidth; o.h = o.el.offsetHeight; } const x = (pv.x + 1) / 2 * W, y = dodge(x, (1 - pv.y) / 2 * H - (o.h || 14) / 2, o.w || 60, o.h || 14) + (o.h || 14) / 2;
+        o.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`; }
     }
     for (const o of pp) {
       if (o.walk) { const t = Math.min(1, ((now || performance.now()) - o.walk.t0) / o.walk.dur), k = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; o.x = o.walk.fx + (o.walk.tx - o.walk.fx) * k; o.z = o.walk.fz + (o.walk.tz - o.walk.fz) * k; if (t >= 1) { o.walk = null; o.el.classList.remove("walking"); } else request(); }
@@ -2027,13 +2039,20 @@ function createMap3D(host, C, planCanvas, hooks) {
   /* ---- the flat map: what a device without 3D gets instead. Places, water, main roads, district names. */
   function flatSVG(D, PL, st) {
     const P = LOOK.plan, w = D.sheet.w, h = D.sheet.h, line = pts => pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
-    let s = `<svg class="cityflat" viewBox="0 0 ${w} ${h}" role="img" aria-label="Map${D.title ? ": " + A.esc(D.title) : ""}"><rect width="${w}" height="${h}" fill="${P.PAPER}"/><rect width="${w}" height="${h}" fill="${P.BLOCK}" opacity=".6"/>`;
+    let s = `<svg class="cityflat" viewBox="0 0 ${w} ${h}" role="group" aria-label="Map${D.title ? ": " + A.esc(D.title) : ""}"><rect width="${w}" height="${h}" fill="${P.PAPER}"/><rect width="${w}" height="${h}" fill="${P.BLOCK}" opacity=".6"/>`;
     for (const p of D.parks) s += `<polygon points="${line(p.pts)}" fill="${P.PARKC}"/>`;
     for (const b of D.basins) s += `<path d="${[b.pts, ...(b.holes || [])].map(r => "M" + line(r).split(" ").join("L") + "Z").join("")}" fill-rule="evenodd" fill="${P.WATERC}" stroke="${P.INK}" stroke-width=".3"/>`;
     for (const r of D.rivers) if (!r.ghost) s += `<polyline points="${line(r.pts)}" fill="none" stroke="${P.WATERC}" stroke-width="${r.hw * 2}" stroke-linecap="round" stroke-linejoin="round"/>`;
     for (const [, cls, pts] of D.roads) if (cls <= 1) s += `<polyline points="${line(pts)}" fill="none" stroke="${cls ? P.ROADF : P.MAJORF}" stroke-width="${cls ? 1.6 : 2.6}" stroke-linecap="round" stroke-linejoin="round"/>`;
-    for (const l of D.landmarks) if (l.major && l.at && l.name) s += `<text x="${l.at[0]}" y="${l.at[1]}" text-anchor="middle" font-size="3.6" font-style="italic" fill="${P.INK}" opacity=".8">${A.esc(l.name)}</text>`;
-    for (const [d, at] of Object.entries(D.districts)) s += `<text x="${at[0]}" y="${at[1] - 9}" text-anchor="middle" font-size="5.5" letter-spacing="1.2" fill="${P.INK}" opacity=".7">${A.esc(d.toUpperCase())}</text>`;
+    // (the UI overhaul of 18 Nov 2026: the places' numbered marks win; a district's or a landmark's name moves up or down off
+    // them, and off the names already written, rather than be written under a mark: "THE W(12)RENS")
+    const taken = PL.filter(e => e.x != null).map(e => [e.x - 5.4, e.y - 5.8, e.x + 5.4, e.y + 5.4]);
+    const free = (x, y, bw, bh) => !taken.some(m => x - bw / 2 < m[2] && x + bw / 2 > m[0] && y - bh < m[3] && y > m[1]);
+    const spot = (x, y, bw, bh) => { let at = [x, y];
+      if (!free(x, y, bw, bh)) search: for (let k = 1; k <= 6; k++) for (const dx of [0, bw * .35, -bw * .35]) for (const sg of [-1, 1]) { const c = [x + dx, y + sg * k * (bh * .6 + 1.2)]; if (free(c[0], c[1], bw, bh)) { at = c; break search; } }
+      taken.push([at[0] - bw / 2, at[1] - bh, at[0] + bw / 2, at[1]]); return at; };
+    for (const [d, at] of Object.entries(D.districts)) { const t = d.toUpperCase(), bw = t.length * (5.5 * .62 + 1.2), [x, y] = spot(at[0], at[1] - 9, bw, 5.5); s += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="5.5" letter-spacing="1.2" fill="${P.INK}" opacity=".7">${A.esc(t)}</text>`; }
+    for (const l of D.landmarks) if (l.major && l.at && l.name) { const bw = l.name.length * 3.6 * .5, [x, y] = spot(l.at[0], l.at[1], bw, 3.6); s += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="3.6" font-style="italic" fill="${P.INK}" opacity=".8">${A.esc(l.name)}</text>`; }
     for (const e of PL) {
       if (e.x == null) continue;
       const sel = st && st.sel === e.id, dim = st && st.matches && !st.matches(e.p);
@@ -2241,5 +2260,8 @@ function createMap3D(host, C, planCanvas, hooks) {
   // the game master's changes made in the city editor and given back to the campaign (atlas-cityedit.js): steps laid
   // over the city once it is built, never building it again: ATLAS.cityChanges("main", [{ op: "remove", at: [x, y] }, ...])
   A.cityChanges = (id, steps) => { (A.cityChangeData = A.cityChangeData || {})[id || "main"] = (steps || []).slice(); return A; };
-  A.cityKit = { prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, FANTASY_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN, kit: () => KIT, KIT_SHAPES: ["box", "roof", "cylinder", "cone", "tube", "dome", "ball", "pyramid", "spire", "obelisk", "frustum", "ring", "arch"], KIT_MATS: ["wall", "roof", "dark", "glow", "green", "glass", "gold", "copper", "stone", "brick", "wood", "white", "black", "water"], KIT_DRESS: ["balcony", "dome", "turret"] };
+  // (the city's plan drawn flat, as its 3D map is printed: for a check or a preview without a 3D card; the tests of
+  // settlement scale, 18 Nov 2026)
+  const preview2d = (raw, ppu) => { const D = prepare(raw); use(D); const city = buildCity(D, []); return { canvas: drawPlan(city, ppu || 3), city }; };
+  A.cityKit = { preview2d, prepare, cityPlaces, buildCity, MODELS, MODEL_SIZE, FUTURE_MODELS, FANTASY_MODELS, LOOKS, REGIONS, LM_KINDS, LM_SIZE, GROUNDS, plan: () => PLAN, kit: () => KIT, KIT_SHAPES: ["box", "roof", "cylinder", "cone", "tube", "dome", "ball", "pyramid", "spire", "obelisk", "frustum", "ring", "arch"], KIT_MATS: ["wall", "roof", "dark", "glow", "green", "glass", "gold", "copper", "stone", "brick", "wood", "white", "black", "water"], KIT_DRESS: ["balcony", "dome", "turret"] };
 })(ATLAS);

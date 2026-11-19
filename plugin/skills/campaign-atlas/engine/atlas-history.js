@@ -19,13 +19,13 @@
   const at = m => W() ? W().at(m) : { short: "", long: "", day: 1 };
   const placeName = id => (A.meta[id] || {}).name || id;
   const personName = id => ((A.castData || {})[id] || {}).n || id;
-  const facName = id => ((A.factionsData || {})[id] || {}).n || id;
+  const facName = id => ((A.lives && A.lives.all ? A.lives.all() : A.factionsData || {})[id] || (A.factionsData || {})[id] || {}).n || id;
   const pls = () => A.order.filter(id => A.meta[id] && !String(id).startsWith("fly-"));
   const UI = { f: { kind: "", who: "", place: "", vis: "", q: "" }, write: false, open: 60, tlz: 36, tsel: null, tlAt: null };
   // the kinds of what happens, in the order the filter lists them
   const KIND = {
     event: "In the world", deed: "The party did", conseq: "Because of it", found: "Found", heard: "Heard of", reached: "Reached",
-    settled: "Finished", news: "News", off: "Called off", loot: "Gained or spent", session: "At the table", note: "Written by you"
+    settled: "Finished", news: "News", off: "Called off", loot: "Gained or spent", session: "At the table", note: "Written by you", deep: "The world's deep past"
   };
   // the collections that are the world (a plugin adds its own: A.history.keep)
   const COLLS = ["clock", "events", "eventdefs", "news", "factions", "npcstate", "clocks", "history"];
@@ -58,7 +58,13 @@
   function all() {
     const st = S(); if (!st) return [];
     const own = Object.entries(st.get("history") || {}).filter(([id, h]) => id !== "since" && h && h.title).map(([id, h]) => Object.assign({ who: [], factions: [], places: [], outcome: [] }, h, { id, own: true }));
-    return fromEvents().concat(own).sort((a, b) => ((b.m == null ? -1e12 : b.m) - (a.m == null ? -1e12 : a.m)) || ((b.t || 0) - (a.t || 0)));
+    // (the world's deep past, as its plates made it (world-tectonics.js history, tectonics 2): each range's rising, each
+    // sinking ocean, each rift, the old roots, as the oldest entries; the game master's only)
+    const T = A.worldTerrainData || {}, pn0 = k => (((T.tect || {}).plates || []).find(p => p.id === k) || {}).name || "a plate", pn = k => pn0(k).replace(/^The /, "the "), cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+    const deep = (((T.tect || {}).history) || []).map((h, i) => ({ id: "geo~" + i, kind: "deep", m: null, t: 0, vis: "gm", who: [], factions: [], places: [], outcome: [], whenText: `about ${h.myr} million years ago`,
+      title: h.kind === "collision" ? cap(`${pn(h.a)} and ${pn(h.b)} met, and a mountain range rose`) : h.kind === "subduction" ? `The ocean floor began sinking under ${pn(h.b)}'s margin` : h.kind === "oldbelt" ? `An ocean closed in ${pn(h.a)}, raising mountains since worn to hills` : `A rift began to tear ${pn(h.a)}`, what: h.kind === "subduction" ? `The floor reaching the trench there is up to ${h.myr} million years old.` : "" }));
+    deep.reverse();   // (newest of them first, as the rest of the history runs)
+    return fromEvents().concat(own, deep).sort((a, b) => ((b.m == null ? -1e12 : b.m) - (a.m == null ? -1e12 : a.m)) || ((b.t || 0) - (a.t || 0)));
   }
   const words = h => [h.title, h.what, h.cause, h.whoText, [].concat(h.outcome || []).join(" "), (h.who || []).map(personName).join(" "), (h.factions || []).map(facName).join(" "), (h.places || []).map(placeName).join(" ")].join(" ").toLowerCase();
   function list(f) {
@@ -69,6 +75,19 @@
   }
   const recent = n => all().filter(h => h.m != null).slice(0, n || 8).map(h => `${at(h.m).short}: ${h.title}${h.what ? " (" + String(h.what).slice(0, 160) + ")" : ""}`);
 
+  // the kinds of a world's history written by hand (the manual civilization editor's request of 17 Nov 2026: "kingdom
+  // founded, civil war, trade agreement ..."; "an entire history for a world without AI"), shown as the entry's kind
+  const EVK = [["", "Something that happened"], ["founded", "A realm founded"], ["war", "A war or civil war"], ["border", "A border conflict"], ["treaty", "A treaty or trade agreement"], ["marriage", "A marriage between houses"], ["revolution", "A revolution or rebellion"], ["coronation", "A ruler crowned or fallen"], ["assassination", "An assassination"], ["schism", "A schism or new faith"], ["disaster", "A disaster"], ["crisis", "A crisis or famine"], ["discovery", "A discovery or invention"], ["migration", "A migration or settlement"]];
+  // the powers to name in an entry: the written factions and those added by hand (A.lives), science fiction's too
+  const facPairs = () => Object.entries(A.lives && A.lives.all ? A.lives.all() : A.factionsData || {}).filter(([, f]) => f && !f.off).map(([k, f]) => [k, f.n || k]);
+  // when it happened: "now", "day 3 18:00", a date of the calendar, "300 years ago" / "2 months ago" / "5 days ago", or any
+  // words ("in the Age of Kings"), kept as they are and set before the world's time
+  function whenFrom(w) {
+    w = String(w || "").trim(); if (!w || /^now$/i.test(w)) return { m: nowM() };
+    const ago = /^(\d+(?:\.\d+)?)\s*(years?|months?|weeks?|days?|centur(?:y|ies))\s+(?:ago|before|earlier)/i.exec(w);
+    if (ago) { const n = +ago[1], u = ago[2].toLowerCase(), min = /^cent/.test(u) ? 52596000 : /^year/.test(u) ? 525960 : /^month/.test(u) ? 43830 : /^week/.test(u) ? 10080 : 1440; return { m: Math.round(nowM() - n * min), whenText: w }; }
+    const m = W() ? W().whenOf(w) : null; return m != null ? { m } : { m: null, whenText: w.slice(0, 80) };
+  }
   // something the game master (or another tool) writes down; it happened now unless it says when
   function add(h) {
     const id = h.id || "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), rec = Object.assign({ kind: "note", m: nowM(), t: Date.now(), vis: "gm" }, h); delete rec.id;
@@ -139,7 +158,7 @@
     const out = [].concat(h.outcome || []).filter(Boolean);
     const tags = (h.who || []).map(p => chip("hs-p", personName(p))).concat((h.factions || []).map(f => chip("hs-fa", facName(f)))).join("") + (h.places || []).filter(p => A.meta[p]).map(p => api.goBtn(p)).join("");
     return `<li class="hs-e hs-k-${esc(h.kind)}${h.imp ? " hs-" + esc(h.imp) : ""}">
-      <div class="tw-h"><span class="kn">${h.m == null ? "Before" : esc(at(h.m).time.replace(/,.*/, ""))}</span><span class="hs-kind">${esc(h.kl || KIND[h.kind] || h.kind)}</span><b>${esc(h.title)}</b>${h.vis === "players" ? `<span class="tw-tag hs-know">the players know</span>` : ""}${h.auto ? `<span class="tw-tag">by itself</span>` : ""}</div>
+      <div class="tw-h"><span class="kn">${h.m == null ? esc(h.whenText || "Before") : h.whenText && h.m < 0 ? esc(h.whenText) : esc(at(h.m).time.replace(/,.*/, ""))}</span><span class="hs-kind">${esc(h.kl || KIND[h.kind] || h.kind)}</span><b>${esc(h.title)}</b>${h.vis === "players" ? `<span class="tw-tag hs-know">the players know</span>` : ""}${h.auto ? `<span class="tw-tag">by itself</span>` : ""}</div>
       ${h.what ? `<p class="t-small">${esc(h.what)}</p>` : ""}
       ${h.cause ? `<p class="t-small"><span class="kn">Why</span> ${esc(h.cause)}</p>` : ""}${h.whoText ? `<p class="t-small"><span class="kn">Who</span> ${esc(h.whoText)}</p>` : ""}
       ${out.length ? `<p class="t-small"><span class="kn">What came of it</span> ${out.map(esc).join("; ")}</p>` : ""}
@@ -150,7 +169,7 @@
     if (!l.length) return `<p class="kn">${all().length ? "Nothing that fits." : "Nothing yet. As time moves on and the party acts, what happens is written here."}</p>`;
     let day = null, s = "";
     for (const h of l.slice(0, UI.open)) {
-      const d = h.m == null ? "Earlier, before the world's time was kept" : at(h.m).long;
+      const d = h.m == null ? (h.whenText ? h.whenText + " (before the world's time was kept)" : "Earlier, before the world's time was kept") : h.whenText ? h.whenText + " (" + at(h.m).long + ")" : at(h.m).long;
       if (d !== day) { s += `${day !== null ? "</ol>" : ""}<h4 class="tw-sub">${esc(d)}</h4><ol class="hs-l">`; day = d; }
       s += entryHTML(h, pub);
     }
@@ -216,8 +235,10 @@
       ${field("What happened", `<input class="t-in" name="title" maxlength="140" required placeholder="The harbour master was found drowned">`)}
       ${field("More of it", `<textarea class="t-in" name="what" rows="2" maxlength="1200"></textarea>`)}
       <div class="tw-2">${field("Why", `<input class="t-in" name="cause" maxlength="300" placeholder="He knew of the smuggling">`)}${field("What came of it", `<input class="t-in" name="outcome" maxlength="300">`)}</div>
-      <div class="tw-2">${field("Who", `<select class="t-in" name="who">${opt(Object.entries(A.castData || {}).map(([k, c]) => [k, c.n || k]), "No one in particular")}</select>`)}${field("Which faction", `<select class="t-in" name="fac">${opt(Object.entries(A.factionsData || {}).map(([k, f]) => [k, f.n || k]), "None")}</select>`)}</div>
-      <div class="tw-2">${field("Where", `<select class="t-in" name="place">${opt(pls().map(p => [p, placeName(p)]), "Nowhere in particular")}</select>`)}${field("When", `<input class="t-in" name="when" placeholder="now, or day 3 18:00">`)}</div>
+      ${field("What kind", `<select class="t-in" name="ev">${EVK.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select>`)}
+      <div class="tw-2">${field("Who", `<select class="t-in" name="who">${opt(Object.entries(A.castData || {}).map(([k, c]) => [k, c.n || k]), "No one in particular")}</select>`)}${field("Which power or faction", `<select class="t-in" name="fac">${opt(facPairs(), "None")}</select>`)}</div>
+      ${field("And which (a war, a treaty, a marriage between two)", `<select class="t-in" name="fac2">${opt(facPairs(), "None")}</select>`)}
+      <div class="tw-2">${field("Where", `<select class="t-in" name="place">${opt(pls().map(p => [p, placeName(p)]), "Nowhere in particular")}</select>`)}${field("When", `<input class="t-in" name="when" placeholder="now, day 3 18:00, 300 years ago, or in the Age of Kings">`)}</div>
       <label class="t-fogck"><input type="checkbox" name="pub"> The players know of it</label>
       <div class="t-row"><button class="t-btn prim">Write it down</button><button type="button" class="t-mini" data-hs="cancel">Cancel</button></div></form>`;
   }
@@ -266,8 +287,8 @@
     const g = n => String((f.elements[n] || {}).value || "").trim();
     if (f.dataset.hs === "snap") { if (snapshot(g("n"))) api.note("The world is saved as it is now."); f.reset(); document.activeElement && document.activeElement.blur(); }
     else if (f.dataset.hs === "write") {
-      if (!g("title")) return; const w = g("when"), m = w && !/^now$/i.test(w) && W() ? W().whenOf(w) : null;
-      add({ title: g("title").slice(0, 140), what: g("what"), cause: g("cause"), outcome: g("outcome") ? [g("outcome")] : [], who: [g("who")], factions: [g("fac")], places: [g("place")], vis: f.elements.pub.checked ? "players" : "gm", m: m != null ? m : nowM() });
+      if (!g("title")) return; const wn = whenFrom(g("when")), ev = EVK.find(x => x[0] === g("ev") && x[0]);
+      add(Object.assign({ title: g("title").slice(0, 140), what: g("what"), cause: g("cause"), outcome: g("outcome") ? [g("outcome")] : [], who: [g("who")], factions: [g("fac"), g("fac2")].filter((x, i, a) => x && a.indexOf(x) === i), places: [g("place")], vis: f.elements.pub.checked ? "players" : "gm", m: wn.m }, wn.whenText ? { whenText: wn.whenText } : {}, ev ? { ev: ev[0], kl: ev[1] } : {}));
       UI.write = false; document.activeElement && document.activeElement.blur(); api.note("Written into the world's history.");
     }
   });

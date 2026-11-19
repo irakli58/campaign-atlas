@@ -76,7 +76,7 @@ WHAT THE PARTY DID: ${d.title}
 HOW IT WENT: ${(HOW.find(h => h[0] === d.how) || HOW[0])[1]}${d.place ? "\nWHERE: " + placeName(d.place) + " (" + d.place + ")" : ""}${d.who ? "\nWHO IT TOUCHED: " + (((A.castData || {})[d.who] || {}).n || d.who) + " (" + d.who + ")" : ""}${d.fac ? "\nWHICH FACTION: " + ((F[d.fac] || {}).n || d.fac) + " (" + d.fac + ")" : ""}${d.what ? "\nMORE: " + d.what : ""}
 
 FACTIONS (id: name; how they stand; what they want and have):
-${facs || "(none)"}
+${facs || "(none)"}${L && L.relationsText ? (t => t ? "\n\n" + t : "")(L.relationsText()) : ""}
 
 PEOPLE (id: name, role; where they are; their factions):
 ${people || "(none)"}

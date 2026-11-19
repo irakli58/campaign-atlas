@@ -29,7 +29,10 @@
   const r1 = v => Math.round(v * 10) / 10;
   const LOOKS = [["hydro", "Hydrographic relief"], ["relief", "Shaded relief"], ["painted", "Fantasy: a painted map"], ["parchment", "Fantasy: parchment"], ["engraved", "The past: an engraved atlas"], ["atlas", "Modern: an atlas"], ["holo", "Science fiction: a survey"], ["planet", "A planet in its own colours"], ["stars", "Science fiction: a star chart"]];
   // the looks a world may wear: a world with land may wear any but the star chart; a star chart only that
-  const looksFor = WD => WD.G && !WD.stars && WD.look !== "stars" ? LOOKS.filter(l => l[0] !== "stars") : LOOKS.filter(l => l[0] === "stars");
+  // (the survey look is science fiction's only: never offered on a fantasy or historical map, the user, 17 Nov 2026: "dont
+  // use this on fantasy maps"; a campaign of space, the future, a planet or a colony keeps it)
+  const scifi = WD => { const c = A.config || {}, t = [c.genre, c.subgenre, c.setting, c.era, c.system].filter(Boolean).join(" ").toLowerCase(); return WD.look === "holo" && /sci|space|future|cyber|planet|star|colony|orbit|traveller/.test(t) || /sci-?fi|science fiction|space|futur|cyber|planet|starship|colony|orbit|traveller|alien world/.test(t) || !!WD.planet; };
+  const looksFor = WD => WD.G && !WD.stars && WD.look !== "stars" ? LOOKS.filter(l => l[0] !== "stars" && (l[0] !== "holo" || scifi(WD))) : LOOKS.filter(l => l[0] === "stars");
 
   /* ---- painting the land and sea: heights on a grid as fine as the picture, light from the north-west */
   function raster(WD, colour, opts) {
@@ -67,13 +70,19 @@
     // what the colour is told of the land at each point: its laid-down kind (b) and how deep inside it (d), how warm it
     // is (tm), whether it is a lake, and the kind of its mountains (mk)
     const NA = nat(WD), I = { b: null, d: 0, tm: .5, lake: false, mk: "rock", N: NA, mix: null };
+    // (the preset tints: each palette colour with its own brightness, so a tint keeps the ground's light and shade)
+    // (the light and shade is read from the ground's brightness against a middle grey, so a dark preset stays dark)
+    const TW = G.TW && G.TP && G.TP.length > 1 ? G.TW : null, TC = TW ? G.TP.map(h => { if (!h) return null; const v = parseInt(h.slice(1), 16); return [v >> 16 & 255, v >> 8 & 255, v & 255, 140]; }) : null;
     for (let py = 0; py < ch; py++) for (let px = 0; px < cw; px++) {
       const i = py * cw + px, l = px > 0 ? sv[i - 1] : sv[i], r = px < cw - 1 ? sv[i + 1] : sv[i], u = py > 0 ? sv[i - cw] : sv[i], b = py < ch - 1 ? sv[i + cw] : sv[i];
       const gx = (r - l) * z, gy = (b - u) * z, x = ox + (px + .5) / k, y = oy + (py + .5) / k;
       // (mix: each laid-down kind near the point and how strongly it shows there, its edge soft and broken; b: the one
       // that holds the point, if one does)
       if (NA) { const bl = NA.blend(x, y); let cc = 0, ca = .5; if (bl) for (const [q, a] of bl) if (a > ca) { ca = a; cc = q; } I.mix = bl; I.b = cc ? BIO.BY[BIO.LIST[cc][0]] : null; I.d = bl ? NA.depth(x, y) : 0; I.tm = NA.temp(x, y); I.lake = hv[i] <= sea && NA.lake(x, y); I.mk = hv[i] > sea + 40 ? NT.mtnKind(NA, x, y) : "rock"; }
-      const c = colour(hv[i], mv[i], gx, gy, x, y, nz, I), o = i * 4;
+      let c = colour(hv[i], mv[i], gx, gy, x, y, nz, I); const o = i * 4;
+      // (a terrain preset's colour (atlas-terrain-presets.js) where the game master painted one: the colour given the
+      // light and shade the look gave the ground, its edge as soft as the brush's)
+      if (TW) { const tw = S(x, y, TW) / 255; if (tw > .02) { const ci = Math.min(G.cols - 1, Math.max(0, Math.floor(x / G.cell))), cj = Math.min(G.rows - 1, Math.max(0, Math.floor(y / G.cell))), tc = TC[G.TI[cj * G.cols + ci]]; if (tc) { const lum = Math.max(.35, Math.min(1.6, (c[0] * .3 + c[1] * .59 + c[2] * .11) / tc[3])), a = Math.min(1, tw * 1.15) * .82; c = [c[0] + (tc[0] * lum - c[0]) * a, c[1] + (tc[1] * lum - c[1]) * a, c[2] + (tc[2] * lum - c[2]) * a]; } } }
       d[o] = clamp(c[0], 0, 255); d[o + 1] = clamp(c[1], 0, 255); d[o + 2] = clamp(c[2], 0, 255); d[o + 3] = 255;
     }
     cx.putImageData(img, 0, 0);
@@ -291,7 +300,7 @@
     }
     // (the lagoons as rounded water, not the grid's squares: their cells eased together and traced)
     if (LG) { const Q = new Float32Array(LG.length); for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { let a = 0, c = 0; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const x = i + di, y = j + dj; if (x >= 0 && y >= 0 && x < cols && y < rows) { a += LG[y * cols + x]; c++; } } Q[j * cols + i] = a / c; }
-      const d = coastRings({ cols, rows, cell, H: Q, sea: 70 }).map(r => pathD(chaikin(rdpRing(r, .6), 2, true), true)).join(""); if (d) s += `<path d="${d}" fill="#bcdcd8" fill-opacity=".6"/>`; }
+      const d = coastRings({ cols, rows, cell, H: Q, sea: 70 }).map(r => pathD(chaikin(rdpRing(r, .6), 2, true), true)).join(""); if (d) s += `<path d="${d}" fill="#8ccbcc" fill-opacity=".82"/><path d="${d}" fill="none" stroke="#5f9ea6" stroke-opacity=".55" stroke-width="${r1(Math.max(.4, cell * .08))}"/>`; } // (a lagoon's clear shallow turquoise with a fine edge: it was too faint on the hydrographic look's pale sea)
     if (dune) s += `<filter id="${clip}-dn" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="${r1(cell * .6)}"/></filter><path d="${dune}" fill="#e6d3a2" fill-opacity=".55" filter="url(#${clip}-dn)" clip-path="url(#${clip})"/>`;
     if (rip) s += `<path class="lod1" d="${rip}" fill="none" stroke="#b89d62" stroke-opacity=".35" stroke-width="${r1(cell * .1)}" stroke-linecap="round" clip-path="url(#${clip})"/>`;
     return s;
@@ -1088,7 +1097,8 @@
 
   /* ================================================================ science fiction: a survey, and a star chart */
   function holo(WD, uid, o) {
-    const [W, H] = WD.size, G = WD.G, sea = G.sea, alien = o.palette === "alien";
+    o = o || {}; if (!o.only) WD._holoPal = o.palette; // (a zoomed tile, below, keeps the map's palette)
+    const [W, H] = WD.size, G = WD.G, sea = G.sea, alien = (o.only ? WD._holoPal : o.palette) === "alien";
     const C = alien ? { bg: hex("#12061a"), lo: hex("#2a0f2e"), hi: hex("#7a2d5a"), line: "#ff9a5a", glow: "#ff6a3a", sea: hex("#0a0414") } : { bg: hex("#020d16"), lo: hex("#05242f"), hi: hex("#0f5a63"), line: "#5ae2f0", glow: "#2fd0e8", sea: hex("#010811") };
     const N = nat(WD), pr = probe(WD);
     const img = raster(WD, (h, m, gx, gy, x, y, nz, I) => {
@@ -1097,8 +1107,10 @@
       // (each zone of the survey tinted in its own colour, faintly: the hatching and the outline say the rest)
       if (I.mix) c = mix(c, washed("holo", c, I, x, y, nz, t, false, .55), .7);
       return c.map(v => v * sh);
-    }, { detail: 8 });
-    let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/>`;
+    }, { detail: 8, rect: o.rect, k: o.k });
+    // (a zoomed tile only: the land painted finer where the game master looks; the user: "paint the land finer on vast maps")
+    if (o.only) return img;
+    let s = `<defs><pattern id="${uid}-b" patternUnits="userSpaceOnUse" width="${W}" height="${H}"><image href="${img}" width="${W}" height="${H}" preserveAspectRatio="none"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#${uid}-b)"/><g class="wm-detail"></g>`;
     // contour lines, a brighter one every fourth
     let n = 0; for (let lv = sea + 14; lv < 252; lv += 14, n++) { const d = ringsAt(G, lv, 1.1).map(r => pathD(r, true)).join(""); if (!d) continue; const major = n % 4 === 3; s += `<path${major ? "" : ` class="lod1"`} d="${d}" fill="none" stroke="${C.line}" stroke-opacity="${major ? .55 : .26}" stroke-width="${major ? .7 : .45}"/>`; }
     const cd = coastD(G, .6);
@@ -1219,8 +1231,116 @@
   }
   // the sharper picture of a window of the map, for the page to lay over the land when zoomed in (the shaded reliefs
   // only); base: how many pixels a unit the whole map's own picture has
-  const DETAIL = { hydro: 3200, relief: 2600, painted: 2000, planet: 2600 };
+  const DETAIL = { hydro: 3200, relief: 2600, painted: 2000, planet: 2600, holo: 2000 };
   const detailBase = (WD, look) => DETAIL[look] ? Math.min(2, DETAIL[look] / Math.max(WD.size[0], WD.size[1])) : 0;
-  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; if (look === "painted") return painted(WD, "d", { rect, k, only: true }); return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6, colours: look === "planet" ? planetColours(WD.T && WD.T.planetPalette) : null }, look === "hydro" ? HYDRO : undefined); }
-  A.worldArt = { LOOKS, looksFor, draw, detail, detailBase };
+  function detail(WD, look, rect, k) { if (!DETAIL[look] || !WD.G) return null; if (look === "painted") return painted(WD, "d", { rect, k, only: true }); if (look === "holo") return holo(WD, "d", { rect, k, only: true }); return relief(WD, "d", { rect, k, only: true, fine: k * WD.G.cell >= 6, colours: look === "planet" ? planetColours(WD.T && WD.T.planetPalette) : null }, look === "hydro" ? HYDRO : undefined); }
+    // the plates (world-tectonics.js), a layer the referee shows or hides: each border drawn in its kind's colour
+  // (collision, subduction, island arc, spreading ridge, rift, transform), each plate's heading and speed, its name
+  const BORDER_STYLE = { 1: ["#8e1b1b", 2.6, "", "Collision: continents meet, great ranges rise"], 2: ["#c94a1c", 2.2, "", "Subduction: an ocean plate sinks under a continent"], 3: ["#d98a1c", 2, "", "Island arc: ocean sinks under ocean"], 4: ["#1f6fb2", 1.8, "", "Spreading ridge: plates part, new sea floor"], 5: ["#2e9a8a", 2, "6 4", "Rift: a continent tearing apart"], 6: ["#5a5a5a", 1.4, "3 4", "Transform: plates slide past"] };
+  // the plates run backward (an idea offered to the user on 27 Oct, built 17 Nov on their "make executive decisions"):
+  // each plate's land moved back along today's heading at today's speed (1 cm a year is 10 km a million years), to show
+  // roughly where the land lay so many million years ago. A sketch, said so on the map: real plates turn, speed up,
+  // break and join; this runs today's motions straight back. Each plate's land is traced once and kept; the slider only
+  // moves it. The coast of today stays as a dashed line
+  const PCOL = ["#b9895a", "#8fa66a", "#c7a46a", "#9d7f5f", "#a8b07a", "#c08f6e", "#7f9a7a", "#b4976a", "#a0886a", "#c2ad7c", "#8d9f6a", "#b88a72"];
+  const kmPerUnit = WD => { const sc = WD.scale || (WD.T && WD.T.scale) || { unit: "km", per: 1 }; return (+sc.per || 1) * ({ mile: 1.609, miles: 1.609, km: 1, league: 4.83, leagues: 4.83 }[String(sc.unit || "").toLowerCase()] || 1); };
+  // how far back the slider goes: until the fastest plate has crossed about two fifths of the map (a regional map shows
+  // only a few million years before its land has moved off it; a whole world, a hundred and more), and its step
+  const driftRange = WD => { const L = WD.T && WD.T.tect; if (!L) return null; const v = Math.max(1, ...L.plates.map(p => +p.speed || 0)), m = .4 * WD.size[0] * kmPerUnit(WD) / (v * 10);
+    const nice = [1, 2, 5, 10, 20, 30, 50, 100, 150, 200, 300], max = nice.reduce((b, x) => x <= m ? x : b, 1); return { max, step: max <= 10 ? .5 : max <= 30 ? 1 : max <= 100 ? 5 : 10 }; };
+  function driftLayer(WD, myr) {
+    const L = WD.T && WD.T.tect, G = WD.G; if (!L || !G || !myr) return "";
+    const [W, H] = WD.size, K = Math.max(1, Math.min(W, H) / 900), r1 = v => Math.round(v * 10) / 10;
+    if (!WD._driftRings) {
+      const s0 = atob(L.plate), P = new Uint8Array(s0.length); for (let i = 0; i < s0.length; i++) P[i] = s0.charCodeAt(i);
+      const at = (x, y) => P[Math.min(L.rows - 1, Math.max(0, Math.floor(y / L.step))) * L.cols + Math.min(L.cols - 1, Math.max(0, Math.floor(x / L.step)))];
+      const ids = new Uint8Array(G.cols * G.rows).fill(255); for (let j = 0; j < G.rows; j++) for (let i = 0; i < G.cols; i++) { const n = j * G.cols + i; if (G.H[n] > G.sea) ids[n] = at((i + .5) * G.cell, (j + .5) * G.cell); }
+      WD._driftRings = {};
+      const gw = G.cols, gh = G.rows, blur = F0 => { let F = F0; for (let pass = 0; pass < 2; pass++) { const O = new Float32Array(F.length); for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { let t = 0, c = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= gw || yy >= gh) continue; t += F[yy * gw + xx]; c++; } O[y * gw + x] = t / c; } F = O; } return Uint8Array.from(F, v => Math.round(v)); };
+      for (const p of L.plates) { const F = new Float32Array(ids.length); let any = 0; for (let n = 0; n < ids.length; n++) if (ids[n] === p.id) { F[n] = 200; any++; } if (any < 4) continue;
+        // (blurred before it is traced: the plate grid is coarse, and its steps would show as square edges)
+        WD._driftRings[p.id] = coastRings({ cols: G.cols, rows: G.rows, cell: G.cell, H: blur(F), sea: 100 }).filter(r => r.length > 4).map(r => pathD(chaikin(rdpRing(r, .8), 2, true), true)).join(""); }
+    }
+    const kmU = kmPerUnit(WD);
+    // (today's map veiled in sea blue, so the land of the past reads on its own; today's coast dashed over it)
+    let s = `<rect width="${W}" height="${H}" fill="#3f6f8f" fill-opacity=".94"/><path d="${ringsAt(G, G.sea, .8).map(r => pathD(r, true)).join("")}" fill="none" stroke="#3b2f22" stroke-opacity=".5" stroke-width="${r1(1 * K)}" stroke-dasharray="${r1(5 * K)} ${r1(4 * K)}"/>`;
+    const fs = Math.min(W, H) * .014;
+    // (the land of the past as land, the user, 18 Nov: "doesnt it look like weird?": one colour of land for all the plates,
+    // drawn first, then every plate's coast, so where two plates lie over each other the land is one; the plates' names
+    // small; today's towns, roads and names hidden meanwhile (atlas-world.js, class "drifting"))
+    let fills = "", coasts = "", names = "";
+    for (const p of L.plates) { const d = WD._driftRings[p.id]; if (!d) continue;
+      const a = -p.dir * Math.PI / 180, dist = (+p.speed || 0) * 10 * myr / kmU, dx = -Math.cos(a) * dist, dy = -Math.sin(a) * dist;
+      const wrap = WD.T && /world/.test(String(WD.T.sizeName || "")) || W * kmU > 30000, x0 = wrap ? ((dx % W) + W * 1.5) % W - W / 2 : dx;
+      for (const ox of wrap ? [x0 - W, x0, x0 + W] : [x0]) { const tr = `transform="translate(${r1(ox)} ${r1(dy)})"`;
+        fills += `<path ${tr} d="${d}" fill="#d2bf8e"/>`;
+        coasts += `<path ${tr} d="${d}" fill="none" stroke="#f3ead0" stroke-opacity=".5" stroke-width="${r1(3.2 * K)}" stroke-linejoin="round"/><path ${tr} d="${d}" fill="none" stroke="#5b4630" stroke-opacity=".75" stroke-width="${r1(.9 * K)}" stroke-linejoin="round"/>`;
+        if (p.name && ox === x0) names += `<text x="${r1(p.at[0] + ox)}" y="${r1(p.at[1] + dy)}" text-anchor="middle" font-size="${r1(fs * .9)}" font-family="Georgia, serif" font-style="italic" fill="#5b4630" fill-opacity=".85" stroke="#f3ead0" stroke-width="${r1(2 * K)}" stroke-opacity=".7" paint-order="stroke">${A.esc ? A.esc(p.name) : p.name}</text>`; } }
+    // (a little relief: the land a shade darker inland, lighter at its coasts, so it reads as ground and not a cut-out)
+    s += `<filter id="drift-sh" x="-5%" y="-5%" width="110%" height="110%"><feMorphology operator="erode" radius="${r1(6 * K)}" in="SourceAlpha" result="in"/><feGaussianBlur in="in" stdDeviation="${r1(8 * K)}" result="b"/><feFlood flood-color="#8a7a4e" flood-opacity=".45"/><feComposite in2="b" operator="in" result="sh"/><feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="sh"/></feMerge></filter>`;
+    s += `<g filter="url(#drift-sh)">${fills}</g>${coasts}${names}`;
+    s += `<path d="${ringsAt(G, G.sea, .8).map(r => pathD(r, true)).join("")}" fill="none" stroke="#f6f2e8" stroke-opacity=".75" stroke-width="${r1(1.1 * K)}" stroke-dasharray="${r1(5 * K)} ${r1(4 * K)}"/>`;
+    s += `<text x="${r1(W * .5)}" y="${r1(H * .06)}" text-anchor="middle" font-size="${r1(fs * 1.4)}" font-family="Georgia, serif" fill="#3b2f22" stroke="#f6f2e8" stroke-width="${r1(3 * K)}" paint-order="stroke">The land ${myr} million years ago: today's plate motions run back (a sketch; the dashed line is today's coast)</text>`;
+    return s;
+  }
+  function plateLayer(WD) {
+    const L = WD.T && WD.T.tect; if (!L) return "";
+    const [W, H] = WD.size, gc = L.cols, gr = L.rows, st = L.step, dec = b => { const s = atob(b), a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; };
+    const B = dec(L.border), K = Math.max(1, Math.min(W, H) / 900), r1 = v => Math.round(v * 10) / 10, by = {};
+    // (each border point eased toward the border cells about it, so the borders curve instead of stepping along the grid)
+    const at = (i, j) => { const k = B[j * gc + i]; let x = 0, y = 0, c = 0; for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) { const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= gc || b >= gr || B[b * gc + a] !== k) continue; x += a; y += b; c++; } return [(x / c + .5) * st, (y / c + .5) * st]; };
+    for (let j = 0; j < gr; j++) for (let i = 0; i < gc; i++) { const k = B[j * gc + i]; if (!k) continue; for (const [di, dj] of [[1, 0], [0, 1], [1, 1], [-1, 1]]) { const a = i + di, b = j + dj; if (a < 0 || b >= gr || a >= gc) continue; if (B[b * gc + a] !== k) continue; if ((di && dj) && (B[j * gc + a] === k || B[b * gc + i] === k)) continue; const [x0, y0] = at(i, j), [x1, y1] = at(a, b); by[k] = (by[k] || "") + `M${r1(x0)} ${r1(y0)}L${r1(x1)} ${r1(y1)}`; } }
+    let s = "";
+    // (earthquakes: where plates catch and slip, as the world's seismicity maps show them: thickest along subduction
+    // zones and island arcs, then collisions and transforms, few on ridges and rifts; a mark for each place they shake
+    // often, the border's kind telling how deep and strong [the USGS earthquake catalogue's patterns])
+    { const RATE = { 1: .5, 2: .9, 3: .8, 4: .12, 5: .25, 6: .6 }; let q = "";
+      for (let j = 0; j < gr; j += 2) for (let i = 0; i < gc; i += 2) { const k = B[j * gc + i]; if (!k || !RATE[k]) continue; const h = Math.abs(Math.sin(i * 12.9898 + j * 78.233) * 43758.5453) % 1; if (h > RATE[k] * .35) continue; const [x, y] = at(i, j); q += `<circle cx="${r1(x + (h - .5) * st * 2)}" cy="${r1(y + ((h * 7) % 1 - .5) * st * 2)}" r="${r1((1.2 + 2.2 * ((h * 13) % 1)) * K)}"/>`; }
+      if (q) s += `<g class="wm-quakes" fill="#e0462d" fill-opacity=".45" stroke="#7a1a0a" stroke-opacity=".4" stroke-width="${r1(.4 * K)}"><title>Earthquakes: where the plates catch and slip, most along subduction zones and island arcs</title>${q}</g>`; }
+    for (const [k, d] of Object.entries(by)) { const [c, w, dash] = BORDER_STYLE[k]; s += `<path d="${d}" fill="none" stroke="#f6f2e8" stroke-opacity=".55" stroke-width="${r1((w + 2) * K)}" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="${r1(w * K)}" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash.split(" ").map(v => r1(v * K)).join(" ")}"` : ""}/>`; }
+    const fs = Math.min(W, H) * .014;
+    // (the deep history at its places: "Rose about 25 million years ago, when the X and Y plates met"; ages worked out
+    // from the plates' own motion: atlas world-tectonics.js history, tectonics 2)
+    const pn = k => ((L.plates.find(p => p.id === k) || {}).name || "a plate").replace(/^The /, "the ");
+    for (const h of L.history || []) { if (!h.at) continue; const [x, y] = h.at,
+      t = h.kind === "collision" ? `Rose about ${h.myr} million years ago, when ${pn(h.a)} and ${pn(h.b)} met${h.myr > 80 ? "; worn low since" : h.myr < 30 ? "; still rising" : ""}` : h.kind === "subduction" ? `Ocean floor up to ${h.myr} million years old sinking here: volcanoes, a trench offshore` : h.kind === "oldbelt" ? `Old mountain roots, raised about ${h.myr} million years ago when an earlier ocean closed; worn to hills` : `A rift, about ${h.myr} million years old, tearing a continent apart`;
+      const short = h.kind === "collision" ? `Rose about ${h.myr} million years ago` : h.kind === "subduction" ? `Ocean floor up to ${h.myr} million years old sinking` : h.kind === "oldbelt" ? `Old roots, about ${h.myr} million years` : `A rift, about ${h.myr} million years`;
+      s += `<text class="lod1" x="${r1(x)}" y="${r1(y + fs * 1.6)}" text-anchor="middle" font-size="${r1(fs * .82)}" font-family="Georgia, serif" font-style="italic" fill="#5b2a14" stroke="#f6f2e8" stroke-width="${r1(2.2 * K)}" stroke-opacity=".85" paint-order="stroke"><title>${A.esc ? A.esc(t) : t}</title>${A.esc ? A.esc(short) : short}</text>`; }
+    for (const p of L.plates) { const [x, y] = p.at, a = -p.dir * Math.PI / 180, len = Math.min(W, H) * (.03 + .006 * p.speed), ex = x + Math.cos(a) * len, ey = y + Math.sin(a) * len, hl = 7 * K;
+      s += `<path d="M${r1(x)} ${r1(y)}L${r1(ex)} ${r1(ey)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(a - .45) * hl)} ${r1(ey - Math.sin(a - .45) * hl)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(a + .45) * hl)} ${r1(ey - Math.sin(a + .45) * hl)}" fill="none" stroke="#f6f2e8" stroke-width="${r1(4.5 * K)}" stroke-linecap="round"/><path d="M${r1(x)} ${r1(y)}L${r1(ex)} ${r1(ey)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(a - .45) * hl)} ${r1(ey - Math.sin(a - .45) * hl)}M${r1(ex)} ${r1(ey)}L${r1(ex - Math.cos(a + .45) * hl)} ${r1(ey - Math.sin(a + .45) * hl)}" fill="none" stroke="#3b2f22" stroke-width="${r1(2 * K)}" stroke-linecap="round"/><circle cx="${r1(x)}" cy="${r1(y)}" r="${r1(3 * K)}" fill="#3b2f22"/>`;
+      s += `<text x="${r1(x)}" y="${r1(y - fs * .8)}" text-anchor="middle" font-size="${r1(fs)}" font-family="Georgia, serif" font-variant="small-caps" letter-spacing=".08em" fill="#3b2f22" stroke="#f6f2e8" stroke-width="${r1(2.6 * K)}" stroke-opacity=".8" paint-order="stroke">${A.esc ? A.esc(p.name || "Plate " + (p.id + 1)) : p.name}<tspan x="${r1(x)}" dy="${r1(fs * 2.6)}" font-size="${r1(fs * .7)}" font-variant="normal" font-style="italic">${p.kind}, about ${p.speed} cm a year</tspan></text>`; }
+    s += legend(W, H, Object.values(BORDER_STYLE).map(([c, w, dash, l]) => [c, l, dash]), "Plate borders");
+    return `<g class="wm-plates" pointer-events="none">${s}</g>`;
+  }
+  // the rocks and what lies in them: each region tinted by its rock, each deposit marked and named, with why it is
+  // there (on hovering, and in the key)
+  const ROCK_STYLE = { 1: ["#7a3b46", "Volcanic rock (basalt, andesite)"], 2: ["#c46d8c", "Granite and metamorphic rock"], 3: ["#9b6b3c", "Ancient shield (the oldest crust)"], 4: ["#a88a5a", "Folded sedimentary rock"], 5: ["#d8c27a", "Sedimentary basin (sandstone, shale)"], 6: ["#8fb4c4", "Limestone"], 7: ["#9ccf8a", "River plains and deltas (alluvium)"] };
+  const DEP_STYLE = { copper: ["#b4602a", "Cu"], gold: ["#d4a017", "Au"], silver: ["#9aa4ad", "Ag"], iron: ["#7a2e1d", "Fe"], tin: ["#6f7f8a", "Sn"], gems: ["#a2245c", "◆"], leadzinc: ["#55606b", "Pb"], coal: ["#2a2a2a", "C"], oil: ["#1d1d1d", "⬤"], salt: ["#e8e4dc", "Na"], hotspring: ["#d0442b", "♨"], caves: ["#4a6a7a", "∩"] };
+  function rockLayer(WD) {
+    const T = WD.T; if (!T || !T.rocks) return "";
+    const [W, H] = WD.size, cols = T.cols, rows = T.rows, s0 = atob(T.rocks), K = Math.max(1, Math.min(W, H) / 900), r1 = v => Math.round(v * 10) / 10;
+    let s = "";
+    if (typeof document !== "undefined") {
+      const cv = document.createElement("canvas"); cv.width = cols; cv.height = rows; const g = cv.getContext("2d"), img = g.createImageData(cols, rows);
+      const RGB = Object.fromEntries(Object.entries(ROCK_STYLE).map(([k, [c]]) => [k, [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]]));
+      for (let n = 0; n < cols * rows; n++) { const c = RGB[s0.charCodeAt(n)]; if (!c) continue; img.data[n * 4] = c[0]; img.data[n * 4 + 1] = c[1]; img.data[n * 4 + 2] = c[2]; img.data[n * 4 + 3] = 150; }
+      g.putImageData(img, 0, 0);
+      // (drawn again larger and softly blurred, so the rocks' edges blend rather than step)
+      const cv2 = document.createElement("canvas"); cv2.width = cols * 3; cv2.height = rows * 3; const g2 = cv2.getContext("2d"); g2.filter = "blur(2px)"; g2.drawImage(cv, 0, 0, cv2.width, cv2.height);
+      s += `<image href="${cv2.toDataURL()}" width="${W}" height="${H}" preserveAspectRatio="none" style="image-rendering:auto"/>`;
+    }
+    const fs = Math.min(W, H) * .011, R = 6.5 * K;
+    for (const d of T.deposits || []) { const [c, sym] = DEP_STYLE[d.kind] || ["#333", "?"], [x, y] = d.at, light = d.kind === "salt";
+      s += `<g><title>${A.esc ? A.esc(d.name + ": " + d.why) : d.name}</title><circle cx="${x}" cy="${y}" r="${r1(R)}" fill="${c}" stroke="#f6f2e8" stroke-width="${r1(1.5 * K)}"/><text x="${x}" y="${r1(y + R * .38)}" text-anchor="middle" font-size="${r1(R * 1.05)}" font-family="Georgia, serif" font-weight="bold" fill="${light ? "#3b2f22" : "#fff"}">${sym}</text><text x="${x}" y="${r1(y + R + fs)}" text-anchor="middle" font-size="${r1(fs)}" font-family="Georgia, serif" font-style="italic" fill="#3b2f22" stroke="#f6f2e8" stroke-width="${r1(2.2 * K)}" stroke-opacity=".85" paint-order="stroke">${A.esc ? A.esc(d.name) : d.name}</text></g>`; }
+    s += legend(W, H, Object.values(ROCK_STYLE).map(([c, l]) => [c, l, "", true]), "Rocks", true);
+    return `<g class="wm-rocks" pointer-events="visiblePainted">${s}</g>`;
+  }
+  // a small key in a corner (left: rocks, right: plates)
+  function legend(W, H, rows2, title, left) {
+    const K = Math.max(1, Math.min(W, H) / 900), fs = 11 * K, lh = fs * 1.5, w = fs * 22, h = lh * (rows2.length + 1.4), x = left ? 14 * K : W - w - 14 * K, y = H - h - 14 * K, r1 = v => Math.round(v * 10) / 10;
+    let s = `<rect x="${r1(x)}" y="${r1(y)}" width="${r1(w)}" height="${r1(h)}" rx="${r1(4 * K)}" fill="#f6f2e8" fill-opacity=".9" stroke="#3b2f22" stroke-opacity=".3"/><text x="${r1(x + fs * .8)}" y="${r1(y + lh)}" font-size="${r1(fs)}" font-family="Georgia, serif" font-weight="bold" fill="#3b2f22">${title}</text>`;
+    rows2.forEach(([c, l, dash, sw], i) => { const yy = y + lh * (i + 2); s += sw ? `<rect x="${r1(x + fs * .8)}" y="${r1(yy - fs * .75)}" width="${r1(fs * 1.6)}" height="${r1(fs * .9)}" fill="${c}"/>` : `<path d="M${r1(x + fs * .8)} ${r1(yy - fs * .3)}h${r1(fs * 1.8)}" stroke="${c}" stroke-width="${r1(2.2 * K)}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`; s += `<text x="${r1(x + fs * 3.2)}" y="${r1(yy)}" font-size="${r1(fs * .85)}" font-family="Georgia, serif" fill="#3b2f22">${l}</text>`; });
+    return s;
+  }
+  A.worldArt = { LOOKS, looksFor, draw, detail, detailBase, plateLayer, rockLayer, driftLayer, driftRange };
 })(ATLAS);

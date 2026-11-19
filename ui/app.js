@@ -344,16 +344,50 @@
   });
   let launchNote = null;
   // how it is made: with the council (a story, the AI's work), or by hand from an empty campaign
-  const howNow = () => (form.querySelector("input[name=how]:checked") || {}).value === "hand" ? "hand" : "council";
+  const howNow = () => { const v = (form.querySelector("input[name=how]:checked") || {}).value; return v === "hand" || v === "import" ? v : "council"; };
   const paintHow = () => {
-    const hand = howNow() === "hand"; form.dataset.how = hand ? "hand" : "council"; form.story.required = !hand;
+    const hand = howNow() === "hand", imp = howNow() === "import"; form.dataset.how = howNow(); form.story.required = !hand && !imp;
+    if (imp) { const b = $("#gobtn"); if (b) b.textContent = "Import the adventure"; }
     if (hand && genreNow() === "auto") { const g = form.querySelector("input[name=genre][value=modern]"); if (g) g.checked = true; }
-    const b = $("#gobtn"); if (b) b.textContent = hand ? "Make the empty campaign" : "Make my campaign";
+    const b = $("#gobtn"); if (b && !imp) b.textContent = hand ? "Make the empty campaign" : "Make my campaign";
   };
   form.addEventListener("change", e => { if (e.target.name === "how") paintHow(); });
   paintHow();
+  // the adventures pasted into the app's imports/ folder, to tick instead of choosing files
+  async function listImports() {
+    const box = $("#implist"); if (!box) return;
+    try { const r = await api("/api/imports"); box.innerHTML = r.files.length ? r.files.map(f => `<label class="rights"><input type="checkbox" name="impfrom" value="${esc(f.name)}" checked> ${esc(f.name)} <small>(${(f.size / 1e6).toFixed(1)} MB)</small></label>`).join("") : `Nothing there yet. Paste the PDF into <code>${esc(r.folder)}</code>, then Look again.`;
+      if (r.files.length && !form.title.value.trim()) form.title.value = r.files[0].name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/\s+(part\s*)?\d+$/i, ""); } catch (x) { box.textContent = x.message; }
+  }
+  document.addEventListener("click", e => { if (e.target.id === "impopen") api("/api/open-imports", {}).catch(() => {}); if (e.target.id === "imprefresh") listImports(); });
+  form.addEventListener("change", e => { if (e.target.name === "how" && howNow() === "import") listImports(); });
+  // one file of an imported adventure, sent as it is (no size limit of a form); the app writes it straight to disk
+  async function sendFile(slug, f, note) {
+    const r = await fetch(`/api/campaigns/${slug}/source?name=${encodeURIComponent(f.name)}`, { method: "PUT", headers: { "x-atlas-token": TOKEN, "content-type": "application/octet-stream" }, body: f });
+    const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || "The file could not be sent (" + r.status + ").");
+    if (note) note(f.name); return d;
+  }
+  form.addEventListener("change", e => { if (e.target.name === "impfiles") { const fs = [...e.target.files]; $("#impnote").textContent = fs.length ? fs.map(f => `${f.name} (${(f.size / 1e6).toFixed(1)} MB)`).join(" + ") : ""; if (fs.length && !form.title.value.trim()) form.title.value = fs[0].name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/\s+part\s*\d+$/i, ""); } });
   form.addEventListener("submit", async e => {
     e.preventDefault();
+    if (howNow() === "import") {
+      const err = $("#newerr"); err.textContent = ""; const fl = [...(form.impfiles.files || [])], from = [...form.querySelectorAll("input[name=impfrom]:checked")].map(x => x.value);
+      if (!fl.length && !from.length) { err.textContent = "Paste the adventure into the imports folder (then Look again), or choose its files."; return; }
+      if (!form.rights.checked) { err.textContent = "Tick that it is your own copy, for your own table."; return; }
+      const p = prov(), own = isOwn(p);
+      if (own && !S.tools[toolOf(p)].found) { err.textContent = "Put " + S.tools[toolOf(p)].label + " on this computer first: the steps are above."; return; }
+      if (!own && !S.connectors[p].connected) { err.textContent = "Connect " + PROV[p] + " first: paste your key above."; return; }
+      const o = { import: true, rights: true, provider: own ? "own" : p, tool: own ? toolOf(p) : undefined, title: form.title.value || (fl[0] || {}).name || from[0], system: form.system.value, genre: genreNow() === "auto" ? "" : genreNow(), kind: kindNow() === "auto" ? "" : kindNow(), maps: (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d", chunk: +form.impchunk.value || 0, model: form.model ? form.model.value : undefined, budget: form.budget ? +form.budget.value : undefined };
+      const btn = $("#gobtn"); btn.disabled = true;
+      try {
+        const r = await api("/api/campaigns", o), slug = r.job.slug;
+        for (let i = 0; i < fl.length; i++) { btn.textContent = `Sending ${i + 1} of ${fl.length}…`; await sendFile(slug, fl[i]); }
+        btn.textContent = "Reading it…"; const s2 = await api(`/api/campaigns/${slug}/import-start`, { fromImports: from }); setS(s2.state);
+        if (own) { try { await api(`/api/campaigns/${slug}/launch`, { tool: o.tool }); } catch (x) { launchNote = x.message; } }
+        form.impfiles.value = ""; $("#impnote").textContent = ""; location.hash = "c/" + slug;
+      } catch (x) { err.textContent = x.message; }
+      btn.disabled = false; paintHow(); return;
+    }
     if (howNow() === "hand") {
       const err = $("#newerr"); err.textContent = "";
       const o = { blank: true, title: form.title.value, genre: genreNow() === "auto" ? "" : genreNow(), kind: kindNow() === "auto" ? "" : kindNow(), period: genreNow() === "modern" ? form.period.value.trim() : "", system: form.system.value, maps: (form.querySelector("input[name=maps]:checked") || {}).value === "3d" ? "3d" : "2d", uses: form.uses ? form.uses.value : "everything" };
@@ -625,13 +659,61 @@
     box.innerHTML = `<h2 class="h3">Your subscription</h2>
       <p class="hint">The app opens your own Claude Code or Codex in a window of its own, with the request already typed, and follows the work here. Anthropic and OpenAI do not let other apps sign in to your subscription, so it is always your own program, signed in by you, that does the work.</p>
       ${own}<details class="paid"${["claude", "openai"].some(p => S.connectors[p].connected) ? " open" : ""}><summary>Pay per use with an API key (optional)</summary>${paid}</details>
-      <p class="hint">The app's workspace, where campaigns are made: <code>${esc(S.workspace)}</code> <button class="btn ghost" data-c="ws">Open the folder</button></p>`;
+      <p class="hint">The app's workspace, where campaigns are made: <code>${esc(S.workspace)}</code> <button class="btn ghost" data-c="ws">Open the folder</button></p>
+      <div class="card conn" id="localai"><h3>Local AI on this computer</h3><p class="hint">Free, private and offline once a model is downloaded: Atlas's questions answered by a model running here, through Ollama. Nothing is downloaded or installed until you press a button.</p><button class="btn ghost" data-l="check">Check this computer</button><div class="lai"></div></div>`;
     bindRecheck(box, paintConns);
+    paintLocal(false);
     for (const b of $$("[data-c]", box)) b.onclick = async () => {
       if (b.dataset.c === "ws") { api("/api/open-workspace", {}).catch(() => {}); return; }
       const card = b.closest(".conn"), p = card.dataset.p;
       if (b.dataset.c === "off") { if (!confirm("Disconnect " + PROV[p] + "? The key is removed from this computer.")) return; setS(await api("/api/disconnect", { provider: p })); paintConns(); return; }
       const f = $(".cform", card); f.innerHTML = connectForm(p, S.connectors[p].connected); bindConnect(f, p, () => paintConns()); $(".ckey", f).focus();
+    };
+  }
+
+  /* ---- local AI (the user, 17 Nov 2026: docs/requests/2026-11-17-local-ai.md): this computer, Ollama, the choice */
+  let LAI = null;
+  async function paintLocal(load) {
+    const card = $("#localai"); if (!card) return; const out = $(".lai", card);
+    $("[data-l='check']", card).onclick = () => paintLocal(true);
+    if (load) { out.innerHTML = `<p class="hint">Looking…</p>`; try { LAI = await api("/api/local-ai"); } catch (e) { out.innerHTML = `<p class="warn">Could not look: ${esc(e.message)}</p>`; return; } }
+    if (!LAI) return;
+    const { conf, hw, ollama, rec, pulls } = LAI, have = new Set((ollama.models || []).map(m => m.tag));
+    const gpu = hw.gpus.length ? hw.gpus.map(g => `${esc(g.name)}${g.vramGB ? ", " + g.vramGB + " GB" : g.unified ? ", shares the system's memory" : g.vramFloorGB ? `, at least ${g.vramFloorGB} GB (Windows does not say more)` : ", its memory could not be read"}${g.accel ? " · " + esc(g.accel) : ""}`).join("<br>") : "none found (or not readable here)";
+    const osn = { win32: "Windows", darwin: "macOS", linux: "Linux" }[hw.os.platform] || hw.os.platform;
+    const pk = ([label, m]) => { const p = pulls[m.tag], got = have.has(m.tag), bn = conf.bench && conf.bench[m.tag], using = conf.model === m.tag && conf.mode === "local";
+      return `<div class="lai-pick"><b>${esc(label)}:</b> ${esc(m.name)} <span class="hint">· needs about ${m.memGB} GB · download ${m.dlGB} GB · ${esc(m.licence)} · ${esc(m.speed)}</span><br><span class="hint">${esc(m.why)}. Good for ${esc(m.good)}.${m.notes ? " " + esc(m.notes) + "." : ""}</span>
+        <div class="row">${got ? `<button class="btn${using ? "" : " ghost"}" data-l="use" data-t="${esc(m.tag)}">${using ? "In use" : "Use this"}</button><button class="btn ghost" data-l="bench" data-t="${esc(m.tag)}">${bn ? `Measured: ${bn.tps} tokens/s · measure again` : "Measure its speed"}</button>` : p && !p.done ? `<span class="hint">Downloading: ${p.total ? Math.round(p.part / p.total * 100) + "%" : esc(p.status)}</span>` : `<button class="btn ghost" data-l="pull" data-t="${esc(m.tag)}" data-gb="${m.dlGB}"${ollama.running ? "" : " disabled"}>Download (${m.dlGB} GB)</button>${p && p.error ? ` <span class="warn">${esc(p.error)}</span>` : ""}`}</div></div>`; };
+    out.innerHTML = `<div class="lai-hw"><p><b>This computer</b><br>${esc(osn)} ${esc(hw.os.arch)} · ${esc(hw.cpu.model || "processor unknown")} (${hw.cpu.threads || "?"} threads) · ${hw.ramGB} GB memory · ${hw.diskGB != null ? hw.diskGB + " GB free on disk" : "free disk unknown"}<br>Graphics: ${gpu}</p>
+        <p class="hint">Not right, or a GPU's memory unknown? Enter it: <label>memory <input type="number" min="1" max="1024" step="1" data-l="ram" value="${esc(conf.ramGB || "")}" placeholder="${hw.ramGB}"> GB</label> <label>GPU memory <input type="number" min="0" max="1024" step="1" data-l="vram" value="${esc(conf.vramGB != null ? conf.vramGB : "")}" placeholder="?"> GB</label></p></div>
+      <div class="lai-ol">${ollama.running ? `<p class="ok-t">Ollama ${esc(ollama.version || "")} is running. Models here: ${(ollama.models || []).map(m => esc(m.tag)).join(", ") || "none yet"}.</p>` : `<p class="warn">Ollama is not running here. It is free (MIT licence) and runs the models on your GPU or processor. Install it from <a href="https://ollama.com/download" target="_blank" rel="noopener">ollama.com/download</a>${hw.os.platform === "linux" ? " (or in a Terminal: <code>curl -fsSL https://ollama.com/install.sh | sh</code>)" : ""}, start it, then press Check this computer again.</p>`}</div>
+      <p><b>${esc(rec.tier)}</b> <span class="hint">${esc(rec.budget.why)}. ${esc(rec.note)}</span></p>${rec.picks.map(pk).join("")}
+      <div class="lai-mode"><label><input type="radio" name="laim" value="cloud"${conf.mode !== "local" ? " checked" : ""}> Cloud: Claude or ChatGPT, as now</label><br><label><input type="radio" name="laim" value="local"${conf.mode === "local" ? " checked" : ""}${conf.model ? "" : " disabled"}> Local: ${conf.model ? esc(conf.model) + " on this computer" : "choose a downloaded model first"}</label><br><label><input type="radio" name="laim" value="hybrid"${conf.mode === "hybrid" ? " checked" : ""}${conf.model ? "" : " disabled"}> Hybrid: each kind of work where you choose</label><br>
+        ${conf.mode === "hybrid" ? `<div class="lai-kinds">${[["answering", "Answers (the copilot, Ask the campaign)"], ["suggesting", "Suggestions (clues, mends, ideas)"], ["reading", "Reading (your story, a document)"], ["checking", "Checking (the consistency check)"], ["writing", "Writing (handouts, places, descriptions)"]].map(([k, l]) => `<label>${esc(l)} <select data-l="kind" data-k="${k}"><option value="local"${(conf.kinds || {})[k] === "local" ? " selected" : ""}>here</option><option value="cloud"${(conf.kinds || {})[k] !== "local" ? " selected" : ""}>Claude</option></select></label>`).join("<br>")}</div>` : ""}
+        ${(() => { const E = LAI.embed || { tag: "nomic-embed-text", dlGB: .27, licence: "Apache 2.0" }, got = (ollama.models || []).some(m => m.tag.split(":")[0] === E.tag), p = (LAI.pulls || {})[E.tag]; return `<p class="hint"><b>Search by meaning</b> (${esc(E.tag)}, ${E.dlGB} GB, ${esc(E.licence)}): lets the local model find the right parts of a large campaign when the words differ. ${got ? "Downloaded: used by itself in Local and Hybrid." : p && !p.done ? "Downloading… " + esc(p.status || "") : ollama.running ? `<button class="btn ghost" data-l="pull" data-t="${esc(E.tag)}" data-gb="${E.dlGB}">Download</button> (without it, passages are found by their words)` : "Needs Ollama."}</p>`; })()}
+        ${(() => { const have = (ollama.models || []).map(m => m.tag).filter(t => !/embed/.test(t)), C = conf.compare || {}, run = LAI.compare || {};
+          if (!have.length) return "";
+          return `<div class="lai-cmp"><p><b>Compare their quality</b> <span class="hint">The same eight questions (a fantasy cast, a mystery's clues, a science fiction place, a person in character, powers' relations, keeping to what happened, improvising, a monster's numbers), each answer checked by plain rules. A few minutes for each model.</span></p>
+          ${[...have, "claude"].filter(t => C[t]).length ? `<table class="lai-ct"><tr><th>Model</th><th>Checks passed</th><th>Time</th></tr>${[...have, "claude"].filter(t => C[t]).sort((a, b) => C[b].pass / C[b].of - C[a].pass / C[a].of).map(t => `<tr><td>${esc(t === "claude" ? "Claude" : t)}</td><td>${C[t].pass} of ${C[t].of}</td><td>${Math.round(C[t].ms / 1000)} s</td></tr>`).join("")}</table><p class="hint"><a href="#" data-l="cmpread">Read the answers</a></p><div class="lai-cmpread" hidden></div>` : ""}
+          ${run.running ? `<p class="hint">Comparing ${esc(run.now === "claude" ? "Claude" : run.now || "")}… ${run.step} of ${run.of} answers</p>` : `<p>${have.map(t => `<label><input type="checkbox" data-l="cmpt" value="${esc(t)}" checked> ${esc(t)}</label>`).join(" ")} <label><input type="checkbox" data-l="cmpc"> Claude too (uses your plan)</label> <button class="btn ghost" data-l="cmp">Compare</button></p>`}</div>`; })()}
+        <label><input type="checkbox" data-l="careful"${conf.careful !== false ? " checked" : ""}> Careful when writing and checking: the local model drafts, then reads its draft against the campaign and mends it (better, about twice as slow; answers at the table stay quick)</label><br>
+        <label><input type="checkbox" data-l="fb"${conf.fallback ? " checked" : ""}> When the local model cannot answer, ask Claude instead (off: nothing is ever sent out in Local mode)</label></div>
+      <p class="hint">In Local mode (and in Hybrid, for the kinds you set here) the campaign pages' questions (Ask the campaign, the copilot, the councils' suggestions, Previously on…) are answered here and nothing is sent anywhere. Not yet local: making a whole campaign from a story (still Claude Code or Codex), reading a floor-plan picture, and live transcription of a session, which uses the browser's speech recognition (in Chrome that sends the sound to Google).</p>`;
+    const save = async o => { const r = await api("/api/local-ai/settings", o); LAI.conf = r.conf; paintLocal(false); };
+    for (const r of $$("input[name='laim']", out)) r.onchange = () => save({ mode: r.value });
+    $("[data-l='fb']", out).onchange = e => save({ fallback: e.target.checked });
+    $("[data-l='careful']", out).onchange = e => save({ careful: e.target.checked });
+    for (const sel of $$("select[data-l='kind']", out)) sel.onchange = () => save({ kind: sel.dataset.k, where: sel.value });
+    $("[data-l='ram']", out).onchange = async e => { await save({ ramGB: e.target.value ? +e.target.value : null }); paintLocal(true); };
+    $("[data-l='vram']", out).onchange = async e => { await save({ vramGB: e.target.value === "" ? null : +e.target.value }); paintLocal(true); };
+    const rd = $("[data-l='cmpread']", out); if (rd) rd.onclick = async e => { e.preventDefault(); const box = $(".lai-cmpread", out); if (!box.hidden) { box.hidden = true; return; } let d = null; try { d = await api("/api/local-ai/compare"); } catch (x) { d = null; } const R = (d && d.results) || {};
+      box.innerHTML = Object.entries(R).map(([who, r]) => `<details><summary>${esc(who === "claude" ? "Claude" : who)}: ${r.pass} of ${r.of}</summary>${r.tests.map(x => `<p><b>${esc(x.title)}</b> ${x.checks.map(([l, ok]) => `<span class="${ok ? "ok-t" : "warn"}">${ok ? "✓" : "✗"} ${esc(l)}</span>`).join(" · ")}</p><pre class="lai-ans">${esc(x.err || x.text)}</pre>`).join("")}</details>`).join("") || "<p class='hint'>No answers kept yet.</p>"; box.hidden = false; };
+    for (const b of $$("button[data-l]", out)) b.onclick = async () => {
+      const t = b.dataset.t, k = b.dataset.l;
+      if (k === "use") return save({ model: t, mode: "local" });
+      if (k === "cmp") { const tags = $$("input[data-l='cmpt']", out).filter(x => x.checked).map(x => x.value), cl = ($("input[data-l='cmpc']", out) || {}).checked; try { await api("/api/local-ai/compare", { tags, claude: !!cl }); } catch (e) { return alert(e.message); } const tick = setInterval(async () => { await paintLocal(true); if (!LAI || !LAI.compare || !LAI.compare.running) clearInterval(tick); }, 4000); return paintLocal(true); }
+      if (k === "pull") { if (!confirm(`Download ${t}? About ${b.dataset.gb} GB, kept by Ollama on this computer for use offline.`)) return; await api("/api/local-ai/pull", { tag: t }); const tick = setInterval(async () => { await paintLocal(true); const p = LAI && LAI.pulls[t]; if (!p || p.done) clearInterval(tick); }, 3000); return; }
+      if (k === "bench") { if (!confirm(`Measure ${t}? It loads the model and writes a short paragraph: a few seconds to a few minutes, using the GPU or processor fully meanwhile.`)) return; b.disabled = true; b.textContent = "Measuring…"; try { await api("/api/local-ai/bench", { tag: t }); } catch (e) { alert(e.message); } return paintLocal(true); }
     };
   }
 

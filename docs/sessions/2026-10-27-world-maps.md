@@ -40,6 +40,59 @@ What was asked, what was done, and what is waiting, so the next session can carr
   latitude lines, names and strengths). Behind an opt-in until approved.
 - The user will continue in a local session after this one: keep this file and HANDOFF.md current.
 
+## Where the ocean and beach work stands (work in progress, committed so it is not lost)
+Both are opt-in and change nothing unless asked: `atlas.js world <dir> --ocean natural --coast natural`, or the
+"Simulate the oceans (preview)" checkbox in Make a new world. Regional and existing worlds stay byte-identical.
+- scripts/world-ocean.js (done, working): winds by belt plus geostrophic turn round each ocean's high; Stommel's
+  equation r∇²ψ + β∂ψ/∂x = curl τ solved by SOR on the basins (coasts as walls, regional maps padded with open sea);
+  circumpolar current where a westerly band is all sea on a planet; Ekman upwelling; SST advected along the currents
+  and relaxed to the latitude's; sea ice below -1.2 °C. Output `T.ocean` (coarse u, v, warmth, named gyres and
+  currents). Feeds climateEarth (sea warmth, cold/upwelling → fog and drought) and the ecology (coast temperature
+  anomaly, winter-weighted). Tested on a 6-continent planet: gyres at ±30°, western boundary currents warm, eastern
+  cold, equatorial currents westward.
+- Map layer (done): `ATLAS.worldArt.currents(WD)` draws arrows (orange-red warm, blue cold), gyre circles with turn,
+  named currents with warm/cold and strength, equator and 30° lines, a key. Page toggle button "Ocean currents"
+  (`.wm-octog`, data-w="currents"), shown only when the world has `T.ocean`, remembered per browser.
+- scripts/world-coast.js (working, still being tuned): sediment by stream power down the rivers (gravel from steep,
+  cold ground, worn to sand with distance), cliff supply, reef carbonate in warm seas, volcanic black sand; waves
+  from belt winds with fetch, openness and storminess, normalised per world; longshore drift with capacity ~ E^1.5
+  sin2θ, deposition where it slows, converges or is sheltered; classes beach/gravel/cliff/dune/marsh/mangrove/
+  barrier/spit/lagoon; a report of the 8 greatest beaches and why. Calibrated so about a third of coasts are sandy.
+  Output T.shore, T.shoreW (width), T.sand (makeup); drawn in both relief looks (old `beaches` strip is used only
+  when a world has no T.shore).
+- Barrier islands fixed: judged by the sand to be had along ~100 km of coast (log-averaged), on a shallow shelf, low
+  land behind (relief < 220 m), moderate waves; two cells wide, inlets at river mouths and rarely elsewhere; capped
+  at ~12% of coasts (Stutz & Pilkey 2011). Sandy coasts ~1/3 (Luijendijk et al. 2018). Label bug fixed (coral vs
+  volcanic sand).
+- Measured on a 6-continent planet: coasts by warm currents ~8 °C warmer than coasts by cold currents at the same
+  latitude; a cold eastern-boundary current runs beside a west-coast desert (as Canary/Sahara).
+- Then still to do for these requests: before/after images and the explanations the user asked for (why each beach
+  and each current formed, how currents change the nearby climate), docs (references/world.md), tutorial step for
+  the currents toggle, and wait for the user's approval before making either the default.
+
+## Plates, rocks and resources (16 Nov 2026: the user asked "do 1 and 3 and add both to the planet generation")
+- Done: scripts/world-tectonics.js, called at the end of world-geology.js (records old belts and hotspots without
+  touching the land: land, climate and rivers verified identical). T.tect, T.rocks, T.deposits; plates named.
+  Page buttons "Plates" and "Rocks and resources" (atlas-world-art.js plateLayer, rockLayer). Tested on a large
+  5-landmass world and a 6-continent planet; page toggles tested; tutorial step added.
+- Not done (option 2, offered): plates moving over time (continental drift history).
+
+## Players' parchment maps (16 Nov 2026; request: docs/requests/2026-11-16-player-parchment-maps.md)
+- The user: optional: "if the DM wants the players to see the real map they can see it, if not they get the [hand-drawn] one".
+- Done: engine/atlas-pmap.js (generate from the world by maker preset, home and accuracy; render on parchment; the
+  editor with tools, layers, status, lock, hide, DM-only; reveal place/rumour/land/road; suggestions of places the
+  party learned of, added only on approval; several maps, copy; look options; picture and print of the players'
+  version). atlas-world.js: "Players' maps" button, docs pm-<id> and pmset with undo/redo. atlas-share.js: given maps
+  shared as pmap:<id> without DM layer/hidden/links; in parchment mode the real world is not shared. atlas-table.js:
+  players' screen shows a pmap, and the world map as the parchment map in parchment mode. Tested end to end.
+- Phase 5: the Copilot tab (atlas-copilot.js pmapHTML) offers places the party knows that a given map lacks, "Add it"
+  or "Not now"; nothing added unasked. Still to do: tying additions to session events; perhaps a list of given
+  maps in the players' copy apart from the screen.
+
+## Dropped (16 Nov 2026)
+- Anything for the old map styles (painted, parchment: drawn trees and symbols), e.g. "polish the trees": the user
+  will not use them.
+
 ## Decided (the user: "okay I like everything now")
 - The Earth climate model is the default for new worlds (a plates world made before keeps the classic rules when made
   again with the same seed; `--climate-model classic|earth` overrides; T.climateModel is written when earth).
@@ -66,3 +119,14 @@ What was asked, what was done, and what is waiting, so the next session can carr
 - Regional classic and Earth-model outputs at fixed seeds must not change when only drawing changes.
 - Render with Playwright: load engine files + world.js + world-terrain.js, `ATLAS.worldArt.draw(WD, look)`.
 - The page: `atlas.js build <dir>`, open dist/preview.html, World map, Edit map, Make a new world.
+
+### Parchment readability (16 Nov 2026)
+The user asked for cleaner player maps (priority hierarchy, few spaced symbols, no overlaps, density presets, Minimal for commoners, never move the DM's marks). Done in engine/atlas-pmap.js, see references/world.md "Players' maps: readability". Mid-way the user said "the connecting lines between cities look weird" (roads were straight lines across the sea; now routed like the real map's roads) and "i wanted you to use the geological map as reference not the old one" (tests now run on freshly generated plates worlds, not the old painted test campaigns). Also fixed: big symbols (the home city) were drawn with a zero stroke width.
+Then the user: "make a general contour of the continent, then put only the really famous places there and some of the really famous mountains stuff a commoner would know"; "do not try adding lines inside of the contour like the ones you did before it looks weird"; "yess this is good also add the forests and thats it". Done: the commoner's map (references/world.md, "The commoner's map").
+Then: "okay can you slightly fill out the map like slighlty more so its less empty do not go overboard": up to 6 places (towns after the cities), 4 ranges and 4 forests, a peak or clump more on the big ones.
+Then: "fill out the map with some more mountains and forests so its not as empty", and "the small hill looking stuff looks so weird remove that": heights and woods judged per continent, more ranges and woods, woods drawn as groups, small mountains (not hill arcs) on the lower uplands.
+Then: "i want a slider on how detailed the map is and how accurate it is": How much is drawn and How accurate, in the New map form and The look (references/world.md, "Two sliders").
+Then the user asked to see the most detailed one (commoner at much/true); fixed a forest name left in the sea: names now sit under the middle of their symbols, only on land, and are dropped with their symbols.
+
+### Overnight (16-17 Nov)
+The user, going to sleep: "keep working on stuff without asking me for permission", "you know what you have to do and i want you to finish all of it". Done: the elder and then every maker draw the whole land (references/world.md "Every maker draws the whole land"); "What it shows" choice; no hill arcs; an accuracy overlay (rough 48, middle 27, true 6 miles off on average); map additions remember their session (references/world.md "Map additions remember their session"). Tested in the page: sliders, reveal, Copilot add, session tags, no page errors.
