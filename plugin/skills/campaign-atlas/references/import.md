@@ -39,6 +39,44 @@ scenario, or their own long notes. The design comes from the user's request of 1
 - **Every fact has a `ref`**, saying where in the book it is: `"p. 43"`, `"Ch. 4, K20"`, `"App. C"`. The game master
   must be able to check anything against the book.
 
+## The workflow: from the book's own maps, outward in
+
+The user set it out on 19 Nov 2026 (docs/requests/2026-11-19-import-workflow-from-the-book-maps.md), after a village
+made from its name alone: "you create the full topographic map on the whole campaign based on the source material,
+then you put the cities / villages in the correct places. then you create 3d maps of those villages exactly the way
+they are and then you build the interiors on the houses exactly as the source material and fill out the characters
+and the loot exactly like the source material". The book's maps are the ground truth for where everything is and how
+it is laid out. The text is the ground truth for what everything is.
+
+1. **Read the PDF, the words and the pictures.** Extract every image (`pdfimages`) and every page as a picture
+   (`pdftoppm`). Find each map in the book and say which it is: the region, each settlement, each building, castle,
+   dungeon or floor, with its page, its caption and its scale ("one hex = 1/4 mile", "one square = 5 feet").
+   - Look at each map closely, a part at a time, enlarged until every letter, number, label and symbol can be read.
+   - Write what it shows into `story/maps.json`: its keys (letters and numbers) and where each stands on the picture,
+     in pixels; its named features; its roads and paths; its scale; its north.
+   - A map that cannot be read is listed as unread, never guessed.
+2. **The whole campaign's topographic map, from the book's regional map.** Make the world map from that picture
+   (`atlas.js world <dir> --drawing story/maps/<region>.png`). Its mountains, hills, forests, lakes, rivers, roads and
+   passes go where the book's map draws them, with their names as written. The scale is the map's own. Every lettered
+   or named place on the map is a location at its spot on the picture, under the book's key, with the book's name for
+   it from the text. Nothing is invented to fill the map.
+3. **The settlements, in their places.** Each city, town, village and site stands where the regional map letters it,
+   at the size the book gives it (its own map, its population, its words): a village is a village.
+4. **Each settlement in 3D, as its own map draws it.** From the book's map of the settlement: its streets and paths,
+   its river, each building in its place and its shape, under the book's numbers, and the open ground between them.
+   Not a generated town with the book's names on it. Where the book has no map of a settlement, lay it out at its size
+   from its words, and say the layout is Atlas's.
+5. **The interiors, as the book's plans.** Each keyed building from its own plan: its rooms in their shapes and sizes,
+   their doors, stairs, windows and secret ways, under the book's keys, a floor at a time. Where there is no plan, from
+   the text's sizes and exits (`map-from-source`), said to be Atlas's layout.
+6. **The people, the creatures, the loot, the clues: exactly where the book puts them.** Each in their room, with the
+   book's numbers; the treasure as listed, in its room and its container; nothing moved and nothing duplicated.
+7. **Then the readiness check** (`ready`), which checks each step against the book: every keyed place on the map, every
+   keyed room in its building, every exit a door, every listed treasure placed.
+
+Each step uses the one before it, and each can be done for the places the game master chooses (`generate`, step 5b),
+but always in this order: the map of the whole first, then the places on it, then their insides.
+
 ## The steps
 
 ```
